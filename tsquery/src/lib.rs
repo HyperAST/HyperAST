@@ -49,6 +49,9 @@ pub use stepped_query_imm::ExtendingStringQuery;
 pub use stepped_query_imm::MyNodeErazing;
 pub use stepped_query_imm::QueryMatcher;
 
+pub use utils::ArrayStr;
+pub use utils::ZeroSepArrayStr;
+
 type Depth = u32;
 type Precomps = u16;
 // type Precomps = u16;
@@ -498,13 +501,13 @@ where
         _stores: HAST,
         _acc: &Acc,
         _label: Option<&str>,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<usize, String> {
+        Ok(0)
     }
 }
 
 pub struct PreparedOverlay<Q, O> {
-    pub query: Q,
+    pub query: Option<Q>,
     pub overlayer: O,
     pub functions: std::sync::Arc<dyn std::any::Any>,
 }
@@ -551,13 +554,16 @@ where
         acc: &Acc,
         label: Option<&str>,
     ) -> hyper_ast::tree_gen::PrecompQueries {
+        let Some(query) = self.query else {
+            return Default::default();
+        };
         // self.query.match_precomp_queries(stores, acc, label)
-        if self.query.enabled_pattern_count() == 0 {
+        if query.enabled_pattern_count() == 0 {
             return Default::default();
         }
         let pos = hyper_ast::position::StructuralPosition::empty();
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
-        let qcursor = self.query.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let qcursor = query.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
         for m in qcursor {
             assert!(m.pattern_index.to_usize() < 16);
@@ -628,6 +634,10 @@ where
     for<'acc> &'acc Acc: hyper_ast::tree_gen::WithLabel<L = &'acc str>,
 {
     const GRAPHING: bool = true;
+    // TODO remove the 'static and other contraints, they add unnecessary unsafes
+    // there is probably something to do with spliting GenQuery and the different execs to avoid both
+    // - holding graph as mutable to often
+    // - bubling the mutability invariant from graph to HAST... (very bad)
     fn compute_tsg<
         HAST2: 'static
             + HyperAST<
@@ -643,7 +653,7 @@ where
         stores: HAST2,
         acc: &Acc,
         label: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<usize, String> {
         // NOTE I had to do a lot of unsafe magic :/
         // mostly exending lifetime and converting HAST to HAST2 on compatible structures
 
@@ -790,11 +800,11 @@ where
             let s = graph.to_json().unwrap();
             log::error!("graph: {}", s);
         }
-        Ok(())
+        Ok(graph.node_count())
     }
 }
 
-pub use tree_sitter_stack_graphs::functions::add_path_functions;
+// pub use tree_sitter_stack_graphs::functions::add_path_functions;
 
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
 pub static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
@@ -804,14 +814,13 @@ static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_NAME: &str = "a/b/AAA.java";
 
 #[cfg(feature = "tsg")]
-fn configure<'a, 'g, Node>(
+pub fn configure<'a, 'g, Node>(
     globals: &'a tree_sitter_graph::Variables<'g>,
     functions: &'a tree_sitter_graph::functions::Functions<
         tree_sitter_graph::graph::GraphErazing<Node>,
     >,
 ) -> tree_sitter_graph::ExecutionConfig<'a, 'g, tree_sitter_graph::graph::GraphErazing<Node>> {
-    let config = tree_sitter_graph::ExecutionConfig::new(functions, globals)
-        .lazy(true);
+    let config = tree_sitter_graph::ExecutionConfig::new(functions, globals).lazy(true);
     if !cfg!(debug_assertions) {
         config.debug_attributes(
             [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
@@ -827,17 +836,17 @@ fn configure<'a, 'g, Node>(
 }
 
 #[cfg(feature = "tsg")]
-fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
-    _globals: &mut tree_sitter_graph::Variables,
-    _graph: &mut tree_sitter_graph::graph::Graph<Node>,
+pub fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
+    globals: &mut tree_sitter_graph::Variables,
+    graph: &mut tree_sitter_graph::graph::Graph<Node>,
 ) {
-    // globals
-    //     .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
-    //     .expect("Failed to set ROOT_NODE");
+    globals
+        .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
+        .expect("Failed to set ROOT_NODE");
     // globals
     //     .add(FILE_PATH_VAR.into(), FILE_NAME.into())
     //     .expect("Failed to set FILE_PATH");
-    // globals
-    //     .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
-    //     .expect("Failed to set JUMP_TO_SCOPE_NODE");
+    globals
+        .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
+        .expect("Failed to set JUMP_TO_SCOPE_NODE");
 }

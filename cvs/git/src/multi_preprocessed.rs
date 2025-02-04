@@ -125,7 +125,7 @@ impl PreProcessedRepositories {
             RepoConfig::JavaMaven => {
                 let t = crate::java_processor::Parameter {
                     query: None,
-                    prepo: None,
+                    prepro: None,
                     tsg: None,
                 };
                 let h_java = self
@@ -176,7 +176,7 @@ impl PreProcessedRepositories {
                     .processing_systems
                     .mut_or_default::<crate::java_processor::JavaProcessorHolder>();
                 let t = crate::java_processor::Parameter {
-                    prepo: Some(prepro),
+                    prepro: Some(prepro),
                     query: None,
                     tsg: None,
                 };
@@ -210,13 +210,54 @@ impl PreProcessedRepositories {
         r
     }
 
+    pub fn register_config_with_tsg(
+        &mut self,
+        repo: Repo,
+        config: RepoConfig,
+        tsg: std::sync::Arc<str>,
+    ) -> ConfiguredRepoHandle2 {
+        use crate::processing::erased::Parametrized;
+        let r = match config {
+            RepoConfig::JavaMaven => {
+                let h_java = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::java_processor::JavaProcessorHolder>();
+                let t = crate::java_processor::Parameter {
+                    prepro: None,
+                    query: None,
+                    tsg: Some(tsg),
+                };
+                let java_handle = CommitProcExt::register_param(h_java, t);
+                let h = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::maven_processor::MavenProcessorHolder>();
+                ConfiguredRepoHandle2 {
+                    spec: repo,
+                    config: h.register_param(crate::maven_processor::Parameter { java_handle }),
+                }
+            }
+            RepoConfig::CppMake => {
+                unimplemented!()
+            }
+            _ => todo!(),
+        };
+        self.configs.insert(r.spec.clone(), r.config);
+        r
+    }
+
     pub fn get_config(&self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
         self.configs
             .get(&repo)
             .map(|&config| ConfiguredRepoHandle2 { config, spec: repo })
     }
 
-    pub fn get_precomp_query(&self, handle: ParametrizedCommitProcessorHandle, lang: &str) -> Option<std::sync::Arc<[String]>> {
+    pub fn get_precomp_query(
+        &self,
+        handle: ParametrizedCommitProcessorHandle,
+        lang: &str,
+    ) -> Option<hyper_ast_tsquery::ZeroSepArrayStr> {
         let proc = self
             .processor
             .processing_systems

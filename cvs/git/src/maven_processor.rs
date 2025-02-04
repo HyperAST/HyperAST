@@ -358,7 +358,7 @@ fn prep_scripting(
         .as_ref()?
         .with_parameters(handle)
         .parameter
-        .prepo
+        .prepro
         .as_ref()
 }
 

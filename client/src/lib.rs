@@ -423,8 +423,14 @@ fn run_scripting(
         let dd = n
             .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
             .unwrap();
-        let s = dd.0.get("show");
+        let s = dd.0.get(show);
         log::debug!("{show} ! {:?}", s);
+        log::debug!("size:{}", n.size());
+        log::debug!("size_no_spaces:{}", n.size_no_spaces());
+        log::debug!("height:{}", n.height());
+        if let Ok(mcc) = n.get_component::<hyper_ast::cyclomatic::Mcc>() {
+            log::debug!("Mcc:{:?}", mcc);
+        }
     }
     let commits = state.repositories.write().unwrap().pre_process_with_limit(
         &mut repository,
@@ -436,13 +442,72 @@ fn run_scripting(
     let commit = repositories
         .get_commit(&repository.config, &commits[1])
         .unwrap();
-    let store = &state.repositories.read().unwrap().processor.main_stores;
-    let n = store.node_store.resolve(commit.ast_root);
+    let stores = &state.repositories.read().unwrap().processor.main_stores;
+    let n = stores.node_store.resolve(commit.ast_root);
     let dd = n
         .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
         .unwrap();
     let s = dd.0.get(show);
     log::debug!("{:?}", s);
+    use hyper_ast::types::WithStats;
+    log::debug!("size:{}", n.size());
+    log::debug!("size_no_spaces:{}", n.size_no_spaces());
+    log::debug!("height:{}", n.height());
+    if let Ok(mcc) = n.get_component::<hyper_ast::cyclomatic::Mcc>() {
+        log::debug!("Mcc:{:?}", mcc);
+    }
+    Ok(())
+}
 
+#[ignore] // ignore (from normal cargo test) for now, later make a feature
+#[test]
+// slow test, more of an integration test, try using release
+fn test_tsg_incr() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .try_init()
+        .unwrap();
+
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("INRIA", "spoon");
+    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let commit = "56e12a0c0e0e69ea70863011b4f4ca3305e0542b";
+    let language = "Java";
+    let tsg = r#"
+(class_declaration name:(_)@name)@class {
+    node @class.decl
+    attr (@class.decl) name = (source-text @name)
+}
+"#;
+
+    run_tsg(repo_spec, config, commit, language, tsg)
+}
+
+fn run_tsg(
+    repo_spec: hyper_ast_cvs_git::git::Repo,
+    config: hyper_ast_cvs_git::processing::RepoConfig,
+    commit: &str,
+    language: &str,
+    tsg: &str,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let state = crate::AppState::default();
+    state
+        .repositories
+        .write()
+        .unwrap()
+        .register_config_with_tsg(repo_spec.clone(), config, tsg.into());
+    let repo = state
+        .repositories
+        .read()
+        .unwrap()
+        .get_config(repo_spec)
+        .ok_or_else(|| "missing config for repository".to_string())?;
+    let mut repository = repo.fetch();
+    log::debug!("done cloning {}", repository.spec);
+    let commits = state.repositories.write().unwrap().pre_process_with_limit(
+        &mut repository,
+        "",
+        &commit,
+        1,
+    )?;
     Ok(())
 }

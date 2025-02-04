@@ -16,6 +16,7 @@ pub(crate) struct CodeEditor<C = Quote> {
     pub lang_name: String,
     // code: String,
     pub code: C,
+    #[cfg(feature = "ts_highlight")]
     #[serde(skip)]
     #[serde(default = "default_parser")]
     #[allow(unused)] // TODO need highlighting in web for tree-sitter
@@ -39,6 +40,7 @@ impl From<egui_addon::code_editor::CodeEditor<Languages>> for CodeEditor {
             info: value.info,
             lang_name: value.lang_name,
             code,
+            #[cfg(feature = "ts_highlight")]
             parser: value.parser,
             languages: value.languages,
             lang: value.lang,
@@ -122,13 +124,7 @@ impl autosurgeon::Hydrate for CodeEditor {
     }
 }
 
-pub(crate) fn default_info() -> EditorInfo<String> {
-    EditorInfo::default().copied()
-}
-
-pub(crate) fn default_parser() -> tree_sitter::Parser {
-    tree_sitter::Parser::new().unwrap()
-}
+use egui_addon::code_editor::default_info;
 
 impl<C: From<String>> Default for CodeEditor<C> {
     fn default() -> Self {
@@ -147,7 +143,8 @@ function f() { return 2; }
         Self {
             lang_name: lang.as_ref().map(|x| x.name.clone()).unwrap(),
             code: code.to_string().into(),
-            parser: default_parser(),
+            #[cfg(feature = "ts_highlight")]
+            parser: egui_addon::code_editor::default_parser(),
             languages,
             lang,
             info: EditorInfo::default().copied(),

@@ -4,7 +4,6 @@ use hyper_ast_cvs_git::SimpleStores;
 use hyper_ast_tsquery::stepped_query::{Node, QueryMatcher};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
-use tree_sitter_graph::GenQuery;
 
 pub type Functions<Node> =
     tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::GraphErazing<Node>>;
@@ -21,6 +20,7 @@ pub struct Content {
     pub language: String,
     pub query: String,
     pub commits: usize,
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -59,6 +59,7 @@ pub fn simple(
         language: lang_name,
         query,
         commits,
+        path,
     } = query;
     let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&lang_name)
         .ok_or_else(|| QueryingError::MissingLanguage(lang_name.clone()))?;
@@ -89,6 +90,7 @@ pub fn simple(
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, commits)
         .unwrap();
+    let path = &path.unwrap_or_default();
     let tsg = {
         type M = QueryMatcher<SimpleStores>;
         type ExtQ =
@@ -98,16 +100,17 @@ pub fn simple(
 
         let mut file = tree_sitter_graph::ast::File::<M>::new(language.clone());
 
-        let precomputeds = state
+        let precomputeds: Box<dyn hyper_ast_tsquery::ArrayStr> = state
             .repositories
             .read()
             .unwrap()
             .get_precomp_query(repo.config, &lang_name)
-            .unwrap();
+            .map_or(Box::new([].as_slice()), |x| Box::new(x));
         let query_source = ExtQ::new(language.clone(), precomputeds, source.len());
         tree_sitter_graph::parser::Parser::<ExtQ>::with_ext(query_source, source)
             .parse_into_file(&mut file)
             .map_err(|e| QueryingError::TsgParsing(e.to_string()))?;
+        use tree_sitter_graph::GenQuery;
         QueryMatcher::<SimpleStores>::check(&mut file)
             .map_err(|e| QueryingError::TsgParsing(e.to_string()))?;
         file
@@ -116,7 +119,7 @@ pub fn simple(
     log::info!("done construction of {commits:?} in  {}", repo.spec);
     let mut results = vec![];
     for commit_oid in &commits {
-        let result = simple_aux(&state, &repo, commit_oid, &query, &tsg)
+        let result = simple_aux(&state, &repo, commit_oid, &query, &tsg, path)
             .map(|inner| ComputeResultIdentified {
                 commit: commit_oid.to_string(),
                 inner,
@@ -137,6 +140,7 @@ fn simple_aux(
     commit_oid: &hyper_ast_cvs_git::git::Oid,
     query: &str,
     tsg: &tree_sitter_graph::ast::File<QueryMatcher<SimpleStores>>,
+    path: &str,
 ) -> Result<ComputeResult, QueryingError> {
     let now = Instant::now();
     type Graph<'a, HAST> = tree_sitter_graph::graph::Graph<Node<'a, HAST>>;
@@ -154,11 +158,8 @@ fn simple_aux(
     let code = commit.ast_root;
     let stores = &repositories.processor.main_stores;
 
-    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "src").unwrap();
-    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "main").unwrap();
-    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "java").unwrap();
-    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "spoon").unwrap();
-    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "JLSViolation.java").unwrap();
+    let code =
+        hyper_ast_cvs_git::preprocessed::child_at_path(stores, code, path.split('/')).unwrap();
 
     let tree = Node::new(stores, hyper_ast::position::StructuralPosition::new(code));
     // SAFETY: just circumventing a limitation in the borrow checker, ie. all associated lifetimes considered as being 'static

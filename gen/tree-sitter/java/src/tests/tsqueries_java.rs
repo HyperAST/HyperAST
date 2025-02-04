@@ -114,7 +114,7 @@ fn prep_baseline<'query, 'tree>(
     query: &'query str,
     text: &'tree [u8],
 ) -> (tree_sitter::Query, tree_sitter::Tree) {
-    let language = tree_sitter_java::language();
+    let language = crate::language();
 
     let query = tree_sitter::Query::new(&language, query).unwrap();
 
@@ -161,7 +161,7 @@ fn prep_stepped<'store>(
     NodeIdentifier,
 ) {
     use crate::legion_with_refs;
-    let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
+    let query = hyper_ast_tsquery::Query::new(query, crate::language()).unwrap();
 
     let mut stores = hyper_ast::store::SimpleStores::default();
     let mut md_cache = Default::default();
@@ -208,10 +208,10 @@ fn prep_stepped2<'store>(
     query: &str,
     text: &[u8],
 ) -> (hyper_ast_tsquery::Query, tree_sitter::Tree) {
-    let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
+    let query = hyper_ast_tsquery::Query::new(query, crate::language()).unwrap();
 
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_java::language()).unwrap();
+    parser.set_language(&crate::language()).unwrap();
     let tree = parser.parse(text, None).unwrap();
 
     (query, tree)
@@ -229,7 +229,7 @@ fn prep_prepro<'store>(
     use crate::legion_with_refs;
     let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
         query,
-        tree_sitter_java::language(),
+        crate::language(),
         &subqueries,
     )
     .unwrap();
@@ -1161,12 +1161,12 @@ fn test_precomputed() {
     // let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
     // let query =
-    //     hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
+    //     hyper_ast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
     //         .unwrap();
     use crate::legion_with_refs;
     let now = Instant::now();
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
+        hyper_ast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
             .unwrap();
     let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
@@ -1300,19 +1300,19 @@ class C {
     let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
     // let query =
-    //     hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
+    //     hyper_ast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
     //         .unwrap();
     let (query, tree) = {
         let query: &str = query;
         let (_precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
             query,
-            tree_sitter_java::language(),
+            crate::language(),
             &precomp,
         )
         .unwrap();
 
         let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&tree_sitter_java::language()).unwrap();
+        parser.set_language(&crate::language()).unwrap();
         let tree = parser.parse(text, None).unwrap();
 
         (query, tree)
@@ -1341,7 +1341,7 @@ fn f(q: &str, p: &[&str], _f: &str) {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (_precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
 }
 
@@ -1694,7 +1694,7 @@ public class TypeAdapterTest {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
     // query._check_preprocessed(0, 0);
     log::trace!("\n{}", query);
     let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
@@ -2272,7 +2272,7 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
     log::trace!("\n{}", query);
     let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
@@ -2338,7 +2338,7 @@ fn h(q: &[&str], text: &str) -> usize {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
-    let query = hyper_ast_tsquery::Query::big(q, tree_sitter_java::language()).unwrap();
+    let query = hyper_ast_tsquery::Query::big(q, crate::language()).unwrap();
     let tree = match crate::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
@@ -2368,7 +2368,7 @@ fn f2(q: &str, p: &[&str]) -> hyper_ast_tsquery::Query {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (_precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
 
     query
 }

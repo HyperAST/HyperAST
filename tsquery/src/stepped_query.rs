@@ -7,7 +7,7 @@ use hyper_ast::types::{
 };
 use std::fmt::Debug;
 
-use crate::CaptureId;
+use crate::{ArrayStr, CaptureId};
 
 #[repr(transparent)]
 pub struct Node<'tree, HAST: HyperASTShared>(crate::hyperast::Node<'tree, HAST>);
@@ -184,7 +184,7 @@ impl<HAST> QueryMatcher<HAST> {
     fn with_precomputed(
         source: &str,
         language: &tree_sitter::Language,
-        precomputeds: &[&str],
+        precomputeds: impl ArrayStr,
     ) -> Result<Self, tree_sitter::QueryError> {
         let query = crate::Query::with_precomputed(source, language.clone(), precomputeds)?.1;
 
@@ -295,7 +295,7 @@ where
 pub struct ExtendingStringQuery<Q = tree_sitter::Query, L = tree_sitter::Language> {
     pub(crate) query: Option<Q>,
     pub(crate) acc: String,
-    pub(crate) precomputeds: Option<std::sync::Arc<[String]>>,
+    pub(crate) precomputeds: Option<Box<dyn ArrayStr>>,
     pub(crate) language: Option<L>,
 }
 
@@ -308,7 +308,7 @@ impl<Q, L> ExtendingStringQuery<Q, L> {
             language: None,
         }
     }
-    pub fn new(language: L, precomputeds: std::sync::Arc<[String]>, capacity: usize) -> Self {
+    pub fn new(language: L, precomputeds: Box<dyn ArrayStr>, capacity: usize) -> Self {
         Self {
             acc: String::with_capacity(capacity),
             precomputeds: Some(precomputeds),
@@ -359,9 +359,11 @@ where
         self.acc += "\n";
         dbg!(source);
         // QueryMatcher::new(source, language)
-        let precomputeds = self.precomputeds.as_ref().map_or(Default::default(), |x|x.as_ref());
-        let precomputeds: Vec<_> = precomputeds.iter().map(|x|x.as_str()).collect();
-        QueryMatcher::with_precomputed(source, language, &precomputeds)
+        if let Some(precomputeds) = &self.precomputeds {
+            QueryMatcher::with_precomputed(source, language, precomputeds.as_ref())
+        } else {
+            QueryMatcher::new(source, language)
+        }
     }
 
     fn make_main_query(&self, language: &Self::Lang) -> Self::Query {
@@ -371,9 +373,11 @@ where
             assert_eq!(language, l);
         }
         // QueryMatcher::new(&self.acc, language).unwrap()
-        let precomputeds = self.precomputeds.as_ref().map_or(Default::default(), |x|x.as_ref());
-        let precomputeds: Vec<_> = precomputeds.iter().map(|x|x.as_str()).collect();
-        QueryMatcher::with_precomputed(&self.acc, language, &precomputeds).unwrap()
+        if let Some(precomputeds) = &self.precomputeds {
+            QueryMatcher::with_precomputed(&self.acc, language, precomputeds.as_ref()).unwrap()
+        } else {
+            QueryMatcher::new(&self.acc, language).unwrap()
+        }
     }
 }
 

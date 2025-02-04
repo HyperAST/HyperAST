@@ -99,17 +99,34 @@ pub fn highlight(
                 } else if let (Some(edit), Some(parsed)) = (code.edit.take(), &mut self.parsed) {
                     parsed.edit(&edit.into())
                 }
-                self.parsed = parser
-                    .parse(code.as_str(), self.parsed.take().as_ref())
-                    .unwrap();
-                if self.parsed.as_ref().unwrap().root_node().has_error() {
-                    self.parsed = None;
-                    code.edit.take();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.parsed = parser.parse(code.as_str(), self.parsed.take().as_ref());
+                    if self.parsed.as_ref().unwrap().root_node().has_error() {
+                        self.parsed = None;
+                        code.edit.take();
+                        self.parsed = parser.parse(code.as_str(), self.parsed.take().as_ref());
+                        if !self.parsed.as_ref().unwrap().root_node().has_error() {
+                            panic!()
+                        }
+                    }
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                {
                     self.parsed = parser
                         .parse(code.as_str(), self.parsed.take().as_ref())
                         .unwrap();
-                    if !self.parsed.as_ref().unwrap().root_node().has_error() {
-                        panic!()
+                    if self.parsed.as_ref().unwrap().root_node().has_error() {
+                        self.parsed = None;
+                        code.edit.take();
+                        self.parsed = parser
+                            .parse(code.as_str(), self.parsed.take().as_ref())
+                            .unwrap();
+                        if !self.parsed.as_ref().unwrap().root_node().has_error() {
+                            panic!()
+                        }
                     }
                 }
             }

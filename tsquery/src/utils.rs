@@ -204,3 +204,56 @@ impl ArrayStr for std::sync::Arc<[String]> {
         self.deref().len()
     }
 }
+
+impl ArrayStr for std::sync::Arc<[&str]> {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        use std::ops::Deref;
+        Box::new(self.deref().iter().map(|x| *x))
+    }
+
+    fn len(&self) -> usize {
+        use std::ops::Deref;
+        self.deref().len()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ZeroSepArrayStr {
+    len: usize,
+    s: std::sync::Arc<str>,
+}
+
+impl From<&[&str]> for ZeroSepArrayStr {
+    fn from(arr: &[&str]) -> Self {
+        arr.into_iter().collect()
+    }
+}
+
+impl<T: AsRef<str>> FromIterator<T> for ZeroSepArrayStr {
+    fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
+        let mut len = 0;
+        let mut s = String::default();
+        for x in iter {
+            if !s.is_empty() {
+                s.push('\0');
+            }
+            let x = x.as_ref();
+            len = len + 1 + x.chars().filter(|x|*x=='\0').count();
+            s.push_str(x);
+        }
+        let s = s.into();
+        Self { len, s }
+    }
+}
+
+
+impl ArrayStr for ZeroSepArrayStr {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        use std::ops::Deref;
+        Box::new(self.s.deref().split('\0'))
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+}

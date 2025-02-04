@@ -128,3 +128,107 @@ fn example_process_make_cpp_project() {
     // let id = preprocessed.processor.object_map_make.get(&a).unwrap();
     // hyper_ast_gen_ts_cpp::legion::print_tree_syntax(&preprocessed.processor.main_stores.node_store, &preprocessed.processor.main_stores.label_store, &id.0);
 }
+
+#[test]
+fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .format(|buf, record| {
+            use std::io::Write;
+            if record.level().to_level_filter() > log::LevelFilter::Debug {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(
+                    buf,
+                    "[{} {}] {}",
+                    buf.timestamp_millis(),
+                    record.level(),
+                    record.args()
+                )
+            }
+        })
+        .init();
+    // let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("INRIA", "spoon");
+    // let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    // let commit = "56e12a0c0e0e69ea70863011b4f4ca3305e0542b";
+    // let language = "Java";
+    let tsg = r#"
+(class_declaration name:(_)@name)@class {
+    node @class.decl
+    attr (@class.decl) name = (source-text @name)
+}
+"#;
+    use hyper_ast_gen_ts_java::legion_with_refs::Acc;
+    use hyper_ast_gen_ts_java::types::TStore;
+    let tsg = {
+        let tsg = tsg;
+        type M<'hast, HAST, Acc> = hyper_ast_tsquery::QueryMatcher<'hast, HAST, Acc>;
+        type ExtQ<'hast, HAST, Acc> =
+            hyper_ast_tsquery::ExtendingStringQuery<M<'hast, HAST, Acc>, tree_sitter::Language>;
+
+        let source: &str = tsg;
+        let language = hyper_ast_gen_ts_java::language();
+
+        let mut file = tree_sitter_graph::ast::File::<
+            M<&hyper_ast::store::SimpleStores<TStore>, &Acc>,
+        >::new(language.clone());
+
+        let query_source = {
+            let x: &[&str] = &[];
+            ExtQ::new(language.clone(), Box::new(x), source.len())
+        };
+        tree_sitter_graph::parser::Parser::<ExtQ<_, _>>::with_ext(query_source, source)
+            .parse_into_file(&mut file)
+            .unwrap();
+        use tree_sitter_graph::GenQuery;
+
+        M::check(&mut file).unwrap();
+        file
+    };
+    let t = INNER_CLASSES;
+    let spec: &tree_sitter_graph::ast::File<
+        hyper_ast_tsquery::QueryMatcher<&hyper_ast::store::SimpleStores<TStore>, &Acc>,
+    > = &tsg;
+    let query: Option<&hyper_ast_tsquery::Query> = None;
+    let functions = tree_sitter_graph::functions::Functions::<
+        tree_sitter_graph::graph::GraphErazing<
+            hyper_ast_tsquery::MyNodeErazing<
+                hyper_ast::store::SimpleStores<
+                    TStore,
+                    &hyper_ast::store::nodes::legion::NodeStoreInner,
+                    &hyper_ast::store::labels::LabelStore,
+                >,
+                &Acc,
+            >,
+        >,
+    >::stdlib();
+    let functions = functions.as_any();
+    let more = hyper_ast_tsquery::PreparedOverlay {
+        query,
+        overlayer: spec,
+        functions,
+    };
+    let mut stores = hyper_ast::store::SimpleStores::default();
+    let mut md_cache = std::collections::HashMap::default();
+    let line_break = "\n".as_bytes().to_vec();
+    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::<
+        hyper_ast_gen_ts_java::types::TStore,
+        _,
+        _,
+    >::with_preprocessing(&mut stores, &mut md_cache, more)
+    .with_line_break(line_break);
+    let r = crate::java::handle_java_file(&mut java_tree_gen, &b"".into(), t.as_bytes()).unwrap();
+    // ASSERT one node per class_declaration
+    // TODO make an automatic test once nodes can be accessed after the contruction
+    Ok(())
+}
+
+static INNER_CLASSES: &str = r#"package spoon.test.imports.testclasses;
+
+import spoon.test.imports.testclasses.internal.ChildClass;
+
+public class ClientClass extends ChildClass {
+	private class InnerClass {}
+	private class InnerClass2 {}
+	private class InnerClass3a {}
+}
+"#;

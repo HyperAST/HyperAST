@@ -4,7 +4,8 @@ use hyper_ast::{position, types::DecompressedSubtree as _, utils::memusage_linux
 use hyper_ast_benchmark_smells::{
     diffing,
     github_ranges::{format_pos_as_github_diff_url, format_pos_as_github_url, PositionWithContext},
-    simple::count_matches, DATASET,
+    simple::count_matches,
+    DATASET,
 };
 use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
 
@@ -28,45 +29,44 @@ fn main() {
     let limit = args.get(3).map_or(2, |x| x.parse().expect("a number"));
     let query = args.get(4).map_or("", |x| x);
 
-    // WARN not to be mutated is some places, here is fine, change it at will
-    // NOTE there is a upper limit for the number of usable subqueries
-    unsafe {
-        hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
-            // invocation of the method "fail", surrounding string with r# makes that we don't have to escape the '"' in the string
-            r#"(method_invocation
+    let subs = [
+        // invocation of the method "fail", surrounding string with r# makes that we don't have to escape the '"' in the string
+        r#"(method_invocation
         (identifier) (#EQ? "fail")
     )"#,
-            // a try block with a catch clause (does not match if there is no catch clause present)
-            r#"(try_statement
+        // a try block with a catch clause (does not match if there is no catch clause present)
+        r#"(try_statement
         (block)
         (catch_clause)
     )"#,
-            "(class_declaration)",
-            "(method_declaration)",
-            // an "@Test" annotation without parameters
-            r#"(marker_annotation 
+        "(class_declaration)",
+        "(method_declaration)",
+        // an "@Test" annotation without parameters
+        r#"(marker_annotation 
         name: (identifier) (#EQ? "Test")
     )"#,
-            "(constructor_declaration)",
-        ]
-    };
+        "(constructor_declaration)",
+    ]
+    .as_slice();
 
-    many(repo_name, commit, limit, query);
+    many(repo_name, commit, limit, query, subs);
 }
 
 const INCREMENTAL_QUERIES: bool = true;
 const CSV_FORMATING: bool = false;
 
-fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
+fn many(
+    repo_name: &str,
+    commit: &str,
+    limit: usize,
+    query: &str,
+    subs: impl hyper_ast_tsquery::ArrayStr,
+) {
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
-            &query,
-            hyper_ast_gen_ts_java::language(),
-            unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
-        )
-        .map_err(|x| x.to_string())
-        .unwrap()
-        .1
+        hyper_ast_tsquery::Query::with_precomputed(&query, hyper_ast_gen_ts_java::language(), subs)
+            .map_err(|x| x.to_string())
+            .unwrap()
+            .1
     } else {
         hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language()).unwrap()
     };
@@ -269,7 +269,7 @@ fn conditional_test_logic() {
          name: (identifier) (#EQ? "assertEquals") 
   ))
     ))"#;
-    many(repo_name, commit, limit, query);
+    many(repo_name, commit, limit, query, [].as_slice());
     eprintln!("conditional_test_logic done!")
 }
 
@@ -282,19 +282,18 @@ fn assertion_roulette_dubbo() {
     let limit = 2000;
     let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
     eprint!("{}", query);
-    unsafe {
-        hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
-            r#"(method_invocation
+    let subs = [
+        r#"(method_invocation
                 name: (identifier) (#EQ? "assertThat")
             )"#,
-            "(class_declaration)",
-            "(method_declaration)",
-            r#"(marker_annotation 
+        "(class_declaration)",
+        "(method_declaration)",
+        r#"(marker_annotation 
         name: (identifier) (#EQ? "Test")
     )"#,
-        ]
-    };
-    many(repo_name, commit, limit, &query);
+    ]
+    .as_slice();
+    many(repo_name, commit, limit, &query, subs);
 }
 
 #[test]
@@ -306,7 +305,7 @@ fn exception_handling() {
     let query = format!("{} @root\n{} @root", query[0], query[1]);
     println!("{}:", repo_name);
     println!("{}", query);
-    many(repo_name, commit, limit, &query);
+    many(repo_name, commit, limit, &query, [].as_slice());
 }
 
 #[test]
@@ -320,5 +319,5 @@ fn exception_handling_graphhopper() {
     let query = format!("{} @root", query[0]);
     println!("{}:", repo_name);
     println!("{}", query);
-    many(repo_name, commit, limit, &query);
+    many(repo_name, commit, limit, &query, [].as_slice());
 }

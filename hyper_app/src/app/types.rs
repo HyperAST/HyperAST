@@ -272,7 +272,11 @@ impl egui_addon::Languages for Languages {
             #[cfg(not(target_arch = "wasm32"))]
             "JavaScript" => Some(egui_addon::Lang {
                 name: "JavaScript".into(),
-                lang: tree_sitter_javascript::language().into(),
+                #[cfg(feature="ts_highlight")]
+                lang: {
+                    let l: tree_sitter::Language = tree_sitter_javascript::LANGUAGE.into();
+                    l
+                },
             }),
             _ => None,
         }

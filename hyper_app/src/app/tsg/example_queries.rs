@@ -12,6 +12,7 @@ pub(super) struct Example {
     pub(crate) config: Config,
     pub(crate) commits: usize,
     pub(crate) query: Query,
+    pub(crate) path: &'static str,
 }
 
 #[derive(Clone)]
@@ -65,6 +66,7 @@ const BASE_SPOON_EX: Example = Example {
         description: "",
         query: "",
     },
+    path: "",
 };
 
 pub(super) const EXAMPLES: &[Example] = &[
@@ -77,6 +79,7 @@ pub(super) const EXAMPLES: &[Example] = &[
     node @prog.lexical_scope
 }",
         },
+        path: "src/main/java/spoon/JLSViolation.java",
         ..BASE_SPOON_EX
     },
     Example {

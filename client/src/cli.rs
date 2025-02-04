@@ -15,7 +15,7 @@ pub struct Options {
     pub re_log: bool, // TODO add a variant to select address of endpoint
 
     /// The address for the server
-    #[clap(default_value_t = SocketAddr::from(([127,0,0,1], 8080)))]
+    #[clap(default_value_t = SocketAddr::from(([127,0,0,1], 8888)))]
     pub address: SocketAddr,
 
     /// config a specific repository (multiple uses)
