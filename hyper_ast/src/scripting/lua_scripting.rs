@@ -623,12 +623,12 @@ impl<'a,
         _stores: HAST,
         _acc: &Acc,
         _label: Option<&str>,
-    ) -> std::result::Result<(), std::string::String>
+    ) -> std::result::Result<usize, std::string::String>
     where
         // <HAST as crate::types::HyperASTShared>::IdN: Copy,
         // HAST: 'static,
     {
-        Ok(())
+        Ok(0)
     }
 }
 

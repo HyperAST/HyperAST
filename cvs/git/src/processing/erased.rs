@@ -62,7 +62,7 @@ pub trait CommitProc {
     ) -> Box<dyn PreparedCommitProc + 'repo>;
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit>;
-    fn get_precomp_query(&self) -> Option<std::sync::Arc<[String]>> {
+    fn get_precomp_query(&self) -> Option<hyper_ast_tsquery::ZeroSepArrayStr> {
         None
     }
     fn get_lang_handle(&self, _lang: &str) -> Option<ParametrizedCommitProcessorHandle> {

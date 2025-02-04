@@ -772,8 +772,9 @@ where
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
-    TS: JavaEnabledTypeStore + 'static,
-    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+    TS: JavaEnabledTypeStore + 'static + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+    More: tree_gen::Prepro<Type>
+        + tree_gen::PreproTSG<'stores>
         + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
 {
     type Acc = Acc;
@@ -838,9 +839,9 @@ where
                 node_store,
             };
             if More::ENABLED {
-                acc.precomp_queries |= self
-                .more
-                .match_precomp_queries(stores.clone(), &acc, label.as_deref());
+                acc.precomp_queries |=
+                    self.more
+                        .match_precomp_queries(stores.clone(), &acc, label.as_deref());
             }
             let children_is_empty = acc.simple.children.is_empty();
 

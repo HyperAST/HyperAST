@@ -49,6 +49,9 @@ pub use stepped_query_imm::ExtendingStringQuery;
 pub use stepped_query_imm::MyNodeErazing;
 pub use stepped_query_imm::QueryMatcher;
 
+pub use utils::ArrayStr;
+pub use utils::ZeroSepArrayStr;
+
 type Depth = u32;
 type Precomps = u16;
 // type Precomps = u16;
@@ -498,13 +501,13 @@ where
         _stores: HAST,
         _acc: &Acc,
         _label: Option<&str>,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<usize, String> {
+        Ok(0)
     }
 }
 
 pub struct PreparedOverlay<Q, O> {
-    pub query: Q,
+    pub query: Option<Q>,
     pub overlayer: O,
     pub functions: std::sync::Arc<dyn std::any::Any>,
 }
@@ -551,13 +554,16 @@ where
         acc: &Acc,
         label: Option<&str>,
     ) -> hyper_ast::tree_gen::PrecompQueries {
+        let Some(query) = self.query else {
+            return Default::default();
+        };
         // self.query.match_precomp_queries(stores, acc, label)
-        if self.query.enabled_pattern_count() == 0 {
+        if query.enabled_pattern_count() == 0 {
             return Default::default();
         }
         let pos = hyper_ast::position::StructuralPosition::empty();
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
-        let qcursor = self.query.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let qcursor = query.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
         for m in qcursor {
             assert!(m.pattern_index.to_usize() < 16);
@@ -643,7 +649,7 @@ where
         stores: HAST2,
         acc: &Acc,
         label: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<usize, String> {
         // NOTE I had to do a lot of unsafe magic :/
         // mostly exending lifetime and converting HAST to HAST2 on compatible structures
 
@@ -790,7 +796,7 @@ where
             let s = graph.to_json().unwrap();
             log::error!("graph: {}", s);
         }
-        Ok(())
+        Ok(graph.node_count())
     }
 }
 

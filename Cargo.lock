@@ -1688,7 +1688,7 @@ dependencies = [
  "tracing-subscriber",
  "tree-sitter",
  "tree-sitter-cli",
- "tree-sitter-graph 0.12.2 (git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=57527aafe1418d6450cfe810fdbdde0f56c3ec61)",
+ "tree-sitter-graph",
 ]
 
 [[package]]
@@ -4191,7 +4191,7 @@ dependencies = [
  "num",
  "serde",
  "tree-sitter",
- "tree-sitter-graph 0.12.2 (git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=57527aafe1418d6450cfe810fdbdde0f56c3ec61)",
+ "tree-sitter-graph",
  "tuples",
 ]
 
@@ -4325,7 +4325,7 @@ dependencies = [
  "ref-cast",
  "regex",
  "tree-sitter",
- "tree-sitter-graph 0.12.2 (git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=57527aafe1418d6450cfe810fdbdde0f56c3ec61)",
+ "tree-sitter-graph",
  "tree-sitter-java 0.21.0",
 ]
 
@@ -6279,7 +6279,7 @@ dependencies = [
  "syn 2.0.90",
  "tree-sitter",
  "tree-sitter-cpp",
- "tree-sitter-graph 0.12.2 (git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=db728a4be63fe9a76eddf3ce7845759a8e209333)",
+ "tree-sitter-graph",
  "tree-sitter-java 0.23.4",
  "tree-sitter-loader",
  "tree-sitter-python",
@@ -9040,21 +9040,6 @@ source = "git+https://github.com/quentinLeDilavrec/tree-sitter-cpp?rev=81216ae5b
 dependencies = [
  "cc",
  "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-graph"
-version = "0.12.2"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=57527aafe1418d6450cfe810fdbdde0f56c3ec61#57527aafe1418d6450cfe810fdbdde0f56c3ec61"
-dependencies = [
- "log",
- "regex",
- "serde",
- "serde_json",
- "smallvec",
- "string-interner 0.12.2",
- "thiserror",
- "tree-sitter",
 ]
 
 [[package]]

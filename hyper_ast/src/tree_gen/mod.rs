@@ -308,6 +308,20 @@ pub struct SpacedGlobalData<'a, GD = BasicGlobalData> {
     sum_byte_length: usize,
     inner: TextedGlobalData<'a, GD>,
 }
+impl<'a, GD> std::ops::Deref for SpacedGlobalData<'a, GD> {
+    type Target = GD;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner.inner
+    }
+}
+impl<'a, GD> std::ops::DerefMut for SpacedGlobalData<'a, GD> {
+
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner.inner
+    }
+}
+
 impl<'a, GD> From<TextedGlobalData<'a, GD>> for SpacedGlobalData<'a, GD> {
     fn from(inner: TextedGlobalData<'a, GD>) -> Self {
         Self {
@@ -366,7 +380,7 @@ mod global_stats {
     use super::*;
     #[derive(Debug, Clone)]
     pub struct StatsGlobalData<GD = BasicGlobalData> {
-        height_count: Vec<u32>,
+        // pub height_counts: Vec<u32>,
         inner: GD,
     }
 
@@ -399,7 +413,7 @@ mod global_stats {
     impl<GD> StatsGlobalData<GD> {
         fn new(inner: GD) -> Self {
             Self {
-                height_count: Vec::with_capacity(30),
+                // height_counts: Vec::with_capacity(30),
                 inner,
             }
         }
@@ -1107,8 +1121,8 @@ where
         stores: HAST,
         acc: &<Self as More>::Acc,
         label: Option<&str>,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<usize, String> {
+        Ok(0)
     }
 }
 
@@ -1129,7 +1143,7 @@ pub trait PreproTSG<'a>: More {
         stores: HAST,
         acc: &Self::Acc,
         label: Option<&str>,
-    ) -> Result<(), String>;
+    ) -> Result<usize, String>;
 }
 
 pub mod metric_definition;

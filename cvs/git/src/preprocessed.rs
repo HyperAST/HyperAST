@@ -858,6 +858,9 @@ pub fn child_at_path<'a>(
     path: impl Iterator<Item = &'a str>,
 ) -> Option<NodeIdentifier> {
     for name in path {
+        if name.trim().is_empty() {
+            continue;
+        }
         let n = stores.node_store.resolve(d);
         d = n.get_child_by_name(&stores.label_store.get(name)?)?
     }

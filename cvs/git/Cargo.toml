@@ -20,11 +20,14 @@ enumset = "1.0.12"
 serde = { version = "1.0.130" }
 
 # tree-sitter-graph = { path = "../../../tree-sitter-graph", optional = true }
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "57527aafe1418d6450cfe810fdbdde0f56c3ec61", version = "0.12", optional = true }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12", optional = true }
 
 
 [dev-dependencies]
 env_logger = "0.11.3"
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12" }
+hyper_ast_tsquery = { path = "../../tsquery", features = ["tsg"]}
+hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java" }
 
 [build-dependencies]
 

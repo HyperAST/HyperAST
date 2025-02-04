@@ -20,17 +20,23 @@ fn main() {
     let limit = args.get(3).map_or(2, |x| x.parse().expect("a number"));
     let query = args.get(4).map_or("", |x| x);
 
-    print_pos(repo_name, commit, limit, query);
+    print_pos(repo_name, commit, limit, query, [].as_slice());
 }
 
 const INCREMENTAL_QUERIES: bool = true;
 
-fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
+fn print_pos(
+    repo_name: &str,
+    commit: &str,
+    limit: usize,
+    query: &str,
+    precomputeds: impl hyper_ast_tsquery::ArrayStr,
+) {
     let query = if INCREMENTAL_QUERIES {
         hyper_ast_tsquery::Query::with_precomputed(
             &query,
             hyper_ast_gen_ts_java::language(),
-            unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
+            precomputeds,
         )
         .map(|x| x.1)
     } else {
@@ -121,19 +127,16 @@ fn bench_conditional_logic() {
         // around("assertNull"),
     );
 
-    // WARN not to be mutated is some places, here is fine, change it at will
-    // NOTE there is a upper limit for the number of usable subqueries
-    unsafe {
-        hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
-            "(if_statement)",
-            "(if_statement !alternative)",
-            r#"(identifier) (#EQ? "assertThat")"#,
-            // r#"(identifier) (#EQ? "assertEquals")"#,
-            // r#"(identifier) (#EQ? "assertNotEquals")"#,
-        ]
-    };
+    let subs = [
+        "(if_statement)",
+        "(if_statement !alternative)",
+        r#"(identifier) (#EQ? "assertThat")"#,
+        // r#"(identifier) (#EQ? "assertEquals")"#,
+        // r#"(identifier) (#EQ? "assertNotEquals")"#,
+    ]
+    .as_slice();
 
-    print_pos(repo_name, commit, limit, query);
+    print_pos(repo_name, commit, limit, query, subs);
 }
 
 #[test]
@@ -143,5 +146,5 @@ fn assertion_roulette() {
     let limit = 6;
     let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
     print!("{}", query);
-    print_pos(repo_name, commit, limit, &query);
+    print_pos(repo_name, commit, limit, &query, [].as_slice());
 }

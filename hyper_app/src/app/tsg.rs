@@ -21,9 +21,9 @@ use std::{
 mod example_queries;
 
 const INFO_QUERY: EditorInfo<&'static str> = EditorInfo {
-    title: "Query",
-    short: "the query",
-    long: concat!("follows the tree sitter query syntax"),
+    title: "Graph Extractor",
+    short: "the extractor",
+    long: concat!("follows the tree-sitter-graph DSL"),
 };
 
 const INFO_DESCRIPTION: EditorInfo<&'static str> = EditorInfo {
@@ -61,6 +61,16 @@ pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQ
     });
     let selected = &mut single.content.config;
     selected.show_combo_box(ui, "Repo Config");
+
+    ui.push_id(ui.id().with("path"), |ui| {
+        egui::TextEdit::singleline(&mut single.content.path)
+            .clip_text(true)
+            // .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("path")
+            .interactive(true)
+            .show(ui)
+    });
 }
 
 impl<C> From<&example_queries::Query> for TsgEditor<C>
@@ -127,6 +137,7 @@ pub(super) struct ComputeConfigQuery {
     commit: Commit,
     config: Config,
     len: usize,
+    path: String
 }
 
 impl Default for ComputeConfigQuery {
@@ -136,6 +147,7 @@ impl Default for ComputeConfigQuery {
             config: example_queries::EXAMPLES[0].config,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
             len: example_queries::EXAMPLES[0].commits,
+            path: example_queries::EXAMPLES[0].path.to_string(),
         }
     }
 }
@@ -169,6 +181,7 @@ pub(super) fn remote_compute_query(
         language: String,
         query: String,
         commits: usize,
+        path: String,
     }
     let language = match single.content.config {
         Config::Any => "",
@@ -184,6 +197,7 @@ pub(super) fn remote_compute_query(
                 language,
                 query: code_editors.query.code().to_string(),
                 commits: single.content.len,
+                path: single.content.path.clone(),
             }
         }
         utils_edition::EditStatus::Local { name: _, content }
@@ -191,6 +205,7 @@ pub(super) fn remote_compute_query(
             language,
             query: content.query.code().to_string(),
             commits: single.content.len,
+            path: single.content.path.clone(),
         },
     };
 
@@ -333,6 +348,7 @@ fn show_examples(
                 single.commit = (&ex.commit).into();
                 single.config = ex.config;
                 single.len = ex.commits;
+                single.path = ex.path.to_string();
                 querying_context.current = utils_edition::EditStatus::Example {
                     i: j,
                     content: (&ex.query).into(),

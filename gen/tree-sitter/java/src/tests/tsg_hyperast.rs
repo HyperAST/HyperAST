@@ -9,7 +9,7 @@ const SOURCE0: &str = include_str!("java.tsg");
 
 #[test]
 fn tsg_vanilla() {
-    let language = tree_sitter_java::language();
+    let language = crate::language();
 
     let text = CODE0;
     // let text =
@@ -57,7 +57,7 @@ fn tsg_vanilla() {
 #[test]
 fn tsg_hyperast_stepped_query() {
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let language = tree_sitter_java::language();
+    let language = crate::language();
 
     let text = CODE0;
     // NOTE you can use a real world java file
@@ -124,7 +124,7 @@ fn tsg_hyperast_stepped_query() {
 #[test]
 fn tsg_hyperast_recursive_query() {
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let language = tree_sitter_java::language();
+    let language = crate::language();
 
     let text = CODE0;
     // let text =
