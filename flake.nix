@@ -22,7 +22,7 @@
         };
         filter = inputs.nix-filter.lib;
         hyperast-backend = pkgs.rustPlatform.buildRustPackage {
-            pname = "HyperAST-WebAPI";
+            pname = "HyperAST";
             version = "0.1.0";
             src = filter {
               root = ./.;
@@ -84,14 +84,14 @@
           hyperast-webapi = hyperast-backend;
 
           hyperast-api-dockerImage = pkgs.dockerTools.buildImage {
-            name = "HyperAST-API";
+            name = "HyperAST";
             tag = "0.2.0";
              runAsRoot = ''
               ln -s  ${hyperast-backend}/bin/scripting /scripting
               ln -s  ${hyperast-backend}/bin/client /client
             '';
             config = {
-              Cmd = [ "/client -- 0.0.0.0:8000" ];
+              Cmd = [ "/client -- 0.0.0.0:8888" ];
             };
           };
         };
