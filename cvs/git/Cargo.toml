@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-git2 = { version = "0.18.2", features = ["vendored-libgit2", "vendored-openssl"] }
+git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
 tree-sitter = { workspace = true }
 hyper_ast_gen_ts_cpp = { workspace = true, optional = true }
 hyper_ast_gen_ts_java = { workspace = true, optional = true }
