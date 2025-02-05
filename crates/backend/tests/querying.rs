@@ -1,11 +1,11 @@
-use client::AppState;
+use backend::AppState;
 
 #[ignore] // ignore (from normal cargo test) for now, later make a feature
 #[test]
 // slow test, more of an integration test, try using release
 fn test_querying() -> Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug")
+        .with_env_filter("backend=debug")
         .try_init()
         .unwrap();
 

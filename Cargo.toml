@@ -5,7 +5,7 @@ members = [
     "crates/hyper_ast",
     "gen/tree-sitter/*",
     "cvs/git",
-    "crates/client",
+    "crates/backend",
     "benchmark",
     "crates/ref-mining-evaluation",
     "benchmark_diffs",

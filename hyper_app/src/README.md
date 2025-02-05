@@ -9,7 +9,7 @@ First terminal :
 
 Second terminal :
 ``` bash
-~/HyperAST> cargo run -p client --release
+~/HyperAST> cargo run -p backend --release
 ```
 
 If you don't compile in release, it will be very slow however it still work.

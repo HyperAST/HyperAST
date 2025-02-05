@@ -1,4 +1,4 @@
-use client::{AppState, track::*};
+use backend::{AppState, track::*};
 use hyperast_vcs_git::git::Forge;
 use hyperast_vcs_git::processing::RepoConfig;
 
@@ -7,7 +7,7 @@ use hyperast_vcs_git::processing::RepoConfig;
 // slow test, more of an integration test, benefits from being run in release mode
 fn test_track_at_file_pos() -> Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug")
+        .with_env_filter("backend=debug")
         .try_init()
         .unwrap();
     let state: std::sync::Arc<AppState> = AppState::default().into();

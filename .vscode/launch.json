@@ -25,15 +25,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'client'",
+            "name": "Debug executable 'backend'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=client",
-                    "--package=client"
+                    "--bin=backend",
+                    "--package=backend"
                 ],
                 "filter": {
-                    "name": "client",
+                    "name": "backend",
                     "kind": "bin"
                 }
             },

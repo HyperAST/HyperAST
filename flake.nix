@@ -43,7 +43,7 @@
               ./README.md
             ];
           };
-          buildAndTestSubdir = "client";
+          buildAndTestSubdir = "crates/backend";
           OPENSSL_NO_VENDOR = 1;
           release = true;
           doCheck = false;
@@ -71,7 +71,7 @@
         apps = {
           hyperast-backend = {
             type = "app";
-            program = "${hyperast-backend}/bin/client";
+            program = "${hyperast-backend}/bin/backend";
           };
           hyperast-scripting = {
             type = "app";
@@ -87,10 +87,10 @@
             tag = "0.2.0";
             runAsRoot = ''
               ln -s  ${hyperast-backend}/bin/scripting /scripting
-              ln -s  ${hyperast-backend}/bin/client /client
+              ln -s  ${hyperast-backend}/bin/backend /backend
             '';
             config = {
-              Cmd = ["/client -- 0.0.0.0:8888"];
+              Cmd = ["/backend -- 0.0.0.0:8888"];
               Env = [
                 "GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"

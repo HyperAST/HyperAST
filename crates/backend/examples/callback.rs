@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.disable_symbol("/");
 
-    engine.eval_file("client/examples/op3.rhai".into())?;
+    engine.eval_file("crates/backend/examples/op3.rhai".into())?;
 
     let mut engine = Engine::new();
     engine.disable_symbol("/");
