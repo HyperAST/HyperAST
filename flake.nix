@@ -81,9 +81,9 @@
         };
 
         packages = rec {
-          hyperast-webapi = hyperast-backend;
+          hyperast = hyperast-backend;
 
-          hyperast-api-dockerImage = pkgs.dockerTools.buildImage {
+          hyperast-dockerImage = pkgs.dockerTools.buildImage {
             name = "HyperAST";
             tag = "0.2.0";
              runAsRoot = ''
