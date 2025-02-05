@@ -2,6 +2,8 @@
 name = "hyperast"
 version = "0.2.0"
 edition = "2021"
+description = "Temporal code analyses at scale"
+license = "GPL-3.0"
 
 [dependencies]
 num = "0.4.0"
