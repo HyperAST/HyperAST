@@ -1,4 +1,7 @@
-use hyperast::types::HyperAST;
+use hyperast::{
+    tree_gen,
+    types::{self, HyperAST},
+};
 
 #[derive(Default)]
 pub struct PreparedQuerying<Q, HAST, Acc>(Q, std::marker::PhantomData<(HAST, Acc)>);
@@ -17,7 +20,7 @@ impl<Q, HAST, Acc> std::ops::Deref for PreparedQuerying<Q, HAST, &Acc> {
     }
 }
 
-impl<T, HAST, Acc> hyperast::tree_gen::Prepro<T> for PreparedQuerying<&crate::Query, HAST, Acc> {
+impl<T, HAST, Acc> tree_gen::Prepro<T> for PreparedQuerying<&crate::Query, HAST, Acc> {
     const USING: bool = false;
 
     fn preprocessing(&self, ty: T) -> Result<hyperast::scripting::Acc, String> {
@@ -25,19 +28,17 @@ impl<T, HAST, Acc> hyperast::tree_gen::Prepro<T> for PreparedQuerying<&crate::Qu
     }
 }
 
-impl<'s, TS, T, Acc> hyperast::tree_gen::More for PreparedQuerying<&crate::Query, (TS, T), Acc>
+impl<'s, TS, T, Acc> tree_gen::More for PreparedQuerying<&crate::Query, (TS, T), Acc>
 where
     TS: 'static
         + Clone
-        + hyperast::types::ETypeStore<Ty2 = Acc::Type>
-        + hyperast::types::RoleStore<IdF = u16, Role = hyperast::types::Role>,
-    T: hyperast::types::WithRoles,
-    T: hyperast::types::Tree,
+        + types::ETypeStore<Ty2 = Acc::Type>
+        + types::RoleStore<IdF = u16, Role = types::Role>,
+    T: types::WithRoles,
+    T: types::Tree,
     T::TreeId: Copy,
-    Acc: hyperast::types::Typed
-        + hyperast::tree_gen::WithRole<hyperast::types::Role>
-        + hyperast::tree_gen::WithChildren<T::TreeId>,
-    for<'c> &'c Acc: hyperast::tree_gen::WithLabel<L = &'c str>,
+    Acc: types::Typed + tree_gen::WithRole<types::Role> + tree_gen::WithChildren<T::TreeId>,
+    for<'c> &'c Acc: tree_gen::WithLabel<L = &'c str>,
 {
     type Acc = Acc;
     type T = T;
@@ -45,18 +46,14 @@ where
     const ENABLED: bool = true;
     fn match_precomp_queries<
         'a,
-        HAST: HyperAST<
-                'a,
-                IdN = <Self::T as hyperast::types::Stored>::TreeId,
-                TS = Self::TS,
-                T = Self::T,
-            > + std::clone::Clone,
+        HAST: HyperAST<'a, IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, T = Self::T>
+            + std::clone::Clone,
     >(
         &self,
         stores: HAST,
         acc: &Acc,
         label: Option<&str>,
-    ) -> hyperast::tree_gen::PrecompQueries {
+    ) -> tree_gen::PrecompQueries {
         if self.0.enabled_pattern_count() == 0 {
             return Default::default();
         }
@@ -73,29 +70,22 @@ where
     }
 }
 
-impl<'s, TS, T, Acc> hyperast::tree_gen::PreproTSG<'s>
-    for PreparedQuerying<&crate::Query, (TS, T), Acc>
+impl<'s, TS, T, Acc> tree_gen::PreproTSG<'s> for PreparedQuerying<&crate::Query, (TS, T), Acc>
 where
     TS: 'static
         + Clone
-        + hyperast::types::ETypeStore<Ty2 = Acc::Type>
-        + hyperast::types::RoleStore<IdF = u16, Role = hyperast::types::Role>,
-    T: hyperast::types::WithRoles,
-    T: hyperast::types::Tree,
+        + types::ETypeStore<Ty2 = Acc::Type>
+        + types::RoleStore<IdF = u16, Role = types::Role>,
+    T: types::WithRoles,
+    T: types::Tree,
     T::TreeId: Copy,
-    Acc: hyperast::types::Typed
-        + hyperast::tree_gen::WithRole<hyperast::types::Role>
-        + hyperast::tree_gen::WithChildren<T::TreeId>,
-    for<'c> &'c Acc: hyperast::tree_gen::WithLabel<L = &'c str>,
+    Acc: types::Typed + tree_gen::WithRole<types::Role> + tree_gen::WithChildren<T::TreeId>,
+    for<'c> &'c Acc: tree_gen::WithLabel<L = &'c str>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
-        HAST: HyperAST<
-                's,
-                IdN = <Self::T as hyperast::types::Stored>::TreeId,
-                TS = Self::TS,
-                T = Self::T,
-            > + std::clone::Clone,
+        HAST: HyperAST<'s, IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, T = Self::T>
+            + std::clone::Clone,
     >(
         &self,
         _stores: HAST,
