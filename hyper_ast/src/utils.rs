@@ -233,6 +233,7 @@ impl std::ops::Add for Bytes {
     }
 }
 
+#[derive(Clone)]
 pub struct Url {
     pub protocol: String,
     pub domain: String,

@@ -20,7 +20,7 @@ controlled-option = "0.4.1" # check if really needed
 string-interner = { version = "0.17.0", optional = true }
 
 # # gen
-tree-sitter = { version = "0.23.0", optional = true }
+tree-sitter = { workspace = true, optional = true }
 
 
 # # memusage
@@ -65,3 +65,4 @@ jemalloc = ["jemallocator", "jemalloc-ctl"]
 ts = ["dep:tree-sitter"]
 serialize = ["serde"]
 scripting = ["dep:rhai", "dep:mlua"]
+subtree-stats=[]

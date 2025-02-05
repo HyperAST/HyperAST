@@ -5,7 +5,7 @@ edition = "2021"
 include = ["/src", "tree-sitter-java/"]
 
 [dependencies]
-tree-sitter = { version = "0.23.0", optional = true }
+tree-sitter = { workspace = true, optional = true }
 # tree-sitter-java = {path="tree-sitter-java", version="0.20.0"}
 # tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc", optional = true }
 tree-sitter-java = { version = "0.23.0", optional = true }
@@ -22,11 +22,10 @@ hashbrown = { version = "0.14.5", default-features = false, optional = true }
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
-# hyper_ast_tsquery = { path = "../../../tsquery", default-features = false }
-# tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12", optional = true }
+# hyper_ast = { workspace = true, default-features = false } # issue with hyper_app + wasm
+tree-sitter-graph = { workspace = true, optional = true }
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
 # stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
-# tree-sitter-graph = { version = "0.11.3", optional = true }
 # tree-sitter-stack-graphs = { version = "0.9.0", optional = true }
 stack-graphs = { version = "0.14.0", optional = true}
 
@@ -51,8 +50,8 @@ cc = "*"
 pretty_assertions = "1.0.0"
 env_logger = "0.11.3"
 criterion = { version = "0.5.1", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
-hyper_ast_tsquery = { path = "../../../tsquery" }
-hyper_ast_gen_ts_tsquery = { path = "../query" }
+hyper_ast_tsquery = { workspace = true }
+hyper_ast_gen_ts_tsquery = { workspace = true }
 
 [[example]]
 name = "querying"
@@ -109,4 +108,5 @@ tsg = [
     # "dep:stack-graphs",
     # "dep:tree-sitter-stack-graphs",
 ]
+subtree-stats=["hyper_ast/subtree-stats"]
 all_examples=[]

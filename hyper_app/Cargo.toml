@@ -44,7 +44,6 @@ chrono = "0.4.23"
 
 serde_qs = "0.12.0"
 crossbeam-queue = "0.3.8"
-# hyper_ast_client = {path = "../client", package="client"}
 
 hyper_ast = { path = "../hyper_ast", default-features = false, features = [
     "serialize",

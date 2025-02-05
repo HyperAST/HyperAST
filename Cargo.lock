@@ -1664,6 +1664,7 @@ dependencies = [
  "hyper_ast_gen_ts_cpp",
  "hyper_ast_gen_ts_java",
  "hyper_ast_gen_ts_tsquery",
+ "hyper_ast_gen_ts_xml",
  "hyper_ast_tsquery",
  "hyper_diff",
  "jemallocator",
@@ -1845,7 +1846,6 @@ dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
- "unicode-width 0.1.14",
  "windows-sys 0.52.0",
 ]
 
@@ -4245,6 +4245,7 @@ dependencies = [
  "stack-graphs",
  "string-interner 0.17.0",
  "tree-sitter",
+ "tree-sitter-graph",
  "tree-sitter-java 0.23.4",
  "tuples",
 ]
@@ -4586,19 +4587,6 @@ dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
  "serde",
-]
-
-[[package]]
-name = "indicatif"
-version = "0.17.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf675b85ed934d3c67b5c5469701eec7db22689d0a2139d856e0925fa28b281"
-dependencies = [
- "console",
- "number_prefix",
- "portable-atomic",
- "unicode-width 0.2.0",
- "web-time",
 ]
 
 [[package]]
@@ -5641,12 +5629,6 @@ checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "number_prefix"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "numtoa"
@@ -7268,7 +7250,6 @@ dependencies = [
  "clap 3.2.25",
  "hyper_ast",
  "hyper_ast_cvs_git",
- "indicatif",
  "rayon",
  "serde",
  "serde_json",

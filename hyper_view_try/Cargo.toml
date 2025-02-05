@@ -6,12 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# tree-sitter = "0.20.9"
-# tree-sitter-cli = "0.20.7"
-# hyper_ast = { path = "../hyper_ast" }
-# hyper_diff = { path = "../hyper_diff" }
-# hyper_ast_cvs_git = { path = "../cvs/git" }
-# hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+# tree-sitter-cli = "0.20.7"]
 # env_logger = "0.9.0"
 # log = { version = "0.4.6", features = [
 #     "max_level_debug",

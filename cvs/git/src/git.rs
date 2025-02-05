@@ -1,7 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
-    fs,
-    path::{Path, PathBuf},
+    fmt::{Debug, Display}, fs, path::{Path, PathBuf}, process
 };
 
 pub use git2::Oid;
@@ -196,8 +194,21 @@ where
 
     fo.remote_callbacks(callbacks);
 
-    let repository = up_to_date_repo(&path, Some(fo), url);
-    repository.unwrap()
+    let repository = up_to_date_repo(&path, Some(fo), url.clone());
+    if let Ok(repository) = repository {
+        return repository;
+    }
+
+    if let Err(err) = process::Command::new("git")
+        .arg("clone")
+        .arg(url.to_string())
+        .current_dir(&*path.to_string_lossy())
+        .spawn()
+    {
+        log::error!("tryed to use the git executable, but failed. {}", err);
+    }
+
+    nofetch_repository(url, path)
 }
 
 pub fn nofetch_repository<'a, T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository
@@ -245,8 +256,12 @@ impl Forge {
     pub fn repo(self, user: impl Into<String>, name: impl Into<String>) -> Repo {
         self.try_repo(user, name).unwrap()
     }
-    
-    pub fn try_repo(self, user: impl Into<String>, name: impl Into<String>) -> Result<Repo, String> {
+
+    pub fn try_repo(
+        self,
+        user: impl Into<String>,
+        name: impl Into<String>,
+    ) -> Result<Repo, String> {
         let user = user.into();
         if user.contains("#") || user.contains("/") {
             return Err("attempting to inject stuff!".to_string());

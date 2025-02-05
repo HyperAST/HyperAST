@@ -24,12 +24,25 @@ pub use elem::{EntryRef, HashedNode, HashedNodeRef, NodeIdentifier};
 
 pub struct NodeStore {
     dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
-    inner: NodeStoreInner,
+    #[doc(hidden)]
+    pub inner: NodeStoreInner,
 }
 
 pub struct NodeStoreInner {
     count: usize,
     errors: usize,
+    #[cfg(feature = "subtree-stats")]
+    pub height_counts: Vec<u32>,
+    #[cfg(feature = "subtree-stats")]
+    pub height_counts_non_dedup: Vec<u32>,
+    #[cfg(feature = "subtree-stats")]
+    pub height_counts_structural: Vec<u32>,
+    #[cfg(feature = "subtree-stats")]
+    pub structurals: std::collections::HashSet<u32>,
+    #[cfg(feature = "subtree-stats")]
+    pub height_counts_label: Vec<u32>,
+    #[cfg(feature = "subtree-stats")]
+    pub labels: std::collections::HashSet<u32>,
     // roots: HashMap<(u8, u8, u8), NodeIdentifier>,
     // dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
     internal: legion::World,
@@ -135,7 +148,8 @@ impl NodeStore {
         let (&mut symbol, _) = {
             let symbol = inner.internal.push(components);
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner.internal
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner
+                    .internal
                     .entry_ref(*id)
                     .map(|x| HashedNodeRef::new(x))
                     .unwrap();
@@ -157,7 +171,8 @@ impl NodeStore {
         let (&mut symbol, _) = {
             let symbol = inner.internal.extend(components)[0];
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner.internal
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner
+                    .internal
                     .entry_ref(*id)
                     .map(|x| HashedNodeRef::new(x))
                     .unwrap();
@@ -267,12 +282,28 @@ impl<T, Ty> Deref for TypedNode<T, Ty> {
 
 impl Debug for NodeStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeStore")
-            .field("count", &self.inner.count)
+        let mut r = f.debug_struct("NodeStore");
+        r.field("count", &self.inner.count)
             .field("errors", &self.inner.errors)
-            .field("internal_len", &self.inner.internal.len())
-            // .field("internal", &self.internal)
-            .finish()
+            .field("internal_len", &self.inner.internal.len());
+        // .field("internal", &self.internal)
+
+        fn lim<T>(v: &[T]) -> &[T] {
+            &v[..v.len().min(30)]
+        }
+        #[cfg(feature = "subtree-stats")]
+        r.field("height_counts", &lim(&self.inner.height_counts_structural));
+        #[cfg(feature = "subtree-stats")]
+        r.field("height_counts", &lim(&self.inner.height_counts_label));
+        #[cfg(feature = "subtree-stats")]
+        r.field("height_counts", &lim(&self.inner.height_counts));
+        #[cfg(feature = "subtree-stats")]
+        r.field(
+            "height_counts_non_dedup",
+            &lim(&self.inner.height_counts_non_dedup),
+        );
+
+        r.finish()
     }
 }
 
@@ -358,6 +389,52 @@ impl NodeStoreInner {
     pub fn len(&self) -> usize {
         self.internal.len()
     }
+
+    #[cfg(feature = "subtree-stats")]
+    pub fn add_height_non_dedup(&mut self, height: u32) {
+        accumulate_height(&mut self.height_counts_non_dedup, height);
+    }
+
+    #[cfg(feature = "subtree-stats")]
+    pub fn add_height_dedup(&mut self, height: u32, hashs: crate::hashed::SyntaxNodeHashs<u32>) {
+        self.add_height(height);
+        self.add_height_label(height, hashs.label);
+        self.add_height_structural(height, hashs.structt);
+    }
+
+    #[cfg(feature = "subtree-stats")]
+    fn add_height(&mut self, height: u32) {
+        accumulate_height(&mut self.height_counts, height);
+    }
+
+    #[cfg(feature = "subtree-stats")]
+    fn add_height_structural(&mut self, height: u32, hash: u32) {
+        if not_there(&mut self.structurals, hash) {
+            accumulate_height(&mut self.height_counts_structural, height);
+        }
+    }
+
+    #[cfg(feature = "subtree-stats")]
+    fn add_height_label(&mut self, height: u32, hash: u32) {
+        if not_there(&mut self.labels, hash) {
+            accumulate_height(&mut self.height_counts_label, height);
+        }
+    }
+}
+
+fn not_there(hash_set: &mut std::collections::HashSet<u32>, hash: u32) -> bool {
+    if hash_set.contains(&hash) {
+        return false;
+    }
+    hash_set.insert(hash);
+    true
+}
+
+fn accumulate_height(counts: &mut Vec<u32>, height: u32) {
+    if counts.len() <= height as usize {
+        counts.resize(height as usize + 1, 0);
+    }
+    counts[height as usize] += 1;
 }
 
 impl NodeStore {
@@ -372,6 +449,18 @@ impl NodeStore {
             inner: NodeStoreInner {
                 count: 0,
                 errors: 0,
+                #[cfg(feature = "subtree-stats")]
+                height_counts: Vec::with_capacity(100),
+                #[cfg(feature = "subtree-stats")]
+                height_counts_non_dedup: Vec::with_capacity(100),
+                #[cfg(feature = "subtree-stats")]
+                height_counts_structural: Vec::with_capacity(100),
+                #[cfg(feature = "subtree-stats")]
+                structurals: std::collections::HashSet::with_capacity(100),
+                #[cfg(feature = "subtree-stats")]
+                height_counts_label: Vec::with_capacity(100),
+                #[cfg(feature = "subtree-stats")]
+                labels: std::collections::HashSet::with_capacity(100),
                 // roots: Default::default(),
                 internal: Default::default(),
                 hasher: Default::default(),
@@ -626,7 +715,8 @@ mod stores_impl {
         type TS = TS;
     }
 
-    impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, &NodeStoreInner, &labels::LabelStore>
+    impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN>
+        for SimpleStores<TS, &NodeStoreInner, &labels::LabelStore>
     where
         TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
         TS: TypeStore,

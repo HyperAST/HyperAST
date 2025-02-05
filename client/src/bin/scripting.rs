@@ -9,32 +9,45 @@ use tracing_subscriber::EnvFilter;
 /// supported languages:
 /// - Java
 /// - Cpp (soon)
+/// 
+/// set the env variable RUST_LOG=debug to display logs during computation
 struct Cli {
-    /// The owner of the repository
+    /// The owner of the repository, eg. INRIA
     owner: String,
-    /// The name of the repository
+    /// The name of the repository, eg. spoon
     name: String,
-    /// The start commit
+    /// The start commit, eg. 56e12a0c0e0e69ea70863011b4f4ca3305e0542b
     commit: String,
-    /// File containing a script to execute
+    /// Number of commits to process
     #[clap(short, long, default_value_t = 10)]
     depth: usize,
+    /// File containing a script to execute. Look at the examples first
     #[clap(short, long)]
     file: Option<std::path::PathBuf>,
-    /// Examples scripts
+    /// Examples scripts to compute:
+    ///  
+    /// * size: the number of nodes in the syntax tree,
+    /// 
+    /// * mcc: the McCabe cyclomatic complexity, or
+    /// 
+    /// * Loc: the number of lines of code ignoring blank lines and comments
     #[clap(short, long)]
     example: Option<String>,
+    /// Write the script directly in stdin
     #[clap(short, long)]
     interative: bool,
 }
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
-
-    // let _ = tracing_subscriber::fmt()
-    //     .with_env_filter(EnvFilter::from_default_env())
-    //     .try_init()
-    //     .unwrap();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(tracing::level_filters::LevelFilter::OFF.into())
+                .from_env_lossy(),
+        )
+        .try_init()
+        .unwrap();
 
     // let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
     // let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
@@ -67,7 +80,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         scripting(repo_spec, config, &args.commit, &script, args.depth)
     } else {
         eprintln!(
-            "You need to select an example, give a file or run a subcommand, use -h to show help."
+            "You need to select an example, give a file, or write a script. Use -h to show help."
         );
         std::process::exit(1)
     }
