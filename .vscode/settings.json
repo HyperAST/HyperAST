@@ -1,6 +1,4 @@
 {
-    "rust-analyzer.linkedProjects": [
-        "./egui_addon/Cargo.toml"
-    ],
-    "rust-analyzer.showUnlinkedFileNotification": false
+    
+    "rust-analyzer.showUnlinkedFileNotification": false,
 }
