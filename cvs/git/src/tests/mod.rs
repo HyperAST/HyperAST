@@ -217,11 +217,8 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
     >::with_preprocessing(&mut stores, &mut md_cache, more)
     .with_line_break(line_break);
     let r = crate::java::handle_java_file(&mut java_tree_gen, &b"".into(), t.as_bytes()).unwrap();
-    log::error!("height                  : {:3?}", r.local.metrics.height);
-    log::error!("height_counts_non_dedup : {:3?}", stores.node_store.inner.height_counts_non_dedup);
-    log::error!("height_counts           : {:3?}", stores.node_store.inner.height_counts);
-    log::error!("height_counts_label     : {:3?}", stores.node_store.inner.height_counts_label);
-    log::error!("height_counts_structural: {:3?}", stores.node_store.inner.height_counts_structural);
+    log::error!("height : {:3?}", r.local.metrics.height);
+    log::error!("{:?}", stores.node_store);
     // ASSERT one node per class_declaration
     // TODO make an automatic test once nodes can be accessed after the contruction
     Ok(())
