@@ -34,3 +34,4 @@ jobs:
           files: |
             HyperAST-${{ steps.get_version.outputs.VERSION }}.tar.gz
             LICENSE
+          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
