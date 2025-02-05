@@ -156,5 +156,6 @@ fn after_prepared(
     let dd = n
         .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
         .unwrap();
-    println!("{} {} {:?}", &oid, commit.processing_time(), &dd.0);
+    use hyper_ast::types::WithStats;
+    println!("{} {} {:?} {}", &oid, commit.processing_time(), &dd.0, n.size());
 }

@@ -42,5 +42,5 @@ impl<HAST, Acc> From<std::sync::Arc<str>> for Prepro<HAST, Acc> {
 }
 
 pub struct Acc {
-    id: usize,
+    id: u16,
 }

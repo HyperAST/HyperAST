@@ -79,34 +79,43 @@ function finish()
 end
 "#;
 
-static mut MAX_COUNT: usize = 0;
-
 impl Drop for Acc {
     fn drop(&mut self) {
-        unsafe { LUA_INSTANCES -= 1 };
-        let count = unsafe { LUA_INSTANCES };
+        let count = LUA_INSTANCES.get() - 1;
+        LUA_INSTANCES.set(count);
         assert_eq!(self.id, count); // TODO handle properly multiple stacks
-        unsafe {
-            MAX_COUNT = MAX_COUNT.max(count);
-        }
-        let lua = unsafe { &LUA_POOL[self.id] };
-        log::warn!("{} drop {count} {:p}", lua.used_memory(), &self);
-        if count < 2 {
-            log::error!(
-                "timings {} {} {} {} {}",
-                unsafe { MAX_COUNT },
-                unsafe { TIME_GEN },
-                unsafe { TIME_INIT },
-                unsafe { TIME_ACC },
-                unsafe { TIME_FINISH }
-            );
-        }
+        MAX_COUNT.set(MAX_COUNT.get().max(count));
+
+        LUA_POOL.with_borrow_mut(|pool| {
+            let lua = &pool[self.id as usize];
+            log::info!("{} drop {count} {:p}", lua.used_memory(), &self);
+            if count < 2 {
+                // log::info!(
+                //     "timings {} {} {} {} {}",
+                //     MAX_COUNT.get(),
+                //     // unsafe { TIME_GEN },
+                //     // unsafe { TIME_INIT },
+                //     // unsafe { TIME_ACC },
+                //     // unsafe { TIME_FINISH }
+                // );
+            }
+        });
     }
 }
 
 use super::{Acc, Prepro};
 
-static mut LUA_POOL: Vec<Lua> = vec![];
+use std::cell::Cell;
+use std::cell::RefCell;
+
+thread_local! {
+    static LUA_POOL: RefCell<Vec<Lua>>  = RefCell::new(vec![]);
+    static LUA_INSTANCES: Cell<u16> = Cell::new(0);
+    static MAX_COUNT: Cell<u16> = Cell::new(0);
+    // pub static FOO: Cell<u32> = Cell::new(1);
+
+    // static BAR: RefCell<Vec<f32>> = RefCell::new(vec![1.0, 2.0]);
+}
 
 impl<HAST, Acc> Prepro<HAST, &Acc> {
     fn gen_lua() -> Result<Lua> {
@@ -175,37 +184,40 @@ impl<HAST, Acc> Prepro<HAST, &Acc> {
 
     fn init<T: HyperType + 'static>(self, ty: T) -> Result<self::Acc> {
         let now = Instant::now();
-        let id;
-        let lua: &mut Lua = unsafe {
-            if LUA_INSTANCES < LUA_POOL.len() {
-                id = LUA_INSTANCES;
-                &mut LUA_POOL[id]
-            } else if LUA_INSTANCES == LUA_POOL.len() {
-                id = LUA_INSTANCES;
-                LUA_POOL.push(Self::gen_lua()?);
-                &mut LUA_POOL[id]
+        let mut count = LUA_INSTANCES.get();
+        LUA_POOL.with_borrow_mut(|pool| {
+            let id;
+            let lua = if (count as usize) < pool.len() {
+                id = count;
+                &mut pool[id as usize]
+            } else if count as usize == pool.len() {
+                id = count;
+                pool.push(Self::gen_lua().expect("a lua interpretor"));
+                &mut pool[id as usize]
             } else {
                 panic!()
-            }
-        };
-        unsafe { LUA_INSTANCES += 1 };
-        let prepare_time = now.elapsed().as_secs_f64();
-        let now = Instant::now();
-        unsafe { TIME_GEN += prepare_time };
-        log::warn!("gen {} {prepare_time}", &lua.used_memory());
+            };
+            count += 1;
+            LUA_INSTANCES.set(count);
 
-        lua.scope(|scope| {
-            let ty = scope.create_any_userdata(Ty(ty))?;
-            lua.globals().set("TY", ty)?;
-            // log::warn!("{} init {count}  {:p}", &lua.used_memory(), &self);
-            lua.load(self.txt.as_ref()).exec()?;
-            // log::warn!("{} inited", &lua.used_memory());
-            Ok(())
-        })?;
-        let prepare_time = now.elapsed().as_secs_f64();
-        unsafe { TIME_INIT += prepare_time };
-        log::warn!("{} {prepare_time}", &lua.used_memory());
-        Ok(self::Acc { id })
+            let prepare_time = now.elapsed().as_secs_f64();
+            let now = Instant::now();
+            // unsafe { TIME_GEN += prepare_time };
+            log::debug!("gen {} {prepare_time}", &lua.used_memory());
+
+            lua.scope(|scope| {
+                let ty = scope.create_any_userdata(Ty(ty))?;
+                lua.globals().set("TY", ty)?;
+                // log::warn!("{} init {count}  {:p}", &lua.used_memory(), &self);
+                lua.load(self.txt.as_ref()).exec()?;
+                // log::warn!("{} inited", &lua.used_memory());
+                Ok(())
+            })?;
+            let prepare_time = now.elapsed().as_secs_f64();
+            // unsafe { TIME_INIT += prepare_time };
+            log::debug!("{} {prepare_time}", &lua.used_memory());
+            Ok(self::Acc { id })
+        })
     }
 }
 #[derive(Clone, ref_cast::RefCast)]
@@ -289,7 +301,6 @@ impl<T: HyperType + Send + Sync + 'static> mlua::UserData for SubtreeHandle<T> {
                 return b.into_lua(lua);
             }
             let dd = n.get_component::<DerivedData>().unwrap();
-            // log::error!("meta {:?}", dd.0.get("size"));
             let Some(d) = dd.0.get(s) else {
                 return Err(mlua::Error::runtime(s));
             };
@@ -311,104 +322,109 @@ impl Acc {
         child: SubtreeHandle<T2>,
     ) -> Result<()> {
         let now = Instant::now();
-        let lua = unsafe { &mut LUA_POOL[self.id] };
-        // let lua = &mut self.lua;
-        let acc = lua.globals().get::<_, mlua::Function>("acc")?;
-        lua.scope(|scope| {
-            let ty = scope.create_any_userdata(Ty(ty.as_static()))?;
-            lua.globals().set("TY", ty)?;
-            let child = scope.create_userdata(child)?;
-            let store = scope.create_userdata_ref(store)?;
-            lua.globals().set("STORE", store)?;
-            log::warn!("{} acc", &lua.used_memory());
-            let m: mlua::Value = acc.call((child,))?;
-            debug_assert!(m.is_nil());
+        LUA_POOL.with_borrow_mut(|pool| {
+            let lua = &mut pool[self.id as usize];
+            // let lua = &mut self.lua;
+            let acc = lua.globals().get::<_, mlua::Function>("acc")?;
+            lua.scope(|scope| {
+                let ty = scope.create_any_userdata(Ty(ty.as_static()))?;
+                lua.globals().set("TY", ty)?;
+                let child = scope.create_userdata(child)?;
+                let store = scope.create_userdata_ref(store)?;
+                lua.globals().set("STORE", store)?;
+                log::debug!("{} acc", &lua.used_memory());
+                let m: mlua::Value = acc.call((child,))?;
+                debug_assert!(m.is_nil());
+                Ok(())
+            })?;
+            let prepare_time = now.elapsed().as_secs_f64();
+            // unsafe { TIME_ACC += prepare_time };
             Ok(())
-        })?;
-        let prepare_time = now.elapsed().as_secs_f64();
-        unsafe { TIME_ACC += prepare_time };
-        Ok(())
+        })
     }
-    pub fn finish<T: HyperType>(mut self, subtree: &Subtr<T>) -> Result<DerivedData> {
+    pub fn finish<T: HyperType>(self, subtree: &Subtr<T>) -> Result<DerivedData> {
         let now = Instant::now();
         let ptr = format!("{:p}", &self);
-        let lua = unsafe { &mut LUA_POOL[self.id] };
-        // let lua = &mut self.lua;
-        let finish = lua.globals().get::<_, mlua::Function>("finish")?;
-        let m = lua.scope(|scope| {
-            let ty = subtree.ty();
-            let ty = scope.create_any_userdata(Ty(ty.as_static()))?;
-            lua.globals().set("TY", ty)?;
-            log::warn!("{}", &lua.used_memory());
-            let m: mlua::Value = finish.call(())?;
-            log::warn!("{}", &lua.used_memory());
+        LUA_POOL.with_borrow_mut(|pool| {
+            let lua = &mut pool[self.id as usize];
+            // let lua = &mut self.lua;
+            let finish = lua.globals().get::<_, mlua::Function>("finish")?;
+            let m = lua.scope(|scope| {
+                let ty = subtree.ty();
+                let ty = scope.create_any_userdata(Ty(ty.as_static()))?;
+                lua.globals().set("TY", ty)?;
+                log::debug!("{}", &lua.used_memory());
+                let m: mlua::Value = finish.call(())?;
+                log::debug!("{}", &lua.used_memory());
+                // dbg!(&m);
+                Ok(m)
+            })?;
+            log::debug!("{}", &lua.used_memory());
             // dbg!(&m);
-            Ok(m)
-        })?;
-        log::warn!("{}", &lua.used_memory());
-        // dbg!(&m);
-        lua.gc_collect()?;
-        // dbg!(&m);
-        log::warn!("{} gced", &lua.used_memory());
+            lua.gc_collect()?;
+            // dbg!(&m);
+            log::debug!("{} gced", &lua.used_memory());
 
-        let map = DerivedData::try_from(m.as_table().unwrap())?;
-        log::warn!("{}", &lua.used_memory());
-        lua.sandbox(false)?;
-        log::warn!("{} unbox {ptr}", &lua.used_memory());
+            let map = DerivedData::try_from(m.as_table().unwrap())?;
+            log::debug!("{}", &lua.used_memory());
+            lua.sandbox(false)?;
+            log::debug!("{} unbox {ptr}", &lua.used_memory());
 
-        let prepare_time = now.elapsed().as_secs_f64();
-        unsafe { TIME_FINISH += prepare_time };
-        log::warn!("{} {prepare_time}", &lua.used_memory());
-        // log::error!("{:?}", map.0.get("size"));
-        Ok(map)
+            let prepare_time = now.elapsed().as_secs_f64();
+            // unsafe { TIME_FINISH += prepare_time };
+            log::debug!("{} {prepare_time}", &lua.used_memory());
+            Ok(map)
+        })
     }
     pub fn finish_with_label<T: HyperType>(
-        mut self,
+        self,
         subtree: &Subtr<T>,
         label: String,
     ) -> Result<DerivedData> {
-        let now = Instant::now();
-        let ptr = format!("{:p}", &self);
-        let lua = unsafe { &mut LUA_POOL[self.id] };
-        // let lua = &mut self.lua;
-        let finish = lua.globals().get::<_, mlua::Function>("finish")?;
-        let m = lua.scope(|scope| {
-            let ty = subtree.ty();
-            let ty = scope.create_any_userdata(Ty(ty.as_static()))?;
-            lua.globals().set("TY", ty)?;
-            // let subt = scope.create_any_userdata(label)?;
-            lua.globals().set("L", label)?;
-            log::warn!("{}", &lua.used_memory());
-            let m: mlua::Value = finish.call(())?;
-            log::warn!("{}", &lua.used_memory());
+        LUA_POOL.with_borrow_mut(|pool| {
+            let lua = &mut pool[self.id as usize];
+            let now = Instant::now();
+            let ptr = format!("{:p}", &self);
+            // let lua = &mut self.lua;
+            let finish = lua.globals().get::<_, mlua::Function>("finish")?;
+            let m = lua.scope(|scope| {
+                let ty = subtree.ty();
+                let ty = scope.create_any_userdata(Ty(ty.as_static()))?;
+                lua.globals().set("TY", ty)?;
+                // let subt = scope.create_any_userdata(label)?;
+                lua.globals().set("L", label)?;
+                log::debug!("{}", &lua.used_memory());
+                let m: mlua::Value = finish.call(())?;
+                log::debug!("{}", &lua.used_memory());
+                // dbg!(&m);
+                Ok(m)
+            })?;
+            log::debug!("{}", &lua.used_memory());
             // dbg!(&m);
-            Ok(m)
-        })?;
-        log::warn!("{}", &lua.used_memory());
-        // dbg!(&m);
-        lua.gc_collect()?;
-        // dbg!(&m);
-        log::warn!("{} gced", &lua.used_memory());
+            lua.gc_collect()?;
+            // dbg!(&m);
+            log::debug!("{} gced", &lua.used_memory());
 
-        let map = DerivedData::try_from(m.as_table().unwrap())?;
-        log::warn!("{}", &lua.used_memory());
-        lua.sandbox(false)?;
-        log::warn!("{} unbox {ptr}", &lua.used_memory());
+            let map = DerivedData::try_from(m.as_table().unwrap())?;
+            log::debug!("{}", &lua.used_memory());
+            lua.sandbox(false)?;
+            log::debug!("{} unbox {ptr}", &lua.used_memory());
 
-        let prepare_time = now.elapsed().as_secs_f64();
-        unsafe { TIME_FINISH += prepare_time };
-        log::warn!("{} {prepare_time}", &lua.used_memory());
-        // log::error!("{:?}", map.0.get("size"));
-        Ok(map)
+            let prepare_time = now.elapsed().as_secs_f64();
+            // unsafe { TIME_FINISH += prepare_time };
+            log::debug!("{} {prepare_time}", &lua.used_memory());
+            Ok(map)
+        })
     }
 }
 
-static mut LUA_INSTANCES: usize = 0;
-static mut TIME_GEN: f64 = 0.0;
-static mut TIME_INIT: f64 = 0.0;
-static mut TIME_ACC: f64 = 0.0;
-static mut TIME_FINISH: f64 = 0.0;
+// WARN if used in parallele the result will tend to bias toward a lower runtime
+// static mut TIME_GEN: f64 = 0.0;
+// static mut TIME_INIT: f64 = 0.0;
+// static mut TIME_ACC: f64 = 0.0;
+// static mut TIME_FINISH: f64 = 0.0;
 
+#[derive(Default)]
 pub struct DerivedData(
     // good way to improve compatibility and reusability
     pub rhai::Map,
@@ -604,7 +620,8 @@ impl<
     }
 }
 
-impl<'a,
+impl<
+        'a,
         TS,
         T: crate::types::Tree,
         Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
@@ -624,7 +641,7 @@ impl<'a,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> std::result::Result<usize, std::string::String>
-    where
+where
         // <HAST as crate::types::HyperASTShared>::IdN: Copy,
         // HAST: 'static,
     {
