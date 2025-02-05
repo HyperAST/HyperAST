@@ -93,7 +93,7 @@ fn scripting(
     script: &str,
     depth: usize,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let state = client::AppState::default();
+    let state = backend::AppState::default();
     state
         .repositories
         .write()
@@ -145,7 +145,7 @@ fn scripting(
 }
 
 fn after_prepared(
-    state: &client::AppState,
+    state: &backend::AppState,
     repository: &hyperast_vcs_git::processing::ConfiguredRepo2,
     oid: hyperast_vcs_git::git::Oid,
 ) {

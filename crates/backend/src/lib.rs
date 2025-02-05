@@ -334,7 +334,7 @@ pub mod log_languages {
 // slow test, more of an integration test, try using release
 fn test_measuring_size() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
+        .with_env_filter("backend=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
@@ -351,7 +351,7 @@ fn test_measuring_size() -> std::result::Result<(), Box<dyn std::error::Error>> 
 // slow test, more of an integration test, try using release
 fn test_measuring_mcc() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
+        .with_env_filter("backend=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
@@ -368,7 +368,7 @@ fn test_measuring_mcc() -> std::result::Result<(), Box<dyn std::error::Error>> {
 // slow test, more of an integration test, try using release
 fn test_measuring_loc() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
+        .with_env_filter("backend=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
@@ -485,7 +485,7 @@ fn run_scripting(
 // slow test, more of an integration test, try using release
 fn test_tsg_incr() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
+        .with_env_filter("backend=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 

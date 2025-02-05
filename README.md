@@ -52,9 +52,9 @@ There is also a development shell provided with all the necessary dependencies i
 ```sh
 nix develop # from the project root dir
 ```
-### Launch server with Cargo (You have to handle system dependencies yourself, such as, `rustc`, `openssl` )
+### Launch our server with Cargo (You have to handle system dependencies yourself, such as, `rustc`, `openssl` )
 ```sh
-cargo run -p client --release # from the project root dir, after having cloned the repository
+cargo run -p backend --release # from the project root dir, after having cloned the repository
 ```
 Note: Currently HyperAST uses features from the nightly channel, so you should definitely use [rustup](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file), the Rust version manager.
 

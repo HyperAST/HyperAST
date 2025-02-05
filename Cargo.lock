@@ -984,6 +984,63 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b7e4c2464d97fe331d41de9d5db0def0a96f4d823b8b32a2efd503578988973"
 
 [[package]]
+name = "backend"
+version = "0.2.0"
+dependencies = [
+ "automerge",
+ "autosurgeon",
+ "average",
+ "axum",
+ "axum-extra",
+ "axum-macros",
+ "base64 0.13.1",
+ "clap 3.2.25",
+ "dashmap",
+ "enumset",
+ "futures",
+ "futures-util",
+ "graphql_client",
+ "hashbrown 0.14.5",
+ "headers",
+ "http 1.1.0",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "hyper_diff",
+ "hyperast",
+ "hyperast_gen_ts_cpp",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_tsquery",
+ "hyperast_gen_ts_xml",
+ "hyperast_tsquery",
+ "hyperast_vcs_git",
+ "jemallocator",
+ "log",
+ "nohash-hasher",
+ "num",
+ "once_cell",
+ "polyglote",
+ "reqwest",
+ "rerun",
+ "rhai",
+ "rustls",
+ "serde",
+ "serde-aux",
+ "serde_json",
+ "syn 2.0.90",
+ "tokio",
+ "tower 0.5.1",
+ "tower-http",
+ "tower-layer",
+ "tracing",
+ "tracing-subscriber",
+ "tree-sitter",
+ "tree-sitter-cli",
+ "tree-sitter-graph",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1634,63 +1691,6 @@ name = "clean-path"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aaa6b4b263a5d737e9bf6b7c09b72c41a5480aec4d7219af827f6564e950b6a5"
-
-[[package]]
-name = "client"
-version = "0.2.0"
-dependencies = [
- "automerge",
- "autosurgeon",
- "average",
- "axum",
- "axum-extra",
- "axum-macros",
- "base64 0.13.1",
- "clap 3.2.25",
- "dashmap",
- "enumset",
- "futures",
- "futures-util",
- "graphql_client",
- "hashbrown 0.14.5",
- "headers",
- "http 1.1.0",
- "http-body-util",
- "hyper",
- "hyper-rustls",
- "hyper-util",
- "hyper_diff",
- "hyperast",
- "hyperast_gen_ts_cpp",
- "hyperast_gen_ts_java",
- "hyperast_gen_ts_tsquery",
- "hyperast_gen_ts_xml",
- "hyperast_tsquery",
- "hyperast_vcs_git",
- "jemallocator",
- "log",
- "nohash-hasher",
- "num",
- "once_cell",
- "polyglote",
- "reqwest",
- "rerun",
- "rhai",
- "rustls",
- "serde",
- "serde-aux",
- "serde_json",
- "syn 2.0.90",
- "tokio",
- "tower 0.5.1",
- "tower-http",
- "tower-layer",
- "tracing",
- "tracing-subscriber",
- "tree-sitter",
- "tree-sitter-cli",
- "tree-sitter-graph",
-]
 
 [[package]]
 name = "clipboard-win"

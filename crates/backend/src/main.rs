@@ -6,10 +6,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use client::*;
+use backend::*;
 
 use axum::{body::Bytes, Router};
-use client::{
+use backend::{
     app::{
         commit_metadata_route, fetch_code_route, fetch_git_file, querying_app, scripting_app,
         smells_app, track_code_route, tsg_app, view_code_route,
@@ -52,10 +52,10 @@ type SharedState = Arc<AppState>;
 
 #[tokio::main]
 async fn main() {
-    let opts = client::cli::parse();
+    let opts = backend::cli::parse();
     #[cfg(feature = "rerun")]
     {
-        if let Err(e) = client::log_languages::log_languages() {
+        if let Err(e) = backend::log_languages::log_languages() {
             log::error!("error logging languages: {}", e)
         };
     }
@@ -80,7 +80,7 @@ async fn main() {
     }
     let app = Router::new()
         .fallback(fallback)
-        .route("/ws", axum::routing::get(client::ws_handler))
+        .route("/ws", axum::routing::get(backend::ws_handler))
         .merge(kv_store_app(Arc::clone(&shared_state)))
         .merge(scripting_app(Arc::clone(&shared_state)))
         .merge(querying_app(Arc::clone(&shared_state)))
@@ -132,8 +132,8 @@ async fn shutdown_signal() {
 // pub(crate) use hyperast::store::nodes::no_space;
 // #[test]
 // fn test_scripting() -> Result<(), Box<dyn std::error::Error>> {
-//     let client = reqwest::blocking::Client::default();
-//     let req_build = client.post(
+//     let backend = reqwest::blocking::Client::default();
+//     let req_build = backend.post(
 //         "http://localhost:8080/script/github/INRIA/spoon/4acedc53a13a727be3640fe234f7e261d2609d58",
 //     );
 //     use crate::scripting::ScriptContent;
@@ -167,7 +167,7 @@ async fn shutdown_signal() {
 //         .header("content-type", "application/json")
 //         .body(serde_json::to_string(&script).unwrap())
 //         .build()?;
-//     let resp = client.execute(req)?;
+//     let resp = backend.execute(req)?;
 //     println!("{:#?}", resp.text()?);
 //     Ok(())
 // }
