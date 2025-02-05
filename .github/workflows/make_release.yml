@@ -25,12 +25,12 @@ jobs:
       # Build the Docker image using nix
       - name: Build Docker image with Nix
         run: |
-          nix build .#hyperast-webapi-dockerImage --no-link --out-link HyperAST-Backend-${{ steps.get_version.outputs.VERSION }}.tar.gz
+          nix build .#hyperast-api-dockerImage --no-link --out-link HyperAST-API-${{ steps.get_version.outputs.VERSION }}.tar.gz
 
       - name: Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            HyperAST-Backend-${{ steps.get_version.outputs.VERSION }}.tar.gz
+            HyperAST-API-${{ steps.get_version.outputs.VERSION }}.tar.gz
             LICENSE
