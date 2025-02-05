@@ -73,13 +73,13 @@ fn compare_querying_with_and_without_skipping(
     let stores = &repositories.processor.main_stores;
     let mut qcursor_incr = {
         let pos = hyperast::position::StructuralPosition::new(code);
-        let cursor = hyperast_tsquery::hyperast::TreeCursor::new(stores, pos);
+        let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
         query_incr.matches(cursor)
     }
     .into_iter();
     let mut qcursor = {
         let pos = hyperast::position::StructuralPosition::new(code);
-        let cursor = hyperast_tsquery::hyperast::TreeCursor::new(stores, pos);
+        let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
         query.matches(cursor)
     }
     .into_iter();
