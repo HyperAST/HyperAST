@@ -1,4 +1,4 @@
-use hyper_ast::{
+use hyperast::{
     filter::{Bloom, BloomResult, BF},
     impact::serialize::CachedHasher,
     impact::BulkHasher,
@@ -12,15 +12,15 @@ use hyper_ast::{
     types::{NodeId, TypedNodeStore, WithChildren},
 };
 
-use hyper_ast_gen_ts_java::types::{TIdN, Type};
+use hyperast_gen_ts_java::types::{TIdN, Type};
 
 use crate::java::handle_java_file;
 
-use hyper_ast_gen_ts_java::impact::{
+use hyperast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
     partial_analysis::PartialAnalysis,
 };
-use hyper_ast_gen_ts_java::{
+use hyperast_gen_ts_java::{
     impact::{element::RefsEnum, usage},
     legion_with_refs as java_tree_gen,
 };
@@ -996,7 +996,7 @@ fn test_hashing() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .is_test(true)
         .init();
-    let mut stores = SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
@@ -1441,7 +1441,7 @@ fn run11(text: &[u8]) {
     //     &java_tree_gen.stores.label_store,
     //     &a.local.compressed_node,
     // );
-    hyper_ast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
+    hyperast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
     println!();
 }
 
@@ -1822,7 +1822,7 @@ fn run12(text: &[u8]) {
     // let root = ana.solver.intern(RefsEnum::Root);
     // let package_ref = scoped!(root, "spoon");
 
-    hyper_ast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
+    hyperast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
     println!();
 }
 
@@ -1881,7 +1881,7 @@ fn run13(text: &[u8]) {
     // let root = ana.solver.intern(RefsEnum::Root);
     // let package_ref = scoped!(root, "spoon");
 
-    hyper_ast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
+    hyperast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
     println!();
 }
 

@@ -6,7 +6,7 @@ use crate::decompressed_tree_store::{
     BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     ShallowDecompressedTreeStore,
 };
-use hyper_ast::types::{NodeStore, WithChildren};
+use hyperast::types::{NodeStore, WithChildren};
 
 /// Wrap or just map a decommpressed tree in breadth-first eg. post-order,
 pub struct SimpleBfsMapper<

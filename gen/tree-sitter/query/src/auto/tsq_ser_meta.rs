@@ -1,5 +1,5 @@
-use hyper_ast::store;
-use hyper_ast::types::{self, HyperType, IterableChildren};
+use hyperast::store;
+use hyperast::types::{self, HyperType, IterableChildren};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::LazyLock;
@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 pub struct TreeToQuery<
     'a,
     HAST: types::HyperAST<'a>,
-    TIdN: hyper_ast::types::TypedNodeId,
+    TIdN: hyperast::types::TypedNodeId,
     C: Converter,
     const PP: bool = true,
 > {
@@ -22,22 +22,22 @@ static Q_STORE: LazyLock<QStore<crate::types::TStore>> = LazyLock::new(|| Defaul
 
 struct QStore<
     TS,
-    NS = hyper_ast::store::nodes::DefaultNodeStore,
-    LS = hyper_ast::store::labels::LabelStore,
->(std::sync::RwLock<hyper_ast::store::SimpleStores<TS, NS, LS>>);
+    NS = hyperast::store::nodes::DefaultNodeStore,
+    LS = hyperast::store::labels::LabelStore,
+>(std::sync::RwLock<hyperast::store::SimpleStores<TS, NS, LS>>);
 
 impl<TS: Default> Default for QStore<TS> {
     fn default() -> Self {
-        let stores = hyper_ast::store::SimpleStores::default();
+        let stores = hyperast::store::SimpleStores::default();
         Self(std::sync::RwLock::new(stores))
     }
 }
 pub(crate) struct QStoreRef<
     'a,
     TS,
-    NS = hyper_ast::store::nodes::DefaultNodeStore,
-    LS = hyper_ast::store::labels::LabelStore,
->(std::sync::RwLockReadGuard<'a, hyper_ast::store::SimpleStores<TS, NS, LS>>);
+    NS = hyperast::store::nodes::DefaultNodeStore,
+    LS = hyperast::store::labels::LabelStore,
+>(std::sync::RwLockReadGuard<'a, hyperast::store::SimpleStores<TS, NS, LS>>);
 
 impl<'a, TS, NS, LS> std::ops::Deref for QStoreRef<'a, TS, NS, LS> {
     type Target = store::SimpleStores<TS, NS, LS>;
@@ -104,7 +104,7 @@ impl<
         'store,
         'a,
         HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
     > TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
 where
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
@@ -122,7 +122,7 @@ impl<
         'store,
         'a,
         HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
         C: Converter<Ty = TIdN::Ty>,
     > TreeToQuery<'store, HAST, TIdN, C>
 {
@@ -156,7 +156,7 @@ impl<
 impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > Display for TreeToQuery<'store, HAST, TIdN, F, PP>
@@ -171,7 +171,7 @@ where
 impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > TreeToQuery<'store, HAST, TIdN, F, PP>

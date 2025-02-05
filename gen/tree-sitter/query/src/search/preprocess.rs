@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use super::{Capture, Pattern, Predicate, PreparedMatcher, QuickTrigger};
 
-use hyper_ast::store::nodes::legion::NodeIdentifier;
-use hyper_ast::store::SimpleStores;
-use hyper_ast::types::{HyperAST, IterableChildren, Labeled, Typed, WithChildren};
+use hyperast::store::nodes::legion::NodeIdentifier;
+use hyperast::store::SimpleStores;
+use hyperast::types::{HyperAST, IterableChildren, Labeled, Typed, WithChildren};
 
 use tree_sitter::CaptureQuantifier as Quant;
 
@@ -84,7 +84,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     ) -> PreparingMatcher<Ty, C> {
         use crate::types::TIdN;
         use crate::types::Type;
-        use hyper_ast::types::LabelStore;
+        use hyperast::types::LabelStore;
         let mut res = PreparingMatcher::default();
         let n = query_store.node_store.resolve(query);
         let t: Type = query_store.resolve_type(&query);
@@ -205,7 +205,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     ) -> Pattern<Ty> {
         use crate::types::TIdN;
         use crate::types::Type;
-        use hyper_ast::types::LabelStore;
+        use hyperast::types::LabelStore;
         let mut patterns = vec![];
         let n = query_store
             .node_store
@@ -429,7 +429,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     ) -> Pattern<Ty> {
         use crate::types::TIdN;
         use crate::types::Type;
-        use hyper_ast::types::LabelStore;
+        use hyperast::types::LabelStore;
         let n = query_store
             .node_store
             .try_resolve_typed3::<TsQuery>(&rule)
@@ -490,7 +490,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     ) -> Pattern<Ty> {
         use crate::types::TIdN;
         use crate::types::Type;
-        use hyper_ast::types::LabelStore;
+        use hyperast::types::LabelStore;
         let n = query_store
             .node_store()
             .try_resolve_typed3::<TsQuery>(&rule)
@@ -623,7 +623,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     ) -> Predicate<String> {
         use crate::types::TIdN;
         use crate::types::Type;
-        use hyper_ast::types::LabelStore;
+        use hyperast::types::LabelStore;
         let n = query_store
             .node_store()
             .try_resolve_typed3::<TsQuery>(&rule)
@@ -717,14 +717,14 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
 }
 
 pub(crate) fn preprocess_capture_pred_arg(
-    arg: hyper_ast::store::nodes::legion::TypedNode<
-        hyper_ast::store::nodes::legion::HashedNodeRef<'_, NodeIdentifier>,
+    arg: hyperast::store::nodes::legion::TypedNode<
+        hyperast::store::nodes::legion::HashedNodeRef<'_, NodeIdentifier>,
         crate::types::Type,
     >,
     query_store: &SimpleStores<_TStore>,
 ) -> String {
     use crate::types::Type;
-    use hyper_ast::types::LabelStore;
+    use hyperast::types::LabelStore;
     if let Type::Capture = arg.get_type() {
         let mut cs = arg.children().unwrap().iter_children();
         assert_eq!(2, cs.len());

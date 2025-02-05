@@ -8,7 +8,7 @@ use crate::{
     },
     matchers::mapping_store::MonoMappingStore,
 };
-use hyper_ast::types::{Tree, WithStats};
+use hyperast::types::{Tree, WithStats};
 
 pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
     pub(super) stores: &'a HAST,
@@ -75,7 +75,7 @@ where
     }
 }
 
-use hyper_ast::types::HyperAST;
+use hyperast::types::HyperAST;
 
 impl<
         'a,

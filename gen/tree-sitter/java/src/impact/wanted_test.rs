@@ -29,7 +29,7 @@ fn test() {
 // #[cfg(test)]
 // #[allow(unused)]
 // mod try_typed_store {
-//     use hyper_ast::types::Type;
+//     use hyperast::types::Type;
 
 //     pub enum Element {
 //         Block(Box<Block>),

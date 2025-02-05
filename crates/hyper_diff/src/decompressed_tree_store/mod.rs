@@ -6,7 +6,7 @@
 //! We need both post-order traversal and breadth-first.
 use num_traits::PrimInt;
 
-use hyper_ast::types::{NodeId, NodeStore, Stored, WithChildren, WithStats};
+use hyperast::types::{NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 // pub mod breath_first;
 pub mod basic_post_order;
@@ -23,7 +23,7 @@ pub mod simple_zs_tree;
 pub use complete_post_order::CompletePostOrder;
 pub use simple_zs_tree::SimpleZsTree;
 
-pub use hyper_ast::types::DecompressedSubtree;
+pub use hyperast::types::DecompressedSubtree;
 
 // /// show that the decompression can be done
 // /// - needed to initialize in matchers
@@ -320,8 +320,8 @@ pub trait WrapDecompressed<
 
 pub struct PersistedNode<I>(I);
 
-impl<I> hyper_ast::types::Node for PersistedNode<I> {}
+impl<I> hyperast::types::Node for PersistedNode<I> {}
 
-impl<I: Eq + NodeId> hyper_ast::types::Stored for PersistedNode<I> {
+impl<I: Eq + NodeId> hyperast::types::Stored for PersistedNode<I> {
     type TreeId = I;
 }

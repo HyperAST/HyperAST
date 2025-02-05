@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 
-use hyper_ast::types::{self, Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren};
+use hyperast::types::{self, Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren};
 
 use super::{
     ContiguousDescendants, DecompressedTreeStore, Iter, PostOrder, PostOrderIterable,
@@ -542,11 +542,11 @@ where
 }
 
 // impl<'a, IdD> super::Persistable
-//     for BasicPostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>, IdD>
+//     for BasicPostOrder<hyperast::store::nodes::legion::HashedNodeRef<'a>, IdD>
 // {
 //     type Persisted = BasicPostOrder<
 //         super::PersistedNode<
-//             <hyper_ast::store::nodes::legion::HashedNodeRef<'a> as types::Stored>::TreeId,
+//             <hyperast::store::nodes::legion::HashedNodeRef<'a> as types::Stored>::TreeId,
 //         >,
 //         IdD,
 //     >;

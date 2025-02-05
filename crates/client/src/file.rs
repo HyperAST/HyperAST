@@ -1,4 +1,4 @@
-use hyper_ast_cvs_git::preprocessed::child_at_path;
+use hyperast_vcs_git::preprocessed::child_at_path;
 use serde::Deserialize;
 use tokio::time::Instant;
 
@@ -12,7 +12,7 @@ pub struct FetchFileParam {
     file: String,
 }
 
-pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String, String> {
+pub fn from_hyperast(state: SharedState, path: FetchFileParam) -> Result<String, String> {
     let now = Instant::now();
     let FetchFileParam {
         user,
@@ -20,7 +20,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         commit,
         file,
     } = path.clone();
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .write()
@@ -49,7 +49,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         return Err("not found".to_string());
     };
 
-    let content = hyper_ast::nodes::TextSerializer::new(&repositories.processor.main_stores, content);
+    let content = hyperast::nodes::TextSerializer::new(&repositories.processor.main_stores, content);
     log::debug!("sending file {file} from {}/{commits:?}", repo.spec);
 
     Ok(content.to_string())

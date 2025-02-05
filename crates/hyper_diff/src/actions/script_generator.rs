@@ -2,7 +2,7 @@
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use hyper_ast::types::{Labeled, NodeStore, Stored, Typed, WithChildren};
+use hyperast::types::{Labeled, NodeStore, Stored, Typed, WithChildren};
 use num_traits::{cast, PrimInt};
 
 use crate::{
@@ -176,8 +176,8 @@ where
     S: NodeStore<T::TreeId, R<'a> = T>,
     // S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
-    //     hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
-    // S::R<'a>: hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
+    //     hyperast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
+    // S::R<'a>: hyperast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
     T::Label: Copy,
     T::TreeId: Debug,
     T::ChildIdx: Debug,

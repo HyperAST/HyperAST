@@ -3,16 +3,16 @@ use super::ANA;
 use crate::impact::partial_analysis::PartialAnalysis;
 use crate::types::TIdN;
 use crate::types::Type;
-use hyper_ast::filter::BF;
-use hyper_ast::filter::{Bloom, BloomSize};
-use hyper_ast::impact::BulkHasher;
-use hyper_ast::store::labels::LabelStore;
-use hyper_ast::store::nodes::legion::PendingInsert;
-use hyper_ast::store::nodes::EntityBuilder;
-use hyper_ast::types::LabelStore as _;
-use hyper_ast::types::Tree;
-use hyper_ast::types::TypeTrait;
-use hyper_ast::types::Typed as _;
+use hyperast::filter::BF;
+use hyperast::filter::{Bloom, BloomSize};
+use hyperast::impact::BulkHasher;
+use hyperast::store::labels::LabelStore;
+use hyperast::store::nodes::legion::PendingInsert;
+use hyperast::store::nodes::EntityBuilder;
+use hyperast::types::LabelStore as _;
+use hyperast::types::Tree;
+use hyperast::types::TypeTrait;
+use hyperast::types::Typed as _;
 
 pub(crate) fn build_ana(kind: &Type, label_store: &mut LabelStore) -> Option<PartialAnalysis> {
     if kind == &Type::ClassBody

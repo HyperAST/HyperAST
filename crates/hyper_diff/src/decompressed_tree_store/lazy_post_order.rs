@@ -10,7 +10,7 @@ use super::{
     Iter, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
     ShallowDecompressedTreeStore,
 };
-use hyper_ast::{
+use hyperast::{
     position::Position,
     types::{
         self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore,

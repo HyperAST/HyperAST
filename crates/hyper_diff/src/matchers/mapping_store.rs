@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use hyper_ast::compat::HashMap;
+use hyperast::compat::HashMap;
 use num_traits::{cast, one, zero, PrimInt};
 
 pub trait MappingStore {
@@ -596,7 +596,7 @@ impl<T: PrimInt + Debug + Hash> MonoMappingStore for HashStore<T> {
 }
 
 pub struct HMIter<'a, T: 'a + PrimInt, U: 'a> {
-    v: hyper_ast::compat::hash_map::Iter<'a, T, U>,
+    v: hyperast::compat::hash_map::Iter<'a, T, U>,
 }
 
 impl<'a, T: PrimInt, U: PrimInt> Iterator for HMIter<'a, T, U> {

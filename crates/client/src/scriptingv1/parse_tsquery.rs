@@ -1,4 +1,4 @@
-//hyper_ast::types::AnyType
+//hyperast::types::AnyType
 pub(super) fn parse_tsquery<
     'a, // ,K: TryFrom<&'a str>
 >(

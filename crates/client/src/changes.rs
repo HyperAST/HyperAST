@@ -1,9 +1,9 @@
-use hyper_ast_cvs_git::{processing::ConfiguredRepoTrait, SimpleStores};
+use hyperast_vcs_git::{processing::ConfiguredRepoTrait, SimpleStores};
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Debug;
 
-use hyper_ast::{
+use hyperast::{
     store::defaults::NodeIdentifier,
     types::{HyperAST, HyperType, IterableChildren, TypeStore, WithChildren, WithStats},
 };
@@ -31,10 +31,10 @@ pub struct DstChanges {
 pub(crate) fn added_deleted(
     state: std::sync::Arc<crate::AppState>,
     repo_handle: &impl ConfiguredRepoTrait<
-        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+        Config = hyperast_vcs_git::processing::ParametrizedCommitProcessorHandle,
     >,
-    src_oid: hyper_ast_cvs_git::git::Oid,
-    dst_oid: hyper_ast_cvs_git::git::Oid,
+    src_oid: hyperast_vcs_git::git::Oid,
+    dst_oid: hyperast_vcs_git::git::Oid,
 ) -> Result<(SrcChanges, DstChanges), String> {
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
@@ -87,22 +87,22 @@ pub(crate) fn added_deleted(
         // }
 
         // impl<'a> TypeStore<no_space::NoSpaceWrapper<'a, NodeIdentifier>> for &TStore {
-        //     type Ty = hyper_ast_cvs_git::MultiType;
+        //     type Ty = hyperast_vcs_git::MultiType;
         //     const MASK: u16 = 0b1000_0000_0000_0000;
 
         //     fn resolve_type(&self, n: &no_space::NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
-        //         use hyper_ast::types::Typed;
+        //         use hyperast::types::Typed;
         //         n.get_type()
         //     }
 
         //     fn resolve_lang(
         //         &self,
         //         n: &no_space::NoSpaceWrapper<'a, NodeIdentifier>,
-        //     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     ) -> hyperast::types::LangWrapper<Self::Ty> {
         //         todo!()
         //     }
 
-        //     type Marshaled = hyper_ast::types::TypeIndex;
+        //     type Marshaled = hyperast::types::TypeIndex;
 
         //     fn marshal_type(
         //         &self,
@@ -117,9 +117,9 @@ pub(crate) fn added_deleted(
         //         m: &no_space::NoSpaceWrapper<'a, NodeIdentifier>,
         //     ) -> bool {
         //         n.as_ref()
-        //             .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
+        //             .get_component::<hyperast_gen_ts_cpp::types::Type>()
         //             == m.as_ref()
-        //                 .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
+        //                 .get_component::<hyperast_gen_ts_cpp::types::Type>()
         //     }
         // }
         // let tstore2 = TStore::default();
@@ -205,7 +205,7 @@ pub(crate) fn added_deleted(
     ))
 }
 
-// TODO try to move it in hyper_ast::position
+// TODO try to move it in hyperast::position
 /// no_spaces gives topolgical indexes, topologically ordered,
 /// it maps onto a tree without spaces
 pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(

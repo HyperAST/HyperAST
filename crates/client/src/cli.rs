@@ -27,8 +27,8 @@ pub struct Options {
 }
 
 pub struct RepoConfig {
-    pub repo: hyper_ast_cvs_git::git::Repo,
-    pub config: hyper_ast_cvs_git::processing::RepoConfig,
+    pub repo: hyperast_vcs_git::git::Repo,
+    pub config: hyperast_vcs_git::processing::RepoConfig,
 }
 
 impl std::str::FromStr for RepoConfig {

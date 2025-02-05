@@ -1,17 +1,17 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 
-use hyper_ast::types;
-use hyper_ast::types::HyperAST;
-use hyper_ast::types::HyperType as _;
-use hyper_ast::types::IterableChildren as _;
-use hyper_ast::types::WithPrecompQueries;
-use hyper_ast::types::WithRoles;
+use hyperast::types;
+use hyperast::types::HyperAST;
+use hyperast::types::HyperType as _;
+use hyperast::types::IterableChildren as _;
+use hyperast::types::WithPrecompQueries;
+use hyperast::types::WithRoles;
 
 pub struct TreeToQuery<
     'hast,
     HAST: HyperAST<'hast>,
-    TIdN: hyper_ast::types::TypedNodeId,
+    TIdN: hyperast::types::TypedNodeId,
     // vanilla tsq syntax
     const V: bool = false,
     // pretty print
@@ -19,20 +19,20 @@ pub struct TreeToQuery<
 > {
     stores: &'hast HAST,
     root: HAST::IdN,
-    meta: hyper_ast_tsquery::Query,
+    meta: hyperast_tsquery::Query,
     phantom: std::marker::PhantomData<TIdN>,
 }
 impl<
         'store,
         'a,
         HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
     > TreeToQuery<'store, HAST, TIdN>
 {
     pub fn new(
         stores: &'store HAST,
         root: HAST::IdN,
-        meta: hyper_ast_tsquery::Query,
+        meta: hyperast_tsquery::Query,
     ) -> TreeToQuery<'store, HAST, TIdN> {
         Self {
             stores,
@@ -46,16 +46,16 @@ impl<
 impl<
         'hast,
         HAST: types::TypedHyperAST<'hast, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         const V: bool,
         const PP: bool,
     > Display for TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
-    HAST::TS: hyper_ast::types::RoleStore,
+    HAST::TS: hyperast::types::RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
-    <HAST::TS as hyper_ast::types::RoleStore>::IdF: Into<u16> + From<u16>,
+    <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, &mut 0, 0, f).map(|_| ())
@@ -65,16 +65,16 @@ where
 impl<
         'hast,
         HAST: types::TypedHyperAST<'hast, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         const V: bool,
         const PP: bool,
     > TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
-    HAST::TS: hyper_ast::types::RoleStore,
+    HAST::TS: hyperast::types::RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
-    <HAST::TS as hyper_ast::types::RoleStore>::IdF: Into<u16> + From<u16>,
+    <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn serialize(
         &self,
@@ -197,8 +197,8 @@ where
     }
 
     fn should_pred_label(&self, id: &HAST::IdN) -> bool {
-        let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(*id);
-        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
+        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(*id);
+        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
         let mut matches = self.meta.matches_immediate(cursor);
         let Some(m) = matches.next_match() else {
             return false;
@@ -216,8 +216,8 @@ where
     }
 
     fn should_ignore(&self, id: &HAST::IdN) -> bool {
-        let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(*id);
-        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
+        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(*id);
+        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
         let mut matches = self.meta.matches_immediate(cursor);
         let Some(m) = matches.next_match() else {
             return false;
@@ -232,8 +232,8 @@ where
     }
 
     fn should_skip(&self, id: &HAST::IdN) -> bool {
-        let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(*id);
-        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
+        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(*id);
+        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
         let mut matches = self.meta.matches_immediate(cursor);
         let Some(m) = matches.next_match() else {
             return false;

@@ -7,8 +7,8 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
-use hyper_ast::compat::HashMap;
-use hyper_ast::types::{
+use hyperast::compat::HashMap;
+use hyperast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, TypeStore,
     WithHashs, WithStats,
 };

@@ -1,7 +1,7 @@
 use crate::auto::tsq_ser_meta::Converter;
 
 use super::*;
-use hyper_ast::types::{
+use hyperast::types::{
     HyperType, IterableChildren, NodeStore, TypeStore, Typed, TypedHyperAST, TypedNodeStore,
     WithChildren,
 };
@@ -10,7 +10,7 @@ pub(crate) struct MatchingIter<
     'a,
     'store,
     HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
     C: Converter,
 > {
     slf: &'a PreparedMatcher<TIdN::Ty, C>,
@@ -39,7 +39,7 @@ impl<
         'a,
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -83,7 +83,7 @@ impl<
         'a,
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -295,7 +295,7 @@ impl<
         'a,
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -315,8 +315,8 @@ pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C: Converter>(
 ) -> bool
 where
     HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-        + hyper_ast::types::TypedNodeId<Ty = Ty>
+    TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
+        + hyperast::types::TypedNodeId<Ty = Ty>
         + 'static,
     Ty: std::fmt::Debug + Eq + Copy,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,

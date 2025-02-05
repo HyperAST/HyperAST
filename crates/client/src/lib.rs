@@ -7,11 +7,11 @@ use std::{
 };
 
 use dashmap::DashMap;
-use hyper_ast_cvs_git::multi_preprocessed::PreProcessedRepositories;
+use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 
 use axum::body::Bytes;
-use hyper_ast::store::nodes::legion::NodeIdentifier;
+use hyperast::store::nodes::legion::NodeIdentifier;
 
 pub mod app;
 mod changes;
@@ -93,7 +93,7 @@ pub(crate) type MappingCache =
     DashMap<(NodeIdentifier, NodeIdentifier), PersistableMappings<NodeIdentifier>>;
 type SharedState = Arc<AppState>;
 
-pub(crate) use hyper_ast_cvs_git::no_space;
+pub(crate) use hyperast_vcs_git::no_space;
 
 #[cfg(feature = "rerun")]
 pub mod log_languages {
@@ -107,9 +107,9 @@ pub mod log_languages {
         let rec = rerun::RecordingStream::global(rerun::StoreKind::Recording).unwrap();
 
         let lang = polyglote::Lang {
-            language: hyper_ast_gen_ts_java::language(),
+            language: hyperast_gen_ts_java::language(),
             name: "java",
-            node_types: hyper_ast_gen_ts_java::node_types(),
+            node_types: hyperast_gen_ts_java::node_types(),
             highlights: "",
             tags: "",
             injects: "",
@@ -121,9 +121,9 @@ pub mod log_languages {
         log_language(&rec, lang, types)?;
 
         let lang = polyglote::Lang {
-            language: hyper_ast_gen_ts_cpp::language(),
+            language: hyperast_gen_ts_cpp::language(),
             name: "cpp",
-            node_types: hyper_ast_gen_ts_cpp::node_types(),
+            node_types: hyperast_gen_ts_cpp::node_types(),
             highlights: "",
             tags: "",
             injects: "",
@@ -135,9 +135,9 @@ pub mod log_languages {
         log_language(&rec, lang, types)?;
 
         let lang = polyglote::Lang {
-            language: hyper_ast_gen_ts_tsquery::language(),
+            language: hyperast_gen_ts_tsquery::language(),
             name: "tsquery",
-            node_types: hyper_ast_gen_ts_tsquery::node_types(),
+            node_types: hyperast_gen_ts_tsquery::node_types(),
             highlights: "",
             tags: "",
             injects: "",
@@ -334,15 +334,15 @@ pub mod log_languages {
 // slow test, more of an integration test, try using release
 fn test_measuring_size() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
-    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
     let language = "Java";
-    let prepro = hyper_ast::scripting::lua_scripting::PREPRO_SIZE_WITH_FINISH.into();
+    let prepro = hyperast::scripting::lua_scripting::PREPRO_SIZE_WITH_FINISH.into();
     run_scripting(repo_spec, config, commit, language, prepro, "size")
 }
 
@@ -351,15 +351,15 @@ fn test_measuring_size() -> std::result::Result<(), Box<dyn std::error::Error>> 
 // slow test, more of an integration test, try using release
 fn test_measuring_mcc() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
-    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
     let language = "Java";
-    let prepro = hyper_ast::scripting::lua_scripting::PREPRO_MCC_WITH_FINISH.into();
+    let prepro = hyperast::scripting::lua_scripting::PREPRO_MCC_WITH_FINISH.into();
     run_scripting(repo_spec, config, commit, language, prepro, "mcc")
 }
 
@@ -368,21 +368,21 @@ fn test_measuring_mcc() -> std::result::Result<(), Box<dyn std::error::Error>> {
 // slow test, more of an integration test, try using release
 fn test_measuring_loc() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
-    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
     let language = "Java";
-    let prepro = hyper_ast::scripting::lua_scripting::PREPRO_LOC.into();
+    let prepro = hyperast::scripting::lua_scripting::PREPRO_LOC.into();
     run_scripting(repo_spec, config, commit, language, prepro, "LoC")
 }
 
 fn run_scripting(
-    repo_spec: hyper_ast_cvs_git::git::Repo,
-    config: hyper_ast_cvs_git::processing::RepoConfig,
+    repo_spec: hyperast_vcs_git::git::Repo,
+    config: hyperast_vcs_git::processing::RepoConfig,
     commit: &str,
     language: &str,
     prepro: &str,
@@ -421,14 +421,14 @@ fn run_scripting(
         let store = &state.repositories.read().unwrap().processor.main_stores;
         let n = store.node_store.resolve(commit.ast_root);
         let dd = n
-            .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
+            .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
             .unwrap();
         let s = dd.0.get(show);
         log::debug!("{show} ! {:?}", s);
         log::debug!("size:{}", n.size());
         log::debug!("size_no_spaces:{}", n.size_no_spaces());
         log::debug!("height:{}", n.height());
-        if let Ok(mcc) = n.get_component::<hyper_ast::cyclomatic::Mcc>() {
+        if let Ok(mcc) = n.get_component::<hyperast::cyclomatic::Mcc>() {
             log::debug!("Mcc:{:?}", mcc);
         }
     }
@@ -445,15 +445,15 @@ fn run_scripting(
     let stores = &state.repositories.read().unwrap().processor.main_stores;
     let n = stores.node_store.resolve(commit.ast_root);
     let dd = n
-        .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
+        .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
         .unwrap();
     let s = dd.0.get(show);
     log::debug!("{:?}", s);
-    use hyper_ast::types::WithStats;
+    use hyperast::types::WithStats;
     log::debug!("size:{}", n.size());
     log::debug!("size_no_spaces:{}", n.size_no_spaces());
     log::debug!("height:{}", n.height());
-    if let Ok(mcc) = n.get_component::<hyper_ast::cyclomatic::Mcc>() {
+    if let Ok(mcc) = n.get_component::<hyperast::cyclomatic::Mcc>() {
         log::debug!("Mcc:{:?}", mcc);
     }
 
@@ -485,12 +485,12 @@ fn run_scripting(
 // slow test, more of an integration test, try using release
 fn test_tsg_incr() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .with_env_filter("client=debug,hyperast_vcs_git=info,hyperast=error")
         .try_init()
         .unwrap();
 
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("INRIA", "spoon");
-    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("INRIA", "spoon");
+    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     let commit = "56e12a0c0e0e69ea70863011b4f4ca3305e0542b";
     let language = "Java";
     let tsg = r#"
@@ -504,8 +504,8 @@ fn test_tsg_incr() -> std::result::Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_tsg(
-    repo_spec: hyper_ast_cvs_git::git::Repo,
-    config: hyper_ast_cvs_git::processing::RepoConfig,
+    repo_spec: hyperast_vcs_git::git::Repo,
+    config: hyperast_vcs_git::processing::RepoConfig,
     commit: &str,
     language: &str,
     tsg: &str,

@@ -1,13 +1,13 @@
-use hyper_ast::position::TreePathMut;
-use hyper_ast::types::LabelStore;
-use hyper_ast::{
+use hyperast::position::TreePathMut;
+use hyperast::types::LabelStore;
+use hyperast::{
     position::{Scout, StructuralPosition, StructuralPositionStore},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{HyperAST, NodeId},
 };
-use hyper_ast_cvs_git::TStore;
-use hyper_ast_gen_ts_java::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
-use hyper_ast_gen_ts_java::impact::{partial_analysis::PartialAnalysis, usage};
+use hyperast_vcs_git::TStore;
+use hyperast_gen_ts_java::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
+use hyperast_gen_ts_java::impact::{partial_analysis::PartialAnalysis, usage};
 
 pub fn find_refs<'a>(
     stores: &'a SimpleStores<TStore>,
@@ -105,7 +105,7 @@ pub fn find_refs<'a>(
     let mut sp_store = StructuralPositionStore::new(id);
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let x = sp_store.type_scout(&mut x, unsafe {
-        hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&id)
+        hyperast_gen_ts_java::types::TIdN::from_ref_id(&id)
     });
     let r = usage::RefsFinder::new(stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     dbg!(r.len());
@@ -113,20 +113,20 @@ pub fn find_refs<'a>(
 }
 
 #[derive(Clone)]
-pub(super) struct QPath(pub(super) hyper_ast::position::StructuralPosition<NodeIdentifier, u16>);
+pub(super) struct QPath(pub(super) hyperast::position::StructuralPosition<NodeIdentifier, u16>);
 impl QPath {
     pub(super) fn new(node: NodeIdentifier) -> Self {
-        Self(hyper_ast::position::StructuralPosition::new(node))
+        Self(hyperast::position::StructuralPosition::new(node))
     }
     pub(super) fn goto(&mut self, node: NodeIdentifier, i: u16) {
         self.0.goto(node, i)
     }
 }
 #[derive(Clone)]
-pub(super) struct Pos(hyper_ast::position::Position);
+pub(super) struct Pos(hyperast::position::Position);
 
-impl From<hyper_ast::position::Position> for Pos {
-    fn from(value: hyper_ast::position::Position) -> Self {
+impl From<hyperast::position::Position> for Pos {
+    fn from(value: hyperast::position::Position) -> Self {
         Self(value)
     }
 }
@@ -134,7 +134,7 @@ impl From<hyper_ast::position::Position> for Pos {
 // impl QPath {
 //     fn convert<HAST>(self, stores: HAST) -> Pos {
 
-//         let position_converter = &hyper_ast::position::PositionConverter::new(&it)
+//         let position_converter = &hyperast::position::PositionConverter::new(&it)
 //         .with_stores(stores);
 //         let p = position_converter.compute_pos_post_order::<_,Position,_>();
 //         Pos(p)

@@ -1,11 +1,11 @@
-use hyper_ast::utils::memusage_linux;
-use hyper_ast_benchmark_smells::simple::count_matches;
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast::utils::memusage_linux;
+use hyperast_benchmark_smells::simple::count_matches;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
-/// enables uses of [`hyper_ast::utils::memusage_linux()`]
+/// enables uses of [`hyperast::utils::memusage_linux()`]
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -27,18 +27,18 @@ const INCREMENTAL_QUERIES: bool = true;
 fn single(repo_name: &str, commit: &str, query: &str) {
 
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
+        hyperast_tsquery::Query::with_precomputed(
             &query,
-            hyper_ast_gen_ts_java::language(),
-            unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
+            hyperast_gen_ts_java::language(),
+            unsafe { hyperast_vcs_git::java_processor::SUB_QUERIES },
         ).unwrap().1
     } else {
-        hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language()).unwrap()
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language()).unwrap()
     };
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oid = preprocessed.pre_process_single(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         commit,
         "",
     );
@@ -49,7 +49,7 @@ fn single(repo_name: &str, commit: &str, query: &str) {
     let commit = preprocessed.commits.get_key_value(&oid).unwrap();
     let time = commit.1.processing_time();
     let tr = commit.1.ast_root;
-    use hyper_ast::types::WithStats;
+    use hyperast::types::WithStats;
     let s = stores.node_store.resolve(tr).size();
 
    let matches = count_matches(stores, tr, &query);

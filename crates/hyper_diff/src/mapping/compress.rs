@@ -14,7 +14,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use hyper_ast::types::{Stored, WithChildren};
+use hyperast::types::{Stored, WithChildren};
 use num_traits::{PrimInt, ToPrimitive};
 
 use crate::decompressed_tree_store::{
@@ -477,7 +477,7 @@ where
 mod test {
     use std::marker::PhantomData;
 
-    use hyper_ast::types::{DecompressedSubtree, SimpleHyperAST};
+    use hyperast::types::{DecompressedSubtree, SimpleHyperAST};
 
     use crate::{
         decompressed_tree_store::{CompletePostOrder, DecompressedWithParent, PostOrderIterable},

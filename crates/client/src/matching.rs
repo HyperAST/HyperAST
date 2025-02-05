@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use hyper_ast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST};
 use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers::Mapper};
 
 use hyper_diff::decompressed_tree_store::hidding_wrapper;

@@ -7,7 +7,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyper_ast::types::{HyperAST, Tree, WithHashs};
+use hyperast::types::{HyperAST, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -19,7 +19,7 @@ type IdD = u16;
 
 pub struct SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
-    T: hyper_ast::types::Tree + hyper_ast::types::WithHashs,
+    T: hyperast::types::Tree + hyperast::types::WithHashs,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
     internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
@@ -83,8 +83,8 @@ impl<
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
-    HAST::TS: hyper_ast::types::TypeStore<Ty = T::Type>,
-    T: hyper_ast::types::Typed,
+    HAST::TS: hyperast::types::TypeStore<Ty = T::Type>,
+    T: hyperast::types::Typed,
     T::Type: Hash + Copy + Eq + Send + Sync,
 {
     pub fn execute(&mut self) {

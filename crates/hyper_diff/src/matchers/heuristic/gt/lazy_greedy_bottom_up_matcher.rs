@@ -12,7 +12,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyper_ast::types::{
+use hyperast::types::{
     DecompressedSubtree, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats,
 };
 

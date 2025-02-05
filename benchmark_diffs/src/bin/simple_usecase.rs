@@ -1,6 +1,6 @@
 // window of one is just consecutive commits
 
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 use std::{
     fs::File,
     io::{BufWriter, Write},
@@ -86,14 +86,14 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
         .unwrap();
         buf.flush().unwrap();
     }
-    use hyper_ast_gen_ts_java::utils::memusage_linux;
+    use hyperast_gen_ts_java::utils::memusage_linux;
     let mut curr = after.to_string();
     for i in 0..100 {
         if curr == before {
             break;
         }
         let processing_ordered_commits = preprocessed.pre_process_with_limit(
-            &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+            &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
             "",
             &curr,
             "",
@@ -109,7 +109,7 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
         let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
         let time_src = commit_src.1.processing_time();
         let src_tr = commit_src.1.ast_root;
-        use hyper_ast::types::WithStats;
+        use hyperast::types::WithStats;
         let src_s = stores.node_store.resolve(src_tr).size();
 
         let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
@@ -117,7 +117,7 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
         let dst_tr = commit_dst.1.ast_root;
         let dst_s = stores.node_store.resolve(dst_tr).size();
 
-        let hyperast = hyper_ast_cvs_git::no_space::as_nospaces(stores);
+        let hyperast = hyperast_vcs_git::no_space::as_nospaces(stores);
 
         let mu = memusage_linux();
         let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
@@ -163,7 +163,7 @@ fn whole(
     let batch_id = format!("{}:({},{})", &preprocessed.name, before, after);
     let mu = memusage_linux();
     let processing_ordered_commits = preprocessed.pre_process_with_limit(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         before,
         after,
         "",
@@ -195,7 +195,7 @@ fn whole(
     }
     let mut i = 0;
     let c_len = processing_ordered_commits.len();
-    use hyper_ast_gen_ts_java::utils::memusage_linux;
+    use hyperast_gen_ts_java::utils::memusage_linux;
     for c in (0..c_len - 1).map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)]) {
         let oid_src = c[0];
         for oid_dst in &c[1..] {
@@ -203,7 +203,7 @@ fn whole(
 
             let stores = &preprocessed.processor.main_stores;
 
-            use hyper_ast::types::WithStats;
+            use hyperast::types::WithStats;
             let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
             let time_src = commit_src.1.processing_time();
             let src_tr = commit_src.1.ast_root;
@@ -214,7 +214,7 @@ fn whole(
             let dst_tr = commit_dst.1.ast_root;
             let dst_s = stores.node_store.resolve(dst_tr).size();
 
-            let hyperast = hyper_ast_cvs_git::no_space::as_nospaces(stores);
+            let hyperast = hyperast_vcs_git::no_space::as_nospaces(stores);
 
             let mu = memusage_linux();
             let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);

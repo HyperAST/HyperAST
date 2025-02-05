@@ -1,18 +1,18 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use hyper_ast::types::{HyperAST, WithSerialization};
-use hyper_ast_gen_ts_tsquery::auto::tsq_ser_meta::Converter;
+use hyperast::types::{HyperAST, WithSerialization};
+use hyperast_gen_ts_tsquery::auto::tsq_ser_meta::Converter;
 
-use hyper_ast::position::position_accessors::{SolvedPosition, WithPreOrderOffsets};
-use hyper_ast::store::defaults::NodeIdentifier;
-use hyper_ast_gen_ts_tsquery::auto::tsq_transform;
-use hyper_ast_tsquery::Node as _;
+use hyperast::position::position_accessors::{SolvedPosition, WithPreOrderOffsets};
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast_gen_ts_tsquery::auto::tsq_transform;
+use hyperast_tsquery::Node as _;
 use num::integer::Average;
 
-type QStore = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_tsquery::types::TStore>;
+type QStore = hyperast::store::SimpleStores<hyperast_gen_ts_tsquery::types::TStore>;
 // TODO use a polyglote code store, snd prio c++ after java
-type JStore = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>;
+type JStore = hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum TR {
@@ -53,15 +53,15 @@ pub struct QueryLattice<E> {
 impl QueryLattice<NodeIdentifier> {
     fn generate_query0<'hast, HAST>(&mut self, stores: &'hast HAST, from: HAST::IdN) -> QueryId
     where
-        HAST: hyper_ast::types::HyperAST<'hast>,
+        HAST: hyperast::types::HyperAST<'hast>,
         HAST::IdN: std::fmt::Debug,
     {
-        use hyper_ast_gen_ts_tsquery::auto::tsq_ser::TreeToQuery;
+        use hyperast_gen_ts_tsquery::auto::tsq_ser::TreeToQuery;
         let query = TreeToQuery::<_, _, true>::with_pred(stores, from, |_| true);
         let query = query.to_string();
         // not necessary for simple generation of queries, but needed to be consistent with the rest
         let query =
-            hyper_ast_gen_ts_tsquery::search::ts_query2(&mut self.query_store, query.as_bytes());
+            hyperast_gen_ts_tsquery::search::ts_query2(&mut self.query_store, query.as_bytes());
         QueryId(query)
     }
 
@@ -74,21 +74,21 @@ impl QueryLattice<NodeIdentifier> {
         &mut self,
         stores: &JStore,
         from: NodeIdentifier,
-        meta_gen: &hyper_ast_tsquery::Query,
-        meta_simp: &hyper_ast_tsquery::Query,
+        meta_gen: &hyperast_tsquery::Query,
+        meta_simp: &hyperast_tsquery::Query,
     ) -> QueryId {
         let q = generate_query2(&mut self.query_store, stores, from, meta_gen, meta_simp).unwrap();
         QueryId(q)
     }
 
     fn pp(&self, query: QueryId) -> String {
-        hyper_ast::nodes::TextSerializer::<_, _>::new(&self.query_store, query.0).to_string()
+        hyperast::nodes::TextSerializer::<_, _>::new(&self.query_store, query.0).to_string()
     }
     pub fn with_examples(
         stores: &JStore,
         from: impl Iterator<Item = NodeIdentifier>,
-        meta_gen: &hyper_ast_tsquery::Query,
-        meta_simp: &hyper_ast_tsquery::Query,
+        meta_gen: &hyperast_tsquery::Query,
+        meta_simp: &hyperast_tsquery::Query,
     ) -> Self {
         let mut s = Self::new();
         macro_rules! sort {
@@ -231,7 +231,7 @@ impl QueryLattice<NodeIdentifier> {
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (String, &'a [NodeIdentifier])> {
         self.queries.iter().filter_map(|(q, e)| {
-            let q = hyper_ast::nodes::TextSerializer::<_, _>::new(&self.query_store, *q)
+            let q = hyperast::nodes::TextSerializer::<_, _>::new(&self.query_store, *q)
                 .to_string()
                 .trim()
                 .to_string();
@@ -252,7 +252,7 @@ pub struct QueryId(
 impl<E> QueryLattice<E> {
     pub fn new() -> Self {
         Self {
-            query_store: hyper_ast_gen_ts_tsquery::search::ts_query_store(),
+            query_store: hyperast_gen_ts_tsquery::search::ts_query_store(),
             relations: vec![],
             leaf_query_count: 0,
             queries: vec![],
@@ -275,37 +275,37 @@ fn generate_query(
     #[derive(Default)]
     struct Conv;
     impl Converter for Conv {
-        type Ty = hyper_ast_gen_ts_java::types::Type;
+        type Ty = hyperast_gen_ts_java::types::Type;
 
         fn conv(s: &str) -> Option<Self::Ty> {
-            hyper_ast_gen_ts_java::types::Type::from_str(s)
+            hyperast_gen_ts_java::types::Type::from_str(s)
         }
     }
-    let _query = hyper_ast_gen_ts_tsquery::auto::tsq_ser_meta::TreeToQuery::<
+    let _query = hyperast_gen_ts_tsquery::auto::tsq_ser_meta::TreeToQuery::<
         _,
-        hyper_ast_gen_ts_java::types::TIdN<_>,
+        hyperast_gen_ts_java::types::TIdN<_>,
         Conv,
     >::with_pred(stores, from, "(identifier) (type_identifier)");
     let _query = _query.to_string();
-    let (mut query_store, query) = hyper_ast_gen_ts_tsquery::search::ts_query(_query.as_bytes());
+    let (mut query_store, query) = hyperast_gen_ts_tsquery::search::ts_query(_query.as_bytes());
     const M0: &str = r#"(predicate (identifier) @op (#eq? @op "eq") (parameters (capture (identifier) @id ) (string) @label ))"#;
     println!("");
     println!("\nThe meta query:\n{}", M0);
-    let (query_store1, query1) = hyper_ast_gen_ts_tsquery::search::ts_query(M0.as_bytes());
-    let path = hyper_ast::position::structural_pos::StructuralPosition::new(query);
-    let prepared_matcher = hyper_ast_gen_ts_tsquery::search::PreparedMatcher::<
-        hyper_ast_gen_ts_tsquery::types::Type,
+    let (query_store1, query1) = hyperast_gen_ts_tsquery::search::ts_query(M0.as_bytes());
+    let path = hyperast::position::structural_pos::StructuralPosition::new(query);
+    let prepared_matcher = hyperast_gen_ts_tsquery::search::PreparedMatcher::<
+        hyperast_gen_ts_tsquery::types::Type,
     >::new(query_store1.with_ts(), query1);
     let mut per_label = std::collections::HashMap::<
         String,
         Vec<(
             String,
-            hyper_ast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>,
+            hyperast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>,
         )>,
     >::default();
-    for e in hyper_ast_gen_ts_tsquery::iter::IterAll::new(&query_store, path, query) {
+    for e in hyperast_gen_ts_tsquery::iter::IterAll::new(&query_store, path, query) {
         if let Some(capts) = prepared_matcher
-            .is_matching_and_capture::<_, hyper_ast_gen_ts_tsquery::types::TIdN<NodeIdentifier>>(
+            .is_matching_and_capture::<_, hyperast_gen_ts_tsquery::types::TIdN<NodeIdentifier>>(
                 &query_store,
                 e.node(),
             )
@@ -354,10 +354,10 @@ fn generate_query(
             .collect(),
     );
     let query =
-        hyper_ast::nodes::TextSerializer::<_, _>::new(&query_store, query_bis.unwrap()).to_string();
+        hyperast::nodes::TextSerializer::<_, _>::new(&query_store, query_bis.unwrap()).to_string();
     let query = format!("{} {}", query, PerLabel(per_label.clone()));
     println!("\nThe generified query:\n{}", query);
-    let query = hyper_ast_gen_ts_tsquery::search::ts_query2(&mut query_store, query.as_bytes());
+    let query = hyperast_gen_ts_tsquery::search::ts_query2(&mut query_store, query.as_bytes());
     query
 }
 
@@ -365,8 +365,8 @@ fn generate_query2(
     query_store: &mut QStore,
     stores: &JStore,
     from: NodeIdentifier,
-    meta_gen: &hyper_ast_tsquery::Query,
-    meta_simp: &hyper_ast_tsquery::Query,
+    meta_gen: &hyperast_tsquery::Query,
+    meta_simp: &hyperast_tsquery::Query,
 ) -> Option<NodeIdentifier> {
     let query = generate_query2_aux(query_store, stores, from, meta_gen)?.0;
 
@@ -382,50 +382,50 @@ fn generate_query2(
 type LableH = u32;
 
 fn simp_imm_eq(
-    query_store: &mut hyper_ast::store::SimpleStores<hyper_ast_gen_ts_tsquery::types::TStore>,
+    query_store: &mut hyperast::store::SimpleStores<hyperast_gen_ts_tsquery::types::TStore>,
     query: NodeIdentifier,
-    meta_simp: &hyper_ast_tsquery::Query,
+    meta_simp: &hyperast_tsquery::Query,
 ) -> Option<(NodeIdentifier, LableH)> {
     // merge immediate predicates with identical labels
     let mut per_label = simp_search_imm_preds(&query_store, query, meta_simp);
     // dbg!(&per_label);
     let query = replace_preds_with_caps(query_store, query, &mut per_label);
-    let query = hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query?).to_string();
+    let query = hyperast::nodes::TextSerializer::<_, _>::new(&*query_store, query?).to_string();
     // TODO pretty print
-    // NOTE hyper_ast::nodes::PrettyPrinter is not specifica enough to do a proper pp
+    // NOTE hyperast::nodes::PrettyPrinter is not specifica enough to do a proper pp
     // print issue after removing something is due to having consecutive space nodes,
     // best would be to keep the one with a newline or else the first.
 
     let query = format!("{} {}", query, PerLabel(per_label));
     println!("\nThe generified query:\n{}", query);
-    hyper_ast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
+    hyperast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
 }
 
 /// remove a matched thing from query
 fn simp_rms(
-    query_store: &mut hyper_ast::store::SimpleStores<hyper_ast_gen_ts_tsquery::types::TStore>,
+    query_store: &mut hyperast::store::SimpleStores<hyperast_gen_ts_tsquery::types::TStore>,
     query: NodeIdentifier,
-    meta_simp: &hyper_ast_tsquery::Query,
+    meta_simp: &hyperast_tsquery::Query,
     f: impl Fn(usize) -> usize,
 ) -> Option<(NodeIdentifier, LableH)> {
     let rms = simp_search_rm(&query_store, query, meta_simp);
     let query = apply_rms(query_store, query, &rms, f);
     let query =
-        hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap()).to_string();
-    hyper_ast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
+        hyperast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap()).to_string();
+    hyperast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
 }
 
 fn simp_rms2<'a>(
-    query_store: &'a mut hyper_ast::store::SimpleStores<hyper_ast_gen_ts_tsquery::types::TStore>,
+    query_store: &'a mut hyperast::store::SimpleStores<hyperast_gen_ts_tsquery::types::TStore>,
     query: NodeIdentifier,
-    meta_simp: &'a hyper_ast_tsquery::Query,
+    meta_simp: &'a hyperast_tsquery::Query,
 ) -> impl Iterator<Item = (NodeIdentifier, LableH)> + 'a {
     let rms = simp_search_rm(&query_store, query, meta_simp);
     rms.into_iter().filter_map(move |path| {
         let query = apply_rms_aux(query_store, query, &path);
-        let query = hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap())
+        let query = hyperast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap())
             .to_string();
-        hyper_ast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
+        hyperast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
     })
 }
 
@@ -433,24 +433,24 @@ fn generate_query2_aux(
     query_store: &mut QStore,
     stores: &JStore,
     from: NodeIdentifier,
-    meta_gen: &hyper_ast_tsquery::Query,
+    meta_gen: &hyperast_tsquery::Query,
 ) -> Option<(NodeIdentifier, LableH)> {
-    let query = hyper_ast_gen_ts_tsquery::auto::tsq_ser_meta2::TreeToQuery::<
+    let query = hyperast_gen_ts_tsquery::auto::tsq_ser_meta2::TreeToQuery::<
         _,
-        hyper_ast_gen_ts_java::types::TIdN<_>,
+        hyperast_gen_ts_java::types::TIdN<_>,
     >::new(stores, from, meta_gen.clone());
     let query = format!("{} @_root", query);
-    hyper_ast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
+    hyperast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
 }
 
 fn simp_search_rm(
     query_store: &Store,
     query: NodeIdentifier,
-    meta_simp: &hyper_ast_tsquery::Query,
+    meta_simp: &hyperast_tsquery::Query,
 ) -> Vec<P> {
     let mut result = vec![];
-    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(query);
-    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(query);
+    let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
     let matches = meta_simp.matches(cursor);
     let Some(cid_p) = meta_simp.capture_index_for_name("rm") else {
         return vec![];
@@ -522,12 +522,12 @@ fn replace_preds_with_caps(
     query_bis
 }
 
-type Store = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_tsquery::types::TStore>;
+type Store = hyperast::store::SimpleStores<hyperast_gen_ts_tsquery::types::TStore>;
 
 fn make_cap(query_store: &mut Store, name: &str) -> NodeIdentifier {
     let q = format!("_ @{}", name);
-    let q = hyper_ast_gen_ts_tsquery::search::ts_query2(query_store, q.as_bytes());
-    use hyper_ast::types::WithChildren;
+    let q = hyperast_gen_ts_tsquery::search::ts_query2(query_store, q.as_bytes());
+    use hyperast::types::WithChildren;
     let q = query_store.node_store.resolve(q).child(&0).unwrap();
     let q = query_store.node_store.resolve(q).child(&2).unwrap();
     q
@@ -540,11 +540,11 @@ type Cap = String;
 fn simp_search_imm_preds(
     query_store: &Store,
     query: NodeIdentifier,
-    meta_simp: &hyper_ast_tsquery::Query,
+    meta_simp: &hyperast_tsquery::Query,
 ) -> std::collections::HashMap<Lab, Vec<(Cap, P)>> {
     let mut per_label = std::collections::HashMap::default();
-    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(query);
-    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(query);
+    let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
     let matches = meta_simp.matches(cursor);
     let Some(cid_p) = meta_simp.capture_index_for_name("pred") else {
         return Default::default();

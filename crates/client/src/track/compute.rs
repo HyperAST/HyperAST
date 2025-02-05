@@ -1,5 +1,5 @@
-use hyper_ast::position::position_accessors::{self, SolvedPosition};
-use hyper_ast_cvs_git::no_space::NoSpaceWrapper;
+use hyperast::position::position_accessors::{self, SolvedPosition};
+use hyperast_vcs_git::no_space::NoSpaceWrapper;
 use hyper_diff::decompressed_tree_store::lazy_post_order;
 
 use crate::MappingAloneCacheRef;
@@ -66,7 +66,7 @@ where
     // );
     let with_spaces_stores = &repositories.processor.main_stores;
     let tracker_nospace = MappingTracker {
-        stores: &hyper_ast_cvs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
+        stores: &hyperast_vcs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
     };
 
     let current_tr = target.root();
@@ -364,7 +364,7 @@ type NoSpaceStore<'a, 'store> = types::SimpleHyperAST<
     NoSpaceWrapper<'store, super::IdN>,
     TStore,
     no_space::NoSpaceNodeStoreWrapper<'store>,
-    &'a hyper_ast::store::labels::LabelStore,
+    &'a hyperast::store::labels::LabelStore,
 >;
 
 fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
@@ -450,7 +450,7 @@ where
     assert_eq!(current_tr, src_tree.original(&src_tree.root()));
     let node_store = &stores.node_store;
     let tracker_nospace = MappingTracker {
-        stores: &hyper_ast_cvs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
+        stores: &hyperast_vcs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
     };
     let mut curr = src_tree.root();
     let path = target.iter_offsets_nospaces().copied().collect::<Vec<_>>();

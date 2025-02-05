@@ -5,7 +5,7 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive};
 use crate::decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent};
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{matcher::Matcher, similarity_metrics};
-use hyper_ast::types::{NodeStore, Tree, WithHashs};
+use hyperast::types::{NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 

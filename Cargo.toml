@@ -40,16 +40,16 @@ default-members = [
 tree-sitter-graph = { version = "0.12.0" }
 tree-sitter = { version = "0.23.0" }
 hyper_diff = { path = "./crates/hyper_diff" }
-hyper_ast = { path = "./crates/hyper_ast" }
-hyper_ast_tsquery = { path = "./crates/tsquery" }
-hyper_ast_cvs_git = { path = "./cvs/git" }
+hyperast = { path = "./crates/hyper_ast" }
+hyperast_tsquery = { path = "./crates/tsquery" }
+hyperast_vcs_git = { path = "./cvs/git" }
 polyglote = { path = "./lib/polyglote" }
 
-hyper_ast_gen_ts_cpp = { path = "./gen/tree-sitter/cpp" }
-hyper_ast_gen_ts_java = { path = "./gen/tree-sitter/java" }
-hyper_ast_gen_ts_xml = { path = "./gen/tree-sitter/xml" }
-hyper_ast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
-hyper_ast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
+hyperast_gen_ts_cpp = { path = "./gen/tree-sitter/cpp" }
+hyperast_gen_ts_java = { path = "./gen/tree-sitter/java" }
+hyperast_gen_ts_xml = { path = "./gen/tree-sitter/xml" }
+hyperast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
+hyperast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
 
 [patch.crates-io] 
 tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12" }

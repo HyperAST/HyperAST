@@ -1,18 +1,18 @@
 use std::fmt::Display;
 
-use hyper_ast::types::{
+use hyperast::types::{
     AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId,
 };
 
 #[cfg(feature = "impl")]
 mod impls {
     use super::*;
-    use hyper_ast::tree_gen::utils_ts::{TsEnableTS, TsType};
+    use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
 
     impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
             n: &N,
-        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
             let k = n.kind_id();
             Type::from_u16(k)
         }
@@ -28,7 +28,7 @@ mod impls {
         }
     }
 
-    use hyper_ast::types::LangWrapper;
+    use hyperast::types::LangWrapper;
     impl TypeStore for TStore {
         type Ty = TType;
     }
@@ -38,14 +38,14 @@ mod impls {
     impl RoleStore for TStore {
         type IdF = u16;
 
-        type Role = hyper_ast::types::Role;
+        type Role = hyperast::types::Role;
 
         fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
             let s = crate::language()
                 .field_name_for_id(field_id)
                 .ok_or_else(|| format!("{}", field_id))
                 .unwrap();
-            hyper_ast::types::Role::try_from(s).expect(s)
+            hyperast::types::Role::try_from(s).expect(s)
         }
 
         fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
@@ -56,7 +56,7 @@ mod impls {
                 .into()
         }
     }
-    impl<'a> hyper_ast::types::ETypeStore for TStore {
+    impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
 
         fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -69,8 +69,8 @@ mod impls {
         }
     }
     pub fn as_any(t: &Type) -> AnyType {
-        let t = <Java as hyper_ast::types::Lang<Type>>::to_u16(*t);
-        let t = <Java as hyper_ast::types::Lang<Type>>::make(t);
+        let t = <Java as hyperast::types::Lang<Type>>::to_u16(*t);
+        let t = <Java as hyperast::types::Lang<Type>>::make(t);
         let t: &'static dyn HyperType = t;
         t.into()
     }
@@ -80,12 +80,12 @@ pub use impls::as_any;
 
 #[cfg(feature = "impl")]
 pub trait JavaEnabledTypeStore:
-    hyper_ast::types::ETypeStore<Ty2 = Type> + Clone + hyper_ast::tree_gen::utils_ts::TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + Clone + hyperast::tree_gen::utils_ts::TsEnableTS
 {
     fn resolve(t: Self::Ty) -> Type;
 }
 #[cfg(not(feature = "impl"))]
-pub trait JavaEnabledTypeStore: hyper_ast::types::ETypeStore<Ty2 = Type> + Clone {
+pub trait JavaEnabledTypeStore: hyperast::types::ETypeStore<Ty2 = Type> + Clone {
     fn resolve(t: Self::Ty) -> Type;
 }
 
@@ -143,7 +143,7 @@ pub struct T(TypeInternalSize);
 pub struct Lang;
 pub type Java = Lang;
 
-impl hyper_ast::types::Lang<Type> for Java {
+impl hyperast::types::Lang<Type> for Java {
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -204,7 +204,7 @@ impl LangRef<TType> for Lang {
     }
 }
 
-pub use hyper_ast::types::Role;
+pub use hyperast::types::Role;
 
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
@@ -350,8 +350,8 @@ impl HyperType for Type {
         // || self == &Type::Super // "super",
     }
 
-    fn as_shared(&self) -> hyper_ast::types::Shared {
-        use hyper_ast::types::Shared;
+    fn as_shared(&self) -> hyperast::types::Shared {
+        use hyperast::types::Shared;
         match self {
             x if x.is_type_declaration() => Shared::TypeDeclaration,
             Type::LineComment => Shared::Comment,
@@ -380,15 +380,15 @@ impl HyperType for Type {
         self.is_named()
     }
 
-    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
+    fn get_lang(&self) -> hyperast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
     }
 
-    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
+    fn lang_ref(&self) -> hyperast::types::LangWrapper<AnyType> {
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -674,16 +674,16 @@ impl<'a> From<&'a str> for Type {
     }
 }
 
-pub type TType = hyper_ast::types::TypeU16<Lang>;
+pub type TType = hyperast::types::TypeU16<Lang>;
 
-impl hyper_ast::types::LLang<TType> for Java {
+impl hyperast::types::LLang<TType> for Java {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
 
-    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+    fn as_lang_wrapper() -> hyperast::types::LangWrapper<TType> {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }

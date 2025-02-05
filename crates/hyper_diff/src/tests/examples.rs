@@ -1,4 +1,4 @@
-use hyper_ast::test_utils::simple_tree::SimpleTree;
+use hyperast::test_utils::simple_tree::SimpleTree;
 
 use crate::tests::tree;
 

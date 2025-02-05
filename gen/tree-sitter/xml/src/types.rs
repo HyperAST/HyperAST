@@ -1,15 +1,15 @@
 use std::{fmt::Display, u16};
 
-use hyper_ast::types::{
+use hyperast::types::{
     AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 #[cfg(feature = "impl")]
 mod impls {
     use super::*;
-    use hyper_ast::tree_gen::utils_ts::{TsEnableTS, TsType};
+    use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
 
-    impl<'a> hyper_ast::types::ETypeStore for TStore {
+    impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
 
         fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -18,9 +18,9 @@ mod impls {
     }
 
     impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
             n: &N,
-        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
             let k = n.kind_id();
             Type::from_u16(k)
         }
@@ -36,7 +36,7 @@ mod impls {
         }
     }
 
-    use hyper_ast::types::{LangWrapper, RoleStore};
+    use hyperast::types::{LangWrapper, RoleStore};
 
     impl TypeStore for TStore {
         type Ty = TypeU16<Xml>;
@@ -54,14 +54,14 @@ mod impls {
     impl RoleStore for TStore {
         type IdF = u16;
 
-        type Role = hyper_ast::types::Role;
+        type Role = hyperast::types::Role;
 
         fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
             let s = crate::language()
                 .field_name_for_id(field_id)
                 .ok_or_else(|| format!("{}", field_id))
                 .unwrap();
-            hyper_ast::types::Role::try_from(s).expect(s)
+            hyperast::types::Role::try_from(s).expect(s)
         }
 
         fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
@@ -85,20 +85,20 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 }
 
 pub fn as_any(t: &Type) -> AnyType {
-    let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*t);
-    let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
+    let t = <Xml as hyperast::types::Lang<Type>>::to_u16(*t);
+    let t = <Xml as hyperast::types::Lang<Type>>::make(t);
     let t: &'static dyn HyperType = t;
     t.into()
 }
 
 #[cfg(not(feature = "impl"))]
-pub trait XmlEnabledTypeStore: hyper_ast::types::ETypeStore<Ty2 = Type> {
+pub trait XmlEnabledTypeStore: hyperast::types::ETypeStore<Ty2 = Type> {
     fn resolve(t: Self::Ty) -> Type;
 }
 
 #[cfg(feature = "impl")]
 pub trait XmlEnabledTypeStore:
-    hyper_ast::types::ETypeStore<Ty2 = Type> + hyper_ast::tree_gen::utils_ts::TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + hyperast::tree_gen::utils_ts::TsEnableTS
 {
     fn resolve(t: Self::Ty) -> Type;
 }
@@ -148,7 +148,7 @@ pub struct Lang;
 
 pub type Xml = Lang;
 
-impl hyper_ast::types::Lang<Type> for Xml {
+impl hyperast::types::Lang<Type> for Xml {
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -194,7 +194,7 @@ impl LangRef<AnyType> for Xml {
     }
 }
 
-impl LangRef<hyper_ast::types::TypeU16<Self>> for Lang {
+impl LangRef<hyperast::types::TypeU16<Self>> for Lang {
     fn make(&self, t: u16) -> &'static TType {
         // TODO could make one safe, but not priority
         unsafe { std::mem::transmute(&S_T_L[t as usize]) }
@@ -225,8 +225,8 @@ impl HyperType for Type {
             .map_or(false, |a| self == a)
     }
 
-    fn as_shared(&self) -> hyper_ast::types::Shared {
-        use hyper_ast::types::Shared;
+    fn as_shared(&self) -> hyperast::types::Shared {
+        use hyperast::types::Shared;
         match self {
             _ => Shared::Other,
         }
@@ -237,8 +237,8 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*self);
-        let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
+        let t = <Xml as hyperast::types::Lang<Type>>::to_u16(*self);
+        let t = <Xml as hyperast::types::Lang<Type>>::make(t);
         t
     }
 
@@ -330,15 +330,15 @@ impl HyperType for Type {
         self.is_named()
     }
 
-    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
+    fn get_lang(&self) -> hyperast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
     }
 
-    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
+    fn lang_ref(&self) -> hyperast::types::LangWrapper<AnyType> {
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -448,14 +448,14 @@ impl TryFrom<&str> for Type {
     }
 }
 
-impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for Xml {
+impl hyperast::types::LLang<hyperast::types::TypeU16<Self>> for Xml {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
 
-    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
+    fn as_lang_wrapper() -> hyperast::types::LangWrapper<hyperast::types::TypeU16<Self>> {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }

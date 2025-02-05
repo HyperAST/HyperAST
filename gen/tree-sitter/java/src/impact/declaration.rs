@@ -10,7 +10,7 @@ use super::{
     reference::DisplayRef,
 };
 
-use hyper_ast::types::LabelStore;
+use hyperast::types::LabelStore;
 
 pub struct ExplorableDecl<'a> {
     decl: (&'a Declarator<RefPtr>, &'a DeclType<RefPtr>),

@@ -17,8 +17,8 @@ use client::{
     examples::{example_app, kv_store_app},
 };
 use dashmap::DashMap;
-use hyper_ast::store::nodes::legion::NodeIdentifier;
-use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
+use hyperast::store::nodes::legion::NodeIdentifier;
+use hyperast_vcs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
@@ -61,7 +61,7 @@ async fn main() {
     }
     let shared_state = SharedState::default();
     {
-        use hyper_ast_cvs_git::processing::RepoConfig;
+        use hyperast_vcs_git::processing::RepoConfig;
         let mut repos = shared_state.repositories.write().unwrap();
         repos.register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
         repos.register_config(Forge::Github.repo("google", "gson"), RepoConfig::JavaMaven);
@@ -110,7 +110,7 @@ async fn main() {
     .await
     .unwrap();
 }
-pub(crate) use hyper_ast_cvs_git::no_space;
+pub(crate) use hyperast_vcs_git::no_space;
 /// axum handler for any request that fails to match the router routes.
 /// This implementation returns HTTP status code Not Found (404).
 pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
@@ -129,7 +129,7 @@ async fn shutdown_signal() {
     println!("signal shutdown");
 }
 
-// pub(crate) use hyper_ast::store::nodes::no_space;
+// pub(crate) use hyperast::store::nodes::no_space;
 // #[test]
 // fn test_scripting() -> Result<(), Box<dyn std::error::Error>> {
 //     let client = reqwest::blocking::Client::default();

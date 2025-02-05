@@ -1,19 +1,19 @@
 use crate::types::{CppEnabledTypeStore, Type};
 use crate::TNode;
-use hyper_ast::store::nodes::legion::dyn_builder;
-use hyper_ast::tree_gen::utils_ts::TTreeCursor;
-use hyper_ast::tree_gen::{
+use hyperast::store::nodes::legion::dyn_builder;
+use hyperast::tree_gen::utils_ts::TTreeCursor;
+use hyperast::tree_gen::{
     self, add_md_precomp_queries, NoOpMore, RoleAcc, TotalBytesGlobalData as _,
 };
-use hyper_ast::tree_gen::{
+use hyperast::tree_gen::{
     compute_indentation, get_spacing, has_final_space,
     parser::{Node as _, TreeCursor},
     AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
     SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
     ZippedTreeGen,
 };
-use hyper_ast::types;
-use hyper_ast::{
+use hyperast::types;
+use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
@@ -32,7 +32,7 @@ use num::ToPrimitive as _;
 ///! fully compress all subtrees from a cpp CST
 use std::{collections::HashMap, fmt::Debug, vec};
 
-pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
+pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
 
 /// HIDDEN_NODES: enables recovering of hidden nodes from tree-sitter.
 ///   You should start without filtering out hidden nodes when intergrating/updating a grammar,
@@ -151,13 +151,13 @@ impl types::Typed for Acc {
     }
 }
 
-impl hyper_ast::tree_gen::WithChildren<NodeIdentifier> for Acc {
+impl hyperast::tree_gen::WithChildren<NodeIdentifier> for Acc {
     fn children(&self) -> &[NodeIdentifier] {
         &self.simple.children
     }
 }
 
-impl hyper_ast::tree_gen::WithRole<Role> for Acc {
+impl hyperast::tree_gen::WithRole<Role> for Acc {
     fn role_at(&self, o: usize) -> Option<Role> {
         self.role
             .offsets
@@ -168,7 +168,7 @@ impl hyper_ast::tree_gen::WithRole<Role> for Acc {
     }
 }
 
-impl<'acc> hyper_ast::tree_gen::WithLabel for &'acc Acc {
+impl<'acc> hyperast::tree_gen::WithLabel for &'acc Acc {
     type L = &'acc str;
 }
 
@@ -195,7 +195,7 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TS,
-            T = hyper_ast::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
             Acc = Acc,
         >,
 {
@@ -378,7 +378,7 @@ impl<'store, 'cache, 'acc, TS, More> CppTreeGen<'store, 'cache, TS, More, true> 
 }
 
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
+    hyperast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
 impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
@@ -388,7 +388,7 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TS,
-            T = hyper_ast::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
             Acc = Acc,
         >,
 {
@@ -534,10 +534,10 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TS,
-            T = hyper_ast::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
             Acc = Acc,
         >,
-    TS::Ty2: hyper_ast::tree_gen::utils_ts::TsType,
+    TS::Ty2: hyperast::tree_gen::utils_ts::TsType,
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'store>;

@@ -13,7 +13,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use hyper_ast_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
+use hyperast_vcs_git::git::{fetch_repository, read_position, read_position_floating_lines};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use relations::{Info, Perfs};
 use serde::{Deserialize, Serialize};

@@ -6,8 +6,8 @@
 //! - [ ] low compute cost extend
 use std::{fmt::Debug, marker::PhantomData};
 
-use hyper_ast::position::position_accessors::SharedPath;
-use hyper_ast::PrimInt;
+use hyperast::position::position_accessors::SharedPath;
+use hyperast::PrimInt;
 use num_traits::{cast, ToPrimitive};
 
 pub trait TreePath: IntoIterator {

@@ -39,7 +39,7 @@ where
     /// The default implementation skips nothing.
     ///
     ///  see also also the following example use:
-    /// [`hyper_ast_gen_ts_cpp::legion::CppTreeGen::pre_skippable`](../../hyper_ast_gen_ts_cpp/legion/struct.CppTreeGen.html#method.pre_skippable)
+    /// [`hyperast_gen_ts_cpp::legion::CppTreeGen::pre_skippable`](../../hyperast_gen_ts_cpp/legion/struct.CppTreeGen.html#method.pre_skippable)
     fn pre_skippable(
         &mut self,
         text: &Self::Text,

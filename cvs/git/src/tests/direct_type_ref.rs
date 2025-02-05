@@ -1,4 +1,4 @@
-use hyper_ast::{
+use hyperast::{
     position::{Scout, StructuralPosition, StructuralPositionStore},
     store::SimpleStores,
     types::{LabelStore as _, NodeId},
@@ -6,11 +6,11 @@ use hyper_ast::{
 
 use crate::{java::handle_java_file, TStore};
 
-use hyper_ast_gen_ts_java::impact::{
+use hyperast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
     partial_analysis::PartialAnalysis,
 };
-use hyper_ast_gen_ts_java::{
+use hyperast_gen_ts_java::{
     impact::{element::RefsEnum, usage},
     legion_with_refs as java_tree_gen,
 };
@@ -50,7 +50,7 @@ fn run(text: &[u8]) {
     let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let x = sp_store.type_scout(&mut x, unsafe {
-        hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&a.local.compressed_node)
+        hyperast_gen_ts_java::types::TIdN::from_ref_id(&a.local.compressed_node)
     });
     usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
 }

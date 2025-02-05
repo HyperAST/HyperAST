@@ -1,4 +1,4 @@
-use hyper_ast::position::position_accessors::SharedPath;
+use hyperast::position::position_accessors::SharedPath;
 
 use super::*;
 

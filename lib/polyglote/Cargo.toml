@@ -45,6 +45,6 @@ proc-macro2 = "1.0.0"
 heck = "0.5.0"
 prettyplease = "0.2.20"
 
-# TODO use types from hyper_ast crate
+# TODO use types from hyperast crate
 strum = "0.24"
 strum_macros = "0.24" # issue on later version with serialization of curly braces

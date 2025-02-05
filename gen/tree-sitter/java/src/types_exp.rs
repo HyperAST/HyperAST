@@ -55,7 +55,7 @@ macro_rules! make_type {
         }
 
         pub struct Language;
-        impl hyper_ast::types::Lang for Language {
+        impl hyperast::types::Lang for Language {
             type Factory = Factory;
             type Type = Type;
         }

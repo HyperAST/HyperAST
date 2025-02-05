@@ -311,7 +311,7 @@ async fn file(
     axum::extract::State(state): axum::extract::State<SharedState>,
 ) -> axum::response::Result<String> {
     dbg!(&path);
-    file::from_hyper_ast(state, path).map_err(|err| err.into())
+    file::from_hyperast(state, path).map_err(|err| err.into())
 }
 
 pub fn track_code_route(_st: SharedState) -> Router<SharedState> {

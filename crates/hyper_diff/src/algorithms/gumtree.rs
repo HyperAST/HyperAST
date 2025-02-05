@@ -13,7 +13,7 @@ use crate::{
     },
     tree::tree_path::CompressedTreePath,
 };
-use hyper_ast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST};
 
 type CDS<T> = CompletePostOrder<T, u32>;
 
@@ -36,7 +36,7 @@ pub fn diff<'store, HAST: HyperAST<'store>>(
 >
 where
     HAST::IdN: Clone + Debug + Eq,
-    HAST::Idx: hyper_ast::PrimInt,
+    HAST::Idx: hyperast::PrimInt,
     HAST::Label: Debug + Clone + Copy,
     HAST::T: 'store + types::WithHashs + types::WithStats,
 {

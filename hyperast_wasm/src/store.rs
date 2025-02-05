@@ -1,5 +1,5 @@
-pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
-use hyper_ast::{
+pub use hyperast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
+use hyperast::{
     store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
     types::AnyType,
 };
@@ -12,7 +12,7 @@ use std::{
 #[derive(Default)]
 pub(crate) struct TStore;
 
-impl<'a> hyper_ast::types::TypeStore for TStore {
+impl<'a> hyperast::types::TypeStore for TStore {
     type Ty = AnyType;
 }
 
@@ -72,7 +72,7 @@ struct AcessibleFetchedHyperAST<'a> {
         std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
 }
 
-impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
     type R<'a>
         = HashedNodeRef<'a, NodeIdentifier>
     where
@@ -97,7 +97,7 @@ impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAS
     }
 }
 
-impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
+impl<'b> hyperast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
     type I = LabelIdentifier;
 
     fn get_or_insert<U: Borrow<str>>(&mut self, _node: U) -> Self::I {
@@ -123,7 +123,7 @@ impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
     }
 }
 
-impl<'a, 'b> hyper_ast::types::TypeStore for AcessibleFetchedHyperAST<'b> {
+impl<'a, 'b> hyperast::types::TypeStore for AcessibleFetchedHyperAST<'b> {
     type Ty = AnyType;
 }
 

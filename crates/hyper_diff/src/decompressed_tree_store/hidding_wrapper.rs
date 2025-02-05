@@ -18,7 +18,7 @@ use crate::{
     },
     matchers::mapping_store::{MappingStore, MonoMappingStore},
 };
-use hyper_ast::types::{self, NodeId, NodeStore, Stored, WithChildren, WithStats};
+use hyperast::types::{self, NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
     lazy_post_order::LazyPostOrder, simple_post_order::SimplePOSlice, ContiguousDescendants,

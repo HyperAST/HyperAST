@@ -2,7 +2,7 @@
 ///! as action_vec only allow one order to apply actions.
 ///! Maybe it can be integrated in the existing script generator or it needs major changes.
 ///! Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
-use hyper_ast::PrimInt;
+use hyperast::PrimInt;
 
 use crate::tree::tree_path::{CompressedTreePath, TreePath};
 use std::fmt::{Debug, Display};
@@ -83,7 +83,7 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
         let mut i = 0;
         for x in r.iter_mut() {
             i += 1;
-            use hyper_ast::position::position_accessors::SharedPath;
+            use hyperast::position::position_accessors::SharedPath;
             dbg!(&x.action.path.mid, &action.path.mid);
             let sh = action.path.mid.shared_ancestors(&x.action.path.mid);
             dbg!(&sh);
@@ -169,7 +169,7 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
             let mut i = 0;
             loop {
                 let Some(x) = r.get_mut(i) else { break };
-                use hyper_ast::position::position_accessors::SharedPath;
+                use hyperast::position::position_accessors::SharedPath;
                 // dbg!(f(&mut x.action.path));
                 let sh = crate::tree::tree_path::shared_ancestors(
                     path.iter().copied(),

@@ -1,4 +1,4 @@
-use hyper_ast_gen_ts_java::tsg::It;
+use hyperast_gen_ts_java::tsg::It;
 
 pub const QUERIES: &[(&[&str], &str)] = &[
     // (
@@ -100,7 +100,7 @@ fn main() {
     let mut args = std::env::args();
     args.next().unwrap();
     let Some(codes) = args.next() else {
-        let codes = hyper_ast_gen_ts_java::tsg::CODES.iter().enumerate();
+        let codes = hyperast_gen_ts_java::tsg::CODES.iter().enumerate();
         let queries: Vec<_> = QUERIES.iter().enumerate().collect();
         compare_all(codes, &queries);
         return;
@@ -138,7 +138,7 @@ fn compare_all(
         &(&[&str], impl AsRef<str>),
     )],
 ) {
-    unsafe { hyper_ast_gen_ts_java::legion_with_refs::HIDDEN_NODES = true };
+    unsafe { hyperast_gen_ts_java::legion_with_refs::HIDDEN_NODES = true };
     let mut good = vec![];
     let mut bad = vec![];
     let mut codes_count = 0;
@@ -156,7 +156,7 @@ fn compare_all(
             // let f_res = f_aux(query, text);
             // let f_matches = {
             //     type It<'a, HAST> =
-            //         crate::iter::IterAll<'a, hyper_ast::position::StructuralPosition, HAST>;
+            //         crate::iter::IterAll<'a, hyperast::position::StructuralPosition, HAST>;
             //     f_res.0
             //     .apply_matcher::<SimpleStores<crate::types::TStore>, It<_>, crate::types::TIdN<_>>(
             //         &f_res.1, f_res.2,
@@ -165,9 +165,9 @@ fn compare_all(
             let h_res = prep_stepped(precomp, query, text);
             let h_matches = h_res
                 .0
-                .matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+                .matches(hyperast_tsquery::hyperast::TreeCursor::new(
                     &h_res.1,
-                    hyper_ast::position::StructuralPosition::new(h_res.2),
+                    hyperast::position::StructuralPosition::new(h_res.2),
                 ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
@@ -243,16 +243,16 @@ fn prep_stepped<'store>(
     query: &str,
     text: &[u8],
 ) -> (
-    hyper_ast_tsquery::Query,
-    hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
-    hyper_ast::store::defaults::NodeIdentifier,
+    hyperast_tsquery::Query,
+    hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
+    hyperast::store::defaults::NodeIdentifier,
 ) {
-    use hyper_ast_gen_ts_java::legion_with_refs;
+    use hyperast_gen_ts_java::legion_with_refs;
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp)
+        hyperast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp)
             .unwrap();
 
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = {
         legion_with_refs::JavaTreeGen {
@@ -271,7 +271,7 @@ fn prep_stepped<'store>(
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     eprintln!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
     );
 
     (query, stores, full_node.local.compressed_node)

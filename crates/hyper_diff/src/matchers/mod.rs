@@ -20,7 +20,7 @@ mod tests;
 
 use std::ops::{Deref, DerefMut};
 
-use hyper_ast::types::{HyperAST, HyperASTShared};
+use hyperast::types::{HyperAST, HyperASTShared};
 
 use crate::matchers::mapping_store::MappingStore;
 

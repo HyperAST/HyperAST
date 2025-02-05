@@ -7,11 +7,11 @@ use super::*;
 //     dst_tr: NodeIdentifier,
 // ) -> &'a hyper_diff::matchers::Mapping<
 //     hyper_diff::decompressed_tree_store::CompletePostOrder<
-//         hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+//         hyperast::store::nodes::legion::HashedNodeRef<'a>,
 //         u32,
 //     >,
 //     hyper_diff::decompressed_tree_store::CompletePostOrder<
-//         hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+//         hyperast::store::nodes::legion::HashedNodeRef<'a>,
 //         u32,
 //     >,
 //     hyper_diff::matchers::mapping_store::VecStore<u32>,
@@ -40,17 +40,17 @@ fn lazy_mapping<'a>(
     (NodeIdentifier, NodeIdentifier),
     hyper_diff::matchers::Mapping<
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
         hyper_diff::matchers::mapping_store::VecStore<u32>,
     >,
 > {
-    use hyper_ast::types::HyperAST;
+    use hyperast::types::HyperAST;
     use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
     use hyper_diff::matchers::heuristic::gt::{
         lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
@@ -154,7 +154,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -162,7 +162,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -181,7 +181,7 @@ fn lazy_subtree_mapping<'a, 'b>(
     let now = Instant::now();
     assert_ne!(src, dst);
     let (mut decompress_src, mut decompress_dst) = {
-        use hyper_ast::types::DecompressedSubtree;
+        use hyperast::types::DecompressedSubtree;
         let mut cached_decomp = |id: &NodeIdentifier| -> Option<
             dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<HashedNodeRef<'a>, u32>>,
         > {

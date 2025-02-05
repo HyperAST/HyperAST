@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::TNode;
 use legion::world::EntryRef;
 
-use hyper_ast::{
+use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
@@ -31,7 +31,7 @@ use hyper_ast::{
 
 use crate::types::{TsEnabledTypeStore, Type};
 
-pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
+pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
 
 pub struct TsTreeGen<'store, 'cache, TS> {
     pub line_break: Vec<u8>,
@@ -144,7 +144,7 @@ impl<'a> Debug for TTreeCursor<'a> {
     }
 }
 
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor for TTreeCursor<'a> {
+impl<'a> hyperast::tree_gen::parser::TreeCursor for TTreeCursor<'a> {
     type N = TNode<'a>;
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
@@ -209,7 +209,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
-    ) -> hyper_ast::tree_gen::PreResult<<Self as TreeGen>::Acc> {
+    ) -> hyperast::tree_gen::PreResult<<Self as TreeGen>::Acc> {
         let node = cursor.node();
         if node.0.is_missing() {
             return PreResult::Skip;
@@ -480,10 +480,10 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
             }
         } else {
             let hashs = hbuilder.build();
-            use hyper_ast::store::nodes::EntityBuilder as _;
+            use hyperast::store::nodes::EntityBuilder as _;
 
             let mut dyn_builder =
-                hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(

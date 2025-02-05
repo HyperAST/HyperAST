@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 
-use hyper_ast::{
+use hyperast::{
     position::Position,
     types::{
         self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore,
@@ -22,11 +22,11 @@ pub struct SimplePostOrder<T: Stored, IdD> {
 }
 
 // impl<'a, IdD> super::Persistable
-//     for SimplePostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>, IdD>
+//     for SimplePostOrder<hyperast::store::nodes::legion::HashedNodeRef<'a>, IdD>
 // {
 //     type Persisted = SimplePostOrder<
 //         super::PersistedNode<
-//             <hyper_ast::store::nodes::legion::HashedNodeRef<'a> as types::Stored>::TreeId,
+//             <hyperast::store::nodes::legion::HashedNodeRef<'a> as types::Stored>::TreeId,
 //         >,
 //         IdD,
 //     >;
@@ -40,7 +40,7 @@ pub struct SimplePostOrder<T: Stored, IdD> {
 
 //     unsafe fn unpersist(this: Self::Persisted) -> Self {
 //         Self {
-//             basic: <BasicPostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>,IdD> as super::Persistable>::unpersist(this.basic),
+//             basic: <BasicPostOrder<hyperast::store::nodes::legion::HashedNodeRef<'a>,IdD> as super::Persistable>::unpersist(this.basic),
 //             id_parent: this.id_parent,
 //         }
 //     }

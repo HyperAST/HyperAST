@@ -6,16 +6,16 @@ edition = "2021"
 [dependencies]
 tree-sitter = { workspace = true }
 tree-sitter-cli = "0.23.0"
-hyper_ast = { workspace = true, default-features = false, features = [
+hyperast = { workspace = true, default-features = false, features = [
     "serialize",
 ] }
-hyper_ast_gen_ts_cpp = { workspace = true }
-hyper_ast_gen_ts_java = { workspace = true }
-hyper_ast_gen_ts_xml = { workspace = true }
+hyperast_gen_ts_cpp = { workspace = true }
+hyperast_gen_ts_java = { workspace = true }
+hyperast_gen_ts_xml = { workspace = true }
 hyper_diff = { workspace = true }
-hyper_ast_cvs_git = { workspace = true }
-hyper_ast_gen_ts_tsquery = { workspace = true }
-hyper_ast_tsquery =  { workspace = true }
+hyperast_vcs_git = { workspace = true }
+hyperast_gen_ts_tsquery = { workspace = true }
+hyperast_tsquery =  { workspace = true }
 polyglote = { workspace = true, optional = true }
 
 # env_logger = "0.9.0"
@@ -130,10 +130,10 @@ tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",
     # "dep:tree-sitter-stack-graphs",
-    "hyper_ast_tsquery/tsg",
-    "hyper_ast_cvs_git/tsg",
+    "hyperast_tsquery/tsg",
+    "hyperast_vcs_git/tsg",
 ]
 rerun = ["dep:rerun", "dep:polyglote"]
 subtree-stats = [
-    "hyper_ast_gen_ts_java/subtree-stats"
+    "hyperast_gen_ts_java/subtree-stats"
 ]

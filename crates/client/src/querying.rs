@@ -1,12 +1,12 @@
 use crate::{smells::globalize, SharedState};
 use axum::{response::IntoResponse, Json};
 use http::{HeaderMap, StatusCode};
-use hyper_ast::{
+use hyperast::{
     position::position_accessors::WithPreOrderOffsets,
     store::defaults::NodeIdentifier,
     types::{Children, HyperAST, IterableChildren, Typed, WithChildren, WithStats},
 };
-use hyper_ast_cvs_git::git::Oid;
+use hyperast_vcs_git::git::Oid;
 use hyper_diff::{
     decompressed_tree_store::ShallowDecompressedTreeStore,
     matchers::mapping_store::MultiMappingStore,
@@ -117,15 +117,15 @@ pub fn simple(
     let timeout = std::time::Duration::from_millis(timeout);
     let mut proc_commit_limit = commits;
     let config = if language == "Java" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else {
-        hyper_ast_cvs_git::processing::RepoConfig::Any
+        hyperast_vcs_git::processing::RepoConfig::Any
     };
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&language)
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
         .ok_or_else(|| QueryingError::MissingLanguage(language))?;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .read()
@@ -148,14 +148,14 @@ pub fn simple(
     let language: tree_sitter::Language = language.clone();
 
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
+        hyperast_tsquery::Query::with_precomputed(
             &query,
-            hyper_ast_gen_ts_java::language(),
-            hyper_ast_cvs_git::java_processor::sub_queries(),
+            hyperast_gen_ts_java::language(),
+            hyperast_vcs_git::java_processor::sub_queries(),
         )
         .map(|x| x.1)
     } else {
-        hyper_ast_tsquery::Query::new(&query, language)
+        hyperast_tsquery::Query::new(&query, language)
     }
     .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
 
@@ -209,7 +209,7 @@ pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::
     let mut headers = HeaderMap::new();
 
     let language: tree_sitter::Language =
-        match hyper_ast_cvs_git::resolve_language(&content.language) {
+        match hyperast_vcs_git::resolve_language(&content.language) {
             Some(x) => x,
             None => {
                 let err = QueryingError::MissingLanguage(content.language);
@@ -329,7 +329,7 @@ fn pre_repo(
     state: &mut SharedState,
     path: &Param,
     content: &Content,
-) -> Result<(hyper_ast_cvs_git::processing::ConfiguredRepo2, Vec<Oid>), Box<dyn std::error::Error>>
+) -> Result<(hyperast_vcs_git::processing::ConfiguredRepo2, Vec<Oid>), Box<dyn std::error::Error>>
 {
     let Param { user, name, commit } = path.clone();
     let mut additional = commit.split("/");
@@ -342,13 +342,13 @@ fn pre_repo(
         timeout,
     } = content.clone();
     let config = if language == "Java" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else {
-        hyper_ast_cvs_git::processing::RepoConfig::Any
+        hyperast_vcs_git::processing::RepoConfig::Any
     };
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .read()
@@ -378,7 +378,7 @@ fn pre_query(
     state: &mut SharedState,
     path: &Param,
     content: &Content,
-) -> Result<hyper_ast_tsquery::Query, QueryingError> {
+) -> Result<hyperast_tsquery::Query, QueryingError> {
     let Param { user, name, commit } = path.clone();
     let mut additional = commit.split("/");
     let commit = additional.next().unwrap();
@@ -390,38 +390,38 @@ fn pre_query(
         timeout,
     } = content.clone();
     let config = if language == "Java" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else {
-        hyper_ast_cvs_git::processing::RepoConfig::Any
+        hyperast_vcs_git::processing::RepoConfig::Any
     };
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&language)
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
         .ok_or_else(|| QueryingError::MissingLanguage(language))?;
     let language: tree_sitter::Language = language.clone();
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
+        hyperast_tsquery::Query::with_precomputed(
             &query,
-            hyper_ast_gen_ts_java::language(),
-            hyper_ast_cvs_git::java_processor::sub_queries(),
+            hyperast_gen_ts_java::language(),
+            hyperast_vcs_git::java_processor::sub_queries(),
         )
         .map(|x| x.1)
     } else {
-        hyper_ast_tsquery::Query::new(&query, language)
+        hyperast_tsquery::Query::new(&query, language)
     }
     .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
     Ok(query)
 }
 
 fn simple_aux(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
+    query: &hyperast_tsquery::Query,
     timeout: std::time::Duration,
     max_matches: u64,
 ) -> Result<ComputeResult, MatchingError<ComputeResult>> {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
     let now = Instant::now();
     let mut result = vec![0; query.enabled_pattern_count()];
@@ -452,9 +452,9 @@ fn simple_aux(
         //     dbg!(i);
         //     let name = query.capture_name(i);
         //     dbg!(name);
-        //     use hyper_ast::position::TreePath;
+        //     use hyperast::position::TreePath;
         //     let n = c.node.pos.node().unwrap();
-        //     let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+        //     let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, *n);
         //     dbg!(n.to_string());
         // }
     }
@@ -499,15 +499,15 @@ pub fn differential(
     } = query;
     let timeout = std::time::Duration::from_millis(timeout);
     let config = if language == "Java" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyper_ast_cvs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else {
-        hyper_ast_cvs_git::processing::RepoConfig::Any
+        hyperast_vcs_git::processing::RepoConfig::Any
     };
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&language)
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
         .ok_or_else(|| QueryingError::MissingLanguage(language))?;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .read()
@@ -535,14 +535,14 @@ pub fn differential(
     let language: tree_sitter::Language = language.clone();
 
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
+        hyperast_tsquery::Query::with_precomputed(
             &query,
-            hyper_ast_gen_ts_java::language(),
-            hyper_ast_cvs_git::java_processor::sub_queries(),
+            hyperast_gen_ts_java::language(),
+            hyperast_vcs_git::java_processor::sub_queries(),
         )
         .map(|x| x.1)
     } else {
-        hyper_ast_tsquery::Query::new(&query, language)
+        hyperast_tsquery::Query::new(&query, language)
     }
     .map_err(|e| QueryingError::ParsingError(e.to_string()))?
     .with_one_pattern_enabled(0)
@@ -599,7 +599,7 @@ pub fn differential(
     let repositories = state.repositories.read().unwrap();
     let stores = &repositories.processor.main_stores;
 
-    let hyperast = &hyper_ast_cvs_git::no_space::as_nospaces(stores);
+    let hyperast = &hyperast_vcs_git::no_space::as_nospaces(stores);
     let (src_tree, dst_tree) =
         crate::utils::get_pair_simp(&state.partial_decomps, hyperast, &current_tr, &other_tr);
     let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
@@ -623,7 +623,7 @@ pub fn differential(
         .filter(|x| {
             log::debug!("filtering");
             let (_, _, no_spaces_path_to_target) =
-                hyper_ast::position::compute_position_with_no_spaces(
+                hyperast::position::compute_position_with_no_spaces(
                     current_tr,
                     &mut x.iter_offsets(),
                     stores,
@@ -660,7 +660,7 @@ pub fn differential(
                     let id = mapper.src_arena.original(&src);
                     let t = hyperast.resolve_type(&id);
                     let (_, _, no_spaces_path_to_target) =
-                        hyper_ast::position::compute_position_with_no_spaces(
+                        hyperast::position::compute_position_with_no_spaces(
                             current_tr,
                             &mut x.iter_offsets(),
                             stores,
@@ -712,17 +712,17 @@ pub fn differential(
 }
 
 fn differential_aux(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
+    query: &hyperast_tsquery::Query,
     _timeout: std::time::Duration,
     _max_matches: u64,
 ) -> Result<
-    Vec<hyper_ast::position::StructuralPosition<NodeIdentifier, u16>>,
+    Vec<hyperast::position::StructuralPosition<NodeIdentifier, u16>>,
     MatchingError<ComputeResult>,
 > {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
     let now = Instant::now();
     assert_eq!(
@@ -766,9 +766,9 @@ fn differential_aux(
         //     dbg!(i);
         //     let name = query.capture_name(i);
         //     dbg!(name);
-        //     use hyper_ast::position::TreePath;
+        //     use hyperast::position::TreePath;
         //     let n = c.node.pos.node().unwrap();
-        //     let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+        //     let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, *n);
         //     dbg!(n.to_string());
         // }
     }

@@ -7,7 +7,7 @@ use crate::{
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{HashKind, NodeStore, Tree, TypeStore, WithHashs};
+use hyperast::types::{HashKind, NodeStore, Tree, TypeStore, WithHashs};
 
 pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
     pub(super) stores: &'a HAST,
@@ -212,7 +212,7 @@ where
     }
 }
 
-use hyper_ast::types::HyperAST;
+use hyperast::types::HyperAST;
 
 impl<
         'a,

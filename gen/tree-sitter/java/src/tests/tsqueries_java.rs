@@ -1,6 +1,6 @@
 use std::{path::Path, time::Instant};
 
-use hyper_ast::store::{defaults::NodeIdentifier, SimpleStores};
+use hyperast::store::{defaults::NodeIdentifier, SimpleStores};
 
 use crate::tsg::{CODE, CODE1, CODE3, CODES, QUERIES};
 
@@ -38,7 +38,7 @@ fn run_recursive(query: &str, text: &[u8]) -> usize {
 
     use crate::iter::IterAll as JavaIter;
     use crate::types::TStore;
-    type It<'a, HAST> = JavaIter<'a, hyper_ast::position::StructuralPosition, HAST>;
+    type It<'a, HAST> = JavaIter<'a, hyperast::position::StructuralPosition, HAST>;
     let matchs =
         matcher.apply_matcher::<SimpleStores<TStore>, It<_>, crate::types::TIdN<_>>(&stores, code);
     dbg!();
@@ -57,14 +57,14 @@ fn prep_recursive<'store>(
     query: &str,
     text: &[u8],
 ) -> (
-    hyper_ast_gen_ts_tsquery::search::PreparedMatcher<crate::types::Type>,
+    hyperast_gen_ts_tsquery::search::PreparedMatcher<crate::types::Type>,
     SimpleStores<crate::types::TStore>,
     NodeIdentifier,
 ) {
     use crate::legion_with_refs;
-    let matcher = hyper_ast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(query);
+    let matcher = hyperast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(query);
 
-    let mut stores = hyper_ast::store::SimpleStores::default();
+    let mut stores = hyperast::store::SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
@@ -76,7 +76,7 @@ fn prep_recursive<'store>(
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     eprintln!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
     );
     (matcher, stores, full_node.local.compressed_node)
 }
@@ -128,9 +128,9 @@ fn prep_baseline<'query, 'tree>(
 #[cfg(test)]
 fn run_stepped(query: &str, text: &[u8]) -> usize {
     let (query, stores, code) = prep_stepped(query, text);
-    let qcursor = query.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+    let qcursor = query.matches(hyperast_tsquery::hyperast::TreeCursor::new(
         &stores,
-        hyper_ast::position::StructuralPosition::new(code),
+        hyperast::position::StructuralPosition::new(code),
     ));
 
     let mut count = 0;
@@ -143,9 +143,9 @@ fn run_stepped(query: &str, text: &[u8]) -> usize {
             dbg!(i);
             let name = query.capture_name(i);
             dbg!(name);
-            use hyper_ast::position::TreePath;
+            use hyperast::position::TreePath;
             let n = c.node.pos.node().unwrap();
-            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+            let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, *n);
             dbg!(n.to_string());
         }
     }
@@ -156,14 +156,14 @@ fn prep_stepped<'store>(
     query: &str,
     text: &[u8],
 ) -> (
-    hyper_ast_tsquery::Query,
+    hyperast_tsquery::Query,
     SimpleStores<crate::types::TStore>,
     NodeIdentifier,
 ) {
     use crate::legion_with_refs;
-    let query = hyper_ast_tsquery::Query::new(query, crate::language()).unwrap();
+    let query = hyperast_tsquery::Query::new(query, crate::language()).unwrap();
 
-    let mut stores = hyper_ast::store::SimpleStores::default();
+    let mut stores = hyperast::store::SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
@@ -175,7 +175,7 @@ fn prep_stepped<'store>(
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     eprintln!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
     );
 
     (query, stores, full_node.local.compressed_node)
@@ -184,7 +184,7 @@ fn prep_stepped<'store>(
 #[cfg(test)]
 fn run_stepped2(query: &str, text: &[u8]) -> usize {
     let (query, tree) = prep_stepped2(query, text);
-    let cursor = hyper_ast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());
+    let cursor = hyperast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());
     let qcursor = query.matches(cursor);
 
     let mut count = 0;
@@ -207,8 +207,8 @@ fn run_stepped2(query: &str, text: &[u8]) -> usize {
 fn prep_stepped2<'store>(
     query: &str,
     text: &[u8],
-) -> (hyper_ast_tsquery::Query, tree_sitter::Tree) {
-    let query = hyper_ast_tsquery::Query::new(query, crate::language()).unwrap();
+) -> (hyperast_tsquery::Query, tree_sitter::Tree) {
+    let query = hyperast_tsquery::Query::new(query, crate::language()).unwrap();
 
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&crate::language()).unwrap();
@@ -222,18 +222,18 @@ fn prep_prepro<'store>(
     subqueries: &[&str],
     text: &[u8],
 ) -> (
-    hyper_ast_tsquery::Query,
+    hyperast_tsquery::Query,
     SimpleStores<crate::types::TStore>,
     NodeIdentifier,
 ) {
     use crate::legion_with_refs;
-    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+    let (precomp, query) = hyperast_tsquery::Query::with_precomputed(
         query,
         crate::language(),
         &subqueries,
     )
     .unwrap();
-    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -252,7 +252,7 @@ fn prep_prepro<'store>(
     // let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     // eprintln!(
     //     "{}",
-    //     hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    //     hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
     // );
 
     // (query, stores, full_node.local.compressed_node)
@@ -324,7 +324,7 @@ fn _compare_all<'a>(
             // let f_res = f_aux(query, text);
             // let f_matches = {
             //     type It<'a, HAST> =
-            //         crate::iter::IterAll<'a, hyper_ast::position::StructuralPosition, HAST>;
+            //         crate::iter::IterAll<'a, hyperast::position::StructuralPosition, HAST>;
             //     f_res.0
             //     .apply_matcher::<SimpleStores<crate::types::TStore>, It<_>, crate::types::TIdN<_>>(
             //         &f_res.1, f_res.2,
@@ -333,9 +333,9 @@ fn _compare_all<'a>(
             let h_res = prep_stepped(query, text);
             let h_matches = h_res
                 .0
-                .matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+                .matches(hyperast_tsquery::hyperast::TreeCursor::new(
                     &h_res.1,
-                    hyper_ast::position::StructuralPosition::new(h_res.2),
+                    hyperast::position::StructuralPosition::new(h_res.2),
                 ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
@@ -484,15 +484,15 @@ fn _compare_all_prepro<'a>(
             // let f_res = f_aux(query, text);
             // let f_matches = {
             //     type It<'a, HAST> =
-            //         crate::iter::IterAll<'a, hyper_ast::position::StructuralPosition, HAST>;
+            //         crate::iter::IterAll<'a, hyperast::position::StructuralPosition, HAST>;
             //     f_res.0
             //     .apply_matcher::<SimpleStores<crate::types::TStore>, It<_>, crate::types::TIdN<_>>(
             //         &f_res.1, f_res.2,
             //     )
             // };
             let h_res = prep_prepro(query.0, subqueries.next().unwrap(), text);
-            let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(h_res.2);
-            let tree_cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&h_res.1, pos);
+            let pos = hyperast::position::structural_pos::CursorWithPersistance::new(h_res.2);
+            let tree_cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&h_res.1, pos);
             let h_matches = h_res.0.matches(tree_cursor);
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
@@ -1161,14 +1161,14 @@ fn test_precomputed() {
     // let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
     // let query =
-    //     hyper_ast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
+    //     hyperast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
     //         .unwrap();
     use crate::legion_with_refs;
     let now = Instant::now();
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
+        hyperast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
             .unwrap();
-    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -1185,15 +1185,15 @@ fn test_precomputed() {
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     log::trace!(
         "syntax ser:\n{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
     );
     let pre_processing = now.elapsed();
     let now = Instant::now();
     let (query, stores, code) = (query, stores, full_node.local.compressed_node);
-    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
-    // let pos = hyper_ast::position::StructuralPosition::new(code);
-    // let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // let pos = hyperast::position::StructuralPosition::new(code);
+    // let cursor = hyperast_tsquery::hyperast::TreeCursor::new(&stores, pos);
     let qcursor = query.matches(cursor);
     let mut count = 0;
     for m in qcursor {
@@ -1205,12 +1205,12 @@ fn test_precomputed() {
             dbg!(i);
             let name = query.capture_name(i);
             dbg!(name);
-            use hyper_ast::position::structural_pos::AAA;
-            use hyper_ast::position::TreePath;
+            use hyperast::position::structural_pos::AAA;
+            use hyperast::position::TreePath;
             let n = c.node.pos.node();
-            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+            let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, n);
             // let n = c.node.pos.node().unwrap();
-            // let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+            // let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, *n);
             dbg!(n.to_string());
         }
     }
@@ -1300,11 +1300,11 @@ class C {
     let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
     // let query =
-    //     hyper_ast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
+    //     hyperast_tsquery::Query::with_precomputed(query, crate::language(), &precomp)
     //         .unwrap();
     let (query, tree) = {
         let query: &str = query;
-        let (_precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+        let (_precomp, query) = hyperast_tsquery::Query::with_precomputed(
             query,
             crate::language(),
             &precomp,
@@ -1317,7 +1317,7 @@ class C {
 
         (query, tree)
     };
-    let cursor = hyper_ast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());
+    let cursor = hyperast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());
     let qcursor = query.matches(cursor);
     let mut count = 0;
     for m in qcursor {
@@ -1341,7 +1341,7 @@ fn f(q: &str, p: &[&str], _f: &str) {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (_precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
+        hyperast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
 }
 
@@ -1694,10 +1694,10 @@ public class TypeAdapterTest {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
+        hyperast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
     // query._check_preprocessed(0, 0);
     log::trace!("\n{}", query);
-    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = crate::legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -1713,8 +1713,8 @@ public class TypeAdapterTest {
     todo!("handle type inconsistences")
     // let full_node = java_tree_gen.generate_file(b"", (&text).as_bytes(), tree.walk());
     // let code = full_node.local.compressed_node;
-    // let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    // let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
+    // let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
     // dbg!();
     // let qcursor = query.matches(cursor);
     // let mut count = 0;
@@ -1727,9 +1727,9 @@ public class TypeAdapterTest {
     //         dbg!(i);
     //         let name = query.capture_name(i);
     //         dbg!(name);
-    //         use hyper_ast::position::structural_pos::AAA;
+    //         use hyperast::position::structural_pos::AAA;
     //         let n = c.node.pos.node();
-    //         let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+    //         let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, n);
     //         dbg!(n.to_string());
     //     }
     // }
@@ -2272,10 +2272,10 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
+        hyperast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
     log::trace!("\n{}", query);
-    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = crate::legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -2291,10 +2291,10 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
     todo!("handle type inconsistences")
     // let full_node = java_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
     // let code = full_node.local.compressed_node;
-    // // let n = hyper_ast::nodes::SyntaxWithFieldsSerializer::new(&stores, code);
+    // // let n = hyperast::nodes::SyntaxWithFieldsSerializer::new(&stores, code);
     // // dbg!(n.to_string());
-    // let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    // let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
+    // let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
     // dbg!();
     // let qcursor = query.matches(cursor);
     // let mut count = 0;
@@ -2307,9 +2307,9 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
     //         dbg!(i);
     //         let name = query.capture_name(i);
     //         dbg!(name);
-    //         use hyper_ast::position::structural_pos::AAA;
+    //         use hyperast::position::structural_pos::AAA;
     //         let n = c.node.pos.node();
-    //         let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+    //         let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, n);
     //         dbg!(n.to_string());
     //     }
     // }
@@ -2338,7 +2338,7 @@ fn h(q: &[&str], text: &str) -> usize {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
-    let query = hyper_ast_tsquery::Query::big(q, crate::language()).unwrap();
+    let query = hyperast_tsquery::Query::big(q, crate::language()).unwrap();
     let tree = match crate::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
@@ -2346,7 +2346,7 @@ fn h(q: &[&str], text: &str) -> usize {
     println!("{}", tree.root_node().to_sexp());
     dbg!();
     let cursor =
-        hyper_ast_tsquery::default_impls::TreeCursor::new(text.as_bytes(), tree.root_node().walk());
+        hyperast_tsquery::default_impls::TreeCursor::new(text.as_bytes(), tree.root_node().walk());
     let qcursor = query.matches(cursor);
     let mut count = 0;
     for m in qcursor {
@@ -2363,12 +2363,12 @@ fn h(q: &[&str], text: &str) -> usize {
     dbg!(count)
 }
 
-fn f2(q: &str, p: &[&str]) -> hyper_ast_tsquery::Query {
+fn f2(q: &str, p: &[&str]) -> hyperast_tsquery::Query {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let (_precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
+        hyperast_tsquery::Query::with_precomputed(q, crate::language(), p).unwrap();
 
     query
 }

@@ -3,8 +3,8 @@ use std::ops::Range;
 use axum::Json;
 use code2query::QueryLattice;
 use hashbrown::HashSet;
-use hyper_ast::position::position_accessors::SolvedPosition;
-use hyper_ast::{
+use hyperast::position::position_accessors::SolvedPosition;
+use hyperast::{
     position::{
         position_accessors::{RootedPosition, WithPreOrderOffsets},
         TreePathMut,
@@ -146,7 +146,7 @@ pub(crate) fn smells(
         true
     };
 
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let configs = state.clone();
     let repo_handle = state
         .repositories
@@ -170,7 +170,7 @@ pub(crate) fn smells(
     let now = Instant::now();
     let src_oid = commits[0];
     let dst_oid = commits[1];
-    use hyper_ast_cvs_git::processing::ConfiguredRepoTrait;
+    use hyperast_vcs_git::processing::ConfiguredRepoTrait;
     let repo_handle = &repository;
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
@@ -181,19 +181,19 @@ pub(crate) fn smells(
         .get_commit(repo_handle.config(), &dst_oid)
         .unwrap();
     let dst_tr = commit_dst.ast_root;
-    let with_spaces_stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore> =
+    let with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore> =
         &repositories.processor.main_stores;
-    let stores = &hyper_ast_cvs_git::no_space::as_nospaces(with_spaces_stores);
+    let stores = &hyperast_vcs_git::no_space::as_nospaces(with_spaces_stores);
 
     // NOTE temporary bypass, will be fixed when adding polyglote facilities
     // SAFETY for now TStores are identical enough to be transmuted
     // TODO use a proper wrapper
     // TODO alternatively rework the type store and node types entirely with some compile time links/macros
-    let sss: &hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore> =
+    let sss: &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore> =
         unsafe { std::mem::transmute(with_spaces_stores) };
-    let meta_gen = hyper_ast_tsquery::Query::new(&meta_gen, hyper_ast_gen_ts_java::language())
+    let meta_gen = hyperast_tsquery::Query::new(&meta_gen, hyperast_gen_ts_java::language())
         .map_err(|x| x.to_string())?;
-    let meta_simp = hyper_ast_tsquery::Query::new(&meta_simp, hyper_ast_gen_ts_tsquery::language())
+    let meta_simp = hyperast_tsquery::Query::new(&meta_simp, hyperast_gen_ts_tsquery::language())
         .map_err(|x| x.to_string())?;
 
     let ex_map: std::collections::HashMap<_, Vec<_>> = examples
@@ -202,7 +202,7 @@ pub(crate) fn smells(
         .map(|(i, e)| {
             assert_eq!(&e.before.commit, &dst_oid.to_string());
             assert!(!e.before.path.is_empty());
-            let (_, from) = hyper_ast::position::compute_position(
+            let (_, from) = hyperast::position::compute_position(
                 dst_tr,
                 &mut e.before.path.iter().copied(),
                 with_spaces_stores,
@@ -231,9 +231,9 @@ pub(crate) fn smells(
     } else {
         unreachable!()
         // TODO
-        // let qqq = hyper_ast_tsquery::Query::big(
+        // let qqq = hyperast_tsquery::Query::big(
         //     &col.iter().map(|x| bad[x[0]].query.as_str()).collect::<Vec<_>>(),
-        //     hyper_ast_gen_ts_java::language(),
+        //     hyperast_gen_ts_java::language(),
         // )
         // .map_err(|e| e.to_string())?;
     };
@@ -283,7 +283,7 @@ pub(crate) fn smells_ex_from_diffs(
         commit,
         len,
     } = path;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let configs = state.clone();
     let repo_handle = state
         .repositories
@@ -370,8 +370,8 @@ pub(crate) fn smells_ex_from_diffs(
 }
 
 pub(crate) fn globalize(
-    repository: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
-    oid: hyper_ast_cvs_git::git::Oid,
+    repository: &hyperast_vcs_git::processing::ConfiguredRepo2,
+    oid: hyperast_vcs_git::git::Oid,
     p: Pos,
 ) -> CodeRange {
     CodeRange {
@@ -393,6 +393,6 @@ pub(crate) struct Diff {
     moves: Vec<(Pos, Pos)>,
 }
 type Pos = (
-    hyper_ast::position::file_and_offset::Position<std::path::PathBuf, usize>,
+    hyperast::position::file_and_offset::Position<std::path::PathBuf, usize>,
     Vec<Idx>,
 );

@@ -1,7 +1,7 @@
 use super::{Status, Symbol, TreeCursorStep};
-use hyper_ast::position::structural_pos::{self, AAA, BBB};
-use hyper_ast::types::{HyperAST, LangRef, TypeStore};
-use hyper_ast::types::{
+use hyperast::position::structural_pos::{self, AAA, BBB};
+use hyperast::types::{HyperAST, LangRef, TypeStore};
+use hyperast::types::{
     HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithPrecompQueries, WithRoles,
 };
 
@@ -205,7 +205,7 @@ where
         if needed == 0 {
             return false;
         }
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let id = self.pos.node();
         let n = self.stores.node_store().resolve(&id);
         n.wont_match_given_precomputed_queries(needed)
@@ -258,7 +258,7 @@ where
     fn symbol(&self) -> Symbol {
         let n = self.pos.node();
         let t = self.stores.resolve_type(&n);
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(&n);
         let id = self.stores.resolve_lang(&n).ts_symbol(t);
         id.into()
@@ -330,7 +330,7 @@ where
     fn symbol(&self) -> Symbol {
         let n = self.pos.node();
         let t = self.stores.resolve_type(&n);
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(&n);
         let id = self.stores.resolve_lang(&n).ts_symbol(t);
         id.into()
@@ -413,7 +413,7 @@ fn resolve<'hast, HAST: HyperAST<'hast>>(
     pos: &impl AAA<HAST::IdN, HAST::Idx>,
 ) -> HAST::T {
     let n = pos.node();
-    use hyper_ast::types::NodeStore;
+    use hyperast::types::NodeStore;
     let n = stores.node_store().resolve(&n);
     n
 }
@@ -431,7 +431,7 @@ fn symbol<'hast, HAST: HyperAST<'hast>>(
 ) -> Symbol {
     let n = pos.node();
     let t = stores.resolve_type(&n);
-    use hyper_ast::types::NodeStore;
+    use hyperast::types::NodeStore;
     let n = stores.node_store().resolve(&n);
     let id = stores.resolve_lang(&n).ts_symbol(t);
     id.into()
@@ -442,10 +442,10 @@ fn text<'a, 'hast, HAST: HyperAST<'hast>>(
     pos: &impl AAA<HAST::IdN, HAST::Idx>,
 ) -> std::borrow::Cow<'hast, str> {
     let id = pos.node();
-    use hyper_ast::types::NodeStore;
+    use hyperast::types::NodeStore;
     let n = stores.node_store().resolve(&id);
     if n.has_children() {
-        let r = hyper_ast::nodes::TextSerializer::new(stores, id).to_string();
+        let r = hyperast::nodes::TextSerializer::new(stores, id).to_string();
         return r.into();
     }
     if let Some(l) = n.try_get_label() {
@@ -529,13 +529,13 @@ fn goto_next_sibling_internal<'hast, HAST: HyperAST<'hast>>(
 where
     HAST::IdN: Copy,
 {
-    use hyper_ast::types::NodeStore;
+    use hyperast::types::NodeStore;
     let Some(p) = pos.parent() else {
         return TreeCursorStep::TreeCursorStepNone;
     };
     let n = stores.node_store().resolve(&p);
-    use hyper_ast::types::Children;
-    use hyper_ast::types::WithChildren;
+    use hyperast::types::Children;
+    use hyperast::types::WithChildren;
     let Some(node) = n.children().and_then(|x| x.get(pos.offset() + num::one())) else {
         if stores.resolve_type(&p).is_hidden() {
             pos.up();
@@ -562,10 +562,10 @@ fn goto_first_child_internal<'hast, HAST: HyperAST<'hast>>(
 where
     HAST::IdN: Copy,
 {
-    use hyper_ast::types::NodeStore;
+    use hyperast::types::NodeStore;
     let n = stores.node_store().resolve(&pos.node());
-    use hyper_ast::types::Children;
-    use hyper_ast::types::WithChildren;
+    use hyperast::types::Children;
+    use hyperast::types::WithChildren;
     let Some(node) = n.children().and_then(|x| x.get(num::zero())) else {
         return TreeCursorStep::TreeCursorStepNone;
     };

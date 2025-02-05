@@ -1,5 +1,5 @@
 [package]
-name = "hyper_ast_gen_ts_ts"
+name = "hyperast_gen_ts_ts"
 version = "0.2.0"
 edition = "2021"
 
@@ -16,7 +16,7 @@ cfg-if = "1.0"
 hashbrown = { version = "0.14.5", default-features = false, optional = true }
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
-hyper_ast = { workspace = true, default-features = false }
+hyperast = { workspace = true, default-features = false }
 
 libc = "0.2"
 
@@ -33,11 +33,11 @@ env_logger = "0.11.3"
 
 [features]
 default = ["impl"]
-legion = ["hyper_ast/legion", "dep:legion"]
+legion = ["hyperast/legion", "dep:legion"]
 impl = [
-    "hyper_ast/jemalloc",
+    "hyperast/jemalloc",
     "legion",
-    "hyper_ast/native",
+    "hyperast/native",
     "dep:hashbrown",
     "hashbrown?/ahash",
     "dep:tree-sitter",

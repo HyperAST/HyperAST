@@ -1,8 +1,8 @@
 use crate::store::FetchedHyperAST;
 use crate::types;
-use hyper_ast::store::nodes::fetched;
-use hyper_ast::store::nodes::fetched::LabelIdentifier;
-use hyper_ast::store::nodes::fetched::NodeIdentifier;
+use hyperast::store::nodes::fetched;
+use hyperast::store::nodes::fetched::LabelIdentifier;
+use hyperast::store::nodes::fetched::NodeIdentifier;
 use poll_promise::Promise;
 use types::ApiAddr;
 

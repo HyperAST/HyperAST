@@ -1,4 +1,4 @@
-use hyper_ast::types::NodeStore;
+use hyperast::types::NodeStore;
 
 use crate::{
     matchers::{

@@ -4,30 +4,30 @@ use crate::{
     types::{TStore, Type},
     TNode,
 };
-use hyper_ast::store::{
+use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
         legion::{dyn_builder, eq_node, HashedNodeRef},
         EntityBuilder,
     },
 };
-use hyper_ast::tree_gen::utils_ts::TTreeCursor;
-use hyper_ast::tree_gen::{
+use hyperast::tree_gen::utils_ts::TTreeCursor;
+use hyperast::tree_gen::{
     self,
     parser::{Node, TreeCursor},
     Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
 };
-use hyper_ast::tree_gen::{add_md_precomp_queries, NoOpMore, RoleAcc};
-use hyper_ast::tree_gen::{
+use hyperast::tree_gen::{add_md_precomp_queries, NoOpMore, RoleAcc};
+use hyperast::tree_gen::{
     GlobalData as _, StatsGlobalData, TextedGlobalData, TotalBytesGlobalData as _,
 };
-use hyper_ast::{
+use hyperast::{
     cyclomatic::Mcc,
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     types::{self, AnyType, NodeStoreExt, Role, TypeTrait, WithHashs, WithStats},
 };
-use hyper_ast::{
+use hyperast::{
     filter::BloomSize,
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::Space,
@@ -119,7 +119,7 @@ impl From<Local> for MD {
     }
 }
 
-pub type Global<'a> = hyper_ast::tree_gen::SpacedGlobalData<'a, StatsGlobalData>;
+pub type Global<'a> = hyperast::tree_gen::SpacedGlobalData<'a, StatsGlobalData>;
 
 type PrecompQueries = u16;
 
@@ -177,7 +177,7 @@ pub struct Acc {
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
     precomp_queries: PrecompQueries,
-    prepro: Option<hyper_ast::scripting::Acc>,
+    prepro: Option<hyperast::scripting::Acc>,
 }
 
 impl Accumulator for Acc {
@@ -215,13 +215,13 @@ impl types::Typed for Acc {
     }
 }
 
-impl hyper_ast::tree_gen::WithChildren<NodeIdentifier> for Acc {
+impl hyperast::tree_gen::WithChildren<NodeIdentifier> for Acc {
     fn children(&self) -> &[NodeIdentifier] {
         &self.simple.children
     }
 }
 
-impl hyper_ast::tree_gen::WithRole<Role> for Acc {
+impl hyperast::tree_gen::WithRole<Role> for Acc {
     fn role_at(&self, o: usize) -> Option<Role> {
         self.role
             .offsets
@@ -232,7 +232,7 @@ impl hyper_ast::tree_gen::WithRole<Role> for Acc {
     }
 }
 
-impl<'acc> hyper_ast::tree_gen::WithLabel for &'acc Acc {
+impl<'acc> hyperast::tree_gen::WithLabel for &'acc Acc {
     type L = &'acc str;
 }
 
@@ -274,7 +274,7 @@ pub(crate) fn should_get_hidden_nodes() -> bool {
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
-    TS: JavaEnabledTypeStore + 'static + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+    TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
         + tree_gen::PreproTSG<'stores>
         + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
@@ -426,7 +426,7 @@ where
         if let Some(p) = &mut parent.prepro {
             // SAFETY: this side should be fine, issue when unerasing
             let store = unsafe { self.stores.erase_ts_unchecked() };
-            let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
+            let child: hyperast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
                 id.into();
             p.acc(store, ty, child).unwrap();
         }
@@ -456,7 +456,7 @@ where
             if let Some(p) = &mut parent.prepro {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.stores.erase_ts_unchecked() };
-                let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
+                let child: hyperast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
                     id.into();
                 p.acc(store, parent.simple.kind, child).unwrap();
             }
@@ -473,7 +473,7 @@ where
 }
 
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
+    hyperast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
 impl<'stores, 'cache, 's, T, TS: JavaEnabledTypeStore>
@@ -573,12 +573,12 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: JavaEnabledTypeStore<Ty2 = Type>
         + 'static
-        + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+        + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
         + tree_gen::PreproTSG<'stores>
         + tree_gen::More<
             TS = TS,
-            T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
             Acc = Acc,
         >,
 {
@@ -632,7 +632,7 @@ where
             }
             if More::USING {
                 let prepro = self.more.preprocessing(Type::Spaces).unwrap();
-                let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+                let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
                 let ss = prepro.finish_with_label(&subtr, spacing).unwrap();
                 dyn_builder.add(ss);
             };
@@ -695,7 +695,7 @@ where
             if let Some(p) = &mut init.prepro {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.stores.erase_ts_unchecked() };
-                let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
+                let child: hyperast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
                     id.into();
                 p.acc(store, init.simple.kind, child).unwrap();
             }
@@ -725,7 +725,7 @@ where
                 if let Some(p) = &mut acc.prepro {
                     // SAFETY: this side should be fine, issue when unerasing
                     let store = unsafe { self.stores.erase_ts_unchecked() };
-                    let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<
+                    let child: hyperast::scripting::lua_scripting::SubtreeHandle<
                         crate::types::TType,
                     > = id.into();
                     p.acc(store, acc.simple.kind, child).unwrap();
@@ -772,7 +772,7 @@ where
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
-    TS: JavaEnabledTypeStore + 'static + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+    TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
         + tree_gen::PreproTSG<'stores>
         + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
@@ -863,8 +863,8 @@ where
                 // SAFETY: it is just an issue with associated types and invariants raising everything to 'static... 
                 let stores: SimpleStores<
                     TS,
-                    &'static hyper_ast::store::nodes::legion::NodeStoreInner,
-                    &'static hyper_ast::store::labels::LabelStore,
+                    &'static hyperast::store::nodes::legion::NodeStoreInner,
+                    &'static hyperast::store::labels::LabelStore,
                 > = unsafe { std::mem::transmute(stores.clone()) };
                 self.more
                     .compute_tsg(stores, &acc, label.as_deref())
@@ -896,7 +896,7 @@ where
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
 
             if More::USING {
-                let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+                let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
                 let ss = if let Some(label) = label {
                     acc.prepro
                         .unwrap()
@@ -942,7 +942,7 @@ where
 impl<
         'stores,
         'cache,
-        TS: JavaEnabledTypeStore + 'static + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+        TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
         More: tree_gen::Prepro<Type>
             + tree_gen::PreproTSG<'stores>
             + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
@@ -955,7 +955,7 @@ where
     #[allow(unused)]
     fn build_then_insert(
         &mut self,
-        i: <HashedNode as hyper_ast::types::Stored>::TreeId,
+        i: <HashedNode as hyperast::types::Stored>::TreeId,
         t: AnyType, //<HashedNode as types::Typed>::Type,
         l: Option<<HashedNode as types::Labeled>::Label>,
         cs: Vec<<HashedNode as types::Stored>::TreeId>,

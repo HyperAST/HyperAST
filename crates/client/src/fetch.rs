@@ -1,4 +1,4 @@
-use hyper_ast::{
+use hyperast::{
     store::{
         defaults,
         labels::label_id_from_usize, // ::fetched,
@@ -9,7 +9,7 @@ use hyper_ast::{
     },
     types::{IterableChildren, WithChildren, WithSerialization, WithStats},
 };
-use hyper_ast_cvs_git::TStore;
+use hyperast_vcs_git::TStore;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
@@ -59,7 +59,7 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
         path,
     } = path;
     dbg!(&path);
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .read()
@@ -105,11 +105,11 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
 }
 
 fn resolve_file_path<'a>(
-    stores: &hyper_ast::store::SimpleStores<TStore>,
+    stores: &hyperast::store::SimpleStores<TStore>,
     root: defaults::NodeIdentifier,
     mut path: impl Iterator<Item = &'a str>,
 ) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
-    use hyper_ast::types::LabelStore;
+    use hyperast::types::LabelStore;
     let mut d = root;
     loop {
         let Some(l) = path.next() else {
@@ -127,7 +127,7 @@ fn resolve_file_path<'a>(
 }
 
 fn resolve_in_file(
-    stores: &hyper_ast::store::SimpleStores<TStore>,
+    stores: &hyperast::store::SimpleStores<TStore>,
     root: defaults::NodeIdentifier,
     rest: &str,
 ) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
@@ -263,7 +263,7 @@ pub fn fetch_labels<'a>(
     let repositories = get_mut.repositories.read().unwrap();
     let node_store = &repositories.processor.main_stores.node_store;
     let label_store = &repositories.processor.main_stores.label_store;
-    use hyper_ast::types::LabelStore;
+    use hyperast::types::LabelStore;
     let (label_ids, labels) = ids
         .map(|x| {
             (
@@ -279,7 +279,7 @@ pub fn fetch_labels<'a>(
 }
 
 fn resolve_path<'a>(
-    node_store: &hyper_ast::store::nodes::legion::NodeStore,
+    node_store: &hyperast::store::nodes::legion::NodeStore,
     root: defaults::NodeIdentifier,
     mut path: impl Iterator<Item = &'a str>,
 ) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
@@ -299,8 +299,8 @@ fn resolve_path<'a>(
 /// ids would better be deduplicated
 fn extract_nodes(
     ids: &[defaults::NodeIdentifier],
-    store: &hyper_ast::store::SimpleStores<TStore>,
-    // label_store: &hyper_ast::store::labels::LabelStore,
+    store: &hyperast::store::SimpleStores<TStore>,
+    // label_store: &hyperast::store::labels::LabelStore,
 ) -> fetched::SimplePacked<&'static str> {
     let mut builder = fetched::SimplePackedBuilder::default();
     for id in ids {

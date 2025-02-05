@@ -1,5 +1,5 @@
 [package]
-name = "hyper_ast_tsquery"
+name = "hyperast_tsquery"
 version = "0.2.0"
 edition = "2021"
 
@@ -13,7 +13,7 @@ tree-sitter-graph = { workspace = true, optional = true }
 
 log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
 
-hyper_ast = { workspace = true, optional = true }
+hyperast = { workspace = true, optional = true }
 num = "0.4.0"
 
 regex = "1.10.5"
@@ -24,12 +24,12 @@ ref-cast = "1.0" # help with transparent unit structs, it makes proper layout as
 tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
 
 [features]
-default = ["hyper_ast"]
+default = ["hyperast"]
 tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",
     # "dep:tree-sitter-stack-graphs",
 ]
-hyper_ast = [
-    "dep:hyper_ast",
+hyperast = [
+    "dep:hyperast",
 ]

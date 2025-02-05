@@ -2,7 +2,7 @@ use std::{fmt::Debug, thread::sleep, time::Duration};
 
 use axum::{response::IntoResponse, Json};
 use enumset::{EnumSet, EnumSetType};
-use hyper_ast::{
+use hyperast::{
     position::{
         compute_position, compute_position_and_nodes, compute_position_with_no_spaces,
         compute_range, path_with_spaces,
@@ -13,7 +13,7 @@ use hyper_ast::{
     types::{self, HyperAST, IterableChildren, NodeStore, WithChildren, WithHashs, WithStats},
     PrimInt,
 };
-use hyper_ast_cvs_git::{
+use hyperast_vcs_git::{
     git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked,
     processing::ConfiguredRepoTrait, TStore,
 };
@@ -268,7 +268,7 @@ pub fn track_code(
         before,
         flags,
     } = query;
-    let repo_specifier = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_specifier = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo_handle = state
         .repositories
         .write()
@@ -423,7 +423,7 @@ pub(crate) fn track_code_at_path(
         commit,
         path,
     } = path;
-    let repo_specifier = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_specifier = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repository = state
         .repositories
         .write()
@@ -580,7 +580,7 @@ pub(crate) fn track_code_at_path_with_changes(
         commit,
         path,
     } = path;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let configs = state.clone();
     let repo_handle = state
         .repositories
@@ -783,7 +783,7 @@ impl<'a, S, IdN: Clone, Idx: Clone> From<(&S, &'a LocalPieceOfCode<IdN, Idx>)>
 
 impl<IdN, Idx> LocalPieceOfCode<IdN, Idx> {
     pub(crate) fn from_position(
-        pos: &hyper_ast::position::Position,
+        pos: &hyperast::position::Position,
         path: Vec<Idx>,
         path_ids: Vec<IdN>,
     ) -> Self {
@@ -817,7 +817,7 @@ impl<IdN, Idx> LocalPieceOfCode<IdN, Idx> {
     where
         P: WithOffsets<Idx = Idx>
             + WithPreOrderPath<IdN>
-            + hyper_ast::position::position_accessors::FileAndOffsetPostionT<IdN, IdO = usize>,
+            + hyperast::position::position_accessors::FileAndOffsetPostionT<IdN, IdO = usize>,
     {
         let mut path = vec![];
         let mut path_ids = vec![];
@@ -955,10 +955,10 @@ impl<IdN, Idx: PrimInt> compute::WithPreOrderOffsetsNoSpaces for TargetCodeEleme
 fn track_aux(
     state: std::sync::Arc<crate::AppState>,
     repo_handle: &impl ConfiguredRepoTrait<
-        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+        Config = hyperast_vcs_git::processing::ParametrizedCommitProcessorHandle,
     >,
-    src_oid: hyper_ast_cvs_git::git::Oid,
-    dst_oid: hyper_ast_cvs_git::git::Oid,
+    src_oid: hyperast_vcs_git::git::Oid,
+    dst_oid: hyperast_vcs_git::git::Oid,
     file: &String,
     start: Option<usize>,
     end: Option<usize>,
@@ -998,7 +998,7 @@ fn track_aux(
     dbg!(&computed_range.2);
     let no_spaces_path_to_target = if false {
         // TODO use this version
-        use hyper_ast::position;
+        use hyperast::position;
         use position::offsets;
         let src = offsets::OffsetsRef::from(path_to_target.as_slice());
         let src = src.with_root(src_tr);
@@ -1037,10 +1037,10 @@ fn track_aux(
 fn track_aux2(
     state: std::sync::Arc<crate::AppState>,
     repo_handle: &impl ConfiguredRepoTrait<
-        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+        Config = hyperast_vcs_git::processing::ParametrizedCommitProcessorHandle,
     >,
-    src_oid: hyper_ast_cvs_git::git::Oid,
-    dst_oid: hyper_ast_cvs_git::git::Oid,
+    src_oid: hyperast_vcs_git::git::Oid,
+    dst_oid: hyperast_vcs_git::git::Oid,
     path: &[Idx],
     flags: &Flags,
 ) -> MappingResult<IdN, Idx> {
@@ -1060,7 +1060,7 @@ fn track_aux2(
     let (pos, target_node, no_spaces_path_to_target): _ = if false {
         // NOTE trying stuff
         // TODO use this version
-        use hyper_ast::position;
+        use hyperast::position;
         use position::offsets;
         use position::offsets_and_nodes;
         let src = offsets::OffsetsRef::from(path_to_target.as_slice());

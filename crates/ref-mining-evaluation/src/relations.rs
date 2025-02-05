@@ -47,9 +47,9 @@ impl Range {
     }
 }
 
-impl Into<hyper_ast::position::Position> for Position {
-    fn into(self) -> hyper_ast::position::Position {
-        hyper_ast::position::Position::new(self.file.into(), self.offset, self.len)
+impl Into<hyperast::position::Position> for Position {
+    fn into(self) -> hyperast::position::Position {
+        hyperast::position::Position::new(self.file.into(), self.offset, self.len)
     }
 }
 

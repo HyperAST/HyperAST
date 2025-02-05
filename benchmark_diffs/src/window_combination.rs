@@ -4,8 +4,8 @@ use crate::{
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
-use hyper_ast::{types::WithStats, utils::memusage_linux};
-use hyper_ast_cvs_git::{
+use hyperast::{types::WithStats, utils::memusage_linux};
+use hyperast_vcs_git::{
     git::fetch_github_repository, no_space::as_nospaces, preprocessed::PreProcessedRepository,
 };
 use hyper_diff::algorithms::{self, ComputeTime};
@@ -331,7 +331,7 @@ mod test {
 
     use super::*;
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
+    use hyperast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
     use hyper_diff::{
         decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
         matchers::{
@@ -540,7 +540,7 @@ mod test {
     #[test]
     fn issue_logging_log4j2_pom() {
         // cargo build --release && time target/release/window_combination apache/logging-log4j2 7e745b42bda9bf6f8ea681d38992d18036fc021e ebfc8945a5dd77b617f4667647ed4b740323acc8 "" batch2/validity_logging-log4j2.csv batch2/perfs_logging-log4j2.csv 2 Chawathe &> batch2/logging-log4j2.log
-        // thread 'main' panicked at '114 55318 "reporting"', hyper_ast/src/tree_gen/mod.rs:414:13
+        // thread 'main' panicked at '114 55318 "reporting"', hyperast/src/tree_gen/mod.rs:414:13
         let preprocessed = PreProcessedRepository::new("apache/logging-log4j2");
         let window_size = 2;
         let mut preprocessed = preprocessed;
@@ -687,11 +687,11 @@ mod test {
 }
 
 // pub(crate) fn as_nospaces<'a>(
-//     stores: &'a hyper_ast::store::SimpleStores<TStore>,
+//     stores: &'a hyperast::store::SimpleStores<TStore>,
 // ) -> SimpleHyperAST<
 //     NoSpaceWrapper<'a>,TStore
 //     NoSpaceNodeStoreWrapper<'a>,
-//     &'a hyper_ast::store::labels::LabelStore,
+//     &'a hyperast::store::labels::LabelStore,
 // > {
 //     let label_store = &stores.label_store;
 //     let node_store = &stores.node_store;
@@ -784,8 +784,8 @@ mod test {
 // }
 
 // impl<'a> types::WithHashs for NoSpaceWrapper<'a> {
-//     type HK = hyper_ast::hashed::SyntaxNodeHashsKinds;
-//     type HP = hyper_ast::nodes::HashSize;
+//     type HK = hyperast::hashed::SyntaxNodeHashsKinds;
+//     type HP = hyperast::nodes::HashSize;
 
 //     fn hash(&self, kind: &Self::HK) -> Self::HP {
 //         self.inner.hash(kind)

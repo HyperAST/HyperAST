@@ -4,7 +4,7 @@ use bitvec::order::Lsb0;
 
 use super::element::{Arguments, ExplorableRef, Nodes, RawLabelPtr, RefPtr, RefsEnum};
 
-use hyper_ast::types::LabelStore;
+use hyperast::types::LabelStore;
 
 pub struct Iter<'a> {
     pub(crate) refs: bitvec::slice::IterOnes<'a, usize, Lsb0>,

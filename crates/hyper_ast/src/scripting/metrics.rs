@@ -612,10 +612,10 @@ fn lossy() {
 
     // // testing a single dot in a named node -> the query is ill-formed...
     // let mut parser = tree_sitter::Parser::new();
-    // parser.set_language(&hyper_ast_gen_ts_java::language()).unwrap();
+    // parser.set_language(&hyperast_gen_ts_java::language()).unwrap();
     // let text = "class A {}";
     // let ast = parser.parse(text, None).unwrap();
-    // let query = tree_sitter::Query::new(&hyper_ast_gen_ts_java::language(), "(class_declaration body: (block .))").unwrap();
+    // let query = tree_sitter::Query::new(&hyperast_gen_ts_java::language(), "(class_declaration body: (block .))").unwrap();
     // let mut cursor = tree_sitter::QueryCursor::new();
     // let mut matches = cursor.matches(&query, ast.root_node(), text.as_bytes());
     // dbg!(matches.next().unwrap());

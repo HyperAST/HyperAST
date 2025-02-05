@@ -16,7 +16,7 @@ use crate::{
     },
     tree::tree_path::CompressedTreePath,
 };
-use hyper_ast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST};
 
 type DS<T> = LazyPostOrder<T, u32>;
 type CDS<T> = CompletePostOrder<T, u32>;
@@ -44,7 +44,7 @@ pub fn diff<'store, HAST: HyperAST<'store>>(
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    HAST::Idx: hyper_ast::PrimInt,
+    HAST::Idx: hyperast::PrimInt,
     HAST::T: 'store + types::WithHashs + types::WithStats,
 {
     let now = Instant::now();

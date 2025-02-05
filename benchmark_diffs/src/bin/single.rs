@@ -1,8 +1,8 @@
-use hyper_ast::utils::memusage_linux;
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast::utils::memusage_linux;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 use num_traits::ToPrimitive;
 
-use hyper_ast_benchmark_diffs::{other_tools, postprocess::CompressedBfPostProcess};
+use hyperast_benchmark_diffs::{other_tools, postprocess::CompressedBfPostProcess};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -44,12 +44,12 @@ fn bbb() {
 fn single(repo_name: &str, before: &str, after: &str) {
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oid_src = preprocessed.pre_process_single(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         before,
         "",
     );
     let oid_dst = preprocessed.pre_process_single(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         after,
         "",
     );
@@ -60,7 +60,7 @@ fn single(repo_name: &str, before: &str, after: &str) {
     let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
     let time_src = commit_src.1.processing_time();
     let src_tr = commit_src.1.ast_root;
-    use hyper_ast::types::WithStats;
+    use hyperast::types::WithStats;
     let src_s = stores.node_store.resolve(src_tr).size();
 
     let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
@@ -68,7 +68,7 @@ fn single(repo_name: &str, before: &str, after: &str) {
     let dst_tr = commit_dst.1.ast_root;
     let dst_s = stores.node_store.resolve(dst_tr).size();
 
-    let hyperast = hyper_ast_cvs_git::no_space::as_nospaces(stores);
+    let hyperast = hyperast_vcs_git::no_space::as_nospaces(stores);
 
     let mu = memusage_linux();
     let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
@@ -116,7 +116,7 @@ fn single(repo_name: &str, before: &str, after: &str) {
         }
     } else if gt_out_format == "JSON" {
         if let Some(gt_out) = &gt_out {
-            let pp = hyper_ast_benchmark_diffs::postprocess::SimpleJsonPostProcess::new(&gt_out);
+            let pp = hyperast_benchmark_diffs::postprocess::SimpleJsonPostProcess::new(&gt_out);
             let gt_timings = pp.performances();
             let counts = pp.counts();
             let valid = pp.validity_mappings(&lazy.mapper);

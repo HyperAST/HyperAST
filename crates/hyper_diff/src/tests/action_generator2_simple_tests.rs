@@ -17,7 +17,7 @@ use crate::{
     },
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
-use hyper_ast::types::{DecompressedSubtree, LabelStore, Labeled, NodeStore};
+use hyperast::types::{DecompressedSubtree, LabelStore, Labeled, NodeStore};
 
 type IdD = u16;
 

@@ -288,16 +288,16 @@ impl<'a, Id> crate::types::ErasedHolder
             // let lang = self.get_lang();
             // let raw = self.get_raw_type();
             // match lang {
-            //     "hyper_ast_gen_ts_java::types::Lang" => {
-            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_java::types::Lang::make(raw);
+            //     "hyperast_gen_ts_java::types::Lang" => {
+            //         let t: &'static dyn hyperast::types::HyperType = hyperast_gen_ts_java::types::Lang::make(raw);
             //         t.into()
             //     },
-            //     "hyper_ast_gen_ts_cpp::types::Lang" => {
-            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+            //     "hyperast_gen_ts_cpp::types::Lang" => {
+            //         let t: &'static dyn hyperast::types::HyperType = hyperast_gen_ts_cpp::types::Lang::make(raw);
             //         t.into()
             //     },
-            //     "hyper_ast_gen_ts_xml::types::Lang" => {
-            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_xml::types::Lang::make(raw);
+            //     "hyperast_gen_ts_xml::types::Lang" => {
+            //         let t: &'static dyn hyperast::types::HyperType = hyperast_gen_ts_xml::types::Lang::make(raw);
             //         t.into()
             //     },
             //     l => unreachable!("{}", l)

@@ -90,7 +90,7 @@ fn run(args: &Args) -> Result<(), git2::Error> {
 
 fn main() {
     let args = Args {
-        arg_path: "hyper_ast/src/store/nodes/legion.rs".into(),
+        arg_path: "hyperast/src/store/nodes/legion.rs".into(),
         arg_spec: None,
         flag_M: true,
         flag_C: true,

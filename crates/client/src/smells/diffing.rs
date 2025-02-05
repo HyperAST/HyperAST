@@ -2,11 +2,11 @@ use super::Diff;
 use super::Idx;
 use super::Pos;
 use super::*;
-use hyper_ast::store::defaults::LabelIdentifier;
-use hyper_ast::store::defaults::NodeIdentifier;
-use hyper_ast::store::labels::LabelStore;
-use hyper_ast::types::HyperAST;
-use hyper_ast_cvs_git::no_space::NoSpaceWrapper;
+use hyperast::store::defaults::LabelIdentifier;
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast::store::labels::LabelStore;
+use hyperast::types::HyperAST;
+use hyperast_vcs_git::no_space::NoSpaceWrapper;
 use hyper_diff::actions::action_tree::ActionsTree;
 use hyper_diff::actions::action_vec::ActionsVec;
 use hyper_diff::actions::script_generator2::Act;
@@ -16,17 +16,17 @@ use hyper_diff::tree::tree_path::CompressedTreePath;
 
 pub(crate) struct T;
 
-impl hyper_ast::types::Node for T {}
+impl hyperast::types::Node for T {}
 
-impl hyper_ast::types::Stored for T {
+impl hyperast::types::Stored for T {
     type TreeId = NodeIdentifier;
 }
 
-impl hyper_ast::types::WithChildren for T {
+impl hyperast::types::WithChildren for T {
     type ChildIdx = u16;
 
     type Children<'a>
-        = hyper_ast::types::MySlice<NodeIdentifier>
+        = hyperast::types::MySlice<NodeIdentifier>
     where
         Self: 'a;
 
@@ -37,14 +37,14 @@ impl hyper_ast::types::WithChildren for T {
     fn child(
         &self,
         idx: &Self::ChildIdx,
-    ) -> Option<<Self::TreeId as hyper_ast::types::NodeId>::IdN> {
+    ) -> Option<<Self::TreeId as hyperast::types::NodeId>::IdN> {
         todo!()
     }
 
     fn child_rev(
         &self,
         idx: &Self::ChildIdx,
-    ) -> Option<<Self::TreeId as hyper_ast::types::NodeId>::IdN> {
+    ) -> Option<<Self::TreeId as hyperast::types::NodeId>::IdN> {
         todo!()
     }
 
@@ -53,7 +53,7 @@ impl hyper_ast::types::WithChildren for T {
     }
 }
 
-impl hyper_ast::types::Labeled for T {
+impl hyperast::types::Labeled for T {
     type Label = LabelIdentifier;
 
     fn get_label_unchecked<'a>(&'a self) -> &'a Self::Label {
@@ -67,11 +67,11 @@ impl hyper_ast::types::Labeled for T {
 
 pub(crate) fn diff(
     state: std::sync::Arc<crate::AppState>,
-    repo_handle: &impl hyper_ast_cvs_git::processing::ConfiguredRepoTrait<
-        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+    repo_handle: &impl hyperast_vcs_git::processing::ConfiguredRepoTrait<
+        Config = hyperast_vcs_git::processing::ParametrizedCommitProcessorHandle,
     >,
-    src_oid: hyper_ast_cvs_git::git::Oid,
-    dst_oid: hyper_ast_cvs_git::git::Oid,
+    src_oid: hyperast_vcs_git::git::Oid,
+    dst_oid: hyperast_vcs_git::git::Oid,
 ) -> Result<Diff, String> {
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
@@ -83,7 +83,7 @@ pub(crate) fn diff(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let with_spaces_stores = &repositories.processor.main_stores;
-    let stores = &hyper_ast_cvs_git::no_space::as_nospaces(with_spaces_stores);
+    let stores = &hyperast_vcs_git::no_space::as_nospaces(with_spaces_stores);
 
     if src_tr == dst_tr {
         return Ok(Diff {
@@ -95,7 +95,7 @@ pub(crate) fn diff(
     }
 
     let pair = crate::utils::get_pair_simp(&state.partial_decomps, stores, &src_tr, &dst_tr);
-    use hyper_ast::types::WithStats;
+    use hyperast::types::WithStats;
     use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
     let mapped = {
         let mappings_cache = &state.mappings_alone;
@@ -233,7 +233,7 @@ pub(crate) fn diff(
 pub(crate) type A = SimpleAction<LabelIdentifier, CompressedTreePath<u16>, NodeIdentifier>;
 
 pub(crate) fn extract_moves<'a>(
-    with_spaces_stores: &'a hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &'a hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     stores: &'a Stores,
     src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
@@ -244,30 +244,30 @@ pub(crate) fn extract_moves<'a>(
     for a in actions.0.iter() {
         if let Act::Move { from } = &a.action {
             dbg!(from.ori.iter().count(), a.path.ori.iter().count());
-            let (_, w) = hyper_ast::position::path_with_spaces(
+            let (_, w) = hyperast::position::path_with_spaces(
                 src_tr,
                 &mut from.ori.iter(),
                 with_spaces_stores,
             );
-            let (_, x) = hyper_ast::position::path_with_spaces(
+            let (_, x) = hyperast::position::path_with_spaces(
                 dst_tr,
                 &mut a.path.ori.iter(),
                 with_spaces_stores,
             );
             assert_eq!(
-                hyper_ast::types::HyperAST::resolve_type(stores, &w),
-                hyper_ast::types::HyperAST::resolve_type(stores, &x)
+                hyperast::types::HyperAST::resolve_type(stores, &w),
+                hyperast::types::HyperAST::resolve_type(stores, &x)
             );
 
             a_tree.merge_ori(a);
         }
     }
     // eprintln!("{:?}", a_tree.inspect());
-    use hyper_ast::types::HyperType;
+    use hyperast::types::HyperType;
     go_to_files(
         stores,
         &a_tree.atomics,
-        hyper_ast::position::StructuralPosition::new(dst_tr),
+        hyperast::position::StructuralPosition::new(dst_tr),
         &mut |p, nn, n, id| {
             let t = stores.resolve_type(&id);
             // dbg!(t.as_static_str(), p);
@@ -289,9 +289,9 @@ pub(crate) fn extract_moves<'a>(
         dbg!(&from);
         dbg!(from.iter().count());
         let (from_path, f_id) =
-            hyper_ast::position::path_with_spaces(src_tr, &mut from.iter(), with_spaces_stores);
+            hyperast::position::path_with_spaces(src_tr, &mut from.iter(), with_spaces_stores);
         dbg!(from_path.iter().count());
-        let (from, _from) = hyper_ast::position::compute_position(
+        let (from, _from) = hyperast::position::compute_position(
             src_tr,
             &mut from_path.iter().copied(),
             with_spaces_stores,
@@ -299,26 +299,26 @@ pub(crate) fn extract_moves<'a>(
         dbg!(f_id);
 
         dbg!(to.node());
-        let t_t = hyper_ast::types::HyperAST::resolve_type(stores, &to.node());
+        let t_t = hyperast::types::HyperAST::resolve_type(stores, &to.node());
         let tr = to.root();
         dbg!(&to);
         let t0 = to.iter_offsets().count();
         let to_path =
-            hyper_ast::position::path_with_spaces(tr, &mut to.iter_offsets(), with_spaces_stores).0;
+            hyperast::position::path_with_spaces(tr, &mut to.iter_offsets(), with_spaces_stores).0;
         let t1 = to_path.len();
-        let (to, _to) = hyper_ast::position::compute_position(
+        let (to, _to) = hyperast::position::compute_position(
             tr,
             &mut to_path.iter().copied(),
             with_spaces_stores,
         );
         dbg!(_to);
 
-        let t_f = hyper_ast::types::HyperAST::resolve_type(stores, &f_id);
+        let t_f = hyperast::types::HyperAST::resolve_type(stores, &f_id);
         dbg!(t0, t1);
         assert_eq!(t_f, t_t);
 
-        let t_f = hyper_ast::types::HyperAST::resolve_type(stores, &_from);
-        let t_t = hyper_ast::types::HyperAST::resolve_type(stores, &_to);
+        let t_f = hyperast::types::HyperAST::resolve_type(stores, &_from);
+        let t_t = hyperast::types::HyperAST::resolve_type(stores, &_to);
         if t_f != t_t {
             dbg!(t_f.as_static_str(), t_t.as_static_str());
             return None;
@@ -328,7 +328,7 @@ pub(crate) fn extract_moves<'a>(
 }
 
 pub(crate) fn extract_moves2<'a>(
-    with_spaces_stores: &'a hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &'a hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     stores: &'a Stores,
     src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
@@ -342,9 +342,9 @@ pub(crate) fn extract_moves2<'a>(
             _ => return None,
         };
         let (from_path, w) =
-            hyper_ast::position::path_with_spaces(src_tr, &mut from.ori.iter(), with_spaces_stores);
-        let t = hyper_ast::types::HyperAST::resolve_type(stores, &w);
-        use hyper_ast::types::HyperType;
+            hyperast::position::path_with_spaces(src_tr, &mut from.ori.iter(), with_spaces_stores);
+        let t = hyperast::types::HyperAST::resolve_type(stores, &w);
+        use hyperast::types::HyperType;
         if t.is_file() || t.is_directory() {
             return None;
         }
@@ -356,19 +356,19 @@ pub(crate) fn extract_moves2<'a>(
         //     dbg!(t.as_static_str());
         //     return None;
         // }
-        let (to_path, x) = hyper_ast::position::path_with_spaces(
+        let (to_path, x) = hyperast::position::path_with_spaces(
             dst_tr,
             &mut a.path.ori.iter(),
             with_spaces_stores,
         );
-        let (from, _from) = hyper_ast::position::compute_position(
+        let (from, _from) = hyperast::position::compute_position(
             src_tr,
             &mut from_path.iter().copied(),
             with_spaces_stores,
         );
         assert_eq!(w, _from);
 
-        let (to, _to) = hyper_ast::position::compute_position(
+        let (to, _to) = hyperast::position::compute_position(
             dst_tr,
             &mut to_path.iter().copied(),
             with_spaces_stores,
@@ -376,8 +376,8 @@ pub(crate) fn extract_moves2<'a>(
         // dbg!(_to);
         assert_eq!(x, _to);
 
-        let t_f = hyper_ast::types::HyperAST::resolve_type(stores, &_from);
-        let t_t = hyper_ast::types::HyperAST::resolve_type(stores, &_to);
+        let t_f = hyperast::types::HyperAST::resolve_type(stores, &_from);
+        let t_t = hyperast::types::HyperAST::resolve_type(stores, &_to);
         if t_f != t_t {
             dbg!(t_f.as_static_str(), t_t.as_static_str());
             return None;
@@ -388,7 +388,7 @@ pub(crate) fn extract_moves2<'a>(
 }
 
 pub(crate) fn extract_updates<'a>(
-    with_spaces_stores: &'a hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &'a hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     stores: &'a Stores,
     _src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
@@ -402,11 +402,11 @@ pub(crate) fn extract_updates<'a>(
         }
     }
     // eprintln!("{:?}", a_tree.inspect());
-    use hyper_ast::types::HyperType;
+    use hyperast::types::HyperType;
     go_to_files(
         stores,
         &a_tree.atomics,
-        hyper_ast::position::StructuralPosition::new(dst_tr),
+        hyperast::position::StructuralPosition::new(dst_tr),
         &mut |p, nn, n, id| {
             let t = stores.resolve_type(&id);
             dbg!(t.as_static_str(), p);
@@ -421,13 +421,13 @@ pub(crate) fn extract_updates<'a>(
         .into_iter()
         .map(|path| {
             let tr = path.root();
-            let path = hyper_ast::position::path_with_spaces(
+            let path = hyperast::position::path_with_spaces(
                 tr,
                 &mut path.iter_offsets(),
                 with_spaces_stores,
             )
             .0;
-            let (pos, _) = hyper_ast::position::compute_position(
+            let (pos, _) = hyperast::position::compute_position(
                 tr,
                 &mut path.iter().copied(),
                 with_spaces_stores,
@@ -438,7 +438,7 @@ pub(crate) fn extract_updates<'a>(
 }
 
 pub(crate) fn extract_inserts<'a>(
-    with_spaces_stores: &'a hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &'a hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     stores: &'a Stores,
     _src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
@@ -452,11 +452,11 @@ pub(crate) fn extract_inserts<'a>(
         }
     }
     // eprintln!("{:?}", a_tree.inspect());
-    use hyper_ast::types::HyperType;
+    use hyperast::types::HyperType;
     go_to_files(
         stores,
         &a_tree.atomics,
-        hyper_ast::position::StructuralPosition::new(dst_tr),
+        hyperast::position::StructuralPosition::new(dst_tr),
         &mut |p, nn, n, id| {
             let t = stores.resolve_type(&id);
             // dbg!(t.as_static_str(), p);
@@ -471,13 +471,13 @@ pub(crate) fn extract_inserts<'a>(
         .into_iter()
         .map(|path| {
             let tr = path.root();
-            let path = hyper_ast::position::path_with_spaces(
+            let path = hyperast::position::path_with_spaces(
                 tr,
                 &mut path.iter_offsets(),
                 with_spaces_stores,
             )
             .0;
-            let (pos, _) = hyper_ast::position::compute_position(
+            let (pos, _) = hyperast::position::compute_position(
                 tr,
                 &mut path.iter().copied(),
                 with_spaces_stores,
@@ -488,7 +488,7 @@ pub(crate) fn extract_inserts<'a>(
 }
 
 pub(crate) fn extract_deletes<'a>(
-    with_spaces_stores: &'a hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &'a hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     stores: &'a Stores,
     src_tr: NodeIdentifier,
     _dst_tr: NodeIdentifier,
@@ -502,11 +502,11 @@ pub(crate) fn extract_deletes<'a>(
         }
     }
     // eprintln!("{:?}", a_tree.inspect());
-    use hyper_ast::types::HyperType;
+    use hyperast::types::HyperType;
     go_to_files(
         stores,
         &a_tree.atomics, // , &mapping
-        hyper_ast::position::StructuralPosition::new(src_tr),
+        hyperast::position::StructuralPosition::new(src_tr),
         &mut |p, nn, n, id| {
             let t = stores.resolve_type(&id);
             if !t.is_hidden() {
@@ -534,13 +534,13 @@ pub(crate) fn extract_deletes<'a>(
         .into_iter()
         .map(|path| {
             let tr = path.root();
-            let path = hyper_ast::position::path_with_spaces(
+            let path = hyperast::position::path_with_spaces(
                 tr,
                 &mut path.iter_offsets(),
                 with_spaces_stores,
             )
             .0;
-            let (pos, _) = hyper_ast::position::compute_position(
+            let (pos, _) = hyperast::position::compute_position(
                 tr,
                 &mut path.iter().copied(),
                 with_spaces_stores,
@@ -551,7 +551,7 @@ pub(crate) fn extract_deletes<'a>(
 }
 
 pub(crate) fn extract_focuses<'a>(
-    with_spaces_stores: &'a hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &'a hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     stores: &'a Stores,
     src_tr: NodeIdentifier,
     _dst_tr: NodeIdentifier,
@@ -565,11 +565,11 @@ pub(crate) fn extract_focuses<'a>(
         }
     }
     // eprintln!("{:?}", a_tree.inspect());
-    use hyper_ast::types::HyperType;
+    use hyperast::types::HyperType;
     go_to_files(
         stores,
         &a_tree.atomics, // , &mapping
-        hyper_ast::position::StructuralPosition::new(src_tr),
+        hyperast::position::StructuralPosition::new(src_tr),
         &mut |p, nn, n, id| {
             let t = stores.resolve_type(&id);
             if t.as_static_str() == "try_statement" {
@@ -592,13 +592,13 @@ pub(crate) fn extract_focuses<'a>(
         .into_iter()
         .map(|path| {
             let tr = path.root();
-            let path = hyper_ast::position::path_with_spaces(
+            let path = hyperast::position::path_with_spaces(
                 tr,
                 &mut path.iter_offsets(),
                 with_spaces_stores,
             )
             .0;
-            let (pos, _) = hyper_ast::position::compute_position(
+            let (pos, _) = hyperast::position::compute_position(
                 tr,
                 &mut path.iter().copied(),
                 with_spaces_stores,
@@ -608,12 +608,12 @@ pub(crate) fn extract_focuses<'a>(
         .map(|x| (x.clone(), x))
 }
 
-pub(crate) type _R = hyper_ast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>;
+pub(crate) type _R = hyperast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>;
 
-pub(crate) type Stores<'a> = hyper_ast::types::SimpleHyperAST<
+pub(crate) type Stores<'a> = hyperast::types::SimpleHyperAST<
     NoSpaceWrapper<'a, NodeIdentifier>,
-    hyper_ast_cvs_git::TStore,
-    hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper<'a>,
+    hyperast_vcs_git::TStore,
+    hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper<'a>,
     &'a LabelStore,
 >;
 
@@ -621,7 +621,7 @@ pub(crate) type N = hyper_diff::actions::action_tree::Node<
     SimpleAction<LabelIdentifier, CompressedTreePath<Idx>, NodeIdentifier>,
 >;
 
-pub(crate) type P = hyper_ast::position::StructuralPosition;
+pub(crate) type P = hyperast::position::StructuralPosition;
 
 pub(crate) fn go_to_files<F>(
     stores: &Stores,
@@ -635,7 +635,7 @@ pub(crate) fn go_to_files<F>(
     't: for n in cs {
         // n.action;
         let mut path = path.clone();
-        // use hyper_ast::types::TypeStore;
+        // use hyperast::types::TypeStore;
         // let t = stores.resolve_type(nn);
         // if t.is_file() {
         //     dbg!();
@@ -649,16 +649,16 @@ pub(crate) fn go_to_files<F>(
             };
             let id = path.node();
             let nn = stores.node_store.resolve(id);
-            use hyper_ast::types::TypeStore;
+            use hyperast::types::TypeStore;
             let t = stores.resolve_type(&id);
-            use hyper_ast::types::HyperType;
+            use hyperast::types::HyperType;
             // dbg!(t.as_static_str());
             if t.is_file() {
                 got_through(stores, n, path.clone(), p, p_it, 0, result);
                 // got_through_file(stores, n, path.clone(), p, p_it, 0, result);
                 continue 't;
             }
-            use hyper_ast::types::WithChildren;
+            use hyperast::types::WithChildren;
             let cs = nn.children().unwrap();
             let node = cs.get(p).unwrap();
             path.goto(*node, p);
@@ -671,7 +671,7 @@ pub(crate) fn go_to_files<F>(
 pub(crate) fn got_through<F>(
     stores: &Stores,
     n: &N,
-    mut path: hyper_ast::position::StructuralPosition,
+    mut path: hyperast::position::StructuralPosition,
     mut p: u16,
     mut p_it: impl std::iter::Iterator<Item = u16> + Clone,
     mut d: usize,
@@ -690,7 +690,7 @@ pub(crate) fn got_through<F>(
         //     result.push(path);
         //     return;
         // }
-        use hyper_ast::types::WithChildren;
+        use hyperast::types::WithChildren;
         let Some(cs) = nn.children() else {
             return; // NOTE should not happen
         };

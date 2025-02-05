@@ -7,7 +7,7 @@ use crate::{
     tests::examples::{example_action, example_gt_java_code},
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef},
 };
-use hyper_ast::types::{DecompressedSubtree, LabelStore, Labeled, NodeStore};
+use hyperast::types::{DecompressedSubtree, LabelStore, Labeled, NodeStore};
 use std::fmt;
 
 pub struct Fmt<F>(pub F)

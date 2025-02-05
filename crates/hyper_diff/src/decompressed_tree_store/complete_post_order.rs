@@ -10,7 +10,7 @@ use std::{
 use bitvec::slice::BitSlice;
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
-use hyper_ast::{
+use hyperast::{
     position::Position,
     types::{
         self, HyperAST, HyperType, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore,
@@ -773,7 +773,7 @@ where
 //     }
 //     unsafe fn unpersist(this: Self::Persisted) -> Self {
 //         Self {
-//             simple: <SimplePostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>,IdD> as super::Persistable>::unpersist(this.simple),
+//             simple: <SimplePostOrder<hyperast::store::nodes::legion::HashedNodeRef<'a>,IdD> as super::Persistable>::unpersist(this.simple),
 //             kr: this.kr,
 //         }
 //     }

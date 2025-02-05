@@ -10,7 +10,7 @@ use std::{
 use bitvec::slice::BitSlice;
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
-use hyper_ast::{
+use hyperast::{
     position::Position,
     types::{
         HyperAST, HyperType, NodeId, NodeStore, Stored, Tree, WithChildren,

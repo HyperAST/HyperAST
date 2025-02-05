@@ -334,7 +334,7 @@ pub(crate) fn prep_baseline<'query, 'tree, P>(
     query: &'query str,
 ) -> impl Fn(&'tree (P, String)) -> (tree_sitter::Query, tree_sitter::Tree, &'tree str) + 'query {
     |(_, text)| {
-        let language = hyper_ast_gen_ts_java::language();
+        let language = hyperast_gen_ts_java::language();
         let query = tree_sitter::Query::new(&language, query).unwrap();
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&language).unwrap();
@@ -345,10 +345,10 @@ pub(crate) fn prep_baseline<'query, 'tree, P>(
 
 pub(crate) fn prep_baseline_query_cursor<P>(
     query: &str,
-) -> impl Fn(&(P, String)) -> (hyper_ast_tsquery::Query, tree_sitter::Tree, &str) + '_ {
+) -> impl Fn(&(P, String)) -> (hyperast_tsquery::Query, tree_sitter::Tree, &str) + '_ {
     |(_, text)| {
-        let language = hyper_ast_gen_ts_java::language();
-        let query = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_java::language()).unwrap();
+        let language = hyperast_gen_ts_java::language();
+        let query = hyperast_tsquery::Query::new(query, hyperast_gen_ts_java::language()).unwrap();
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();

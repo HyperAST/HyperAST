@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use hyper_ast::{
+use hyperast::{
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{HashedNodeRef, NodeStore},
@@ -28,7 +28,7 @@ pub trait AsNoSpace2 {
 }
 
 // impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> AsNoSpace2
-//     for &'a hyper_ast::store::SimpleStores<TS, NS, LS>
+//     for &'a hyperast::store::SimpleStores<TS, NS, LS>
 // {
 //     type R = SimpleHyperAST<NoSpaceWrapper<'a, T::TreeId>, TS, NoSpaceNodeStore<NS>, LS>;
 
@@ -38,7 +38,7 @@ pub trait AsNoSpace2 {
 // }
 
 impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> AsNoSpace
-    for &'a hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+    for &'a hyperast::types::SimpleHyperAST<T, TS, NS, LS>
 {
     type R = SimpleHyperAST<NoSpaceWrapper<'a, T::TreeId>, TS, NoSpaceNodeStore<NS>, LS>;
 
@@ -47,7 +47,7 @@ impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> AsNoSpace
     }
 }
 
-impl<T: types::Stored, TS, NS, LS> AsNoSpace for hyper_ast::types::SimpleHyperAST<T, TS, NS, LS> {
+impl<T: types::Stored, TS, NS, LS> AsNoSpace for hyperast::types::SimpleHyperAST<T, TS, NS, LS> {
     type R = SimpleHyperAST<NoSpaceNode<T>, TS, NoSpaceNodeStore<NS>, LS>;
 
     fn as_nospaces(&self) -> &Self::R {
@@ -55,8 +55,8 @@ impl<T: types::Stored, TS, NS, LS> AsNoSpace for hyper_ast::types::SimpleHyperAS
     }
 }
 
-impl<TS, NS, LS> AsNoSpace for hyper_ast::store::SimpleStores<TS, NS, LS> {
-    type R = hyper_ast::store::SimpleStores<TS, NoSpaceNodeStore<NS>, LS>;
+impl<TS, NS, LS> AsNoSpace for hyperast::store::SimpleStores<TS, NS, LS> {
+    type R = hyperast::store::SimpleStores<TS, NoSpaceNodeStore<NS>, LS>;
 
     fn as_nospaces(&self) -> &Self::R {
         unsafe { std::mem::transmute(self) }
@@ -72,7 +72,7 @@ pub trait IntoNoSpaceGAT {
 }
 
 impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT
-    for &'a hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+    for &'a hyperast::types::SimpleHyperAST<T, TS, NS, LS>
 where
     for<'b> NoSpaceNodeStoreWrapper<'b>: From<&'b NS>,
 {
@@ -103,7 +103,7 @@ where
         }
     }
 }
-impl<'a, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT for &'a hyper_ast::store::SimpleStores<TS, NS, LS>
+impl<'a, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT for &'a hyperast::store::SimpleStores<TS, NS, LS>
 where
     for<'b> NoSpaceNodeStoreWrapper<'b>: From<&'b NS>,
 {
@@ -142,9 +142,9 @@ where
 pub trait NoSpaceMarker {}
 
 impl<T: NoSpaceMarker, TS, NS: NoSpaceMarker, LS> NoSpaceMarker for SimpleHyperAST<T, TS, NS, LS> {}
-impl<TS, NS: NoSpaceMarker, LS> NoSpaceMarker for hyper_ast::store::SimpleStores<TS, NS, LS> {}
+impl<TS, NS: NoSpaceMarker, LS> NoSpaceMarker for hyperast::store::SimpleStores<TS, NS, LS> {}
 
-impl<'a, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT for hyper_ast::store::SimpleStores<TS, NS, LS>
+impl<'a, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT for hyperast::store::SimpleStores<TS, NS, LS>
 where
     for<'b> NoSpaceNodeStoreWrapper<'b>: From<&'b NS>,
 {
@@ -175,9 +175,9 @@ where
         }
     }
 }
-// impl<TS> NoSpaceNodeStoreContainer for hyper_ast::store::SimpleStores<TS>
+// impl<TS> NoSpaceNodeStoreContainer for hyperast::store::SimpleStores<TS>
 // where
-//     TS: for<'s> hyper_ast::types::TypeStore<hyper_ast::store::nodes::legion::HashedNodeRef<'s>>,
+//     TS: for<'s> hyperast::types::TypeStore<hyperast::store::nodes::legion::HashedNodeRef<'s>>,
 // {
 //     type NST<'store> = NoSpaceWrapper<'store, Self::IdN> where Self: 'store;
 //     type NSNS<'store> = NoSpaceNodeStoreWrapper<'store> where Self: 'store;
@@ -196,7 +196,7 @@ pub trait IntoNoSpaceLife<'a> {
 }
 
 impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceLife<'a>
-    for &hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+    for &hyperast::types::SimpleHyperAST<T, TS, NS, LS>
 where
     NoSpaceNodeStoreWrapper<'a>: From<&'a NS>,
 {
@@ -219,12 +219,12 @@ where
 }
 
 pub fn as_nospaces<'a, TS>(
-    stores: &'a hyper_ast::store::SimpleStores<TS>,
+    stores: &'a hyperast::store::SimpleStores<TS>,
 ) -> SimpleHyperAST<
     NoSpaceWrapper<'a, NodeIdentifier>,
     TS,
     NoSpaceNodeStoreWrapper<'a>,
-    &'a hyper_ast::store::labels::LabelStore,
+    &'a hyperast::store::labels::LabelStore,
 > {
     let label_store = &stores.label_store;
     let node_store = &stores.node_store;
@@ -468,15 +468,15 @@ impl<'a, T> types::WithChildren for NoSpaceWrapper<'a, T> {
 }
 
 impl<'a, T> types::WithHashs for NoSpaceWrapper<'a, T> {
-    type HK = hyper_ast::hashed::SyntaxNodeHashsKinds;
-    type HP = hyper_ast::nodes::HashSize;
+    type HK = hyperast::hashed::SyntaxNodeHashsKinds;
+    type HP = hyperast::nodes::HashSize;
 
     fn hash(&self, kind: &Self::HK) -> Self::HP {
         self.inner.hash(kind)
     }
 }
 
-impl<'a> hyper_ast::types::ErasedHolder for NoSpaceWrapper<'a, MIdN<NodeIdentifier>> {
+impl<'a> hyperast::types::ErasedHolder for NoSpaceWrapper<'a, MIdN<NodeIdentifier>> {
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         self.inner.unerase_ref(tid)
     }
@@ -499,8 +499,8 @@ impl<'a> hyper_ast::types::ErasedHolder for NoSpaceWrapper<'a, MIdN<NodeIdentifi
 //     }
 // }
 
-impl<'a> hyper_ast::types::ErasedHolder for NoSpaceWrapper<'a, NodeIdentifier> {
-    unsafe fn unerase_ref_unchecked<T: 'static + hyper_ast::types::Compo>(
+impl<'a> hyperast::types::ErasedHolder for NoSpaceWrapper<'a, NodeIdentifier> {
+    unsafe fn unerase_ref_unchecked<T: 'static + hyperast::types::Compo>(
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {

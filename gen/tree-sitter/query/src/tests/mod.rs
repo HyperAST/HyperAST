@@ -1,6 +1,6 @@
 use std::io::{stdout, Write};
 
-use hyper_ast::store::SimpleStores;
+use hyperast::store::SimpleStores;
 
 use crate::{legion::TsQueryTreeGen, types::TStore};
 
@@ -30,7 +30,7 @@ fn run(text: &[u8]) {
     println!();
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(
+        hyperast::nodes::SyntaxSerializer::<_, _, true>::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -38,7 +38,7 @@ fn run(text: &[u8]) {
     stdout().flush().unwrap();
     println!(
         "{}",
-        hyper_ast::nodes::JsonSerializer::<_, _, false>::new(
+        hyperast::nodes::JsonSerializer::<_, _, false>::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -51,12 +51,12 @@ mod search;
 fn cpp_tree(
     text: &[u8],
 ) -> (
-    SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>,
+    SimpleStores<hyperast_gen_ts_cpp::types::TStore>,
     legion::Entity,
 ) {
-    use hyper_ast_gen_ts_cpp::legion::CppTreeGen;
-    use hyper_ast_gen_ts_cpp::types::TStore;
-    let tree = match hyper_ast_gen_ts_cpp::legion::tree_sitter_parse(text) {
+    use hyperast_gen_ts_cpp::legion::CppTreeGen;
+    use hyperast_gen_ts_cpp::types::TStore;
+    let tree = match hyperast_gen_ts_cpp::legion::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -68,19 +68,19 @@ fn cpp_tree(
     let entity = x.compressed_node;
     // println!(
     //     "{}",
-    //     hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
+    //     hyperast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
     // );
     (stores, entity)
 }
 fn xml_tree(
     text: &[u8],
 ) -> (
-    SimpleStores<hyper_ast_gen_ts_xml::types::TStore>,
+    SimpleStores<hyperast_gen_ts_xml::types::TStore>,
     legion::Entity,
 ) {
-    use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
-    use hyper_ast_gen_ts_xml::types::TStore;
-    let tree = match hyper_ast_gen_ts_xml::legion::tree_sitter_parse_xml(text) {
+    use hyperast_gen_ts_xml::legion::XmlTreeGen;
+    use hyperast_gen_ts_xml::types::TStore;
+    let tree = match hyperast_gen_ts_xml::legion::tree_sitter_parse_xml(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -94,7 +94,7 @@ fn xml_tree(
     let entity = x.compressed_node;
     // println!(
     //     "{}",
-    //     hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
+    //     hyperast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
     // );
     (stores, entity)
 }

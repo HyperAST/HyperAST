@@ -1,9 +1,9 @@
 // window of one is just consecutive commits
 
-use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
+use hyperast_vcs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use std::{io::Write, path::PathBuf, str::FromStr};
 
-use hyper_ast_benchmark_diffs::cross_repo::{windowed_commits_compare, CommitCompareParameters};
+use hyperast_benchmark_diffs::cross_repo::{windowed_commits_compare, CommitCompareParameters};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -84,7 +84,7 @@ fn main() {
             }
             let (user, name) = name.split_once("/").unwrap();
             let repo = Forge::Github.repo(user, name);
-            let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+            let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
             let configured_repo = preprocessed.register_config(repo, config);
             Some(CommitCompareParameters {
                 // name,

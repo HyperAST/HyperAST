@@ -3,14 +3,14 @@ use crate::{
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 use enumset::EnumSet;
-use hyper_ast::{
+use hyperast::{
     position::{StructuralPosition, TreePath, TreePathMut},
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
     types::{IterableChildren, LabelStore as _, Labeled, Tree, Typed, WithChildren},
 };
-use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::{
+use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyperast_gen_ts_xml::{
     legion::XmlTreeGen,
     types::{TStore, Type},
 };
@@ -208,7 +208,7 @@ pub struct MavenModuleAcc {
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
     pub(crate) status: EnumSet<SemFlags>,
-    pub(crate) scripting_acc: std::option::Option<hyper_ast::scripting::Acc>,
+    pub(crate) scripting_acc: std::option::Option<hyperast::scripting::Acc>,
 }
 
 impl From<String> for MavenModuleAcc {
@@ -448,8 +448,8 @@ impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterM
     }
 }
 
-type XmlIdN = hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>;
-type XmlNode<'a> = hyper_ast::store::nodes::legion::HashedNodeRef<'a, XmlIdN>;
+type XmlIdN = hyperast_gen_ts_xml::types::TIdN<NodeIdentifier>;
+type XmlNode<'a> = hyperast::store::nodes::legion::HashedNodeRef<'a, XmlIdN>;
 
 impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
     pub fn new(stores: &'a SimpleStores, path: T, root: NodeIdentifier) -> Self {
@@ -505,7 +505,7 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
     }
 }
 
-impl hyper_ast::tree_gen::Accumulator for MavenModuleAcc {
+impl hyperast::tree_gen::Accumulator for MavenModuleAcc {
     type Node = (LabelIdentifier, (NodeIdentifier, MD));
     fn push(&mut self, (name, full_node): Self::Node) {
         let s = full_node.1.status - SemFlags::IsMavenModule;

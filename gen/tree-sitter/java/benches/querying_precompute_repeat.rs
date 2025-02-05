@@ -3,7 +3,7 @@ use std::path::Path;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 mod shared;
-use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
+use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
@@ -91,14 +91,14 @@ fn compare_querying_group(c: &mut Criterion) {
             |b, (q, f)| {
                 b.iter(|| {
                     let query =
-                        hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language())
+                        hyperast_tsquery::Query::new(q.1, hyperast_gen_ts_java::language())
                             .unwrap();
-                    let mut stores = hyper_ast::store::SimpleStores::<
-                        hyper_ast_gen_ts_java::types::TStore,
+                    let mut stores = hyperast::store::SimpleStores::<
+                        hyperast_gen_ts_java::types::TStore,
                     >::default();
                     let mut md_cache = Default::default();
                     let mut java_tree_gen =
-                        hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::new(
+                        hyperast_gen_ts_java::legion_with_refs::JavaTreeGen::new(
                             &mut stores,
                             &mut md_cache,
                         );
@@ -106,7 +106,7 @@ fn compare_querying_group(c: &mut Criterion) {
                         .into_iter()
                         .map(|(name, text)| {
                             let tree =
-                                match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(
+                                match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(
                                     text.as_bytes(),
                                 ) {
                                     Ok(t) => t,
@@ -122,8 +122,8 @@ fn compare_querying_group(c: &mut Criterion) {
                         .collect();
                     for _ in 0..p.0 .4 {
                         for &n in &roots {
-                            let pos = hyper_ast::position::StructuralPosition::new(n);
-                            let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
+                            let pos = hyperast::position::StructuralPosition::new(n);
+                            let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
                             let matches = query.matches(cursor);
                             black_box(matches.count());
                         }
@@ -136,24 +136,24 @@ fn compare_querying_group(c: &mut Criterion) {
             &p,
             |b, (q, f)| {
                 b.iter(|| {
-                    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+                    let (precomp, query) = hyperast_tsquery::Query::with_precomputed(
                         q.1,
-                        hyper_ast_gen_ts_java::language(),
+                        hyperast_gen_ts_java::language(),
                         q.0,
                     )
                     .unwrap();
-                    let mut stores = hyper_ast::store::SimpleStores::<
-                        hyper_ast_gen_ts_java::types::TStore,
+                    let mut stores = hyperast::store::SimpleStores::<
+                        hyperast_gen_ts_java::types::TStore,
                     >::default();
                     let mut md_cache = Default::default();
-                    let more = hyper_ast_tsquery::PreparedQuerying::from(&precomp);
+                    let more = hyperast_tsquery::PreparedQuerying::from(&precomp);
                     let mut java_tree_gen =
                         JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, more);
                     let roots: Vec<_> = f
                         .into_iter()
                         .map(|(name, text)| {
                             let tree =
-                                match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(
+                                match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(
                                     text.as_bytes(),
                                 ) {
                                     Ok(t) => t,
@@ -169,8 +169,8 @@ fn compare_querying_group(c: &mut Criterion) {
                         .collect();
                     for _ in 0..p.0 .4 {
                         for &n in &roots {
-                            let pos = hyper_ast::position::StructuralPosition::new(n);
-                            let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
+                            let pos = hyperast::position::StructuralPosition::new(n);
+                            let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
                             let matches = query.matches(cursor);
                             black_box(matches.count());
                         }

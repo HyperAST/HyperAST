@@ -7,9 +7,9 @@ use crate::auto::tsq_ser_meta::Conv;
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
-use hyper_ast::store::nodes::legion::NodeIdentifier;
-use hyper_ast::store::SimpleStores;
-use hyper_ast::types::{HyperAST, Labeled};
+use hyperast::store::nodes::legion::NodeIdentifier;
+use hyperast::store::SimpleStores;
+use hyperast::types::{HyperAST, Labeled};
 
 mod preprocess;
 
@@ -280,8 +280,8 @@ impl<IdN, Idx> CaptureRes<IdN, Idx> {
     where
         HAST: HyperAST<'store, IdN = IdN, Idx = Idx>,
     {
-        use hyper_ast::types::LabelStore;
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::LabelStore;
+        use hyperast::types::NodeStore;
         let n = store.node_store().resolve(&self.match_node);
         let l = n.try_get_label()?;
         let l = store.label_store().resolve(l);
@@ -319,7 +319,7 @@ pub fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Enti
     let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
     eprintln!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
     );
     full_node.local.compressed_node
 }
@@ -346,7 +346,7 @@ pub fn ts_query2_with_label_hash(
     let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
     // eprintln!(
     //     "{}",
-    //     hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
+    //     hyperast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
     // );
     let r = (
         full_node.local.compressed_node,

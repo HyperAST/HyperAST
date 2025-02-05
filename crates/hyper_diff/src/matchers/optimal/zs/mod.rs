@@ -9,7 +9,7 @@ use str_distance::DistanceMetric;
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
-use hyper_ast::types::{
+use hyperast::types::{
     DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, Stored, Tree,
 };
 
@@ -505,7 +505,7 @@ pub mod str_distance_patched {
 pub mod qgrams {
     use std::collections::HashMap;
 
-    use hyper_ast::compat::DefaultHashBuilder;
+    use hyperast::compat::DefaultHashBuilder;
 
     const PAD: [u8; 10] = *b"##########";
 
@@ -758,7 +758,7 @@ pub(super) mod other_qgrams {
     }
 
     extern crate test;
-    use hyper_ast::compat::DefaultHashBuilder;
+    use hyperast::compat::DefaultHashBuilder;
     use test::Bencher;
 
     const PAIR1: (&[u8], &[u8]) = ("abaaacdefg".as_bytes(), "abcdefg".as_bytes());
@@ -814,7 +814,7 @@ mod tests {
 
     use crate::matchers::mapping_store::DefaultMappingStore;
     use crate::tree::simple_tree::TStore;
-    use hyper_ast::test_utils::simple_tree::vpair_to_stores;
+    use hyperast::test_utils::simple_tree::vpair_to_stores;
     use crate::tests::examples::example_zs_paper;
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
         let (label_store, node_store, src, dst) = vpair_to_stores(example_zs_paper());
         // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-        let stores = hyper_ast::types::SimpleHyperAST {
+        let stores = hyperast::types::SimpleHyperAST {
             node_store,
             label_store,
             _phantom: PhantomData::<(_,TStore)>,

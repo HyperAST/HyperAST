@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use num_traits::ToPrimitive;
 
-use hyper_ast::{
+use hyperast::{
     position::compute_range,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
@@ -218,13 +218,13 @@ pub fn apply_actions<T, S, P>(
     node_store: &mut S,
 ) where
     P: TreePath<Item = T::ChildIdx> + Debug,
-    T: hyper_ast::types::TypedTree,
+    T: hyperast::types::TypedTree,
     T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
-    for<'d> S::R<'d>: hyper_ast::types::TypedTree<
+    for<'d> S::R<'d>: hyperast::types::TypedTree<
         TreeId = T::TreeId,
         Type = T::Type,
         Label = T::Label,
@@ -246,13 +246,13 @@ pub fn apply_action<T, S, P>(
     s: &'_ mut S,
 ) where
     P: TreePath<Item = T::ChildIdx> + Debug,
-    T: hyper_ast::types::TypedTree,
+    T: hyperast::types::TypedTree,
     T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
-    for<'d> S::R<'d>: hyper_ast::types::TypedTree<
+    for<'d> S::R<'d>: hyperast::types::TypedTree<
         TreeId = T::TreeId,
         Type = T::Type,
         Label = T::Label,
@@ -496,7 +496,7 @@ pub fn apply_action<T, S, P>(
 
 // pub trait ActionApplier<T>
 // where
-//     T: hyper_ast::types::Tree,
+//     T: hyperast::types::Tree,
 //     T::Type: Debug + Copy,
 //     T::Label: Debug + Copy,
 //     T::TreeId: Debug + Copy,
@@ -509,7 +509,7 @@ pub fn apply_action<T, S, P>(
 //     // where
 //     //     for<'d> S::R<'d>: Self::R<'d>;
 //     type R<'d>: 'd
-//         + hyper_ast::types::Tree<
+//         + hyperast::types::Tree<
 //             TreeId = T::TreeId,
 //             Type = T::Type,
 //             Label = T::Label,
@@ -517,7 +517,7 @@ pub fn apply_action<T, S, P>(
 //         >
 //     where
 //         Self: 'd;
-//     // for<'d> S::R<'d>: hyper_ast::types::Tree<
+//     // for<'d> S::R<'d>: hyperast::types::Tree<
 //     //     TreeId = T::TreeId,
 //     //     Type = T::Type,
 //     //     Label = T::Label,
@@ -758,13 +758,13 @@ pub fn apply_action<T, S, P>(
 //     s: &'b mut S,
 // ) -> <T as Stored>::TreeId
 // where
-//     T: 'b + hyper_ast::types::Tree + Clone,
+//     T: 'b + hyperast::types::Tree + Clone,
 //     T::Type: Debug + Copy + Default,
 //     T::Label: Debug + Copy + Default,
 //     T::TreeId: Debug + Copy + Default,
 //     T::ChildIdx: Debug + Copy + Default,
 //     S: 'd+NodeStoreExt2<T>+NodeStore2< T>, //NodeStoreExt<'a, T, R>,
-//     S::R<'d>: hyper_ast::types::Tree<
+//     S::R<'d>: hyperast::types::Tree<
 //             TreeId = T::TreeId,
 //             Type = T::Type,
 //             Label = T::Label,
@@ -784,13 +784,13 @@ pub fn apply_action<T, S, P>(
 //     roots: &mut Vec<T::TreeId>,
 //     s: &mut S,
 // ) where
-//     T: hyper_ast::types::Tree + Clone,
+//     T: hyperast::types::Tree + Clone,
 //     T::Type: Debug + Copy + Default,
 //     T::Label: Debug + Copy + Default,
 //     T::TreeId: Debug + Copy + Default,
 //     T::ChildIdx: Debug + Copy + Default,
 //     S:'d+ NodeStoreExt2<T>+NodeStore2< T>, //NodeStoreExt<'a, T, R>,
-//     S::R<'d>: hyper_ast::types::Tree<
+//     S::R<'d>: hyperast::types::Tree<
 //             TreeId = T::TreeId,
 //             Type = T::Type,
 //             Label = T::Label,

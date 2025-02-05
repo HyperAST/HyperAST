@@ -6,8 +6,8 @@ use crate::{
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
     tempfile,
 };
-use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
-// use hyper_ast_gen_ts_java::types::TStore;
+use hyperast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
+// use hyperast_gen_ts_java::types::TStore;
 use hyper_diff::actions::Actions;
 use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
@@ -15,12 +15,12 @@ use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 fn test_simple_1() {
     let buggy = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
     let fixed = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
-    // use hyper_ast_gen_ts_java::types::TStore;
+    // use hyperast_gen_ts_java::types::TStore;
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
 
-    let stores = stores.change_type_store::<hyper_ast_gen_ts_java::types::TStore>();
+    let stores = stores.change_type_store::<hyperast_gen_ts_java::types::TStore>();
 
     println!(
         "{}",
@@ -69,7 +69,7 @@ fn test_crash1() {
 #[cfg(test)]
 mod examples {
 
-    use hyper_ast::nodes::JsonSerializer;
+    use hyperast::nodes::JsonSerializer;
 
     use crate::diff_output;
 
@@ -306,15 +306,15 @@ mod examples {
 
 #[cfg(test)]
 mod test {
-    use hyper_ast::{
+    use hyperast::{
         nodes::SyntaxWithIdsSerializer,
         store::SimpleStores,
         types::{DecompressedSubtree, Typed},
     };
 
-    use hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper;
-    use hyper_ast_gen_ts_xml::legion::tree_sitter_parse_xml as parse_xml;
-    use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
+    use hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper;
+    use hyperast_gen_ts_xml::legion::tree_sitter_parse_xml as parse_xml;
+    use hyperast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
 
     use hyper_diff::{
         decompressed_tree_store::lazy_post_order::LazyPostOrder,
@@ -432,11 +432,11 @@ mod test {
 
         // let mut stores = SimpleHyperAST {
         //     label_store: label_store,
-        //     type_store: hyper_ast_cvs_git::TStore::default(),
+        //     type_store: hyperast_vcs_git::TStore::default(),
         //     node_store: node_store,
         //     _phantom: std::marker::PhantomData,
         // };
-        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
+        let stores = hyperast_vcs_git::no_space::as_nospaces(tree_gen.stores);
 
         // print_tree_syntax_with_ids(
         //     |id: &NodeIdentifier| -> _ {
@@ -552,7 +552,7 @@ mod test {
         //     s: &tree_gen.stores.node_store,
         // };
 
-        // use hyper_ast::types::LabelStore as _;
+        // use hyperast::types::LabelStore as _;
         // print_tree_syntax_with_ids(
         //     |id: &NodeIdentifier| -> _ {
         //         tree_gen
@@ -654,14 +654,14 @@ mod test {
             (full_node1, full_node2)
         };
         let src = src_tr.local.compressed_node;
-        use hyper_ast::types::HyperAST;
+        use hyperast::types::HyperAST;
         dbg!(tree_gen.stores.resolve_type(&src));
         let dst = dst_tr.local.compressed_node;
 
         // let label_store = &tree_gen.stores.label_store;
         // let node_store = &tree_gen.stores.node_store;
         // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
-        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
+        let stores = hyperast_vcs_git::no_space::as_nospaces(tree_gen.stores);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
@@ -951,7 +951,7 @@ mod test {
         // let label_store = &tree_gen.stores.label_store;
         // let node_store = &tree_gen.stores.node_store;
         // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
-        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
+        let stores = hyperast_vcs_git::no_space::as_nospaces(tree_gen.stores);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
@@ -1035,7 +1035,7 @@ mod test {
         // let label_store = &tree_gen.stores.label_store;
         // let node_store = &tree_gen.stores.node_store;
         // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
-        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
+        let stores = hyperast_vcs_git::no_space::as_nospaces(tree_gen.stores);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         // let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
@@ -1711,22 +1711,22 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
     let parse_t = now.elapsed().as_secs_f64();
 
-    // use hyper_ast_cvs_git::no_space::IntoNoSpace;
-    // let stores: hyper_ast::types::SimpleHyperAST<_, _, _, _> = (&stores).into();
+    // use hyperast_vcs_git::no_space::IntoNoSpace;
+    // let stores: hyperast::types::SimpleHyperAST<_, _, _, _> = (&stores).into();
 
-    // let aaa = hyper_ast_cvs_git::TStore::default();
-    // let stores: hyper_ast::types::SimpleHyperAST<_, _, _, _> = stores.change_type_store(aaa);
-    let stores = hyper_ast_cvs_git::no_space::as_nospaces(&java_gen.main_stores);
+    // let aaa = hyperast_vcs_git::TStore::default();
+    // let stores: hyperast::types::SimpleHyperAST<_, _, _, _> = stores.change_type_store(aaa);
+    let stores = hyperast_vcs_git::no_space::as_nospaces(&java_gen.main_stores);
     // // let stores = (&java_gen.main_stores).as_nospaces();
     // let stores = java_gen.main_stores.as_nospaces();
 
-    // : hyper_ast::types::SimpleHyperAST<
-    //     hyper_ast_cvs_git::no_space::NoSpaceWrapper<
+    // : hyperast::types::SimpleHyperAST<
+    //     hyperast_vcs_git::no_space::NoSpaceWrapper<
     //     '_,
-    //     hyper_ast_gen_ts_java::types::TIdN<hyper_ast::store::defaults::NodeIdentifier>,
+    //     hyperast_gen_ts_java::types::TIdN<hyperast::store::defaults::NodeIdentifier>,
     // >,
     // &TStore,
-    // hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper<'_>,
+    // hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper<'_>,
     // &LabelStore,
     // >
 

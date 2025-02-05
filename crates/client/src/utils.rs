@@ -1,7 +1,7 @@
 use std::{collections::HashMap, usize};
 
 use dashmap::{RwLock, SharedValue};
-use hyper_ast::{
+use hyperast::{
     store::defaults::NodeIdentifier,
     types::{HyperAST, WithStats},
 };
@@ -21,7 +21,7 @@ pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<'store, IdN = IdN>>(
 where
     <HAST as HyperAST<'store>>::T: WithStats,
 {
-    use hyper_ast::types::DecompressedSubtree;
+    use hyperast::types::DecompressedSubtree;
     use lazy_post_order::LazyPostOrder;
 
     let (shard1, shard2) = bi_sharding(partial_comp_cache, src, dst);
@@ -133,12 +133,12 @@ fn bi_sharding<'a>(
 /// Ensures the range is preprocessed --doing it if needed-- while avoiding to lock global state
 pub(crate) fn handle_pre_processing(
     state: &std::sync::Arc<crate::AppState>,
-    repo: &mut hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    repo: &mut hyperast_vcs_git::processing::ConfiguredRepo2,
     before: &str,
     after: &str,
     limit: usize,
-) -> Result<Vec<hyper_ast_cvs_git::git::Oid>, Box<dyn std::error::Error>> {
-    let rw = hyper_ast_cvs_git::git::Builder::new(&repo.repo)?
+) -> Result<Vec<hyperast_vcs_git::git::Oid>, Box<dyn std::error::Error>> {
+    let rw = hyperast_vcs_git::git::Builder::new(&repo.repo)?
         .before(before)?
         .after(after)?
         .walk()?
@@ -152,10 +152,10 @@ pub(crate) fn handle_pre_processing(
 }
 
 pub(crate) fn walk_commits_multi<'a, R: AsRef<str>>(
-    repo: &'a hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    repo: &'a hyperast_vcs_git::processing::ConfiguredRepo2,
     after: impl Iterator<Item = R>,
-) -> Result<impl Iterator<Item = hyper_ast_cvs_git::git::Oid> + 'a, Box<dyn std::error::Error>> {
-    let mut rw = hyper_ast_cvs_git::git::Builder::new(&repo.repo)?;
+) -> Result<impl Iterator<Item = hyperast_vcs_git::git::Oid> + 'a, Box<dyn std::error::Error>> {
+    let mut rw = hyperast_vcs_git::git::Builder::new(&repo.repo)?;
     for after in after {
         rw = rw.after(after.as_ref())?;
     }
@@ -166,9 +166,9 @@ pub(crate) fn walk_commits_multi<'a, R: AsRef<str>>(
 /// Ensures the range is preprocessed --doing it if needed-- while avoiding to lock global state
 pub(crate) fn handle_pre_processing_aux(
     state: &std::sync::Arc<crate::AppState>,
-    repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
-    rw: impl Iterator<Item = hyper_ast_cvs_git::git::Oid>,
-) -> Vec<hyper_ast_cvs_git::git::Oid> {
+    repo: &hyperast_vcs_git::processing::ConfiguredRepo2,
+    rw: impl Iterator<Item = hyperast_vcs_git::git::Oid>,
+) -> Vec<hyperast_vcs_git::git::Oid> {
     let mut rw = rw.peekable();
     let commits = {
         state

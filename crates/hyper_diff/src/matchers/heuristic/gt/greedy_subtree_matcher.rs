@@ -8,8 +8,8 @@ use crate::matchers::heuristic::gt::height;
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
-use hyper_ast::compat::HashMap;
-use hyper_ast::types::{
+use hyperast::compat::HashMap;
+use hyperast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, TypeStore,
     WithHashs,
 };
@@ -38,7 +38,7 @@ impl<
     > GreedySubtreeMatcher<'a, Dsrc, Ddst, T, HAST, M, MIN_HEIGHT>
 where
     HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
-    // HAST::NS: hyper_ast::types::NodeStore<<T as hyper_ast::types::Stored>::TreeId>,
+    // HAST::NS: hyperast::types::NodeStore<<T as hyperast::types::Stored>::TreeId>,
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
     T::Label: Clone,
     // T::Type: Copy + Eq + Send + Sync,

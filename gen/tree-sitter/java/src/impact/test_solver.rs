@@ -1,4 +1,4 @@
-use hyper_ast::{store::labels::LabelStore, types::LabelStore as _};
+use hyperast::{store::labels::LabelStore, types::LabelStore as _};
 
 use super::{
     element::{IdentifierFormat, LabelPtr, RefsEnum},

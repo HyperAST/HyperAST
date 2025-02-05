@@ -1,6 +1,6 @@
 use client::{AppState, track::*};
-use hyper_ast_cvs_git::git::Forge;
-use hyper_ast_cvs_git::processing::RepoConfig;
+use hyperast_vcs_git::git::Forge;
+use hyperast_vcs_git::processing::RepoConfig;
 
 #[ignore] // ignore (from normal cargo test) for now, later make a feature
 #[test]

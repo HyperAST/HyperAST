@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use hyper_ast::types::{
+use hyperast::types::{
     AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
@@ -8,15 +8,15 @@ use hyper_ast::types::{
 mod legion_impls {
 
     use super::*;
-    use hyper_ast::tree_gen::utils_ts::TsEnableTS;
-    use hyper_ast::tree_gen::utils_ts::TsType;
+    use hyperast::tree_gen::utils_ts::TsEnableTS;
+    use hyperast::tree_gen::utils_ts::TsType;
 
-    use hyper_ast::types::{LangWrapper, RoleStore};
+    use hyperast::types::{LangWrapper, RoleStore};
 
     impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
             n: &N,
-        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
             let k = n.kind_id();
             Type::from_u16(k)
         }
@@ -41,7 +41,7 @@ mod legion_impls {
         }
     }
 
-    impl<'a> hyper_ast::types::ETypeStore for TStore {
+    impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
 
         fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -52,14 +52,14 @@ mod legion_impls {
     impl RoleStore for TStore {
         type IdF = u16;
 
-        type Role = hyper_ast::types::Role;
+        type Role = hyperast::types::Role;
 
         fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
             let s = crate::language()
                 .field_name_for_id(field_id)
                 .ok_or_else(|| format!("{}", field_id))
                 .unwrap();
-            hyper_ast::types::Role::try_from(s).expect(s)
+            hyperast::types::Role::try_from(s).expect(s)
         }
 
         fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
@@ -83,7 +83,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 
 #[cfg(feature = "impl")]
 pub trait CppEnabledTypeStore:
-    hyper_ast::types::ETypeStore<Ty2 = Type> + Clone + hyper_ast::tree_gen::utils_ts::TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + Clone + hyperast::tree_gen::utils_ts::TsEnableTS
 {
     // fn intern(t: Type) -> Self::Ty;
     fn resolve(t: Self::Ty) -> Type;
@@ -175,7 +175,7 @@ mod exp {
     }
 
     // #[cfg(feature = "legion")]
-    // impl<'a, TS: CppEnabledTypeStore<hyper_ast::store::nodes::legion::HashedNodeRef<'a, Type>>>
+    // impl<'a, TS: CppEnabledTypeStore<hyperast::store::nodes::legion::HashedNodeRef<'a, Type>>>
     //     From<TS> for Single
     // {
     //     fn from(_value: TS) -> Self {
@@ -244,8 +244,8 @@ impl Cpp {
 }
 
 pub fn as_any(t: &Type) -> AnyType {
-    let t = <Cpp as hyper_ast::types::Lang<Type>>::to_u16(*t);
-    let t = <Cpp as hyper_ast::types::Lang<Type>>::make(t);
+    let t = <Cpp as hyperast::types::Lang<Type>>::to_u16(*t);
+    let t = <Cpp as hyperast::types::Lang<Type>>::make(t);
     let t: &'static dyn HyperType = t;
     t.into()
 }
@@ -305,7 +305,7 @@ impl LangRef<TType> for Lang {
     }
 }
 
-impl hyper_ast::types::Lang<Type> for Cpp {
+impl hyperast::types::Lang<Type> for Cpp {
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -314,7 +314,7 @@ impl hyper_ast::types::Lang<Type> for Cpp {
     }
 }
 
-pub use hyper_ast::types::Role;
+pub use hyperast::types::Role;
 
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
@@ -473,8 +473,8 @@ impl HyperType for Type {
         ||self == &Type::Using // "using",
     }
 
-    fn as_shared(&self) -> hyper_ast::types::Shared {
-        use hyper_ast::types::Shared;
+    fn as_shared(&self) -> hyperast::types::Shared {
+        use hyperast::types::Shared;
         match self {
             Type::ClassSpecifier => Shared::TypeDeclaration,
             Type::EnumSpecifier => Shared::TypeDeclaration,
@@ -501,8 +501,8 @@ impl HyperType for Type {
 
     /// ```
     /// # fn main() {
-    /// # use hyper_ast_gen_ts_cpp::types::Type;
-    /// # use hyper_ast::types::HyperType;
+    /// # use hyperast_gen_ts_cpp::types::Type;
+    /// # use hyperast::types::HyperType;
     /// let k0 = Type::FunctionDefinition.as_static();
     /// let k1 = Type::FunctionDefinition.as_static();
     /// let k2 = Type::EnumSpecifier.as_static();
@@ -511,8 +511,8 @@ impl HyperType for Type {
     /// # }
     /// ```
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Cpp as hyper_ast::types::Lang<Type>>::to_u16(*self);
-        let t = <Cpp as hyper_ast::types::Lang<Type>>::make(t);
+        let t = <Cpp as hyperast::types::Lang<Type>>::to_u16(*self);
+        let t = <Cpp as hyperast::types::Lang<Type>>::make(t);
         t
     }
 
@@ -531,15 +531,15 @@ impl HyperType for Type {
     fn is_named(&self) -> bool {
         self.is_named()
     }
-    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
+    fn get_lang(&self) -> hyperast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
     }
 
-    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
+    fn lang_ref(&self) -> hyperast::types::LangWrapper<AnyType> {
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 impl TypeTrait for Type {
@@ -693,14 +693,14 @@ impl Type {
     }
 }
 
-impl hyper_ast::types::LLang<TType> for Cpp {
+impl hyperast::types::LLang<TType> for Cpp {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
 
-    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+    fn as_lang_wrapper() -> hyperast::types::LangWrapper<TType> {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }

@@ -49,19 +49,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .try_init()
         .unwrap();
 
-    // let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    // let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
     // let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
-    // let script = hyper_ast::scripting::lua_scripting::PREPRO_LOC.into();
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(&args.owner, &args.name);
-    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    // let script = hyperast::scripting::lua_scripting::PREPRO_LOC.into();
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(&args.owner, &args.name);
+    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     if let Some(file) = args.file {
         let script = std::fs::read_to_string(file).unwrap();
         scripting(repo_spec, config, &args.commit, &script, args.depth)
     } else if let Some(example) = args.example {
         let script = match example.as_str() {
-            "size" => hyper_ast::scripting::lua_scripting::PREPRO_SIZE_WITH_FINISH,
-            "mcc" => hyper_ast::scripting::lua_scripting::PREPRO_MCC_WITH_FINISH,
-            "LoC" => hyper_ast::scripting::lua_scripting::PREPRO_LOC,
+            "size" => hyperast::scripting::lua_scripting::PREPRO_SIZE_WITH_FINISH,
+            "mcc" => hyperast::scripting::lua_scripting::PREPRO_MCC_WITH_FINISH,
+            "LoC" => hyperast::scripting::lua_scripting::PREPRO_LOC,
             x => {
                 eprintln!("{x} is not an available example. Try: size, mcc, LoC");
                 std::process::exit(1)
@@ -87,8 +87,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 }
 
 fn scripting(
-    repo_spec: hyper_ast_cvs_git::git::Repo,
-    config: hyper_ast_cvs_git::processing::RepoConfig,
+    repo_spec: hyperast_vcs_git::git::Repo,
+    config: hyperast_vcs_git::processing::RepoConfig,
     commit: &str,
     script: &str,
     depth: usize,
@@ -112,7 +112,7 @@ fn scripting(
         .ok_or_else(|| "missing config for repository".to_string())?;
     let repository = repo.fetch();
     log::debug!("done cloning {}", repository.spec);
-    let mut rw = hyper_ast_cvs_git::git::Builder::new(&repository.repo)
+    let mut rw = hyperast_vcs_git::git::Builder::new(&repository.repo)
         .unwrap()
         .first_parents()
         .unwrap()
@@ -146,16 +146,16 @@ fn scripting(
 
 fn after_prepared(
     state: &client::AppState,
-    repository: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
-    oid: hyper_ast_cvs_git::git::Oid,
+    repository: &hyperast_vcs_git::processing::ConfiguredRepo2,
+    oid: hyperast_vcs_git::git::Oid,
 ) {
     let repositories = state.repositories.read().unwrap();
     let commit = repositories.get_commit(&repository.config, &oid).unwrap();
     let store = &state.repositories.read().unwrap().processor.main_stores;
     let n = store.node_store.resolve(commit.ast_root);
     let dd = n
-        .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
+        .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
         .unwrap();
-    use hyper_ast::types::WithStats;
+    use hyperast::types::WithStats;
     println!("{} {} {:?} {}", &oid, commit.processing_time(), &dd.0, n.size());
 }

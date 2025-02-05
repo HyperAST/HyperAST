@@ -9,8 +9,8 @@ use crate::{
     tests::examples::{example_gt_java_code, example_gt_slides, example_zs_paper},
 };
 
-use hyper_ast::test_utils::simple_tree::{vpair_to_stores, DisplayTree, TStore};
-use hyper_ast::types::{LabelStore, SimpleHyperAST};
+use hyperast::test_utils::simple_tree::{vpair_to_stores, DisplayTree, TStore};
+use hyperast::types::{LabelStore, SimpleHyperAST};
 
 #[test]
 fn test_zs_paper_for_initial_layout() {

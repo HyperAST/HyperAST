@@ -14,7 +14,7 @@ use crate::{
     tests::examples::{example_action, example_action2, example_gt_java_code},
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
-use hyper_ast::types::{
+use hyperast::types::{
     DecompressedSubtree, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Typed, WithChildren,
 };
 use std::fmt;
@@ -179,13 +179,13 @@ fn test_with_action_example() {
 //         root: &mut Vec<T::TreeId>,
 //         node_store: &mut S,
 //     ) where
-//         T: hyper_ast::types::Tree,
+//         T: hyperast::types::Tree,
 //         T::Type: Debug + Copy + Default,
 //         T::Label: Debug + Copy + Default,
 //         T::TreeId: Debug + Copy + Default,
 //         T::ChildIdx: Debug + Copy + Default,
 //         S: NodeStoreExt2<T> + NodeStore2<T::TreeId>, //NodeStoreExt<'a, T, R>,
-//         for<'d> S::R<'d>: hyper_ast::types::Tree<
+//         for<'d> S::R<'d>: hyperast::types::Tree<
 //             TreeId = T::TreeId,
 //             Type = T::Type,
 //             Label = T::Label,
@@ -206,13 +206,13 @@ fn test_with_action_example() {
 //         root: &mut Vec<T::TreeId>,
 //         s: &mut S,
 //     ) where
-//         T: hyper_ast::types::Tree,
+//         T: hyperast::types::Tree,
 //         T::Type: Debug + Copy + Default,
 //         T::Label: Debug + Copy + Default,
 //         T::TreeId: Debug + Copy + Default,
 //         T::ChildIdx: Debug + Copy + Default,
 //         S: NodeStoreExt2<T> + NodeStore2<T::TreeId>, //NodeStoreExt<'a, T, R>,
-//         for<'d> S::R<'d>: hyper_ast::types::Tree<
+//         for<'d> S::R<'d>: hyperast::types::Tree<
 //             TreeId = T::TreeId,
 //             Type = T::Type,
 //             Label = T::Label,

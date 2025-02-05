@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use hyper_ast::{
+use hyperast::{
     position::Position,
     types::{
         self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, WithChildren,
@@ -64,7 +64,7 @@ impl CompressedBfPostProcess {
 }
 
 pub mod compressed_bf_post_process {
-    use hyper_ast::types::{self, HyperAST};
+    use hyperast::types::{self, HyperAST};
     use hyper_diff::matchers::Mapper;
 
     use super::*;
@@ -519,7 +519,7 @@ impl SimpleJsonPostProcess {
             + PostOrder<'a, HAST::T, u32>
             + DecompressedWithSiblings<'a, HAST::T, u32>,
     {
-        use hyper_ast::types::Labeled;
+        use hyperast::types::Labeled;
         let with_p = |mut pos: Position, ori| {
             let r = stores.node_store().resolve(&ori);
             let t = stores.resolve_type(&ori);
@@ -955,9 +955,9 @@ mod tests {
         other_tools,
         preprocess::{parse_dir_pair, JavaPreprocessFileSys},
     };
-    use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
-    // use hyper_ast_gen_ts_java::types::TStore;
-    use hyper_ast_cvs_git::TStore;
+    use hyperast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
+    // use hyperast_gen_ts_java::types::TStore;
+    use hyperast_vcs_git::TStore;
     use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
     #[test]

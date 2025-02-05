@@ -7,7 +7,7 @@
 //!
 use std::fmt::Debug;
 
-use hyper_ast::types::HyperAST;
+use hyperast::types::HyperAST;
 use num_traits::PrimInt;
 
 use crate::{

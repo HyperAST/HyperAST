@@ -4,16 +4,16 @@ use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatch
 
 use tree_sitter::CaptureQuantifier as Quant;
 
-use hyper_ast::types::HyperType;
-use hyper_ast::types::TypedHyperAST;
-use hyper_ast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
+use hyperast::types::HyperType;
+use hyperast::types::TypedHyperAST;
+use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
 
 impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
+        TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
+            + hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
         Ty: std::fmt::Debug + Eq + Copy,
     {
@@ -43,8 +43,8 @@ impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     ) -> Option<Captured<HAST::IdN, HAST::Idx>>
     where
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
+        TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
+            + hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
         Ty: std::fmt::Debug + Eq + Copy,
     {
@@ -136,8 +136,8 @@ impl<Ty> Pattern<Ty> {
     ) -> MatchingRes<HAST::IdN, HAST::Idx>
     where
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
+        TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
+            + hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
         Ty: std::fmt::Debug + Eq + Copy + HyperType,
     {
@@ -313,10 +313,10 @@ impl<Ty> Pattern<Ty> {
                 } => {
                     let name = name.clone();
                     let n = code_store.typed_node_store().try_resolve(&id).unwrap().0;
-                    use hyper_ast::types::Tree;
+                    use hyperast::types::Tree;
                     // let v = if !n.has_children() {
                     //     let l = n.try_get_label().unwrap();
-                    //     use hyper_ast::types::LabelStore;
+                    //     use hyperast::types::LabelStore;
                     //     let l = code_store.label_store().resolve(l);
                     //     CaptureRes::Label(l.to_owned())
                     // } else {

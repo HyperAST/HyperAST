@@ -1659,14 +1659,14 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "hyper-util",
- "hyper_ast",
- "hyper_ast_cvs_git",
- "hyper_ast_gen_ts_cpp",
- "hyper_ast_gen_ts_java",
- "hyper_ast_gen_ts_tsquery",
- "hyper_ast_gen_ts_xml",
- "hyper_ast_tsquery",
  "hyper_diff",
+ "hyperast",
+ "hyperast_gen_ts_cpp",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_tsquery",
+ "hyperast_gen_ts_xml",
+ "hyperast_tsquery",
+ "hyperast_vcs_git",
  "jemallocator",
  "log",
  "nohash-hasher",
@@ -4034,10 +4034,10 @@ dependencies = [
  "futures-util",
  "gloo-timers",
  "http 0.2.12",
- "hyper_ast",
- "hyper_ast_gen_ts_cpp",
- "hyper_ast_gen_ts_java",
- "hyper_ast_gen_ts_xml",
+ "hyperast",
+ "hyperast_gen_ts_cpp",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_xml",
  "image",
  "js-sys",
  "lazy_static",
@@ -4071,7 +4071,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast"
+name = "hyper_diff"
+version = "0.2.0"
+dependencies = [
+ "bitvec",
+ "criterion 0.4.0",
+ "enum-map",
+ "env_logger 0.11.5",
+ "hungarian",
+ "hyperast",
+ "log",
+ "logging_timer",
+ "num-traits",
+ "specs",
+ "str-distance",
+]
+
+[[package]]
+name = "hyperast"
 version = "0.2.0"
 dependencies = [
  "bevy_ecs",
@@ -4102,15 +4119,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_benchmark"
+name = "hyperast_benchmark"
 version = "0.2.0"
 dependencies = [
  "cfg-if",
  "criterion 0.3.6",
  "env_logger 0.9.3",
- "hyper_ast_cvs_git",
- "hyper_ast_gen_ts_java",
  "hyper_diff",
+ "hyperast_gen_ts_java",
+ "hyperast_vcs_git",
  "jemallocator",
  "log",
  "pommes",
@@ -4120,7 +4137,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_benchmark_diffs"
+name = "hyperast_benchmark_diffs"
 version = "0.2.0"
 dependencies = [
  "bitvec",
@@ -4128,11 +4145,11 @@ dependencies = [
  "cfg-if",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
- "hyper_ast",
- "hyper_ast_cvs_git",
- "hyper_ast_gen_ts_java",
- "hyper_ast_gen_ts_xml",
  "hyper_diff",
+ "hyperast",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_xml",
+ "hyperast_vcs_git",
  "jemallocator",
  "log",
  "md5",
@@ -4146,7 +4163,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_benchmark_smells"
+name = "hyperast_benchmark_smells"
 version = "0.2.0"
 dependencies = [
  "base16ct",
@@ -4155,13 +4172,13 @@ dependencies = [
  "cfg-if",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
- "hyper_ast",
- "hyper_ast_cvs_git",
- "hyper_ast_gen_ts_java",
- "hyper_ast_gen_ts_tsquery",
- "hyper_ast_gen_ts_xml",
- "hyper_ast_tsquery",
  "hyper_diff",
+ "hyperast",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_tsquery",
+ "hyperast_gen_ts_xml",
+ "hyperast_tsquery",
+ "hyperast_vcs_git",
  "jemallocator",
  "log",
  "md5",
@@ -4176,27 +4193,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_cvs_git"
-version = "0.2.0"
-dependencies = [
- "enumset",
- "env_logger 0.11.5",
- "git2",
- "hyper_ast",
- "hyper_ast_gen_ts_cpp",
- "hyper_ast_gen_ts_java",
- "hyper_ast_gen_ts_xml",
- "hyper_ast_tsquery",
- "log",
- "num",
- "serde",
- "tree-sitter",
- "tree-sitter-graph",
- "tuples",
-]
-
-[[package]]
-name = "hyper_ast_gen_ts_cpp"
+name = "hyperast_gen_ts_cpp"
 version = "0.2.0"
 dependencies = [
  "atomic-counter",
@@ -4206,7 +4203,7 @@ dependencies = [
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
- "hyper_ast",
+ "hyperast",
  "legion",
  "libc",
  "log",
@@ -4219,7 +4216,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_gen_ts_java"
+name = "hyperast_gen_ts_java"
 version = "0.2.0"
 dependencies = [
  "atomic-counter",
@@ -4231,9 +4228,9 @@ dependencies = [
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
- "hyper_ast",
- "hyper_ast_gen_ts_tsquery",
- "hyper_ast_tsquery",
+ "hyperast",
+ "hyperast_gen_ts_tsquery",
+ "hyperast_tsquery",
  "legion",
  "libc",
  "log",
@@ -4251,7 +4248,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_gen_ts_ts"
+name = "hyperast_gen_ts_ts"
 version = "0.2.0"
 dependencies = [
  "atomic-counter",
@@ -4261,7 +4258,7 @@ dependencies = [
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
- "hyper_ast",
+ "hyperast",
  "legion",
  "libc",
  "log",
@@ -4274,7 +4271,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_gen_ts_tsquery"
+name = "hyperast_gen_ts_tsquery"
 version = "0.2.0"
 dependencies = [
  "atomic-counter",
@@ -4285,10 +4282,10 @@ dependencies = [
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
- "hyper_ast",
- "hyper_ast_gen_ts_cpp",
- "hyper_ast_gen_ts_xml",
- "hyper_ast_tsquery",
+ "hyperast",
+ "hyperast_gen_ts_cpp",
+ "hyperast_gen_ts_xml",
+ "hyperast_tsquery",
  "legion",
  "libc",
  "log",
@@ -4302,11 +4299,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_gen_ts_xml"
+name = "hyperast_gen_ts_xml"
 version = "0.2.0"
 dependencies = [
  "hashbrown 0.14.5",
- "hyper_ast",
+ "hyperast",
  "legion",
  "libc",
  "num",
@@ -4317,10 +4314,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_ast_tsquery"
+name = "hyperast_tsquery"
 version = "0.2.0"
 dependencies = [
- "hyper_ast",
+ "hyperast",
  "log",
  "num",
  "ref-cast",
@@ -4331,20 +4328,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper_diff"
+name = "hyperast_vcs_git"
 version = "0.2.0"
 dependencies = [
- "bitvec",
- "criterion 0.4.0",
- "enum-map",
+ "enumset",
  "env_logger 0.11.5",
- "hungarian",
- "hyper_ast",
+ "git2",
+ "hyperast",
+ "hyperast_gen_ts_cpp",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_xml",
+ "hyperast_tsquery",
  "log",
- "logging_timer",
- "num-traits",
- "specs",
- "str-distance",
+ "num",
+ "serde",
+ "tree-sitter",
+ "tree-sitter-graph",
+ "tuples",
 ]
 
 [[package]]
@@ -4352,11 +4352,11 @@ name = "hyperast_wasm"
 version = "0.2.0"
 dependencies = [
  "ehttp 0.2.0",
- "hyper_ast",
- "hyper_ast_gen_ts_cpp",
- "hyper_ast_gen_ts_java",
- "hyper_ast_gen_ts_ts",
- "hyper_ast_gen_ts_xml",
+ "hyperast",
+ "hyperast_gen_ts_cpp",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_ts",
+ "hyperast_gen_ts_xml",
  "poll-promise",
  "serde",
  "serde_json",
@@ -7248,8 +7248,8 @@ name = "ref-mining-evaluation"
 version = "0.2.0"
 dependencies = [
  "clap 3.2.25",
- "hyper_ast",
- "hyper_ast_cvs_git",
+ "hyperast",
+ "hyperast_vcs_git",
  "rayon",
  "serde",
  "serde_json",

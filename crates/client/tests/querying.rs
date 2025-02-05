@@ -9,8 +9,8 @@ fn test_querying() -> Result<(), Box<dyn std::error::Error>> {
         .try_init()
         .unwrap();
 
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
-    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
     let query = r#"(try_statement
     (block
@@ -30,8 +30,8 @@ fn test_querying() -> Result<(), Box<dyn std::error::Error>> {
 /// use this in a test if you suspect a querying discrepancy on a commit due to the subtree skipping feature,
 /// it might help you find where the query verdicts where not bubbled up.
 fn compare_querying_with_and_without_skipping(
-    repo_spec: hyper_ast_cvs_git::git::Repo,
-    config: hyper_ast_cvs_git::processing::RepoConfig,
+    repo_spec: hyperast_vcs_git::git::Repo,
+    config: hyperast_vcs_git::processing::RepoConfig,
     commit: &str,
     language: &str,
     query: &str,
@@ -60,26 +60,26 @@ fn compare_querying_with_and_without_skipping(
     let commit = repositories
         .get_commit(&repository.config, &commits[0])
         .unwrap();
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&language).unwrap();
-    let query_incr = hyper_ast_tsquery::Query::with_precomputed(
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language).unwrap();
+    let query_incr = hyperast_tsquery::Query::with_precomputed(
         &query,
         language.clone(),
-        hyper_ast_cvs_git::java_processor::sub_queries(),
+        hyperast_vcs_git::java_processor::sub_queries(),
     )
     .map(|x| x.1)
     .unwrap();
-    let query = hyper_ast_tsquery::Query::new(&query, language).unwrap();
+    let query = hyperast_tsquery::Query::new(&query, language).unwrap();
     let code = commit.ast_root;
     let stores = &repositories.processor.main_stores;
     let mut qcursor_incr = {
-        let pos = hyper_ast::position::StructuralPosition::new(code);
-        let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+        let pos = hyperast::position::StructuralPosition::new(code);
+        let cursor = hyperast_tsquery::hyperast::TreeCursor::new(stores, pos);
         query_incr.matches(cursor)
     }
     .into_iter();
     let mut qcursor = {
-        let pos = hyper_ast::position::StructuralPosition::new(code);
-        let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+        let pos = hyperast::position::StructuralPosition::new(code);
+        let cursor = hyperast_tsquery::hyperast::TreeCursor::new(stores, pos);
         query.matches(cursor)
     }
     .into_iter();

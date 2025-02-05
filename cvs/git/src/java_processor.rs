@@ -3,11 +3,11 @@ use std::sync::Arc;
 use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
-use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
-use hyper_ast::store::nodes::legion::RawHAST;
-use hyper_ast::tree_gen::add_md_precomp_queries;
-use hyper_ast_gen_ts_java::legion_with_refs::{self, Acc};
-use hyper_ast_gen_ts_java::types::{TStore, Type};
+use hyperast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
+use hyperast::store::nodes::legion::RawHAST;
+use hyperast::tree_gen::add_md_precomp_queries;
+use hyperast_gen_ts_java::legion_with_refs::{self, Acc};
+use hyperast_gen_ts_java::types::{TStore, Type};
 
 use crate::processing::erased::ParametrizedCommitProc2;
 use crate::{
@@ -26,7 +26,7 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
         .collect()
 }
 
-pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>;
+pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>;
 
 pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
@@ -49,9 +49,9 @@ impl<'repo, 'b, 'd, 'c> JavaProcessor<'repo, 'b, 'd, 'c, JavaAcc> {
         let prepared = prepare_dir_exploration(tree);
         let name = name.try_into().unwrap();
         let prep_scripting = prep_scripting(prepro, handle.0);
-        use hyper_ast::tree_gen::Prepro;
+        use hyperast::tree_gen::Prepro;
         let scripting_acc = prep_scripting.map(|x| {
-            hyper_ast::scripting::Prepro::<SimpleStores, &Acc>::from(x.clone())
+            hyperast::scripting::Prepro::<SimpleStores, &Acc>::from(x.clone())
                 .preprocessing(Type::Directory)
                 .unwrap()
         });
@@ -90,12 +90,12 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                     let w = &mut self.stack.last_mut().unwrap().2;
                     let name = self.prepro.intern_object_name(&name);
                     assert!(!w.primary.children_names.contains(&name));
-                    hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
+                    hyperast::tree_gen::Accumulator::push(w, (name, full_node));
                     // w.push(name, full_node, skiped_ana);
                     if let Some(acc) = &mut w.scripting_acc {
                         // SAFETY: this side should be fine, issue when unerasing
                         let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                        acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                        acc.acc::<_, hyperast_gen_ts_java::types::TType, _>(
                             store,
                             Type::Directory,
                             id.into(),
@@ -109,9 +109,9 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                 let prepared: Vec<BasicGitObject> = prepare_dir_exploration(tree);
 
                 let prepro_acc = if let Some(more) = prep_scripting(&self.prepro, self.handle.0) {
-                    use hyper_ast::tree_gen::Prepro;
+                    use hyperast::tree_gen::Prepro;
                     Some(
-                        hyper_ast::scripting::Prepro::<RawHAST<TStore>, &Acc>::from(more.clone())
+                        hyperast::scripting::Prepro::<RawHAST<TStore>, &Acc>::from(more.clone())
                             .preprocessing(Type::Directory)
                             .unwrap(),
                     )
@@ -168,7 +168,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                acc.acc::<_, hyperast_gen_ts_java::types::TType, _>(
                     store,
                     Type::Directory,
                     id.into(),
@@ -200,8 +200,8 @@ fn prep_scripting(
         .as_ref()
 }
 
-fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
-    use hyper_ast::{
+fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyperast_gen_ts_java::legion_with_refs::Local {
+    use hyperast::{
         cyclomatic::Mcc,
         store::nodes::legion::{eq_node, NodeStore},
         types::LabelStore,
@@ -209,8 +209,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     let kind = Type::Directory;
-    use hyper_ast::types::ETypeStore;
-    let interned_kind = hyper_ast_gen_ts_java::types::TStore::intern(kind);
+    use hyperast::types::ETypeStore;
+    let interned_kind = hyperast_gen_ts_java::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -290,16 +290,16 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
 
     let ana = compute_ana();
 
-    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
 
     add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
     let children_is_empty = primary.children.is_empty();
     if acc.skiped_ana {
-        use hyper_ast::store::nodes::EntityBuilder;
-        dyn_builder.add(hyper_ast::filter::BloomSize::None);
+        use hyperast::store::nodes::EntityBuilder;
+        dyn_builder.add(hyperast::filter::BloomSize::None);
     } else {
         #[cfg(feature = "impact")]
-        hyper_ast_gen_ts_java::legion_with_refs::add_md_ref_ana(
+        hyperast_gen_ts_java::legion_with_refs::add_md_ref_ana(
             &mut dyn_builder,
             children_is_empty,
             ana.as_ref(),
@@ -311,10 +311,10 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     hashs.persist(&mut dyn_builder);
 
     if let Some(acc) = acc.scripting_acc {
-        let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+        let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
         let ss = acc.finish(&subtr).unwrap();
         log::error!("dir {:?}", ss.0);
-        use hyper_ast::store::nodes::EntityBuilder;
+        use hyperast::store::nodes::EntityBuilder;
         dyn_builder.add(ss);
     };
 
@@ -332,11 +332,11 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     full_node
 }
 
-use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Parameter {
-    pub query: Option<hyper_ast_tsquery::ZeroSepArrayStr>,
+    pub query: Option<hyperast_tsquery::ZeroSepArrayStr>,
     pub tsg: Option<std::sync::Arc<str>>,
     pub prepro: Option<std::sync::Arc<str>>,
 }
@@ -409,8 +409,9 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
             .position(|x| &x.parameter == &t)
             .unwrap_or_else(|| {
                 let l = self.0.len();
+                assert!(l <= 1);
                 let query = if let Some(q) = &t.query {
-                    use hyper_ast_tsquery::ArrayStr;
+                    use hyperast_tsquery::ArrayStr;
                     Some(Query::new(q.iter()))
                 } else {
                     None
@@ -419,18 +420,18 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                 #[cfg(feature = "tsg")]
                 let tsg = if let Some(q) = &t.tsg {
                     let tsg = q.deref();
-                    type M<'hast, HAST, Acc> = hyper_ast_tsquery::QueryMatcher<'hast, HAST, Acc>;
-                    type ExtQ<'hast, HAST, Acc> = hyper_ast_tsquery::ExtendingStringQuery<
+                    type M<'hast, HAST, Acc> = hyperast_tsquery::QueryMatcher<'hast, HAST, Acc>;
+                    type ExtQ<'hast, HAST, Acc> = hyperast_tsquery::ExtendingStringQuery<
                         M<'hast, HAST, Acc>,
                         tree_sitter::Language,
                     >;
 
                     let source: &str = tsg;
-                    let language = hyper_ast_gen_ts_java::language();
+                    let language = hyperast_gen_ts_java::language();
 
                     let mut file = tree_sitter_graph::ast::File::<
                         M<
-                            &hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
+                            &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
                             &Acc,
                         >,
                     >::new(language.clone());
@@ -452,18 +453,18 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
                     let mut functions = tree_sitter_graph::functions::Functions::<
                         tree_sitter_graph::graph::GraphErazing<
-                            hyper_ast_tsquery::MyNodeErazing<
-                                hyper_ast::store::SimpleStores<
+                            hyperast_tsquery::MyNodeErazing<
+                                hyperast::store::SimpleStores<
                                     TStore,
-                                    &hyper_ast::store::nodes::legion::NodeStoreInner,
-                                    &hyper_ast::store::labels::LabelStore,
+                                    &hyperast::store::nodes::legion::NodeStoreInner,
+                                    &hyperast::store::labels::LabelStore,
                                 >,
                                 &Acc,
                             >,
                         >,
                     >::stdlib();
                     // TODO port those path functions to the generified variant in my fork
-                    // hyper_ast_tsquery::add_path_functions(&mut functions);
+                    // hyperast_tsquery::add_path_functions(&mut functions);
                     let functions = functions.as_any();
 
                     Some((file.as_any(), functions))
@@ -492,7 +493,7 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 }
 
 #[derive(Clone)]
-pub(crate) struct Query(pub(crate) hyper_ast_tsquery::Query, Arc<str>);
+pub(crate) struct Query(pub(crate) hyperast_tsquery::Query, Arc<str>);
 
 impl PartialEq for Query {
     fn eq(&self, other: &Self) -> bool {
@@ -512,9 +513,9 @@ impl Query {
     fn new<'a>(precomputeds: impl Iterator<Item = &'a str>) -> Self {
         static DQ: &str = "(_)";
         let precomputeds = precomputeds.collect::<Vec<_>>();
-        let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+        let (precomp, _) = hyperast_tsquery::Query::with_precomputed(
             DQ,
-            hyper_ast_gen_ts_java::language(),
+            hyperast_gen_ts_java::language(),
             precomputeds.as_slice(),
         )
         .unwrap();
@@ -527,7 +528,7 @@ impl crate::processing::erased::CommitProc for JavaProc {
         self.commits.get(&commit_oid)
     }
 
-    fn get_precomp_query(&self) -> Option<hyper_ast_tsquery::ZeroSepArrayStr> {
+    fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         dbg!(&self.parameter.query);
         // if self.parameter.query.is_none() {
         //     let s = unsafe { crate::java_processor::SUB_QUERIES };
@@ -656,16 +657,16 @@ impl RepositoryProcessor {
     fn java_generator(
         &mut self,
         text: &[u8],
-    ) -> java_tree_gen::JavaTreeGen<crate::TStore, SimpleStores, hyper_ast_tsquery::Query> {
+    ) -> java_tree_gen::JavaTreeGen<crate::TStore, SimpleStores, hyperast_tsquery::Query> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
             "\n".as_bytes().to_vec()
         };
 
-        let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+        let (precomp, _) = hyperast_tsquery::Query::with_precomputed(
             "(_)",
-            hyper_ast_gen_ts_java::language(),
+            hyperast_gen_ts_java::language(),
             sub_queries(),
         )
         .unwrap();
@@ -690,7 +691,7 @@ impl RepositoryProcessor {
         oid: Oid,
         name: &ObjectName,
         handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
-    ) -> <JavaAcc as hyper_ast::tree_gen::Accumulator>::Node {
+    ) -> <JavaAcc as hyperast::tree_gen::Accumulator>::Node {
         let full_node = self.handle_java_directory(repository, dir_path, name, oid, handle);
         let name = self.intern_object_name(name);
         (name, full_node)
@@ -717,7 +718,7 @@ impl RepositoryProcessor {
                 let md_cache = &mut java_proc.cache.md_cache;
                 let stores = self
                     .main_stores
-                    .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
+                    .mut_with_ts::<hyperast_gen_ts_java::types::TStore>();
                 // let java_tree_gen =
                 //     java_tree_gen::JavaTreeGen::new(stores, md_cache).with_line_break(line_break);
                 #[cfg(not(feature = "tsg"))]
@@ -730,22 +731,22 @@ impl RepositoryProcessor {
                     #[cfg(feature = "tsg")]
                     {
                         let spec: &tree_sitter_graph::ast::File<
-                            hyper_ast_tsquery::QueryMatcher<
-                                &hyper_ast::store::SimpleStores<
-                                    hyper_ast_gen_ts_java::types::TStore,
+                            hyperast_tsquery::QueryMatcher<
+                                &hyperast::store::SimpleStores<
+                                    hyperast_gen_ts_java::types::TStore,
                                 >,
                                 &Acc,
                             >,
                         > = tsg.0.downcast_ref().unwrap();
                         let query = java_proc.query.as_ref().map(|x| &x.0);
                         let functions = tsg.1.clone();
-                        let more = hyper_ast_tsquery::PreparedOverlay {
+                        let more = hyperast_tsquery::PreparedOverlay {
                             query,
                             overlayer: spec,
                             functions,
                         };
                         let mut java_tree_gen = java_tree_gen::JavaTreeGen::<
-                            hyper_ast_gen_ts_java::types::TStore,
+                            hyperast_gen_ts_java::types::TStore,
                             _,
                             _,
                         >::with_preprocessing(
@@ -755,7 +756,7 @@ impl RepositoryProcessor {
                         crate::java::handle_java_file(&mut java_tree_gen, n, t)
                     }
                 } else if let Some(precomp) = &java_proc.parameter.prepro {
-                    let more = hyper_ast::scripting::Prepro::<_, _>::from_arc(precomp.clone());
+                    let more = hyperast::scripting::Prepro::<_, _>::from_arc(precomp.clone());
                     // let mut java_tree_gen = java_tree_gen.with_more(more);
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
@@ -763,7 +764,7 @@ impl RepositoryProcessor {
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
-                    let more: hyper_ast_tsquery::PreparedQuerying<_, _, _> = more.into();
+                    let more: hyperast_tsquery::PreparedQuerying<_, _, _> = more.into();
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
                             .with_line_break(line_break);
@@ -778,7 +779,7 @@ impl RepositoryProcessor {
                 if let Ok(dd) = stores
                     .node_store
                     .resolve(r.local.compressed_node)
-                    .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
+                    .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
                 {
                     log::info!("native: {:?} {:?}", r.local.mcc, r.local.metrics);
                     log::info!("script: {:?}", dd.0);
@@ -803,12 +804,12 @@ impl RepositoryProcessor {
         if let Some(acc) = &mut w.scripting_acc {
             // SAFETY: this side should be fine, issue when unerasing
             let store = unsafe { self.main_stores.erase_ts_unchecked() };
-            acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(store, Type::Directory, id.into())
+            acc.acc::<_, hyperast_gen_ts_java::types::TType, _>(store, Type::Directory, id.into())
                 .unwrap();
             // prepro_acc(
             //     acc,
             //     self.main_stores
-            //         .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>(),
+            //         .mut_with_ts::<hyperast_gen_ts_java::types::TStore>(),
             //     &full_node,
             // );
         }
@@ -942,7 +943,7 @@ mod experiments {
                     w.primary.children_names,
                     name
                 );
-                hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
+                hyperast::tree_gen::Accumulator::push(w, (name, full_node));
                 None
             }
         }

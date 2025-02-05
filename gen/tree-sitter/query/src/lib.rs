@@ -9,7 +9,7 @@ pub mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    pub use hyper_ast::tree_gen::utils_ts::TNode;
+    pub use hyperast::tree_gen::utils_ts::TNode;
 }
 
 use auto::tsq_ser_meta::Conv;
@@ -45,19 +45,19 @@ pub struct IterMatched<M, HAST, It, TIdN> {
 impl<'a, HAST, It: Iterator, TIdN> Iterator
     for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>, &'a HAST, It, TIdN>
 where
-    HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
+    HAST: hyperast::types::HyperAST<'a> + hyperast::types::TypedHyperAST<'a, TIdN>,
     TIdN: 'static
-        + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
+        + hyperast::types::TypedNodeId<IdN = <HAST as hyperast::types::HyperASTShared>::IdN>,
     It::Item:
-        hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx>,
-    for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
+        hyperast::position::TreePath<TIdN::IdN, <HAST as hyperast::types::HyperASTShared>::Idx>,
+    for<'b> &'b str: Into<<TIdN as hyperast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy,
 {
     type Item = (It::Item, Captured<HAST::IdN, HAST::Idx>);
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(e) = self.iter.next() {
-            use hyper_ast::position::TreePath;
+            use hyperast::position::TreePath;
             if let Some(c) = self
                 .matcher
                 .is_matching_and_capture::<_, TIdN>(self.hast, *e.node().unwrap())
@@ -76,12 +76,12 @@ where
 //         root: TIdN::IdN,
 //     ) -> IterMatched<&crate::search::PreparedMatcher<Ty>, &'a HAST, It, TIdN>
 //     where
-//         HAST: 'a + hyper_ast::types::HyperAST<'a>,
-//         TIdN: hyper_ast::types::TypedNodeId<Ty = Ty, IdN = HAST::IdN>,
+//         HAST: 'a + hyperast::types::HyperAST<'a>,
+//         TIdN: hyperast::types::TypedNodeId<Ty = Ty, IdN = HAST::IdN>,
 //         It: From<(&'a HAST, It::Item)>,
 //         It::Item: From<HAST::IdN>,
 //         It: Iterator,
-//         It::Item: hyper_ast::position::TreePathMut<HAST::IdN, HAST::Idx>,
+//         It::Item: hyperast::position::TreePathMut<HAST::IdN, HAST::Idx>,
 //     {
 //         let path = It::Item::from(root);
 //         let iter = It::from((hast, path));
@@ -111,13 +111,13 @@ impl<Ty> crate::search::PreparedMatcher<Ty, Conv<Ty>> {
         TIdN,
     >
     where
-        HAST: 'a + hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
-        // HAST::TS: hyper_ast::types::TypeStore<HAST::T, Ty = Ty>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = Ty>,
+        HAST: 'a + hyperast::types::HyperAST<'a> + hyperast::types::TypedHyperAST<'a, TIdN>,
+        // HAST::TS: hyperast::types::TypeStore<HAST::T, Ty = Ty>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = Ty>,
         It: From<(&'a HAST, It::Item)>,
         It::Item: From<HAST::IdN>,
         It: Iterator,
-        It::Item: hyper_ast::position::TreePathMut<HAST::IdN, HAST::Idx>,
+        It::Item: hyperast::position::TreePathMut<HAST::IdN, HAST::Idx>,
     {
         let path = It::Item::from(root.clone());
         let mut iter = It::from((hast, path));
@@ -153,12 +153,12 @@ impl<'a, HAST, It: Iterator, TIdN> Iterator
         TIdN,
     >
 where
-    HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
+    HAST: hyperast::types::HyperAST<'a> + hyperast::types::TypedHyperAST<'a, TIdN>,
     TIdN: 'static
-        + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
-    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx>
+        + hyperast::types::TypedNodeId<IdN = <HAST as hyperast::types::HyperASTShared>::IdN>,
+    It::Item: hyperast::position::TreePath<TIdN::IdN, <HAST as hyperast::types::HyperASTShared>::Idx>
         + Clone,
-    for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
+    for<'b> &'b str: Into<<TIdN as hyperast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy + std::fmt::Debug,
 {
     type Item = (It::Item, Captured<HAST::IdN, HAST::Idx>);
@@ -167,7 +167,7 @@ where
         if let Some(c) = self.matcher.next() {
             return Some((self.cur.clone(), c));
         } else if let Some(e) = self.iter.next() {
-            use hyper_ast::position::TreePath;
+            use hyperast::position::TreePath;
             self.cur = e;
             self.matcher.repurpose(*self.cur.node().unwrap());
             return self.next();

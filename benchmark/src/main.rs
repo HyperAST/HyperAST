@@ -9,11 +9,11 @@ use std::{
     time::Instant,
 };
 
-use hyper_ast_cvs_git::{
+use hyperast_vcs_git::{
     git::{fetch_github_repository, retrieve_commit},
     preprocessed::PreProcessedRepository,
 };
-use hyper_ast_gen_ts_java::utils::memusage_linux; // TODO move that to a more code crate
+use hyperast_gen_ts_java::utils::memusage_linux; // TODO move that to a more code crate
 use serde::{Deserialize, Serialize};
 
 use crate::write_serializer::{WriteJson, WritePartialJson};
@@ -104,7 +104,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     dir_path: &str,
     out: Option<PathBuf>,
 ) {
-    use hyper_ast_cvs_git::allrefs::write_referencial_relations;
+    use hyperast_vcs_git::allrefs::write_referencial_relations;
     let batch_id = format!("{}:({},{})", repo_name, before, after);
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let processing_ordered_commits = preprocessed.pre_process_with_limit(
@@ -212,7 +212,7 @@ pub fn single_commit_ref_ana(
     dir_path: &str,
     out: Option<PathBuf>,
 ) {
-    use hyper_ast_cvs_git::allrefs::write_referencial_relations;
+    use hyperast_vcs_git::allrefs::write_referencial_relations;
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     preprocessed.pre_process_single(&mut fetch_github_repository(&repo_name), after, dir_path);
     let mu = memusage_linux();

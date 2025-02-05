@@ -1,4 +1,4 @@
-use hyper_ast::types::{IterableChildren, NodeId, NodeStore, WithChildren};
+use hyperast::types::{IterableChildren, NodeId, NodeStore, WithChildren};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;

@@ -10,19 +10,19 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
-use hyper_ast::types::ETypeStore as _;
-use hyper_ast::{
+use hyperast::types::ETypeStore as _;
+use hyperast::{
     hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
     store::{defaults::NodeIdentifier, nodes::legion::eq_node},
     types::LabelStore,
 };
-use hyper_ast_gen_ts_xml::types::Type;
+use hyperast_gen_ts_xml::types::Type;
 use std::{
     iter::Peekable,
     path::{Components, PathBuf},
 };
 
-pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_xml::types::TStore>;
+pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_xml::types::TStore>;
 
 pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut RepositoryProcessor,
@@ -239,7 +239,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
 
 pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
     let kind = Type::Directory;
-    let interned_kind = hyper_ast_gen_ts_xml::types::TStore::intern(kind);
+    let interned_kind = hyperast_gen_ts_xml::types::TStore::intern(kind);
     let label_id = stores.label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -263,7 +263,7 @@ pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdenti
 
     log::info!("make mm {} {}", &primary.name, primary.children.len());
 
-    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
 
     let children_is_empty = primary.children.is_empty();
 
@@ -273,7 +273,7 @@ pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdenti
     hashs.persist(&mut dyn_builder);
 
     let vacant = insertion.vacant();
-    let node_id = hyper_ast::store::nodes::legion::NodeStore::insert_built_after_prepare(
+    let node_id = hyperast::store::nodes::legion::NodeStore::insert_built_after_prepare(
         vacant,
         dyn_builder.build(),
     );
@@ -282,7 +282,7 @@ pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdenti
     full_node
 }
 
-use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::XmlEnabledTypeStore as _};
+use hyperast_gen_ts_xml::{legion::XmlTreeGen, types::XmlEnabledTypeStore as _};
 impl RepositoryProcessor {
     fn help_handle_makefile(
         &mut self,
@@ -570,7 +570,7 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMakeCommit
     fn process(
         self: Box<PreparedMakeCommitProc<'repo>>,
         prepro: &mut RepositoryProcessor,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
+    ) -> hyperast::store::defaults::NodeIdentifier {
         let dir_path = PathBuf::from("");
         let mut dir_path = dir_path.components().peekable();
         let name = b"";

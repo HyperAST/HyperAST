@@ -1,4 +1,4 @@
-use hyper_ast::store::SimpleStores;
+use hyperast::store::SimpleStores;
 use tree_sitter_graph::GenQuery;
 
 use crate::legion_with_refs;
@@ -69,7 +69,7 @@ fn tsg_hyperast_stepped_query() {
     use crate::tsg::stepped_query as impls;
 
     // parsing code into hyperast
-    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
@@ -96,7 +96,7 @@ fn tsg_hyperast_stepped_query() {
     let mut config = configure(&globals, &functions);
     let cancellation_flag = tree_sitter_graph::NoCancellation;
 
-    let pos = hyper_ast::position::StructuralPosition::new(full_node.local.compressed_node);
+    let pos = hyperast::position::StructuralPosition::new(full_node.local.compressed_node);
     let tree: impls::Node<_> = impls::Node::new(&stores, pos);
 
     // SAFETY: just circumventing a limitation in the borrow checker
@@ -135,7 +135,7 @@ fn tsg_hyperast_recursive_query() {
     use crate::tsg::recursive_query as impls;
 
     // parsing code into hyperast
-    let mut stores = hyper_ast::store::SimpleStores::default();
+    let mut stores = hyperast::store::SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
@@ -159,7 +159,7 @@ fn tsg_hyperast_recursive_query() {
 
     let tree = impls::Node {
         stores: &stores,
-        pos: hyper_ast::position::StructuralPosition::new(full_node.local.compressed_node),
+        pos: hyperast::position::StructuralPosition::new(full_node.local.compressed_node),
     };
 
     if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {

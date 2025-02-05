@@ -1,4 +1,4 @@
-use hyper_ast::types::DecompressedSubtree;
+use hyperast::types::DecompressedSubtree;
 
 use crate::{
     decompressed_tree_store::{
@@ -28,8 +28,8 @@ fn test() {
     dbg!(src_arena.root());
     dbg!(dst_arena.root());
     use crate::decompressed_tree_store::PostOrder;
-    use hyper_ast::types::NodeStore;
-    use hyper_ast::types::WithStats;
+    use hyperast::types::NodeStore;
+    use hyperast::types::WithStats;
     dbg!(src_arena.tree(&src_arena.root()));
     dbg!(dst_arena.tree(&dst_arena.root()));
     src_arena

@@ -1,6 +1,6 @@
 use crate::types::{TIdN, Type};
 use core::fmt;
-use hyper_ast::{
+use hyperast::{
     filter::BloomResult,
     nodes::RefContainer,
     position::{
@@ -15,13 +15,13 @@ use hyper_ast::{
 };
 use num::{cast, one, zero, ToPrimitive, Zero};
 use std::fmt::Debug;
-// use hyper_ast_core::tree::tree::{WithChildren, Tree, Labeled};
+// use hyperast_core::tree::tree::{WithChildren, Tree, Labeled};
 
 use crate::impact::{
     element::{IdentifierFormat, LabelPtr},
     reference::DisplayRef,
 };
-use hyper_ast::types::AnyType;
+use hyperast::types::AnyType;
 
 use super::{
     element::ExplorableRef,
@@ -87,21 +87,21 @@ where
     >,
     IdN: 'a + Copy + Eq + Debug + NodeId<IdN = IdN>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
-    HAST: hyper_ast::types::TypeStore,
-    HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
-    HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T:
+    HAST: hyperast::types::TypeStore,
+    HAST: hyperast::types::LabelStore<str, I = LabelIdentifier>,
+    HAST: hyperast::types::NodeStore<IdN, R<'a> = <HAST as hyperast::types::HyperAST<'a>>::T>,
+    <HAST as hyperast::types::HyperAST<'a>>::T:
         TypedTree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    <HAST as hyperast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         RefContainer<Result = BloomResult>,
 {
     pub fn eq_root_scoped(
         d: ExplorableRef,
         stores: &'a HAST,
-        b: <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT,
+        b: <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT,
     ) -> bool {
         match d.as_ref() {
             RefsEnum::Root => false, // TODO check, not sure
@@ -241,7 +241,7 @@ where
             };
             return self.find_refs2::<IM>(package, target, current, b, scout);
         }
-        let b = hyper_ast::types::NodeStore::resolve(self.stores.node_store(), &current);
+        let b = hyperast::types::NodeStore::resolve(self.stores.node_store(), &current);
         let t = self.stores.resolve_type(&current);
         if !IM && !has_children {
             log::debug!("d=1 {:?}", "'Not Java'");
@@ -400,7 +400,7 @@ where
 
                     log::debug!(
                         "{}",
-                        hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                        hyperast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
                     );
 
                     self.exact_match(target, scout.clone());
@@ -409,7 +409,7 @@ where
                 log::debug!("!found This");
                 log::debug!(
                     "{}",
-                    hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                    hyperast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
                 );
                 self.exact_match(target, scout.clone());
                 return vec![];
@@ -417,7 +417,7 @@ where
                 log::debug!("!found TypeIdentifier");
                 log::debug!(
                     "{}",
-                    hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                    hyperast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
                 );
                 self.exact_match(target, scout.clone());
                 return vec![];
@@ -425,7 +425,7 @@ where
                 // java_tree_gen::print_tree_syntax(
                 log::debug!(
                     "{}",
-                    hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                    hyperast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
                 );
                 self.exact_match(target, scout.clone());
             } else if !has_children {
@@ -524,7 +524,7 @@ where
             );
             log::debug!(
                 "{}",
-                hyper_ast::nodes::SyntaxSerializer::new(self.stores, *x.as_id())
+                hyperast::nodes::SyntaxSerializer::new(self.stores, *x.as_id())
             );
 
             if Self::eq_root_scoped(d, self.stores, b) {
@@ -583,7 +583,7 @@ where
             // TODO move print to maybe contains branch
             log::debug!(
                 "{}",
-                hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id(),)
+                hyperast::nodes::SyntaxSerializer::new(self.stores, *current.as_id(),)
             );
             if target == package {
                 return Err(vec![]);
@@ -826,14 +826,14 @@ where
     >,
     IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
-    HAST: hyper_ast::types::TypeStore,
-    HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
-    HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    HAST: hyperast::types::TypeStore,
+    HAST: hyperast::types::LabelStore<str, I = LabelIdentifier>,
+    HAST: hyperast::types::NodeStore<IdN, R<'a> = <HAST as hyperast::types::HyperAST<'a>>::T>,
+    <HAST as hyperast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyperast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         RefContainer<Result = BloomResult>,
 {
     pub fn exact_match(&mut self, target: RefPtr, scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
@@ -1830,7 +1830,7 @@ where
             } else if t == Type::FieldAccess {
                 log::debug!(
                     "need to handle a.new b.C() {}",
-                    hyper_ast::nodes::SyntaxSerializer::new(
+                    hyperast::nodes::SyntaxSerializer::new(
                         self.stores,
                         scout.node_always(&self.sp_store).unwrap().as_id().clone()
                     )
@@ -1839,7 +1839,7 @@ where
                 // TODO need full check if creating anonymous class
                 log::debug!(
                     "need to handle a<T>.new b.C() {}",
-                    hyper_ast::nodes::SyntaxSerializer::new(
+                    hyperast::nodes::SyntaxSerializer::new(
                         self.stores,
                         scout.node_always(&self.sp_store).unwrap().as_id().clone()
                     )
@@ -2247,7 +2247,7 @@ where
         } else {
             log::debug!(
                 "{}",
-                hyper_ast::nodes::SyntaxSerializer::new(
+                hyperast::nodes::SyntaxSerializer::new(
                     self.stores,
                     scout.node_always(&self.sp_store).unwrap().as_id().clone()
                 )
@@ -2895,11 +2895,11 @@ where
         // T = HashedNodeRef<'a,Type>,
         Label = LabelIdentifier,
     >,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    <HAST as hyperast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx>,
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
 {
-    // log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(
+    // log::debug!("{}",hyperast::nodes::SyntaxSerializer::new(
     //     stores,
     //     x
     // ));
@@ -2951,16 +2951,16 @@ where
         // T = HashedNodeRef<'a,Type>,
         Label = LabelIdentifier,
     >,
-    HAST: hyper_ast::types::TypeStore,
-    HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
-    HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
+    HAST: hyperast::types::TypeStore,
+    HAST: hyperast::types::LabelStore<str, I = LabelIdentifier>,
+    HAST: hyperast::types::NodeStore<IdN, R<'a> = <HAST as hyperast::types::HyperAST<'a>>::T>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
     IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    <HAST as hyperast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyperast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+    <HAST as hyperast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         RefContainer<Result = BloomResult>,
 {
     /// Structurally find constructors in class
@@ -3041,7 +3041,7 @@ where
             log::debug!("!found 'this' {:?}", &t);
             log::debug!(
                 "{}",
-                hyper_ast::nodes::SyntaxSerializer::new(self.stores, current.as_id().clone(),)
+                hyperast::nodes::SyntaxSerializer::new(self.stores, current.as_id().clone(),)
             );
             self.successful_match(scout);
             // scout.check(&self.stores).expect("a");

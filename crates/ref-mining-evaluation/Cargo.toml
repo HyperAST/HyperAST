@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyper_ast_cvs_git = { workspace = true }
-hyper_ast = { workspace = true, features = ["serialize"] }
+hyperast_vcs_git = { workspace = true }
+hyperast = { workspace = true, features = ["serialize"] }
 # log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_info"] }
 
 serde = { version = "1.0.130", features = ["derive"] }

@@ -5,7 +5,7 @@ use std::{
     hash::Hash,
 };
 
-use hyper_ast::PrimInt;
+use hyperast::PrimInt;
 use num_traits::{cast, ToPrimitive};
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
     tree::tree_path::TreePath,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{HyperAST, Labeled, NodeStore, Stored, Tree, WithChildren};
+use hyperast::types::{HyperAST, Labeled, NodeStore, Stored, Tree, WithChildren};
 
 use super::action_vec::ActionsVec;
 

@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{types::TIdN, TNode};
 use legion::world::EntryRef;
 
-use hyper_ast::{
+use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
@@ -32,7 +32,7 @@ use hyper_ast::{
 
 use crate::types::{TsQueryEnabledTypeStore, Type};
 
-pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
+pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
 
 pub struct TsQueryTreeGen<'store, 'cache, TS> {
     pub line_break: Vec<u8>,
@@ -69,7 +69,7 @@ pub struct Local {
 }
 
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
+    hyperast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
 impl Local {
@@ -466,7 +466,7 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
             let hashs = hbuilder.build();
 
             let mut dyn_builder =
-                hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(
@@ -515,7 +515,7 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
 impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
     pub fn build_then_insert(
         &mut self,
-        _i: <hashed::HashedNode as hyper_ast::types::Stored>::TreeId,
+        _i: <hashed::HashedNode as hyperast::types::Stored>::TreeId,
         t: Type,
         l: Option<LabelIdentifier>,
         cs: Vec<NodeIdentifier>,
@@ -545,8 +545,8 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                     let metrics = md.metrics;
                     metrics
                 } else {
-                    use hyper_ast::hashed::SyntaxNodeHashsKinds;
-                    use hyper_ast::types::WithHashs;
+                    use hyperast::hashed::SyntaxNodeHashsKinds;
+                    use hyperast::types::WithHashs;
                     let (_, node) = self
                         .stores
                         .node_store
@@ -556,7 +556,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                         label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
                         syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
                     };
-                    use hyper_ast::types::WithStats;
+                    use hyperast::types::WithStats;
                     use num::ToPrimitive;
                     let metrics = SubTreeMetrics {
                         size: node.size().to_u32().unwrap(),
@@ -612,7 +612,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
             let hashs = hbuilder.build();
 
             let mut dyn_builder =
-                hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(

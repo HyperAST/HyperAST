@@ -1,7 +1,7 @@
 use core::fmt;
 use std::io::{stdout, Write};
 
-use hyper_ast::{
+use hyperast::{
     filter::BloomResult,
     nodes::RefContainer,
     position::{
@@ -35,14 +35,14 @@ fn run(text: &[u8]) {
     println!();
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(
+        hyperast::nodes::SyntaxSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(
+        hyperast::nodes::SexpSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -50,7 +50,7 @@ fn run(text: &[u8]) {
     stdout().flush().unwrap();
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(
+        hyperast::nodes::TextSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -133,7 +133,7 @@ fn test_equals() {
     println!();
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(
+        hyperast::nodes::SyntaxSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -143,7 +143,7 @@ fn test_equals() {
 
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(
+        hyperast::nodes::TextSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -160,7 +160,7 @@ fn test_equals() {
         ana.print_refs(&stores.label_store);
 
         let b = stores.node_store.resolve(*a);
-        use hyper_ast::types::LabelStore;
+        use hyperast::types::LabelStore;
         macro_rules! scoped_ref {
             ( $o:expr, $i:expr ) => {{
                 let o = $o;
@@ -180,7 +180,7 @@ fn test_equals() {
             BloomResult::DoNotContain => println!("Do not contains B"),
         }
     }
-    //     use hyper_ast::position::extract_position;
+    //     use hyperast::position::extract_position;
     //     let mut position = extract_position(&java_tree_gen.stores, d_it.parents(), d_it.offsets());
     //     position.set_len(b.get_bytes_len() as usize);
     //     println!("position: {:?}", position);
@@ -347,7 +347,7 @@ public class A {
 
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(
+        hyperast::nodes::SyntaxSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -361,7 +361,7 @@ public class A {
     write!(
         out,
         "{}",
-        hyper_ast::nodes::TextSerializer::new(
+        hyperast::nodes::TextSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -424,7 +424,7 @@ fn test_offset_computation() {
         let mut f = |x, i: u16| {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
-            use hyper_ast::types::TypedNodeStore;
+            use hyperast::types::TypedNodeStore;
             let x: crate::types::TIdN<_> = stores.node_store.try_typed(&x).unwrap();
             dbg!(stores.node_store.resolve_typed(&x).get_type());
             scout.goto_typed(x, i);
@@ -443,11 +443,11 @@ fn test_offset_computation() {
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
     let z = s.get(x);
-    hyper_ast::position::position_accessors::assert_invariants_post_full(&z, &stores);
+    hyperast::position::position_accessors::assert_invariants_post_full(&z, &stores);
     let position_converter = &PositionConverter::new(&z).with_stores(&stores);
 
     let p = if true {
-        use hyper_ast::position;
+        use hyperast::position;
         // use position::offsets_and_nodes;
         // let src = offsets::OffsetsRef::from(path_to_target.as_slice());
         // let src = src.with_root(src_tr);
@@ -494,7 +494,7 @@ fn test_offset_computation2() {
 
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(
+        hyperast::nodes::SyntaxSerializer::new(
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
@@ -503,7 +503,7 @@ fn test_offset_computation2() {
         let mut f = |x, i: u16| {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
-            use hyper_ast::types::TypedNodeStore;
+            use hyperast::types::TypedNodeStore;
             let x = stores.node_store.try_typed(&x).unwrap();
             scout.goto_typed(x, i);
             scout.up(&s);
@@ -517,10 +517,10 @@ fn test_offset_computation2() {
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
     let z = s.get(x);
-    hyper_ast::position::position_accessors::assert_invariants_post(&z, &stores);
+    hyperast::position::position_accessors::assert_invariants_post(&z, &stores);
     let position_converter = &PositionConverter::new(&z).with_stores(&stores);
     let p = if true {
-        use hyper_ast::position;
+        use hyperast::position;
         // use position::offsets_and_nodes;
         // let src = offsets::OffsetsRef::from(path_to_target.as_slice());
         // let src = src.with_root(src_tr);

@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use hyper_ast::{
+use hyperast::{
     position::{compute_position, Position},
     types::{self, LabelStore, Labeled, NodeStore, WithSerialization},
 };

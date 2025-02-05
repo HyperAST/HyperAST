@@ -1,7 +1,7 @@
 use crate::SharedState;
 use axum::Json;
-use hyper_ast_cvs_git::SimpleStores;
-use hyper_ast_tsquery::stepped_query::{Node, QueryMatcher};
+use hyperast_vcs_git::SimpleStores;
+use hyperast_tsquery::stepped_query::{Node, QueryMatcher};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -61,9 +61,9 @@ pub fn simple(
         commits,
         path,
     } = query;
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&lang_name)
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&lang_name)
         .ok_or_else(|| QueryingError::MissingLanguage(lang_name.clone()))?;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .write()
@@ -75,7 +75,7 @@ pub fn simple(
             let configs = &mut state.repositories.write().unwrap();
             configs.register_config(
                 repo_spec.clone(),
-                hyper_ast_cvs_git::processing::RepoConfig::JavaMaven,
+                hyperast_vcs_git::processing::RepoConfig::JavaMaven,
             );
             log::error!("missing config for {}", repo_spec);
             configs.get_config(repo_spec.clone()).unwrap()
@@ -94,13 +94,13 @@ pub fn simple(
     let tsg = {
         type M = QueryMatcher<SimpleStores>;
         type ExtQ =
-            hyper_ast_tsquery::stepped_query::ExtendingStringQuery<M, tree_sitter::Language>;
+            hyperast_tsquery::stepped_query::ExtendingStringQuery<M, tree_sitter::Language>;
 
         let source: &str = &query;
 
         let mut file = tree_sitter_graph::ast::File::<M>::new(language.clone());
 
-        let precomputeds: Box<dyn hyper_ast_tsquery::ArrayStr> = state
+        let precomputeds: Box<dyn hyperast_tsquery::ArrayStr> = state
             .repositories
             .read()
             .unwrap()
@@ -136,15 +136,15 @@ pub fn simple(
 
 fn simple_aux(
     state: &crate::AppState,
-    repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
-    commit_oid: &hyper_ast_cvs_git::git::Oid,
+    repo: &hyperast_vcs_git::processing::ConfiguredRepo2,
+    commit_oid: &hyperast_vcs_git::git::Oid,
     query: &str,
     tsg: &tree_sitter_graph::ast::File<QueryMatcher<SimpleStores>>,
     path: &str,
 ) -> Result<ComputeResult, QueryingError> {
     let now = Instant::now();
     type Graph<'a, HAST> = tree_sitter_graph::graph::Graph<Node<'a, HAST>>;
-    // SimpleStores<hyper_ast_gen_ts_java::types::TStore>
+    // SimpleStores<hyperast_gen_ts_java::types::TStore>
     let mut globals = tree_sitter_graph::Variables::new();
     let mut graph = Graph::default();
     init_globals(&mut globals, &mut graph);
@@ -159,9 +159,9 @@ fn simple_aux(
     let stores = &repositories.processor.main_stores;
 
     let code =
-        hyper_ast_cvs_git::preprocessed::child_at_path(stores, code, path.split('/')).unwrap();
+        hyperast_vcs_git::preprocessed::child_at_path(stores, code, path.split('/')).unwrap();
 
-    let tree = Node::new(stores, hyper_ast::position::StructuralPosition::new(code));
+    let tree = Node::new(stores, hyperast::position::StructuralPosition::new(code));
     // SAFETY: just circumventing a limitation in the borrow checker, ie. all associated lifetimes considered as being 'static
     let tree = unsafe { std::mem::transmute(tree) };
     if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {

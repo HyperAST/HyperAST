@@ -28,13 +28,13 @@ pub mod tests;
 
 use git::BasicGitObject;
 use git2::Oid;
-use hyper_ast::{store::defaults::LabelIdentifier, utils::Bytes};
+use hyperast::{store::defaults::LabelIdentifier, utils::Bytes};
 
 mod type_store;
 
 pub use type_store::TStore;
 
-pub type SimpleStores = hyper_ast::store::SimpleStores<TStore>;
+pub type SimpleStores = hyperast::store::SimpleStores<TStore>;
 
 // might also skip
 pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;
@@ -42,7 +42,7 @@ pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;
 pub(crate) const MAX_REFS: u32 = 10000; //4096;
 
 pub(crate) type DefaultMetrics =
-    hyper_ast::tree_gen::SubTreeMetrics<hyper_ast::hashed::SyntaxNodeHashs<u32>>;
+    hyperast::tree_gen::SubTreeMetrics<hyperast::hashed::SyntaxNodeHashs<u32>>;
 
 pub struct Diffs();
 pub struct Impacts();
@@ -52,7 +52,7 @@ pub struct Commit {
     pub parents: Vec<git2::Oid>,
     processing_time: u128,
     memory_used: Bytes,
-    pub ast_root: hyper_ast::store::nodes::DefaultNodeIdentifier,
+    pub ast_root: hyperast::store::nodes::DefaultNodeIdentifier,
     pub tree_oid: git2::Oid,
 }
 
@@ -65,7 +65,7 @@ impl Commit {
     }
 }
 
-trait Accumulator: hyper_ast::tree_gen::Accumulator<Node = (LabelIdentifier, Self::Unlabeled)> {
+trait Accumulator: hyperast::tree_gen::Accumulator<Node = (LabelIdentifier, Self::Unlabeled)> {
     type Unlabeled;
 }
 
@@ -102,7 +102,7 @@ impl From<std::str::Utf8Error> for ParseErr {
 
 #[cfg(feature = "cpp")]
 fn ts_lang_cpp() -> Option<tree_sitter::Language> {
-    Some(hyper_ast_gen_ts_cpp::language())
+    Some(hyperast_gen_ts_cpp::language())
 }
 #[cfg(not(feature = "cpp"))]
 fn ts_lang_cpp() -> Option<tree_sitter::Language> {
@@ -110,7 +110,7 @@ fn ts_lang_cpp() -> Option<tree_sitter::Language> {
 }
 #[cfg(feature = "java")]
 fn ts_lang_java() -> Option<tree_sitter::Language> {
-    Some(hyper_ast_gen_ts_java::language())
+    Some(hyperast_gen_ts_java::language())
 }
 #[cfg(not(feature = "java"))]
 fn ts_lang_java() -> Option<tree_sitter::Language> {
@@ -127,7 +127,7 @@ pub fn resolve_language(language: &str) -> Option<tree_sitter::Language> {
 
 /// Identifying elements and fundamental derived metrics used to accelerate deduplication.
 /// For example, hashing subtrees accelerates the deduplication process,
-/// but it requires to hash children and it can be done by accumulating hashes iteratively per child (see [`hyper_ast::hashed::inner_node_hash`]).
+/// but it requires to hash children and it can be done by accumulating hashes iteratively per child (see [`hyperast::hashed::inner_node_hash`]).
 pub struct BasicDirAcc<Id, L, M> {
     pub name: String,
     pub children: Vec<Id>,
@@ -146,10 +146,10 @@ impl<Id, L, M: Default> BasicDirAcc<Id, L, M> {
     }
 }
 
-impl<Id, L, U: hyper_ast::hashed::NodeHashs>
-    BasicDirAcc<Id, L, hyper_ast::tree_gen::SubTreeMetrics<U>>
+impl<Id, L, U: hyperast::hashed::NodeHashs>
+    BasicDirAcc<Id, L, hyperast::tree_gen::SubTreeMetrics<U>>
 {
-    pub fn push(&mut self, name: L, id: Id, metrics: hyper_ast::tree_gen::SubTreeMetrics<U>) {
+    pub fn push(&mut self, name: L, id: Id, metrics: hyperast::tree_gen::SubTreeMetrics<U>) {
         self.children.push(id);
         self.children_names.push(name);
         self.metrics.acc(metrics);
@@ -170,7 +170,7 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
 impl<Id, L, M> BasicDirAcc<Id, L, M> {
     pub fn persist<K>(
         self,
-        dyn_builder: &mut impl hyper_ast::store::nodes::EntityBuilder,
+        dyn_builder: &mut impl hyperast::store::nodes::EntityBuilder,
         interned_kind: K,
         label_id: L,
     ) -> M
@@ -186,7 +186,7 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
         let children_names = self.children_names;
         assert_eq!(children_names.len(), children.len());
         if !children.is_empty() {
-            use hyper_ast::store::nodes::legion::compo::CS;
+            use hyperast::store::nodes::legion::compo::CS;
             dyn_builder.add(CS(children_names.into_boxed_slice()));
             dyn_builder.add(CS(children.into_boxed_slice()));
         }

@@ -3,12 +3,12 @@
 
 use std::fmt::Debug;
 
-use hyper_ast::{
+use hyperast::{
     position::{StructuralPosition, TreePathMut},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::HyperAST,
 };
-use hyper_ast_gen_ts_tsquery::auto::tsq_ser_meta::Conv;
+use hyperast_gen_ts_tsquery::auto::tsq_ser_meta::Conv;
 use tree_sitter_graph::GenQuery;
 
 use crate::types::TStore;
@@ -16,7 +16,7 @@ use crate::types::TStore;
 pub struct Node<
     'hast,
     HAST = SimpleStores<crate::types::TStore>,
-    P = hyper_ast::position::StructuralPosition,
+    P = hyperast::position::StructuralPosition,
 > {
     pub stores: &'hast HAST,
     pub pos: P,
@@ -39,14 +39,14 @@ impl<'tree, HAST, P: Clone> Clone for Node<'tree, HAST, P> {
 
 impl<'tree, HAST, P> tree_sitter_graph::graph::SyntaxNode for Node<'tree, HAST, P>
 where
-    HAST::T: hyper_ast::types::WithSerialization + hyper_ast::types::WithStats,
+    HAST::T: hyperast::types::WithSerialization + hyperast::types::WithStats,
     HAST: HyperAST<'tree, IdN = NodeIdentifier>,
     P: Clone
         + Debug
         + std::hash::Hash
-        + hyper_ast::position::node_filter_traits::Full
-        + hyper_ast::position::position_accessors::WithFullPostOrderPath<HAST::IdN, Idx = HAST::Idx>
-        + hyper_ast::position::position_accessors::SolvedPosition<HAST::IdN>,
+        + hyperast::position::node_filter_traits::Full
+        + hyperast::position::position_accessors::WithFullPostOrderPath<HAST::IdN, Idx = HAST::Idx>
+        + hyperast::position::position_accessors::SolvedPosition<HAST::IdN>,
     HAST::IdN: Copy,
 {
     fn id(&self) -> usize {
@@ -63,16 +63,16 @@ where
     fn kind(&self) -> &'static str {
         let n = self.pos.node();
         let n = self.stores.resolve_type(&n);
-        use hyper_ast::types::HyperType;
+        use hyperast::types::HyperType;
         n.as_static_str()
     }
 
     fn start_position(&self) -> tree_sitter::Point {
         dbg!(&self.pos);
-        let conv = hyper_ast::position::PositionConverter::new(&self.pos).with_stores(self.stores);
-        let pos: hyper_ast::position::row_col::RowCol<usize> =
-            conv.compute_pos_post_order::<_, hyper_ast::position::row_col::RowCol<usize>, _>();
-        // use hyper_ast::position::computing_offset_bottom_up::extract_position_it;
+        let conv = hyperast::position::PositionConverter::new(&self.pos).with_stores(self.stores);
+        let pos: hyperast::position::row_col::RowCol<usize> =
+            conv.compute_pos_post_order::<_, hyperast::position::row_col::RowCol<usize>, _>();
+        // use hyperast::position::computing_offset_bottom_up::extract_position_it;
         // let p = extract_position_it(self.stores, self.pos.iter());
         tree_sitter::Point {
             row: pos.row() as usize, //p.range().start,
@@ -99,7 +99,7 @@ where
     }
 
     fn text(&self) -> String {
-        hyper_ast::nodes::TextSerializer::new(self.stores, self.pos.node()).to_string()
+        hyperast::nodes::TextSerializer::new(self.stores, self.pos.node()).to_string()
     }
 
     fn named_child_count(&self) -> usize {
@@ -116,15 +116,15 @@ where
 
 impl<'tree, HAST, P> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST, P>
 where
-    HAST::T: hyper_ast::types::WithSerialization + hyper_ast::types::WithStats,
+    HAST::T: hyperast::types::WithSerialization + hyperast::types::WithStats,
     HAST: HyperAST<'tree, IdN = NodeIdentifier>,
     P: Clone
         + Debug
         + TreePathMut<HAST::IdN, HAST::Idx>
         + std::hash::Hash
-        + hyper_ast::position::node_filter_traits::Full
-        + hyper_ast::position::position_accessors::WithFullPostOrderPath<HAST::IdN, Idx = HAST::Idx>
-        + hyper_ast::position::position_accessors::SolvedPosition<HAST::IdN>,
+        + hyperast::position::node_filter_traits::Full
+        + hyperast::position::position_accessors::WithFullPostOrderPath<HAST::IdN, Idx = HAST::Idx>
+        + hyperast::position::position_accessors::SolvedPosition<HAST::IdN>,
 {
     type Cursor = Self;
 
@@ -163,7 +163,7 @@ pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST<'tree>, P> {
     root: P,
     stores: &'tree HAST,
     b: &'cursor (),
-    captures: hyper_ast_gen_ts_tsquery::search::Captured<HAST::IdN, HAST::Idx>,
+    captures: hyperast_gen_ts_tsquery::search::Captured<HAST::IdN, HAST::Idx>,
 }
 
 impl<'cursor, 'tree, HAST, P> tree_sitter_graph::graph::QMatch for MyQMatch<'cursor, 'tree, HAST, P>
@@ -184,10 +184,10 @@ where
             let mut p = self.root.clone();
             dbg!(p.node());
             for i in c.path.iter().rev() {
-                use hyper_ast::types::NodeStore;
+                use hyperast::types::NodeStore;
                 let nn = self.stores.node_store().resolve(p.node().unwrap());
-                use hyper_ast::types::IterableChildren;
-                use hyper_ast::types::WithChildren;
+                use hyperast::types::IterableChildren;
+                use hyperast::types::WithChildren;
                 dbg!(nn.children().unwrap().iter_children().collect::<Vec<_>>());
                 let node = nn.child(i).unwrap();
                 p.goto(node, *i);
@@ -207,18 +207,18 @@ where
 pub struct MyQMatches<'query, 'cursor: 'query, 'tree: 'cursor> {
     q: &'query QueryMatcher<crate::types::Type>,
     cursor: &'cursor mut Vec<u16>,
-    matchs: hyper_ast_gen_ts_tsquery::IterMatched2<
-        hyper_ast_gen_ts_tsquery::search::recursive2::MatchingIter<
+    matchs: hyperast_gen_ts_tsquery::IterMatched2<
+        hyperast_gen_ts_tsquery::search::recursive2::MatchingIter<
             'tree,
             SimpleStores<TStore>,
             crate::types::TIdN<NodeIdentifier>,
-            &'query hyper_ast_gen_ts_tsquery::search::PreparedMatcher<crate::types::Type>,
+            &'query hyperast_gen_ts_tsquery::search::PreparedMatcher<crate::types::Type>,
         >,
         &'tree SimpleStores<TStore>,
         crate::iter::IterAll<'tree, StructuralPosition<NodeIdentifier, u16>, SimpleStores<TStore>>,
         crate::types::TIdN<NodeIdentifier>,
     >,
-    node: Node<'tree, SimpleStores<crate::types::TStore>, hyper_ast::position::StructuralPosition>,
+    node: Node<'tree, SimpleStores<crate::types::TStore>, hyperast::position::StructuralPosition>,
 }
 
 impl<'query, 'cursor: 'query, 'tree: 'cursor> Iterator for MyQMatches<'query, 'cursor, 'tree> {
@@ -246,7 +246,7 @@ impl<'query, 'cursor: 'query, 'tree: 'cursor> Iterator for MyQMatches<'query, 'c
 }
 
 pub struct QueryMatcher<Ty, C = Conv<Ty>>(
-    pub hyper_ast_gen_ts_tsquery::search::PreparedMatcher<Ty, C>,
+    pub hyperast_gen_ts_tsquery::search::PreparedMatcher<Ty, C>,
 );
 
 impl<Ty: Debug> Debug for QueryMatcher<Ty> {
@@ -289,7 +289,7 @@ impl GenQuery for QueryMatcher<crate::types::Type> {
     }
 
     type Node<'tree> =
-        Node<'tree, SimpleStores<crate::types::TStore>, hyper_ast::position::StructuralPosition>;
+        Node<'tree, SimpleStores<crate::types::TStore>, hyperast::position::StructuralPosition>;
 
     type Cursor = Vec<u16>;
 
@@ -299,10 +299,10 @@ impl GenQuery for QueryMatcher<crate::types::Type> {
         node: &Self::Node<'tree>,
     ) -> Self::Matches<'query, 'cursor, 'tree> {
         use crate::iter::IterAll as JavaIter;
-        use hyper_ast::position::TreePath;
+        use hyperast::position::TreePath;
         let matchs = self
             .0
-            .apply_matcher::<SimpleStores<TStore>, JavaIter<hyper_ast::position::StructuralPosition, _>, crate::types::TIdN<_>>(
+            .apply_matcher::<SimpleStores<TStore>, JavaIter<hyperast::position::StructuralPosition, _>, crate::types::TIdN<_>>(
                 node.stores,
                 *node.pos.node().unwrap(),
             );
@@ -316,7 +316,7 @@ impl GenQuery for QueryMatcher<crate::types::Type> {
         }
     }
 
-    type Match<'cursor, 'tree: 'cursor> = self::MyQMatch<'cursor, 'tree, SimpleStores<TStore>, hyper_ast::position::StructuralPosition>
+    type Match<'cursor, 'tree: 'cursor> = self::MyQMatch<'cursor, 'tree, SimpleStores<TStore>, hyperast::position::StructuralPosition>
     where
         Self: 'cursor;
 
@@ -376,12 +376,12 @@ impl tree_sitter_graph::ExtendedableQuery
         self.acc += source;
         self.acc += "\n";
         dbg!(source);
-        let matcher = hyper_ast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(source);
+        let matcher = hyperast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(source);
         Ok(QueryMatcher(matcher))
     }
 
     fn make_main_query(&self, _language: &Self::Lang) -> Self::Query {
-        let matcher = hyper_ast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(&self.acc);
+        let matcher = hyperast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(&self.acc);
         QueryMatcher(matcher)
     }
 }

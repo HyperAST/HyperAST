@@ -7,14 +7,14 @@ use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatch
 
 use tree_sitter::CaptureQuantifier as Quant;
 
-use hyper_ast::types::HyperType;
-use hyper_ast::types::TypedHyperAST;
-use hyper_ast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
+use hyperast::types::HyperType;
+use hyperast::types::TypedHyperAST;
+use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
 
 pub struct MatchingIter<
     'store,
     HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
     PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
 > {
     slf: PM,
@@ -28,7 +28,7 @@ pub struct MatchingIter<
 impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
         PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > MatchingIter<'store, HAST, TIdN, PM>
 {
@@ -46,7 +46,7 @@ impl<
 impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
         PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > Iterator for MatchingIter<'store, HAST, TIdN, PM>
 where
@@ -71,7 +71,7 @@ where
 impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
         PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > MatchingIter<'store, HAST, TIdN, PM>
 where
@@ -460,7 +460,7 @@ where
         mut matched: Quant,
         mut captures: Vec<CaptureRes<HAST::IdN, HAST::Idx>>,
         mut cs: ChildIt<'store, HAST, TIdN>,
-        // cs: &(impl hyper_ast::types::Children<HAST::Idx, HAST::IdN> + ?Sized),
+        // cs: &(impl hyperast::types::Children<HAST::Idx, HAST::IdN> + ?Sized),
         mut immediate: bool,
         // mut i: HAST::Idx,
         p_t: TIdN::Ty,
@@ -484,7 +484,7 @@ where
                         cs.adv();
                         continue;
                     }
-                    // if t.as_shared() == hyper_ast::types::Shared::Comment {
+                    // if t.as_shared() == hyperast::types::Shared::Comment {
                     //     i += num::one();
                     //     continue;
                     // }
@@ -631,7 +631,7 @@ where
             let aaa = format!("{:?}", curr_p);
             if !curr_p.unwrap_captures().is_anonymous() {
                 if !curr_p.unwrap_captures().is_any_node()
-                    && t.as_shared() == hyper_ast::types::Shared::Comment
+                    && t.as_shared() == hyperast::types::Shared::Comment
                 {
                     cs.adv();
                     continue;
@@ -829,7 +829,7 @@ struct ChildIt<'store, HAST, IdN> {
     stores: &'store HAST,
     id: IdN,
     waiting: VecDeque<IdN>,
-    role: Option<hyper_ast::types::Role>,
+    role: Option<hyperast::types::Role>,
 }
 impl<'store, HAST, IdN: Clone> Clone for ChildIt<'store, HAST, IdN> {
     fn clone(&self) -> Self {
@@ -844,7 +844,7 @@ impl<'store, HAST, IdN: Clone> Clone for ChildIt<'store, HAST, IdN> {
 impl<'store, TIdN, HAST> ChildIt<'store, HAST, TIdN>
 where
     HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
 {
     fn new(stores: &'store HAST, id: TIdN) -> Self {
         Self {
@@ -873,7 +873,7 @@ where
     fn clone_adv(&self) -> Self {
         todo!()
     }
-    fn role(&self) -> Option<hyper_ast::types::Role> {
+    fn role(&self) -> Option<hyperast::types::Role> {
         todo!()
     }
     fn short_path(&self) -> impl Iterator<Item = HAST::Idx> {

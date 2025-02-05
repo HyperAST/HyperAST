@@ -252,7 +252,7 @@ impl<'a> TryInto<String> for ObjectName {
 
 pub(crate) mod caches {
 
-    use hyper_ast::store::defaults::NodeIdentifier;
+    use hyperast::store::defaults::NodeIdentifier;
 
     use crate::preprocessed::IsSkippedAna;
 
@@ -263,14 +263,14 @@ pub(crate) mod caches {
 
     #[derive(Default)]
     pub struct Java {
-        pub(crate) md_cache: hyper_ast_gen_ts_java::legion_with_refs::MDCache,
-        pub object_map: NamedMap<(hyper_ast_gen_ts_java::legion_with_refs::Local, IsSkippedAna)>,
+        pub(crate) md_cache: hyperast_gen_ts_java::legion_with_refs::MDCache,
+        pub object_map: NamedMap<(hyperast_gen_ts_java::legion_with_refs::Local, IsSkippedAna)>,
     }
 
     impl super::ObjectMapper for Java {
         type K = (git2::Oid, ObjectName);
 
-        type V = (hyper_ast_gen_ts_java::legion_with_refs::Local, IsSkippedAna);
+        type V = (hyperast_gen_ts_java::legion_with_refs::Local, IsSkippedAna);
 
         fn get(&self, key: &Self::K) -> Option<&Self::V> {
             self.object_map.get(key)
@@ -283,14 +283,14 @@ pub(crate) mod caches {
 
     #[derive(Default)]
     pub struct Cpp {
-        pub(crate) md_cache: hyper_ast_gen_ts_cpp::legion::MDCache,
-        pub object_map: NamedMap<(hyper_ast_gen_ts_cpp::legion::Local, IsSkippedAna)>,
+        pub(crate) md_cache: hyperast_gen_ts_cpp::legion::MDCache,
+        pub object_map: NamedMap<(hyperast_gen_ts_cpp::legion::Local, IsSkippedAna)>,
     }
 
     impl super::ObjectMapper for Cpp {
         type K = (git2::Oid, ObjectName);
 
-        type V = (hyper_ast_gen_ts_cpp::legion::Local, IsSkippedAna);
+        type V = (hyperast_gen_ts_cpp::legion::Local, IsSkippedAna);
 
         fn get(&self, key: &Self::K) -> Option<&Self::V> {
             self.object_map.get(key)
@@ -495,8 +495,8 @@ impl crate::preprocessed::RepositoryProcessor {
     pub fn intern_object_name<T: std::borrow::Borrow<ObjectName>>(
         &mut self,
         name: T,
-    ) -> hyper_ast::store::defaults::LabelIdentifier {
-        use hyper_ast::types::LabelStore;
+    ) -> hyperast::store::defaults::LabelIdentifier {
+        use hyperast::types::LabelStore;
         let s: &str = name.borrow().try_into().unwrap();
         self.main_stores.label_store.get_or_insert(s)
     }

@@ -1,4 +1,4 @@
-use hyper_ast::types::Stored;
+use hyperast::types::Stored;
 
 pub struct Arena<T>(stack_graphs::arena::Arena<T>);
 

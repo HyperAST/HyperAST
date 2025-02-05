@@ -1,10 +1,10 @@
 use super::SearchResult;
 
-use hyper_ast::store::defaults::NodeIdentifier;
-use hyper_ast_cvs_git::java_processor::sub_queries;
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast_vcs_git::java_processor::sub_queries;
 
 pub(crate) fn matches_default<'a>(
-    with_spaces_stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     tr: NodeIdentifier,
     queries: impl Iterator<Item = &'a str>,
 ) -> Result<Vec<usize>, String> {
@@ -15,7 +15,7 @@ pub(crate) fn matches_default<'a>(
             format!("{}\n\n", x)
         })
         .collect::<String>();
-    let qqq = hyper_ast_tsquery::Query::new(&collect, hyper_ast_gen_ts_java::language())
+    let qqq = hyperast_tsquery::Query::new(&collect, hyperast_gen_ts_java::language())
         .map_err(|e| e.to_string())?;
     if qqq.enabled_pattern_count() != len {
         dbg!(qqq.enabled_pattern_count(), len);
@@ -52,9 +52,9 @@ pub(crate) fn matches_default<'a>(
         dbg!(count);
         return Err("different number of patterns".to_string());
     }
-    let qcursor = qqq.matches(hyper_ast_tsquery::hyperast_opt::TreeCursor::new(
+    let qcursor = qqq.matches(hyperast_tsquery::hyperast_opt::TreeCursor::new(
         with_spaces_stores,
-        hyper_ast::position::structural_pos::CursorWithPersistance::new(tr),
+        hyperast::position::structural_pos::CursorWithPersistance::new(tr),
     ));
     let mut res = vec![0; len];
     for m in qcursor {
@@ -66,19 +66,19 @@ pub(crate) fn matches_default<'a>(
 }
 
 pub(crate) fn matches_with_precomputeds<'a>(
-    with_spaces_stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     tr: NodeIdentifier,
     queries: impl Iterator<Item = &'a str>,
 ) -> Result<Vec<usize>, String> {
     let mut len = 0;
-    let (_, qqq) = hyper_ast_tsquery::Query::with_precomputed(
+    let (_, qqq) = hyperast_tsquery::Query::with_precomputed(
         &queries
             .map(|x| {
                 len += 1;
                 format!("{}\n", x)
             })
             .collect::<String>(),
-        hyper_ast_gen_ts_java::language(),
+        hyperast_gen_ts_java::language(),
         sub_queries(),
     )
     .map_err(|e| e.to_string())?;
@@ -86,9 +86,9 @@ pub(crate) fn matches_with_precomputeds<'a>(
         dbg!(qqq.pattern_count(), len);
         return Err("different number of patterns".to_string());
     }
-    let qcursor = qqq.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+    let qcursor = qqq.matches(hyperast_tsquery::hyperast_cursor::TreeCursor::new(
         with_spaces_stores,
-        hyper_ast::position::StructuralPosition::new(tr),
+        hyperast::position::StructuralPosition::new(tr),
     ));
     let mut res = vec![0; len];
     for m in qcursor {
@@ -100,13 +100,13 @@ pub(crate) fn matches_with_precomputeds<'a>(
 }
 
 pub(crate) fn matches_with_precomputed(
-    with_spaces_stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     tr: NodeIdentifier,
     result: &mut SearchResult,
 ) -> Result<(), String> {
-    let (_, qqq) = hyper_ast_tsquery::Query::with_precomputed(
+    let (_, qqq) = hyperast_tsquery::Query::with_precomputed(
         &result.query,
-        hyper_ast_gen_ts_java::language(),
+        hyperast_gen_ts_java::language(),
         sub_queries(),
     )
     .map_err(|e| e.to_string())?;
@@ -114,9 +114,9 @@ pub(crate) fn matches_with_precomputed(
         dbg!(qqq.pattern_count());
         return Err("different number of patterns".to_string());
     }
-    let qcursor = qqq.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+    let qcursor = qqq.matches(hyperast_tsquery::hyperast_cursor::TreeCursor::new(
         with_spaces_stores,
-        hyper_ast::position::StructuralPosition::new(tr),
+        hyperast::position::StructuralPosition::new(tr),
     ));
     for m in qcursor {
         let i = m.pattern_index;

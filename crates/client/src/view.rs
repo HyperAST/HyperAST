@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use axum::Json;
-use hyper_ast::{
+use hyperast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{
@@ -85,7 +85,7 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
         path,
     } = path;
     dbg!(&path);
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .write()
@@ -145,7 +145,7 @@ pub fn view_with_node_id(state: SharedState, id: u64) -> Result<Json<ViewRes>, S
 fn resolve_path(
     root: NodeIdentifier,
     path: Option<String>,
-    node_store: &hyper_ast::store::nodes::legion::NodeStore,
+    node_store: &hyperast::store::nodes::legion::NodeStore,
 ) -> NodeIdentifier {
     let mut curr = root;
     for i in path.unwrap_or_default().split("/") {
@@ -163,8 +163,8 @@ fn resolve_path(
 fn make_view<'a, HAST>(
     mut queue: Vec<(HAST::IdN, usize)>,
     stores: &'a HAST,
-    // node_store: &hyper_ast::store::nodes::legion::NodeStore,
-    // label_store: &hyper_ast::store::labels::LabelStore,
+    // node_store: &hyperast::store::nodes::legion::NodeStore,
+    // label_store: &hyperast::store::labels::LabelStore,
 ) -> View
 where
     HAST::IdN: Hash,
@@ -209,7 +209,7 @@ where
         let mut id = EntityHasher::default();
         curr.hash(&mut id);
         let nid = id.finish();
-        let n = stores.node_store().resolve(&curr); //hyper_ast::types::NodeStore::resolve(stores, &curr);
+        let n = stores.node_store().resolve(&curr); //hyperast::types::NodeStore::resolve(stores, &curr);
         let k = stores.resolve_type(&curr);
         if let Some(l) = n.try_get_label() {
             let l = label_map.entry(*l).or_insert_with(|| {
@@ -268,7 +268,7 @@ where
     dbg!(&only_typed.ids.len());
     let label_list = label_list
         .into_iter()
-        .map(|l| hyper_ast::types::LabelStore::resolve(stores, &l).to_string())
+        .map(|l| hyperast::types::LabelStore::resolve(stores, &l).to_string())
         .collect();
     let view = View {
         label_list,

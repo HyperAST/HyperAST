@@ -7,11 +7,11 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
-use hyper_ast::{
+use hyperast::{
     store::nodes::legion::eq_node,
     types::{ETypeStore as _, LabelStore},
 };
-use hyper_ast_gen_ts_cpp::{
+use hyperast_gen_ts_cpp::{
     legion as cpp_gen,
     types::{CppEnabledTypeStore as _, Type},
 };
@@ -25,7 +25,7 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
         .collect()
 }
 
-pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>;
+pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_cpp::types::TStore>;
 
 pub struct CppProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
@@ -159,7 +159,7 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
             let w = &mut self.stack.last_mut().unwrap().2;
             let name = self.prepro.intern_object_name(&name);
             assert!(!w.primary.children_names.contains(&name));
-            hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
+            hyperast::tree_gen::Accumulator::push(w, (name, full_node));
             // w.push(name, full_node, skiped_ana);
         } else {
             log::debug!("tree {:?}", name.try_str());
@@ -218,7 +218,7 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
 }
 
 #[derive(Clone)]
-pub(crate) struct Query(pub(crate) hyper_ast_tsquery::Query, Arc<str>);
+pub(crate) struct Query(pub(crate) hyperast_tsquery::Query, Arc<str>);
 
 impl PartialEq for Query {
     fn eq(&self, other: &Self) -> bool {
@@ -231,9 +231,9 @@ impl Query {
     fn new<'a>(precomputeds: impl Iterator<Item = &'a str>) -> Self {
         static DQ: &str = "(_)";
         let precomputeds = precomputeds.collect::<Vec<_>>();
-        let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+        let (precomp, _) = hyperast_tsquery::Query::with_precomputed(
             DQ,
-            hyper_ast_gen_ts_cpp::language(),
+            hyperast_gen_ts_cpp::language(),
             precomputeds.as_slice(),
         )
         .unwrap();
@@ -316,8 +316,8 @@ impl RepositoryProcessor {
                 let md_cache = &mut cpp_proc.cache.md_cache;
                 let stores = self
                     .main_stores
-                    .mut_with_ts::<hyper_ast_gen_ts_cpp::types::TStore>();
-                let more = hyper_ast_tsquery::PreparedQuerying::<_, _, cpp_gen::Acc>::from(
+                    .mut_with_ts::<hyperast_gen_ts_cpp::types::TStore>();
+                let more = hyperast_tsquery::PreparedQuerying::<_, _, cpp_gen::Acc>::from(
                     &cpp_proc.query.0,
                 );
                 let mut cpp_tree_gen = cpp_gen::CppTreeGen {
@@ -388,7 +388,7 @@ impl RepositoryProcessor {
         oid: Oid,
         name: &ObjectName,
         handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
-    ) -> <CppAcc as hyper_ast::tree_gen::Accumulator>::Node {
+    ) -> <CppAcc as hyperast::tree_gen::Accumulator>::Node {
         let full_node = self.handle_cpp_directory(repository, dir_path, name, oid, handle);
         let name = self.intern_object_name(name);
         (name, full_node)
@@ -396,11 +396,11 @@ impl RepositoryProcessor {
 }
 
 fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
-    use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
+    use hyperast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     let kind = Type::Directory;
-    let interned_kind = hyper_ast_gen_ts_cpp::types::TStore::intern(kind);
+    let interned_kind = hyperast_gen_ts_cpp::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -427,7 +427,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
         };
     }
 
-    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
 
     let ana = None;
 
@@ -439,7 +439,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
     hashs.persist(&mut dyn_builder);
 
     let vacant = insertion.vacant();
-    let node_id = hyper_ast::store::nodes::legion::NodeStore::insert_built_after_prepare(
+    let node_id = hyperast::store::nodes::legion::NodeStore::insert_built_after_prepare(
         vacant,
         dyn_builder.build(),
     );

@@ -1,10 +1,10 @@
 use super::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
-use hyper_ast::position::TreePath;
-use hyper_ast::types::{
+use hyperast::position::TreePath;
+use hyperast::types::{
     HyperASTShared, HyperType, LabelStore, Labeled, NodeStore, RoleStore, Tree, WithPrecompQueries,
     WithRoles,
 };
-use hyper_ast::{
+use hyperast::{
     position::TreePathMut,
     types::{HyperAST, TypeStore},
 };
@@ -13,7 +13,7 @@ pub type TreeCursor<'hast, HAST> = Node<'hast, HAST>;
 pub struct Node<
     'hast,
     HAST: HyperASTShared,
-    P = hyper_ast::position::StructuralPosition<
+    P = hyperast::position::StructuralPosition<
         <HAST as HyperASTShared>::IdN,
         <HAST as HyperASTShared>::Idx,
     >,
@@ -31,7 +31,7 @@ impl<'hast, HAST: HyperAST<'hast>> PartialEq for Node<'hast, HAST> {
 impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST> {
     pub fn new(
         stores: &'hast HAST,
-        pos: hyper_ast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
+        pos: hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
     ) -> Self {
         Self { stores, pos }
     }
@@ -96,13 +96,13 @@ where
         Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let Some(p) = self.pos.parent() else {
             return TreeCursorStep::TreeCursorStepNone;
         };
         let n = self.stores.node_store().resolve(p);
-        use hyper_ast::types::Children;
-        use hyper_ast::types::WithChildren;
+        use hyperast::types::Children;
+        use hyperast::types::WithChildren;
         let Some(node) = n
             .children()
             .and_then(|x| x.get(*self.pos.offset().unwrap()))
@@ -126,10 +126,10 @@ where
     }
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep {
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.node().unwrap());
-        use hyper_ast::types::Children;
-        use hyper_ast::types::WithChildren;
+        use hyperast::types::Children;
+        use hyperast::types::WithChildren;
         let Some(node) = n.children().and_then(|x| x.get(num::zero())) else {
             return TreeCursorStep::TreeCursorStepNone;
         };
@@ -241,7 +241,7 @@ where
         if needed == 0 {
             return false;
         }
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.node().unwrap());
         n.wont_match_given_precomputed_queries(needed)
     }
@@ -255,7 +255,7 @@ where
     HAST::T: WithPrecompQueries,
 {
     fn role(&self) -> Option<<HAST::TS as RoleStore>::Role> {
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.parent().unwrap());
         n.role_at::<<HAST::TS as RoleStore>::Role>(self.pos.o().unwrap())
     }
@@ -284,7 +284,7 @@ where
         Option<<<HAST as HyperAST<'hast>>::TS as RoleStore>::Role>,
         <<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF,
     ) {
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let mut p = self.clone();
         let lang;
         let role = loop {
@@ -323,7 +323,7 @@ where
         let n = self.pos.node().unwrap();
         let t = self.stores.resolve_type(n);
         let n = self.stores.node_store().resolve(n);
-        use hyper_ast::types::LangRef;
+        use hyperast::types::LangRef;
         let id = self.stores.resolve_lang(&n).ts_symbol(t);
         id.into()
     }
@@ -379,10 +379,10 @@ where
     type TP<'a> = ();
     fn text(&self, _tp: ()) -> std::borrow::Cow<str> {
         let id = self.pos.node().unwrap();
-        use hyper_ast::types::NodeStore;
+        use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(id);
         if n.has_children() {
-            let r = hyper_ast::nodes::TextSerializer::new(self.stores, *id).to_string();
+            let r = hyperast::nodes::TextSerializer::new(self.stores, *id).to_string();
             return r.into();
         }
         if let Some(l) = n.try_get_label() {

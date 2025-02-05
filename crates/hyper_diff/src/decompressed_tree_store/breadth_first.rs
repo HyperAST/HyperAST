@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use num_traits::{cast, zero, PrimInt};
 
-use hyper_ast::types::{IterableChildren, NodeId};
-use hyper_ast::types::{NodeStore, Stored, WithChildren};
+use hyperast::types::{IterableChildren, NodeId};
+use hyperast::types::{NodeStore, Stored, WithChildren};
 
 use super::{DecompressedTreeStore, Iter, ShallowDecompressedTreeStore};
 

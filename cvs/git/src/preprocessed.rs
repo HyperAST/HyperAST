@@ -7,12 +7,12 @@ use std::{
 };
 
 use git2::{Oid, Repository};
-use hyper_ast::{
+use hyperast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
     types::{AnyType, IterableChildren, LabelStore as _, WithChildren},
     utils::memusage,
 };
-use hyper_ast_gen_ts_java::legion_with_refs::PartialAnalysis;
+use hyperast_gen_ts_java::legion_with_refs::PartialAnalysis;
 use log::info;
 
 use crate::{
@@ -24,7 +24,7 @@ use crate::{
     processing::{file_sys, ConfiguredRepo2},
     Commit, DefaultMetrics, Processor, SimpleStores,
 };
-// use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
+// use hyperast_gen_ts_cpp::legion as cpp_tree_gen;
 
 /// Preprocess a git repository
 /// using the hyperAST and caching git object transformations
@@ -75,8 +75,8 @@ impl RepositoryProcessor {
     pub fn get_or_insert_label(
         &mut self,
         s: &str,
-    ) -> hyper_ast::store::labels::DefaultLabelIdentifier {
-        use hyper_ast::types::LabelStore;
+    ) -> hyperast::store::labels::DefaultLabelIdentifier {
+        use hyperast::types::LabelStore;
         self.main_stores.label_store.get_or_insert(s)
     }
 
@@ -331,7 +331,7 @@ impl PreProcessedRepository {
                 if let Ok(full_node) = self.processor.handle_java_file(&b"".into(), text)
                 // handle_java_file(&mut self.processor.java_generator(text), b"", text)
                 {
-                    let out = hyper_ast::nodes::TextSerializer::new(
+                    let out = hyperast::nodes::TextSerializer::new(
                         &self.processor.main_stores,
                         full_node.local.compressed_node,
                     )
@@ -607,7 +607,7 @@ pub struct CommitBuilder {
     commit_oid: git2::Oid,
     tree_oid: git2::Oid,
     parents: Vec<git2::Oid>,
-    memory_used: hyper_ast_gen_ts_java::utils::MemoryUsage,
+    memory_used: hyperast_gen_ts_java::utils::MemoryUsage,
     time: Instant,
 }
 
@@ -845,7 +845,7 @@ pub fn child_by_type(
         .enumerate()
         .find(|(_, x)| {
             let n = stores.node_store.resolve(**x);
-            use hyper_ast::types::HyperAST;
+            use hyperast::types::HyperAST;
             stores.resolve_type(x).eq(t)
         })
         .map(|(i, x)| (*x, i as u16));
@@ -889,7 +889,7 @@ mod experiments {
     use crate::Accumulator;
 
     use super::*;
-    use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
+    use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
 
     pub struct PreProcessedRepository2 {
         name: String,
@@ -943,7 +943,7 @@ mod experiments {
             object_map: BTreeMap<
                 Id,
                 (
-                    hyper_ast::store::nodes::DefaultNodeIdentifier,
+                    hyperast::store::nodes::DefaultNodeIdentifier,
                     crate::maven::MD,
                 ),
             >,

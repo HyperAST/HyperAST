@@ -1,6 +1,6 @@
 use axum::Json;
-// use hyper_ast::types::LabelStore;
-use hyper_ast_cvs_git::git::{fetch_github_repository, retrieve_commit};
+// use hyperast::types::LabelStore;
+use hyperast_vcs_git::git::{fetch_github_repository, retrieve_commit};
 use serde::{Deserialize, Serialize};
 
 use crate::SharedState;
@@ -150,7 +150,7 @@ pub fn add_remote(_state: SharedState, path: ParamRemote) -> Result<(), String> 
     match r {
         Ok(x) => {
             log::error!("{:?}", &head);
-            hyper_ast_cvs_git::git::fetch_fork(x, &head).unwrap();
+            hyperast_vcs_git::git::fetch_fork(x, &head).unwrap();
             Ok(())
         }
         Err(e) => {

@@ -6,8 +6,8 @@ use std::{
 use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrder};
-use hyper_ast::types::TypeStore;
-use hyper_ast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, WithSerialization};
+use hyperast::types::TypeStore;
+use hyperast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, WithSerialization};
 
 use super::FullyDecompressedTreeStore;
 

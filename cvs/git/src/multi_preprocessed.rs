@@ -1,7 +1,7 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 use git2::Repository;
-use hyper_ast::store::nodes::DefaultNodeIdentifier as NodeIdentifier;
+use hyperast::store::nodes::DefaultNodeIdentifier as NodeIdentifier;
 
 use crate::{
     git::{all_commits_between, Repo},
@@ -257,7 +257,7 @@ impl PreProcessedRepositories {
         &self,
         handle: ParametrizedCommitProcessorHandle,
         lang: &str,
-    ) -> Option<hyper_ast_tsquery::ZeroSepArrayStr> {
+    ) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         let proc = self
             .processor
             .processing_systems

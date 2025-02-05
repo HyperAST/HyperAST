@@ -13,8 +13,8 @@ mod stats;
 use crate::SharedState;
 use average::Merge;
 use axum::Json;
-use hyper_ast::types::HyperAST;
-use hyper_ast::{
+use hyperast::types::HyperAST;
+use hyperast::{
     store::defaults::NodeIdentifier,
     types::{HyperType, LabelStore, Labeled, WithChildren, WithStats},
 };
@@ -138,7 +138,7 @@ pub fn simple_depth(
     let accumulate_script = engine.compile(script.accumulate.clone()).map_err(|x| {
         ScriptingError::AtCompilation(format!("Acc: {}, {}", x, script.accumulate.clone()))
     })?;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .write()
@@ -150,7 +150,7 @@ pub fn simple_depth(
             let configs = &mut state.repositories.write().unwrap();
             configs.register_config(
                 repo_spec.clone(),
-                hyper_ast_cvs_git::processing::RepoConfig::JavaMaven,
+                hyperast_vcs_git::processing::RepoConfig::JavaMaven,
             );
             log::error!("missing config for {}", repo_spec);
             configs.get_config(repo_spec.clone()).unwrap()
@@ -206,7 +206,7 @@ fn simple_prepare(
         rhai::AST,
         rhai::AST,
         rhai::AST,
-        hyper_ast_cvs_git::processing::ConfiguredRepo2,
+        hyperast_vcs_git::processing::ConfiguredRepo2,
     ),
     ScriptingError,
 > {
@@ -223,7 +223,7 @@ fn simple_prepare(
     let accumulate_script = engine.compile(script.accumulate.clone()).map_err(|x| {
         ScriptingError::AtCompilation(format!("Acc: {}, {}", x, script.accumulate.clone()))
     })?;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
         .write()
@@ -244,8 +244,8 @@ fn simple_prepare(
 
 fn simple_aux(
     state: rhai::Shared<crate::AppState>,
-    repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
-    commit_oid: &hyper_ast_cvs_git::git::Oid,
+    repo: &hyperast_vcs_git::processing::ConfiguredRepo2,
+    commit_oid: &hyperast_vcs_git::git::Oid,
     engine: &Engine,
     init_script: &rhai::AST,
     filter_script: &rhai::AST,
@@ -332,7 +332,7 @@ fn simple_aux(
                 let stores = &stores!(s);
                 let t = stores.resolve_type(&current);
                 let s = t.as_shared();
-                s == hyper_ast::types::Shared::TypeDeclaration
+                s == hyperast::types::Shared::TypeDeclaration
             });
             let s = state.clone();
             filter_engine.register_fn("is_file", move || {
@@ -385,7 +385,7 @@ fn simple_aux(
                 let node_store = &stores.node_store;
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
-                use hyper_ast_cvs_git::maven::SemFlags;
+                use hyperast_vcs_git::maven::SemFlags;
                 n.get_component::<EnumSet<SemFlags>>()
                     .map_or(false, |x| x.contains(SemFlags::IsMavenModule))
             });
@@ -395,7 +395,7 @@ fn simple_aux(
                 let node_store = &stores.node_store;
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
-                use hyper_ast_cvs_git::maven::SemFlags;
+                use hyperast_vcs_git::maven::SemFlags;
                 n.get_component::<EnumSet<SemFlags>>()
                     .map_or(false, |x| x.contains(SemFlags::HoldMavenSubModule))
             });
@@ -405,7 +405,7 @@ fn simple_aux(
                 let node_store = &stores.node_store;
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
-                use hyper_ast_cvs_git::maven::SemFlags;
+                use hyperast_vcs_git::maven::SemFlags;
                 n.get_component::<EnumSet<SemFlags>>().map_or(false, |x| {
                     x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
                 })
@@ -458,7 +458,7 @@ fn simple_aux(
             let stores = &stores!(s);
             let t = stores.resolve_type(&current);
             let s = t.as_shared();
-            s == hyper_ast::types::Shared::TypeDeclaration
+            s == hyperast::types::Shared::TypeDeclaration
         });
         let s = state.clone();
         acc_engine.register_fn("is_directory", move || {
@@ -507,7 +507,7 @@ fn simple_aux(
             let node_store = &stores.node_store;
             let n = node_store.resolve(current);
             use enumset::EnumSet;
-            use hyper_ast_cvs_git::maven::SemFlags;
+            use hyperast_vcs_git::maven::SemFlags;
             n.get_component::<EnumSet<SemFlags>>()
                 .map_or(false, |x| x.contains(SemFlags::IsMavenModule))
         });
@@ -517,7 +517,7 @@ fn simple_aux(
             let node_store = &stores.node_store;
             let n = node_store.resolve(current);
             use enumset::EnumSet;
-            use hyper_ast_cvs_git::maven::SemFlags;
+            use hyperast_vcs_git::maven::SemFlags;
             n.get_component::<EnumSet<SemFlags>>()
                 .map_or(false, |x| x.contains(SemFlags::HoldMavenSubModule))
         });
@@ -527,7 +527,7 @@ fn simple_aux(
             let node_store = &stores.node_store;
             let n = node_store.resolve(current);
             use enumset::EnumSet;
-            use hyper_ast_cvs_git::maven::SemFlags;
+            use hyperast_vcs_git::maven::SemFlags;
             n.get_component::<EnumSet<SemFlags>>().map_or(false, |x| {
                 x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
             })
@@ -550,9 +550,9 @@ fn simple_aux(
                     // let stores = &stores!(s);
                     // let it = s.0;
                     // let position_converter =
-                    //     &hyper_ast::position::PositionConverter::new(&it).with_stores(stores);
+                    //     &hyperast::position::PositionConverter::new(&it).with_stores(stores);
                     // let p = position_converter
-                    //     .compute_pos_post_order::<_, hyper_ast::position::Position, _>();
+                    //     .compute_pos_post_order::<_, hyperast::position::Position, _>();
                     // Ok(refs::Pos::from(p))
                     todo!("need to choose a convenient path, try to exploit param overloading")
                 },

@@ -1,4 +1,4 @@
-// use hyper_ast::types::{NodeStore, Tree, WithHashs};
+// use hyperast::types::{NodeStore, Tree, WithHashs};
 
 // pub trait Matcher<'a, Dsrc, Ddst, T: 'a + Tree + WithHashs, S>
 // where

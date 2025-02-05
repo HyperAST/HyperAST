@@ -1,16 +1,16 @@
 [package]
-name = "hyper_ast_cvs_git"
+name = "hyperast_vcs_git"
 version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
 tree-sitter = { workspace = true }
-hyper_ast_gen_ts_cpp = { workspace = true, optional = true }
-hyper_ast_gen_ts_java = { workspace = true, optional = true }
-hyper_ast_gen_ts_xml = { workspace = true, optional = true }
-hyper_ast = { workspace = true }
-hyper_ast_tsquery =  { workspace = true }
+hyperast_gen_ts_cpp = { workspace = true, optional = true }
+hyperast_gen_ts_java = { workspace = true, optional = true }
+hyperast_gen_ts_xml = { workspace = true, optional = true }
+hyperast = { workspace = true }
+hyperast_tsquery =  { workspace = true }
 log = { version = "0.4.6" }
 num = "0.4.0"
 tuples = "=1.4.1"
@@ -24,8 +24,8 @@ tree-sitter-graph = { workspace = true, optional = true }
 [dev-dependencies]
 env_logger = "0.11.3"
 tree-sitter-graph = { workspace = true }
-hyper_ast_tsquery = { workspace = true, features = ["tsg"]}
-hyper_ast_gen_ts_java = { workspace = true }#, features = ["subtree-stats"]
+hyperast_tsquery = { workspace = true, features = ["tsg"]}
+hyperast_gen_ts_java = { workspace = true }#, features = ["subtree-stats"]
 
 [build-dependencies]
 
@@ -33,16 +33,16 @@ hyper_ast_gen_ts_java = { workspace = true }#, features = ["subtree-stats"]
 default = ["maven_java", "make_cpp", "npm_ts"]
 tsg = ["dep:tree-sitter-graph"]
 maven_java = ["maven", "java"]
-maven = ["dep:hyper_ast_gen_ts_xml"]
+maven = ["dep:hyperast_gen_ts_xml"]
 # gradle = []
-java = ["dep:hyper_ast_gen_ts_java"]
+java = ["dep:hyperast_gen_ts_java"]
 # kotlin = []
 # scala = []
 make_cpp = ["make", "cpp"]
 make = []
 # cmake = []
 # ninja = []
-cpp = ["dep:hyper_ast_gen_ts_cpp"]
+cpp = ["dep:hyperast_gen_ts_cpp"]
 # c = []
 npm_ts = ["npm", "ts"]
 npm = []
@@ -54,6 +54,6 @@ ts = []
 # rust = []
 impact = []
 subtree-stats = [
-    "hyper_ast/subtree-stats",
-    "hyper_ast_gen_ts_java/subtree-stats"
+    "hyperast/subtree-stats",
+    "hyperast_gen_ts_java/subtree-stats"
 ]

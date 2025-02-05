@@ -1,16 +1,16 @@
 use core::panic;
 
-use hyper_ast::types::{AnyType, HyperType, LangRef, LangWrapper, TypeStore};
+use hyperast::types::{AnyType, HyperType, LangRef, LangWrapper, TypeStore};
 
 #[derive(Clone)]
 pub struct TStore;
 
 #[cfg(feature = "cpp")]
-impl hyper_ast::store::TyDown<hyper_ast_gen_ts_cpp::types::TStore> for TStore {}
+impl hyperast::store::TyDown<hyperast_gen_ts_cpp::types::TStore> for TStore {}
 #[cfg(feature = "java")]
-impl hyper_ast::store::TyDown<hyper_ast_gen_ts_java::types::TStore> for TStore {}
+impl hyperast::store::TyDown<hyperast_gen_ts_java::types::TStore> for TStore {}
 #[cfg(feature = "maven")]
-impl hyper_ast::store::TyDown<hyper_ast_gen_ts_xml::types::TStore> for TStore {}
+impl hyperast::store::TyDown<hyperast_gen_ts_xml::types::TStore> for TStore {}
 
 impl Default for TStore {
     fn default() -> Self {
@@ -33,33 +33,33 @@ macro_rules! on_multi {
     };
 }
 
-impl<'a> hyper_ast::types::RoleStore for TStore {
+impl<'a> hyperast::types::RoleStore for TStore {
     type IdF = u16;
 
-    type Role = hyper_ast::types::Role;
+    type Role = hyperast::types::Role;
 
     fn resolve_field(lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
         match lang.name() {
             #[cfg(feature = "java")]
-            "hyper_ast_gen_ts_java::types::Lang" => {
-                let t = hyper_ast_gen_ts_java::types::TType::new(
-                    hyper_ast_gen_ts_java::types::Type::Spaces,
+            "hyperast_gen_ts_java::types::Lang" => {
+                let t = hyperast_gen_ts_java::types::TType::new(
+                    hyperast_gen_ts_java::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_java::types::TStore::resolve_field(t.get_lang(), field_id)
+                hyperast_gen_ts_java::types::TStore::resolve_field(t.get_lang(), field_id)
             }
             #[cfg(feature = "cpp")]
-            "hyper_ast_gen_ts_cpp::types::Lang" => {
-                let t = hyper_ast_gen_ts_cpp::types::TType::new(
-                    hyper_ast_gen_ts_cpp::types::Type::Spaces,
+            "hyperast_gen_ts_cpp::types::Lang" => {
+                let t = hyperast_gen_ts_cpp::types::TType::new(
+                    hyperast_gen_ts_cpp::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_cpp::types::TStore::resolve_field(t.get_lang(), field_id)
+                hyperast_gen_ts_cpp::types::TStore::resolve_field(t.get_lang(), field_id)
             }
             #[cfg(feature = "maven")]
-            "hyper_ast_gen_ts_xml::types::Lang" => {
-                let t = hyper_ast_gen_ts_xml::types::TType::new(
-                    hyper_ast_gen_ts_xml::types::Type::Spaces,
+            "hyperast_gen_ts_xml::types::Lang" => {
+                let t = hyperast_gen_ts_xml::types::TType::new(
+                    hyperast_gen_ts_xml::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_xml::types::TStore::resolve_field(t.get_lang(), field_id)
+                hyperast_gen_ts_xml::types::TStore::resolve_field(t.get_lang(), field_id)
             }
             x => panic!("{}", x),
         }
@@ -69,25 +69,25 @@ impl<'a> hyper_ast::types::RoleStore for TStore {
         // TODO fix that, the lang thing, both parameter and the get_lang() should be respectively extracted and removed
         match lang.name() {
             #[cfg(feature = "java")]
-            "hyper_ast_gen_ts_java::types::Lang" => {
-                let t = hyper_ast_gen_ts_java::types::TType::new(
-                    hyper_ast_gen_ts_java::types::Type::Spaces,
+            "hyperast_gen_ts_java::types::Lang" => {
+                let t = hyperast_gen_ts_java::types::TType::new(
+                    hyperast_gen_ts_java::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_java::types::TStore::intern_role(t.get_lang(), role)
+                hyperast_gen_ts_java::types::TStore::intern_role(t.get_lang(), role)
             }
             #[cfg(feature = "cpp")]
-            "hyper_ast_gen_ts_cpp::types::Lang" => {
-                let t = hyper_ast_gen_ts_cpp::types::TType::new(
-                    hyper_ast_gen_ts_cpp::types::Type::Spaces,
+            "hyperast_gen_ts_cpp::types::Lang" => {
+                let t = hyperast_gen_ts_cpp::types::TType::new(
+                    hyperast_gen_ts_cpp::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_cpp::types::TStore::intern_role(t.get_lang(), role)
+                hyperast_gen_ts_cpp::types::TStore::intern_role(t.get_lang(), role)
             }
             #[cfg(feature = "maven")]
-            "hyper_ast_gen_ts_xml::types::Lang" => {
-                let t = hyper_ast_gen_ts_xml::types::TType::new(
-                    hyper_ast_gen_ts_xml::types::Type::Spaces,
+            "hyperast_gen_ts_xml::types::Lang" => {
+                let t = hyperast_gen_ts_xml::types::TType::new(
+                    hyperast_gen_ts_xml::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_xml::types::TStore::intern_role(t.get_lang(), role)
+                hyperast_gen_ts_xml::types::TStore::intern_role(t.get_lang(), role)
             }
             x => panic!("{}", x),
         }
@@ -98,27 +98,27 @@ impl TypeStore for TStore {
     type Ty = AnyType;
 
     fn decompress_type(
-        erazed: &impl hyper_ast::types::ErasedHolder,
+        erazed: &impl hyperast::types::ErasedHolder,
         tid: std::any::TypeId,
     ) -> Self::Ty {
         unsafe {
-            erazed.unerase_ref_unchecked::<hyper_ast_gen_ts_java::types::TType>(
-                std::any::TypeId::of::<hyper_ast_gen_ts_java::types::TType>(),
+            erazed.unerase_ref_unchecked::<hyperast_gen_ts_java::types::TType>(
+                std::any::TypeId::of::<hyperast_gen_ts_java::types::TType>(),
             )
         }
         .map(|t| t.as_static().into())
         .or_else(|| {
             unsafe {
-                erazed.unerase_ref_unchecked::<hyper_ast_gen_ts_cpp::types::TType>(
-                    std::any::TypeId::of::<hyper_ast_gen_ts_cpp::types::TType>(),
+                erazed.unerase_ref_unchecked::<hyperast_gen_ts_cpp::types::TType>(
+                    std::any::TypeId::of::<hyperast_gen_ts_cpp::types::TType>(),
                 )
             }
             .map(|t| t.as_static().into())
         })
         .or_else(|| {
             unsafe {
-                erazed.unerase_ref_unchecked::<hyper_ast_gen_ts_xml::types::TType>(
-                    std::any::TypeId::of::<hyper_ast_gen_ts_xml::types::TType>(),
+                erazed.unerase_ref_unchecked::<hyperast_gen_ts_xml::types::TType>(
+                    std::any::TypeId::of::<hyperast_gen_ts_xml::types::TType>(),
                 )
             }
             .map(|t| t.as_static().into())
