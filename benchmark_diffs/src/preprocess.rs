@@ -1,11 +1,11 @@
-use hyper_ast::{
+use hyperast::{
     cyclomatic::Mcc,
     hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
     store::{defaults::LabelIdentifier, SimpleStores},
     types::LabelStore as _,
 };
-use hyper_ast_cvs_git::java::JavaAcc;
-use hyper_ast_gen_ts_java::{
+use hyperast_vcs_git::java::JavaAcc;
+use hyperast_gen_ts_java::{
     legion_with_refs::{self, FNode, JavaTreeGen, Local, MDCache, MD},
     types::{TStore, Type},
 };
@@ -47,7 +47,7 @@ fn parse_unchecked<'b: 'stores, 'stores>(
     full_node1
 }
 
-// TODO make it cvs/files or a module of hyper_ast (it will also serve as an example)
+// TODO make it cvs/files or a module of hyperast (it will also serve as an example)
 pub struct JavaPreprocessFileSys {
     pub main_stores: SimpleStores<TStore>,
     pub java_md_cache: MDCache,
@@ -172,7 +172,7 @@ pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local
     make(w, &mut java_gen.main_stores)
 }
 
-trait Accumulator: hyper_ast::tree_gen::Accumulator<Node = (LabelIdentifier, Self::Unlabeled)> {
+trait Accumulator: hyperast::tree_gen::Accumulator<Node = (LabelIdentifier, Self::Unlabeled)> {
     type Unlabeled;
 }
 
@@ -315,11 +315,11 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
 fn make(
     acc: JavaAcc,
     stores: &mut SimpleStores<TStore>,
-) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
+) -> hyperast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     let kind = Type::Directory;
-    use hyper_ast::types::ETypeStore;
+    use hyperast::types::ETypeStore;
     let interned_kind = TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
@@ -327,7 +327,7 @@ fn make(
         .primary
         .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
     let hashable = primary.metrics.hashs.most_discriminating();
-    let eq = hyper_ast::store::nodes::legion::eq_node(
+    let eq = hyperast::store::nodes::legion::eq_node(
         &interned_kind,
         Some(&label_id),
         &primary.children,
@@ -347,7 +347,7 @@ fn make(
         };
     }
 
-    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
 
     let ana = None;
 
@@ -355,7 +355,7 @@ fn make(
 
     // TODO move add_md_ref_ana to better place
     #[cfg(feature = "impact")]
-    hyper_ast_gen_ts_java::legion_with_refs::add_md_ref_ana(
+    hyperast_gen_ts_java::legion_with_refs::add_md_ref_ana(
         &mut dyn_builder,
         children_is_empty,
         None,
@@ -367,7 +367,7 @@ fn make(
     hashs.persist(&mut dyn_builder);
 
     let vacant = insertion.vacant();
-    let node_id = hyper_ast::store::nodes::legion::NodeStore::insert_built_after_prepare(
+    let node_id = hyperast::store::nodes::legion::NodeStore::insert_built_after_prepare(
         vacant,
         dyn_builder.build(),
     );

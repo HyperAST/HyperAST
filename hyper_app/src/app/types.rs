@@ -1,5 +1,5 @@
 use egui_addon::code_editor;
-use hyper_ast::store::nodes::fetched::NodeIdentifier;
+use hyperast::store::nodes::fetched::NodeIdentifier;
 use re_ui::UiExt;
 
 use std::{collections::HashSet, hash::Hash, ops::Range};
@@ -80,23 +80,23 @@ pub(crate) struct ComputeConfigAspectViews {
     // pub(super) ser_opt_java_text: String,
     // TODO use an enum set btw...
     #[serde(skip)]
-    pub(super) ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type>,
+    pub(super) ser_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type>,
     #[serde(skip)]
-    pub(super) ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type>,
+    pub(super) ser_opt_java: HashSet<hyperast_gen_ts_java::types::Type>,
     #[serde(skip)]
-    pub(super) hide_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type>,
+    pub(super) hide_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type>,
     #[serde(skip)]
-    pub(super) hide_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type>,
+    pub(super) hide_opt_java: HashSet<hyperast_gen_ts_java::types::Type>,
 }
 
 impl Default for ComputeConfigAspectViews {
     fn default() -> Self {
-        let mut ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type> = Default::default();
-        ser_opt_cpp.insert(hyper_ast_gen_ts_cpp::types::Type::FunctionDeclarator);
-        let mut ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
-        ser_opt_java.insert(hyper_ast_gen_ts_java::types::Type::MethodDeclaration);
-        let hide_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type> = Default::default();
-        let hide_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
+        let mut ser_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type> = Default::default();
+        ser_opt_cpp.insert(hyperast_gen_ts_cpp::types::Type::FunctionDeclarator);
+        let mut ser_opt_java: HashSet<hyperast_gen_ts_java::types::Type> = Default::default();
+        ser_opt_java.insert(hyperast_gen_ts_java::types::Type::MethodDeclaration);
+        let hide_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type> = Default::default();
+        let hide_opt_java: HashSet<hyperast_gen_ts_java::types::Type> = Default::default();
         Self {
             commit: Default::default(),
             path: "".into(),

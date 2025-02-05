@@ -4,8 +4,8 @@ use super::types;
 use super::types::Resource;
 use super::utils_egui::MyUiExt as _;
 use egui_addon::egui_utils::{radio_collapsing, show_wip};
-use hyper_ast::store::nodes::fetched;
-use hyper_ast::store::nodes::fetched::LabelIdentifier;
+use hyperast::store::nodes::fetched;
+use hyperast::store::nodes::fetched::LabelIdentifier;
 use poll_promise::Promise;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -226,27 +226,27 @@ pub(crate) fn show(
                             );
                             match action {
                                 super::tree_view::Action::SerializeKind(k) => {
-                                    use hyper_ast::types::HyperType;
+                                    use hyperast::types::HyperType;
                                     let k = &k.as_any();
                                     if let Some(k) =
-                                        k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>()
+                                        k.downcast_ref::<hyperast_gen_ts_cpp::types::Type>()
                                     {
                                         aspects.ser_opt_cpp.insert(k.to_owned());
                                     } else if let Some(k) =
-                                        k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                                        k.downcast_ref::<hyperast_gen_ts_java::types::Type>()
                                     {
                                         aspects.ser_opt_java.insert(k.to_owned());
                                     }
                                 }
                                 super::tree_view::Action::HideKind(k) => {
-                                    use hyper_ast::types::HyperType;
+                                    use hyperast::types::HyperType;
                                     let k = &k.as_any();
                                     if let Some(k) =
-                                        k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>()
+                                        k.downcast_ref::<hyperast_gen_ts_cpp::types::Type>()
                                     {
                                         aspects.hide_opt_cpp.insert(k.to_owned());
                                     } else if let Some(k) =
-                                        k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                                        k.downcast_ref::<hyperast_gen_ts_java::types::Type>()
                                     {
                                         aspects.hide_opt_java.insert(k.to_owned());
                                     }

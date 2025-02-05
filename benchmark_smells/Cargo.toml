@@ -1,7 +1,7 @@
 cargo-features = ["profile-rustflags"]
 
 [package]
-name = "hyper_ast_benchmark_smells"
+name = "hyperast_benchmark_smells"
 version = "0.2.0"
 edition = "2021"
 autobins = true
@@ -10,13 +10,13 @@ autobins = true
 
 [dependencies]
 tree-sitter = { workspace = true }
-hyper_ast = { workspace = true }
+hyperast = { workspace = true }
 hyper_diff = { workspace = true }
-hyper_ast_cvs_git = { workspace = true }
-hyper_ast_gen_ts_java = { workspace = true }
-hyper_ast_gen_ts_xml = { workspace = true }
-hyper_ast_gen_ts_tsquery = { workspace = true }
-hyper_ast_tsquery = { workspace = true }
+hyperast_vcs_git = { workspace = true }
+hyperast_gen_ts_java = { workspace = true }
+hyperast_gen_ts_xml = { workspace = true }
+hyperast_gen_ts_tsquery = { workspace = true }
+hyperast_tsquery = { workspace = true }
 
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.79"
@@ -48,7 +48,7 @@ jemallocator = "0.5.0"
 # [build-dependencies]
 
 [dev-dependencies]
-hyper_ast_gen_ts_java = { workspace = true }
+hyperast_gen_ts_java = { workspace = true }
 
 # [[bin]]
 # name = "window_combination"

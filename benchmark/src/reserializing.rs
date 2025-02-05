@@ -2,7 +2,7 @@ pub mod write_serializer;
 
 use std::{env, io::Write};
 
-use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
+use hyperast_vcs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_env = "msvc"))]

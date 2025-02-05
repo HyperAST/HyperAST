@@ -1,15 +1,15 @@
 
-use hyper_ast::store::defaults::NodeIdentifier;
+use hyperast::store::defaults::NodeIdentifier;
 
 type Positions = Vec<String>;
 
 pub fn output_positions(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
+    query: &hyperast_tsquery::Query,
 ) -> Vec<Positions> {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
     let mut result = vec![vec![]; query.enabled_pattern_count()];
     let cid = query.capture_index_for_name("root").expect(r#"you should put a capture named "root" on the pattern you can to capture (can be something else that the root pattern btw)"#);

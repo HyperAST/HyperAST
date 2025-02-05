@@ -1,10 +1,10 @@
-use hyper_ast::utils::memusage_linux;
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast::utils::memusage_linux;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
-/// enables uses of [`hyper_ast::utils::memusage_linux()`]
+/// enables uses of [`hyperast::utils::memusage_linux()`]
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -30,17 +30,17 @@ fn print_pos(
     commit: &str,
     limit: usize,
     query: &str,
-    precomputeds: impl hyper_ast_tsquery::ArrayStr,
+    precomputeds: impl hyperast_tsquery::ArrayStr,
 ) {
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
+        hyperast_tsquery::Query::with_precomputed(
             &query,
-            hyper_ast_gen_ts_java::language(),
+            hyperast_gen_ts_java::language(),
             precomputeds,
         )
         .map(|x| x.1)
     } else {
-        hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language())
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language())
     };
 
     let query = match query {
@@ -53,7 +53,7 @@ fn print_pos(
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oids = preprocessed.pre_process_first_parents_with_limit(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         "",
         commit,
         "",
@@ -67,10 +67,10 @@ fn print_pos(
         let commit = preprocessed.commits.get_key_value(&oid).unwrap();
         let time = commit.1.processing_time();
         let tr = commit.1.ast_root;
-        use hyper_ast::types::WithStats;
+        use hyperast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
 
-        let matches = hyper_ast_benchmark_smells::github_ranges::compute_formated_ranges(
+        let matches = hyperast_benchmark_smells::github_ranges::compute_formated_ranges(
             stores,
             tr,
             &query,
@@ -144,7 +144,7 @@ fn assertion_roulette() {
     let repo_name = "INRIA/spoon";
     let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
     let limit = 6;
-    let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
+    let query = hyperast_benchmark_smells::queries::assertion_roulette();
     print!("{}", query);
     print_pos(repo_name, commit, limit, &query, [].as_slice());
 }

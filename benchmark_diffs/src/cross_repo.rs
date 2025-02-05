@@ -1,10 +1,10 @@
 use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
 
-use hyper_ast::{
+use hyperast::{
     types::{LabelStore, WithStats},
     utils::memusage_linux,
 };
-use hyper_ast_cvs_git::{
+use hyperast_vcs_git::{
     maven::MavenModuleAcc,
     maven_processor::MavenProcessorHolder,
     multi_preprocessed::PreProcessedRepositories,
@@ -117,7 +117,7 @@ pub fn windowed_commits_compare(
             assert_eq!(oid_src.len(), oid_dst.len());
 
             let mut src_acc = MavenModuleAcc::from("".to_string());
-            let mut src_mem = hyper_ast::utils::Bytes::default(); // NOTE it does not consider the size of the root, but it is an implementation detail
+            let mut src_mem = hyperast::utils::Bytes::default(); // NOTE it does not consider the size of the root, but it is an implementation detail
             let mut src_s = 0;
             for (i, (oid_src, repo)) in oid_src.iter().enumerate() {
                 let commit_src = preprocessed.get_commit(repo.config(), &oid_src).unwrap();
@@ -145,7 +145,7 @@ pub fn windowed_commits_compare(
             }
 
             let mut dst_acc = MavenModuleAcc::from("".to_string());
-            let mut dst_mem = hyper_ast::utils::Bytes::default();
+            let mut dst_mem = hyperast::utils::Bytes::default();
             let mut dst_s = 0;
             for (i, (oid_dst, repo)) in oid_dst.iter().enumerate() {
                 let commit_dst = preprocessed.get_commit(repo.config(), &oid_dst).unwrap();

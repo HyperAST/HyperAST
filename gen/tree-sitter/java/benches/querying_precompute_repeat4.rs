@@ -9,7 +9,7 @@ use criterion::{
 };
 
 mod shared;
-use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
+use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[BenchQuery] = &[
@@ -183,21 +183,21 @@ pub const QUERIES: &[BenchQuery] = &[
 fn preps_default(
     p: &(&BenchQuery, &[(std::path::PathBuf, String)]),
 ) -> (
-    hyper_ast_tsquery::Query,
-    hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
+    hyperast_tsquery::Query,
+    hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
     Vec<legion::Entity>,
 ) {
     let (q, f) = p;
-    let query = hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let query = hyperast_tsquery::Query::new(q.1, hyperast_gen_ts_java::language()).unwrap();
+    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen =
-        hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
+        hyperast_gen_ts_java::legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let roots: Vec<_> = f
         .into_iter()
         .map(|(name, text)| {
             let tree =
-                match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+                match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -216,27 +216,27 @@ fn preps_default(
 fn preps_precomputed(
     (bench_param, f): &(&BenchQuery, &[(std::path::PathBuf, String)]),
 ) -> (
-    hyper_ast_tsquery::Query,
-    hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
+    hyperast_tsquery::Query,
+    hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
     Vec<legion::Entity>,
 ) {
-    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+    let (precomp, query) = hyperast_tsquery::Query::with_precomputed(
         bench_param.1,
-        hyper_ast_gen_ts_java::language(),
+        hyperast_gen_ts_java::language(),
         bench_param.0,
     )
     .unwrap();
     query._check_preprocessed(0, bench_param.0.len());
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
-    let more = hyper_ast_tsquery::PreparedQuerying::from(&precomp);
+    let more = hyperast_tsquery::PreparedQuerying::from(&precomp);
     let mut java_tree_gen = JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache,more);
     let roots: Vec<_> = f
         .into_iter()
         .map(|(name, text)| {
             let name = &name.to_str().unwrap();
             let tree =
-                match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+                match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -303,8 +303,8 @@ fn compare_querying_group(c: &mut Criterion) {
                 b.iter(|| {
                     let mut count = 0;
                     for &n in roots {
-                        let pos = hyper_ast::position::StructuralPosition::new(n);
-                        let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+                        let pos = hyperast::position::StructuralPosition::new(n);
+                        let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
@@ -321,8 +321,8 @@ fn compare_querying_group(c: &mut Criterion) {
                     let mut count = 0;
                     for &n in roots {
                         let pos =
-                            hyper_ast::position::structural_pos::CursorWithPersistance::new(n);
-                        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+                            hyperast::position::structural_pos::CursorWithPersistance::new(n);
+                        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
@@ -340,8 +340,8 @@ fn compare_querying_group(c: &mut Criterion) {
                 b.iter(|| {
                     let mut count = 0;
                     for &n in roots {
-                        let pos = hyper_ast::position::StructuralPosition::new(n);
-                        let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+                        let pos = hyperast::position::StructuralPosition::new(n);
+                        let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
@@ -358,8 +358,8 @@ fn compare_querying_group(c: &mut Criterion) {
                     let mut count = 0;
                     for &n in roots {
                         let pos =
-                            hyper_ast::position::structural_pos::CursorWithPersistance::new(n);
-                        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+                            hyperast::position::structural_pos::CursorWithPersistance::new(n);
+                        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
@@ -409,7 +409,7 @@ fn bench_rust_baseline(
             b.iter(|| {
                 let mut count = 0;
                 for (q, t, text) in p.into_iter() {
-                    let cursor = hyper_ast_tsquery::default_impls::TreeCursor::new(
+                    let cursor = hyperast_tsquery::default_impls::TreeCursor::new(
                         text.as_bytes(),
                         t.walk(),
                     );

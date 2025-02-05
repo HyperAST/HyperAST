@@ -1,4 +1,4 @@
-use hyper_ast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST};
 use hyper_diff::{
     decompressed_tree_store::{lazy_post_order::LazyPostOrder, ShallowDecompressedTreeStore},
     matchers::{

@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use hyper_ast::{nodes::JsonSerializer, types};
+use hyperast::{nodes::JsonSerializer, types};
 
 use crate::tempfile;
 

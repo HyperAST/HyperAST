@@ -14,7 +14,7 @@ use crate::{
     types::Type,
 };
 use enumset::{enum_set, EnumSet, EnumSetType};
-use hyper_ast::types::{LabelStore, TypeTrait};
+use hyperast::types::{LabelStore, TypeTrait};
 use num::ToPrimitive;
 use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
 
@@ -2095,7 +2095,7 @@ impl PartialAnalysis {
                 (State::Declarations(v), State::None) if kind == &Type::ConstantDeclaration => {
                     // TODO check if right is ok to be none
                     // reproduce ConstantDeclaration Declarations([(None, Field(3), Runtime([2]))]) None'
-                    // with ["target/release/hyper_ast_benchmark", "apache/dubbo", "", "e831b464837ae5d2afac9841559420aeaef6c52b", "", "results_1000_commits/dubbo"]
+                    // with ["target/release/hyperast_benchmark", "apache/dubbo", "", "e831b464837ae5d2afac9841559420aeaef6c52b", "", "results_1000_commits/dubbo"]
                     State::Declarations(v)
                 }
                 (State::Declarations(v), State::None) if kind == &Type::FieldDeclaration => {
@@ -4250,7 +4250,7 @@ impl PartialAnalysis {
                     }
                     (State::InvocationId(o, i), State::None) if kind == &Type::MethodInvocation => {
                         // TODO check, I suppose it is caused by module identifiers
-                        // to reproduce on ["target/release/hyper_ast_benchmark", "alibaba/fastjson", "", "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db", "", "results_1000_commits2/fastjson"]
+                        // to reproduce on ["target/release/hyperast_benchmark", "alibaba/fastjson", "", "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db", "", "results_1000_commits2/fastjson"]
                         // State::InvocationId(o, i)
                         let r = acc.solver.intern_ref(RefsEnum::Invocation(
                             o,

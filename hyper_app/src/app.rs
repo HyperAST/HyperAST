@@ -428,7 +428,7 @@ pub(crate) struct AppData {
     #[serde(skip)]
     fetched_files2: HashMap<
         types::FileIdentifier,
-        poll_promise::Promise<Result<hyper_ast::store::nodes::fetched::NodeIdentifier, String>>,
+        poll_promise::Promise<Result<hyperast::store::nodes::fetched::NodeIdentifier, String>>,
     >,
     #[serde(skip)]
     fetched_commit: HashMap<Commit, code_aspects::RemoteView>,
@@ -830,7 +830,7 @@ impl HyperApp {
 struct CodeView {
     commit: Commit,
     file_path: Option<String>,
-    root: Option<hyper_ast::store::nodes::fetched::NodeIdentifier>,
+    root: Option<hyperast::store::nodes::fetched::NodeIdentifier>,
     path: Vec<u16>,
     #[serde(skip)]
     prefill_cache: Option<tree_view::PrefillCache>,

@@ -1,4 +1,4 @@
-use hyper_ast::{
+use hyperast::{
     nodes::{SyntaxSerializer, TextSerializer},
     store::SimpleStores,
     tree_gen::{self, utils_ts},

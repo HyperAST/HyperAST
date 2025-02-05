@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use hyper_ast::{
+use hyperast::{
     store::defaults::NodeIdentifier,
     tree_gen::utils_ts::TsEnableTS,
     types::{
@@ -12,7 +12,7 @@ use hyper_ast::{
 mod legion_impls {
     use super::*;
 
-    impl<'a> hyper_ast::types::ETypeStore for TStore {
+    impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
 
         fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -21,9 +21,9 @@ mod legion_impls {
     }
 
     impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
             n: &N,
-        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
             let k = n.kind_id();
             Type::from_u16(k)
         }
@@ -39,7 +39,7 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{
+    use hyperast::{
         store::nodes::legion::HashedNodeRef,
         tree_gen::utils_ts::{TsEnableTS, TsType},
         types::LangWrapper,
@@ -51,7 +51,7 @@ mod legion_impls {
     impl TypeStore for _TStore {
         type Ty = Type;
         fn decompress_type(
-            erazed: &impl hyper_ast::types::ErasedHolder,
+            erazed: &impl hyperast::types::ErasedHolder,
             tid: std::any::TypeId,
         ) -> Self::Ty {
             erazed
@@ -64,14 +64,14 @@ mod legion_impls {
     impl RoleStore for TStore {
         type IdF = u16;
 
-        type Role = hyper_ast::types::Role;
+        type Role = hyperast::types::Role;
 
         fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
             let s = tree_sitter_query::language()
                 .field_name_for_id(field_id)
                 .ok_or_else(|| format!("{}", field_id))
                 .unwrap();
-            hyper_ast::types::Role::try_from(s).expect(s)
+            hyperast::types::Role::try_from(s).expect(s)
         }
 
         fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
@@ -110,7 +110,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 }
 
 pub trait TsQueryEnabledTypeStore<T>:
-    hyper_ast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
 {
     fn resolve(t: Self::Ty) -> Type;
 }
@@ -154,7 +154,7 @@ pub struct TStore;
 
 pub struct _TStore;
 
-impl hyper_ast::store::TyDown<_TStore> for TStore {}
+impl hyperast::store::TyDown<_TStore> for TStore {}
 
 impl Default for TStore {
     fn default() -> Self {
@@ -208,7 +208,7 @@ impl LangRef<Type> for TsQuery {
     }
 }
 
-type TType = hyper_ast::types::TypeU16<Lang>;
+type TType = hyperast::types::TypeU16<Lang>;
 
 impl LangRef<TType> for TsQuery {
     fn make(&self, t: u16) -> &'static TType {
@@ -228,7 +228,7 @@ impl LangRef<TType> for TsQuery {
     }
 }
 
-impl hyper_ast::types::Lang<Type> for TsQuery {
+impl hyperast::types::Lang<Type> for TsQuery {
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -270,8 +270,8 @@ impl HyperType for Type {
         todo!()
     }
 
-    fn as_shared(&self) -> hyper_ast::types::Shared {
-        use hyper_ast::types::Shared;
+    fn as_shared(&self) -> hyperast::types::Shared {
+        use hyperast::types::Shared;
 
         match self {
             Type::Comment => Shared::Comment,
@@ -285,8 +285,8 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <TsQuery as hyper_ast::types::Lang<Type>>::to_u16(*self);
-        let t = <TsQuery as hyper_ast::types::Lang<Type>>::make(t);
+        let t = <TsQuery as hyperast::types::Lang<Type>>::to_u16(*self);
+        let t = <TsQuery as hyperast::types::Lang<Type>>::make(t);
         t
     }
 
@@ -306,14 +306,14 @@ impl HyperType for Type {
         self.is_named()
     }
 
-    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
+    fn get_lang(&self) -> hyperast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
         From::<&'static (dyn LangRef<Self>)>::from(&Lang)
     }
-    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
-        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
+    fn lang_ref(&self) -> hyperast::types::LangWrapper<AnyType> {
+        hyperast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -418,14 +418,14 @@ impl TryFrom<&str> for Type {
     }
 }
 
-impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for TsQuery {
+impl hyperast::types::LLang<hyperast::types::TypeU16<Self>> for TsQuery {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
 
-    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
+    fn as_lang_wrapper() -> hyperast::types::LangWrapper<hyperast::types::TypeU16<Self>> {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }

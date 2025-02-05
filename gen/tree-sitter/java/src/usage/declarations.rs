@@ -1,7 +1,7 @@
 use core::fmt;
 use std::fmt::Debug;
 
-use hyper_ast::{
+use hyperast::{
     position::{TreePath, TreePathMut},
     store::defaults::NodeIdentifier,
     types::{
@@ -66,7 +66,7 @@ where
                     let child = children[offset.to_usize().unwrap()];
                     self.path.check(self.stores).unwrap();
                     {
-                        let b = hyper_ast::types::NodeStore::resolve(
+                        let b = hyperast::types::NodeStore::resolve(
                             self.stores.node_store(),
                             node.id(),
                         );
@@ -131,7 +131,7 @@ where
                     Id::Java(node) => TypedNodeStore::resolve(self.stores.node_store(), node),
                     Id::Other(node) => {
                         let b =
-                            hyper_ast::types::NodeStore::resolve(self.stores.node_store(), node);
+                            hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
                         if b.has_children() {
                             let children = b.children();
                             let children = children.unwrap();
@@ -270,7 +270,7 @@ where
 #[cfg(test)]
 mod experiment {
     use super::*;
-    use hyper_ast::position::StructuralPosition;
+    use hyperast::position::StructuralPosition;
     use std::ops::AddAssign;
 
     pub struct IterDeclarationsUnstableOpti<'a, HAST> {

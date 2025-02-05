@@ -5,13 +5,13 @@ use crate::{
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
-use hyper_ast::{
+use hyperast::{
     hashed::SyntaxNodeHashs,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::{self, SubTreeMetrics},
 };
 
-use hyper_ast_gen_ts_cpp::{
+use hyperast_gen_ts_cpp::{
     legion as cpp_tree_gen,
     types::{TStore, Type},
 };
@@ -61,7 +61,7 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TStore,
-            T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
             Acc = cpp_tree_gen::Acc,
         >,
 {
@@ -75,7 +75,7 @@ where
     // parser.set_timeout_micros(MINUTE);
     // parser.set_cancellation_flag(flag);
     parser
-        .set_language(&hyper_ast_gen_ts_cpp::language())
+        .set_language(&hyperast_gen_ts_cpp::language())
         .unwrap();
     let time = Instant::now();
     let tree = parser.parse(text, None);
@@ -162,7 +162,7 @@ impl CppAcc {
     }
 }
 
-impl hyper_ast::tree_gen::Accumulator for CppAcc {
+impl hyperast::tree_gen::Accumulator for CppAcc {
     type Node = (LabelIdentifier, (cpp_tree_gen::Local, IsSkippedAna));
     fn push(&mut self, (name, (full_node, skiped_ana)): Self::Node) {
         self.primary

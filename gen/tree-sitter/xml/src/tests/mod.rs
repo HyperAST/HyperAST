@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use hyper_ast::store::{labels::LabelStore, SimpleStores};
+use hyperast::store::{labels::LabelStore, SimpleStores};
 use tree_sitter::Parser;
 
 use crate::{
@@ -118,7 +118,7 @@ fn xml_issue_cdata() {
 
 #[test]
 fn type_test_generic_eq() {
-    use hyper_ast::types::HyperType;
+    use hyperast::types::HyperType;
 
     let k = crate::types::Type::Document;
     let k0 = crate::types::Type::Document;

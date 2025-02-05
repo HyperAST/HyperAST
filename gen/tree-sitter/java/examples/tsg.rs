@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use hyper_ast::store::SimpleStores;
-use hyper_ast_gen_ts_java::{
+use hyperast::store::SimpleStores;
+use hyperast_gen_ts_java::{
     legion_with_refs,
     tsg::{configure, init_globals, Functions, It},
 };
@@ -14,7 +14,7 @@ fn main() {
     let mut args = std::env::args();
     args.next().unwrap();
     let Some(codes) = args.next() else {
-        let codes = hyper_ast_gen_ts_java::tsg::CODES.iter().enumerate();
+        let codes = hyperast_gen_ts_java::tsg::CODES.iter().enumerate();
         let queries: Vec<_> = [include_str!("../src/tests/java.tsg")]
             .iter()
             .enumerate()
@@ -23,7 +23,7 @@ fn main() {
         return;
     };
     // "../stack-graphs/languages/tree-sitter-stack-graphs-java/test"
-    let codes = hyper_ast_gen_ts_java::tsg::It::new(Path::new(&codes).to_owned()).map(|x| {
+    let codes = hyperast_gen_ts_java::tsg::It::new(Path::new(&codes).to_owned()).map(|x| {
         let text = std::fs::read_to_string(&x).expect(&format!(
             "{:?} is not a java file or a dir containing java files: ",
             x
@@ -54,7 +54,7 @@ fn tsg_hyperast_stepped_loop(
     codes: impl Iterator<Item = (impl Display, impl AsRef<str>)>,
     queries: &[(impl Display, impl AsRef<str>)],
 ) {
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     for code in codes {
         for query in queries {
@@ -67,12 +67,12 @@ fn tsg_hyperast_stepped<'a, 'c, 'd>(
     code_name: impl Display,
     code_text: &'a str,
     query: &(impl Display, impl AsRef<str>),
-    stores: &'a mut SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
+    stores: &'a mut SimpleStores<hyperast_gen_ts_java::types::TStore>,
     md_cache: &'c mut std::collections::HashMap<legion::Entity, legion_with_refs::MD>,
 ) -> tree_sitter_graph::graph::Graph<
-    hyper_ast_gen_ts_java::tsg::stepped_query::Node<
+    hyperast_gen_ts_java::tsg::stepped_query::Node<
         'a,
-        SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
+        SimpleStores<hyperast_gen_ts_java::types::TStore>,
     >,
 > {
     unsafe { legion_with_refs::HIDDEN_NODES = true };
@@ -87,7 +87,7 @@ fn tsg_hyperast_stepped<'a, 'c, 'd>(
     let tsg_path = query.0.to_string();
     let tsg_source = query.1.as_ref();
     // choose the stepped query implementation (like the treesitter one)
-    use hyper_ast_gen_ts_java::tsg::stepped_query as impls;
+    use hyperast_gen_ts_java::tsg::stepped_query as impls;
 
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
@@ -103,7 +103,7 @@ fn tsg_hyperast_stepped<'a, 'c, 'd>(
     use tree_sitter_graph::GenQuery;
     let tsg = impls::QueryMatcher::from_str(language.clone(), tsg_source).unwrap();
     type Graph<'a> = tree_sitter_graph::graph::Graph<
-        impls::Node<'a, SimpleStores<hyper_ast_gen_ts_java::types::TStore>>,
+        impls::Node<'a, SimpleStores<hyperast_gen_ts_java::types::TStore>>,
     >;
 
     let mut globals = tree_sitter_graph::Variables::new();
@@ -116,7 +116,7 @@ fn tsg_hyperast_stepped<'a, 'c, 'd>(
 
     let tree = impls::Node::new(
         &*java_tree_gen.stores,
-        hyper_ast::position::StructuralPosition::new(full_node.local.compressed_node),
+        hyperast::position::StructuralPosition::new(full_node.local.compressed_node),
     );
 
     if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {

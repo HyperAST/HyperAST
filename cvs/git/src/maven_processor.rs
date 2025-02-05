@@ -10,21 +10,21 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
-use hyper_ast::store::nodes::legion::RawHAST;
-use hyper_ast::types::ETypeStore as _;
-use hyper_ast::{
+use hyperast::store::nodes::legion::RawHAST;
+use hyperast::types::ETypeStore as _;
+use hyperast::{
     hashed::MetaDataHashsBuilder,
     store::{defaults::NodeIdentifier, nodes::EntityBuilder},
     tree_gen::Accumulator,
     types::LabelStore,
 };
-use hyper_ast_gen_ts_xml::types::{Type, XmlEnabledTypeStore as _};
+use hyperast_gen_ts_xml::types::{Type, XmlEnabledTypeStore as _};
 use std::{
     iter::Peekable,
     marker::PhantomData,
     path::{Components, PathBuf},
 };
-pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_xml::types::TStore>;
+pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_xml::types::TStore>;
 
 /// RMS: Resursive Module Search
 /// FFWD: Fast ForWarD to java directories without looking at maven stuff
@@ -55,9 +55,9 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         let acc = acc.init_scripting(
             prep_scripting
                 .map(|x| {
-                    hyper_ast::scripting::Prepro::<
-                        RawHAST<hyper_ast_gen_ts_java::types::TStore>,
-                        &hyper_ast_gen_ts_java::legion_with_refs::Acc,
+                    hyperast::scripting::Prepro::<
+                        RawHAST<hyperast_gen_ts_java::types::TStore>,
+                        &hyperast_gen_ts_java::legion_with_refs::Acc,
                     >::from(x.clone())
                 })
                 .as_ref(),
@@ -134,8 +134,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<
-                    hyper_ast_gen_ts_xml::types::TType,
+                let child: hyperast::scripting::lua_scripting::SubtreeHandle<
+                    hyperast_gen_ts_xml::types::TType,
                 > = id.into();
                 acc.acc(store, Type::Directory, child).unwrap();
             }
@@ -170,9 +170,9 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 let acc = acc.init_scripting(
                     prep_scripting
                         .map(|x| {
-                            hyper_ast::scripting::Prepro::<
-                                RawHAST<hyper_ast_gen_ts_java::types::TStore>,
-                                &hyper_ast_gen_ts_java::legion_with_refs::Acc,
+                            hyperast::scripting::Prepro::<
+                                RawHAST<hyperast_gen_ts_java::types::TStore>,
+                                &hyperast_gen_ts_java::legion_with_refs::Acc,
                             >::from(x.clone())
                         })
                         .as_ref(),
@@ -208,7 +208,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_, hyper_ast_gen_ts_xml::types::TType, _>(
+                acc.acc::<_, hyperast_gen_ts_xml::types::TType, _>(
                     store,
                     Type::Directory,
                     id.into(),
@@ -234,7 +234,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut parent_acc.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                acc.acc::<_, hyperast_gen_ts_java::types::TType, _>(
                     store,
                     Type::Directory,
                     id.into(),
@@ -266,7 +266,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut parent_acc.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                acc.acc::<_, hyperast_gen_ts_java::types::TType, _>(
                     store,
                     Type::Directory,
                     id.into(),
@@ -291,7 +291,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 // handle as maven module
                 let acc = helper.into_acc().init_scripting(
                     prep_scripting
-                        .map(|x| hyper_ast::scripting::Prepro::from(x.clone()))
+                        .map(|x| hyperast::scripting::Prepro::from(x.clone()))
                         .as_ref(),
                 );
                 self.stack.push((oid, prepared, acc));
@@ -299,7 +299,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 // search further inside
                 let acc = helper.into_acc().init_scripting(
                     prep_scripting
-                        .map(|x| hyper_ast::scripting::Prepro::from(x.clone()))
+                        .map(|x| hyperast::scripting::Prepro::from(x.clone()))
                         .as_ref(),
                 );
                 self.stack.push((oid, prepared, acc));
@@ -312,7 +312,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
             let acc = helper.into_acc().init_scripting(
                 prep_scripting
-                    .map(|x| hyper_ast::scripting::Prepro::from(x.clone()))
+                    .map(|x| hyperast::scripting::Prepro::from(x.clone()))
                     .as_ref(),
             );
             self.stack.push((oid, prepared, acc));
@@ -324,14 +324,14 @@ impl MavenModuleAcc {
     fn init_scripting(
         mut self,
         prep_scripting: Option<
-            &hyper_ast::scripting::Prepro<
-                RawHAST<hyper_ast_gen_ts_java::types::TStore>,
-                &hyper_ast_gen_ts_java::legion_with_refs::Acc,
+            &hyperast::scripting::Prepro<
+                RawHAST<hyperast_gen_ts_java::types::TStore>,
+                &hyperast_gen_ts_java::legion_with_refs::Acc,
             >,
         >,
     ) -> Self {
         if let Some(more) = prep_scripting {
-            use hyper_ast::tree_gen::Prepro;
+            use hyperast::tree_gen::Prepro;
             match more.preprocessing(Type::MavenDirectory) {
                 Ok(acc) => self.scripting_acc = Some(acc),
                 Err(err) => {
@@ -363,12 +363,12 @@ fn prep_scripting(
 }
 
 pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-    use hyper_ast::hashed::IndexingHashBuilder;
+    use hyperast::hashed::IndexingHashBuilder;
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
-    use hyper_ast::store::nodes::legion::eq_node;
+    use hyperast::store::nodes::legion::eq_node;
     let kind = Type::MavenDirectory;
-    let interned_kind = hyper_ast_gen_ts_xml::types::TStore::intern(kind);
+    let interned_kind = hyperast_gen_ts_xml::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -407,11 +407,11 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         };
         return (id, md);
     }
-    use hyper_ast::store::nodes::legion::NodeStore;
+    use hyperast::store::nodes::legion::NodeStore;
 
     log::info!("make mm {} {}", &primary.name, primary.children.len());
     assert_eq!(primary.children_names.len(), primary.children.len());
-    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
     let children_is_empty = primary.children.is_empty();
     if !acc.status.is_empty() {
         dyn_builder.add(acc.status);
@@ -422,10 +422,10 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     hashs.persist(&mut dyn_builder);
 
     if let Some(acc) = acc.scripting_acc {
-        let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+        let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
         let ss = acc.finish(&subtr).unwrap();
         log::error!("mm {:?}", ss.0);
-        use hyper_ast::store::nodes::EntityBuilder;
+        use hyperast::store::nodes::EntityBuilder;
         dyn_builder.add(ss);
     };
 
@@ -442,7 +442,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     (node_id.clone(), md)
 }
 
-use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+use hyperast_gen_ts_xml::legion::XmlTreeGen;
 impl RepositoryProcessor {
     fn handle_pom(
         &mut self,
@@ -480,7 +480,7 @@ impl RepositoryProcessor {
         crate::maven::handle_pom_file(&mut self.xml_generator(), name, text)
     }
 
-    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<hyper_ast_gen_ts_xml::types::TStore> {
+    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<hyperast_gen_ts_xml::types::TStore> {
         XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: self.main_stores.mut_with_ts(),
@@ -520,7 +520,7 @@ impl MavenModuleHelper {
             self.test_source_directories.1,
         )
     }
-    pub fn into_acc_with_scripting(self, prepro_acc: hyper_ast::scripting::Acc) -> MavenModuleAcc {
+    pub fn into_acc_with_scripting(self, prepro_acc: hyperast::scripting::Acc) -> MavenModuleAcc {
         let mut r = MavenModuleAcc::with_content(
             self.name,
             self.submodules.1,
@@ -596,7 +596,7 @@ pub(crate) fn prepare_dir_exploration(
 #[derive(Clone, PartialEq, Eq)]
 pub struct Parameter {
     // pub(crate) query: Option<std::sync::Arc<[String]>>,
-    // pub(crate) prepo: Option<hyper_ast_scripting::Prepro>,
+    // pub(crate) prepo: Option<hyperast_scripting::Prepro>,
     pub java_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
         crate::java_processor::JavaProc,
     >,
@@ -745,7 +745,7 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMavenCommi
     fn process(
         self: Box<PreparedMavenCommitProc<'repo>>,
         prepro: &mut RepositoryProcessor,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
+    ) -> hyperast::store::defaults::NodeIdentifier {
         let dir_path = PathBuf::from("");
         let mut dir_path = dir_path.components().peekable();
         let name = b"";

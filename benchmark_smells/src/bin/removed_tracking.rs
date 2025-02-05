@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use hyper_ast::{
+use hyperast::{
     position::{self, compute_position_with_no_spaces, position_accessors::WithPreOrderOffsets},
     types::{
         Children, DecompressedSubtree as _, HyperAST as _, HyperType, IterableChildren, LabelStore,
@@ -8,13 +8,13 @@ use hyper_ast::{
     },
     utils::memusage_linux,
 };
-use hyper_ast_benchmark_smells::{
+use hyperast_benchmark_smells::{
     diffing,
     github_ranges::{format_pos_as_github_url, Pos, PositionWithContext},
     simple::count_matches,
     DATASET,
 };
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
 use hyper_diff::{
     decompressed_tree_store::{
@@ -25,7 +25,7 @@ use hyper_diff::{
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
-/// enables uses of [`hyper_ast::utils::memusage_linux()`]
+/// enables uses of [`hyperast::utils::memusage_linux()`]
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -73,26 +73,26 @@ fn removed_tracking(
     commit: &str,
     limit: usize,
     query: &str,
-    precomputeds: impl hyper_ast_tsquery::ArrayStr,
+    precomputeds: impl hyperast_tsquery::ArrayStr,
 ) {
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(
+        hyperast_tsquery::Query::with_precomputed(
             &query,
-            hyper_ast_gen_ts_java::language(),
+            hyperast_gen_ts_java::language(),
             precomputeds,
         )
         .map_err(|x| x.to_string())
         .unwrap()
         .1
     } else {
-        hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language()).unwrap()
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language()).unwrap()
     };
 
     assert!(query.enabled_pattern_count() > 0);
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oids = preprocessed.pre_process_first_parents_with_limit(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         "",
         commit,
         "",
@@ -101,7 +101,7 @@ fn removed_tracking(
     eprintln!("computing matches of {oids:?}");
 
     let stores = &preprocessed.processor.main_stores;
-    let nospace = &hyper_ast_cvs_git::no_space::as_nospaces(stores);
+    let nospace = &hyperast_vcs_git::no_space::as_nospaces(stores);
 
     if CSV_FORMATING {
         println!("commit_sha, ast_size, memory_used, processing_time, matches_count");
@@ -118,10 +118,10 @@ fn removed_tracking(
         let commit = preprocessed.commits.get_key_value(&oid).unwrap();
         let time = commit.1.processing_time();
         let tr = commit.1.ast_root;
-        use hyper_ast::types::WithStats;
+        use hyperast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
 
-        let matches = hyper_ast_benchmark_smells::github_ranges::compute_postions_with_context(
+        let matches = hyperast_benchmark_smells::github_ranges::compute_postions_with_context(
             stores, tr, &query,
         );
         let matches_count: Vec<usize> = matches.iter().map(|x| x.len()).collect();
@@ -168,7 +168,7 @@ fn removed_tracking(
             // do the tracking at least in the fast case top_down/subtree matching
             let curr_comm = &preprocessed.commits.get(&oid).unwrap();
 
-            // let stores: &hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore> =
+            // let stores: &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore> =
             //     unsafe { std::mem::transmute(stores) };
 
             let mut src_arena =
@@ -244,7 +244,7 @@ fn removed_tracking(
                                                         }
                                                         let n = &stores.node_store.resolve(*child);
                                                         line_offset += n.line_count();
-                                                        use hyper_ast::types::TypeStore;
+                                                        use hyperast::types::TypeStore;
                                                         if !stores.resolve_type(child).is_spaces() {
                                                             curr_off += 1;
                                                         }
@@ -346,7 +346,7 @@ fn assertion_roulette_dubbo() {
     eprintln!("{}:", repo_name);
     let commit = data.2;
     let limit = 2000;
-    let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
+    let query = hyperast_benchmark_smells::queries::assertion_roulette();
     eprint!("{}", query);
     let subs = [
         r#"(method_invocation
@@ -368,7 +368,7 @@ fn exception_handling() {
     eprintln!("{}:", repo_name);
     let commit = data.2;
     let limit = 200;
-    let query = hyper_ast_benchmark_smells::queries::exception_handling();
+    let query = hyperast_benchmark_smells::queries::exception_handling();
     let query = format!("{} @root {} @root", query[0], query[1]);
     println!("{}:", repo_name);
     println!("{}", query);
@@ -382,7 +382,7 @@ fn exception_handling_graphhopper() {
     eprintln!("{}:", repo_name);
     let commit = data.2;
     let limit = 4000;
-    let query = hyper_ast_benchmark_smells::queries::exception_handling();
+    let query = hyperast_benchmark_smells::queries::exception_handling();
     let query = format!("{} @root", query[0]);
     println!("{}:", repo_name);
     println!("{}", query);

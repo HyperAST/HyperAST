@@ -8,7 +8,7 @@ pub mod obj_creation;
 use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
 use std::env;
 
-use hyper_ast::utils::memusage;
+use hyperast::utils::memusage;
 
 #[cfg(feature = "impact")]
 #[test]
@@ -40,7 +40,7 @@ pub fn find_refs_from_canonical_type(
     _after: &str,
     _dir_path: &str,
 ) {
-    use hyper_ast_gen_ts_java::impact::{
+    use hyperast_gen_ts_java::impact::{
         element::{IdentifierFormat, LabelPtr, RefsEnum},
         partial_analysis::PartialAnalysis,
     };
@@ -126,7 +126,7 @@ fn example_process_make_cpp_project() {
         2,
     );
     // let id = preprocessed.processor.object_map_make.get(&a).unwrap();
-    // hyper_ast_gen_ts_cpp::legion::print_tree_syntax(&preprocessed.processor.main_stores.node_store, &preprocessed.processor.main_stores.label_store, &id.0);
+    // hyperast_gen_ts_cpp::legion::print_tree_syntax(&preprocessed.processor.main_stores.node_store, &preprocessed.processor.main_stores.label_store, &id.0);
 }
 
 #[test]
@@ -147,8 +147,8 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
             }
         })
         .init();
-    // let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("INRIA", "spoon");
-    // let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    // let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("INRIA", "spoon");
+    // let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
     // let commit = "56e12a0c0e0e69ea70863011b4f4ca3305e0542b";
     // let language = "Java";
     let tsg = r#"
@@ -157,19 +157,19 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
     attr (@class.decl) name = (source-text @name)
 }
 "#;
-    use hyper_ast_gen_ts_java::legion_with_refs::Acc;
-    use hyper_ast_gen_ts_java::types::TStore;
+    use hyperast_gen_ts_java::legion_with_refs::Acc;
+    use hyperast_gen_ts_java::types::TStore;
     let tsg = {
         let tsg = tsg;
-        type M<'hast, HAST, Acc> = hyper_ast_tsquery::QueryMatcher<'hast, HAST, Acc>;
+        type M<'hast, HAST, Acc> = hyperast_tsquery::QueryMatcher<'hast, HAST, Acc>;
         type ExtQ<'hast, HAST, Acc> =
-            hyper_ast_tsquery::ExtendingStringQuery<M<'hast, HAST, Acc>, tree_sitter::Language>;
+            hyperast_tsquery::ExtendingStringQuery<M<'hast, HAST, Acc>, tree_sitter::Language>;
 
         let source: &str = tsg;
-        let language = hyper_ast_gen_ts_java::language();
+        let language = hyperast_gen_ts_java::language();
 
         let mut file = tree_sitter_graph::ast::File::<
-            M<&hyper_ast::store::SimpleStores<TStore>, &Acc>,
+            M<&hyperast::store::SimpleStores<TStore>, &Acc>,
         >::new(language.clone());
 
         let query_source = {
@@ -186,42 +186,39 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
     };
     let t = INNER_CLASSES;
     let spec: &tree_sitter_graph::ast::File<
-        hyper_ast_tsquery::QueryMatcher<&hyper_ast::store::SimpleStores<TStore>, &Acc>,
+        hyperast_tsquery::QueryMatcher<&hyperast::store::SimpleStores<TStore>, &Acc>,
     > = &tsg;
-    let query: Option<&hyper_ast_tsquery::Query> = None;
+    let query: Option<&hyperast_tsquery::Query> = None;
     let functions = tree_sitter_graph::functions::Functions::<
         tree_sitter_graph::graph::GraphErazing<
-            hyper_ast_tsquery::MyNodeErazing<
-                hyper_ast::store::SimpleStores<
+            hyperast_tsquery::MyNodeErazing<
+                hyperast::store::SimpleStores<
                     TStore,
-                    &hyper_ast::store::nodes::legion::NodeStoreInner,
-                    &hyper_ast::store::labels::LabelStore,
+                    &hyperast::store::nodes::legion::NodeStoreInner,
+                    &hyperast::store::labels::LabelStore,
                 >,
                 &Acc,
             >,
         >,
     >::stdlib();
     let functions = functions.as_any();
-    let more = hyper_ast_tsquery::PreparedOverlay {
+    let more = hyperast_tsquery::PreparedOverlay {
         query,
         overlayer: spec,
         functions,
     };
-    let mut stores = hyper_ast::store::SimpleStores::default();
+    let mut stores = hyperast::store::SimpleStores::default();
     let mut md_cache = std::collections::HashMap::default();
     let line_break = "\n".as_bytes().to_vec();
-    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::<
-        hyper_ast_gen_ts_java::types::TStore,
+    let mut java_tree_gen = hyperast_gen_ts_java::legion_with_refs::JavaTreeGen::<
+        hyperast_gen_ts_java::types::TStore,
         _,
         _,
     >::with_preprocessing(&mut stores, &mut md_cache, more)
     .with_line_break(line_break);
     let r = crate::java::handle_java_file(&mut java_tree_gen, &b"".into(), t.as_bytes()).unwrap();
-    log::error!("height                  : {:3?}", r.local.metrics.height);
-    log::error!("height_counts_non_dedup : {:3?}", stores.node_store.inner.height_counts_non_dedup);
-    log::error!("height_counts           : {:3?}", stores.node_store.inner.height_counts);
-    log::error!("height_counts_label     : {:3?}", stores.node_store.inner.height_counts_label);
-    log::error!("height_counts_structural: {:3?}", stores.node_store.inner.height_counts_structural);
+    log::error!("height : {:3?}", r.local.metrics.height);
+    log::error!("{:?}", stores.node_store);
     // ASSERT one node per class_declaration
     // TODO make an automatic test once nodes can be accessed after the contruction
     Ok(())

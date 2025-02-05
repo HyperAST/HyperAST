@@ -1,25 +1,25 @@
 [workspace]
 resolver = "2"
 members = [
-    "hyper_diff",
-    "hyper_ast",
+    "crates/hyper_diff",
+    "crates/hyper_ast",
     "gen/tree-sitter/*",
     "cvs/git",
-    "client",
+    "crates/client",
     "benchmark",
-    "ref-mining-evaluation",
+    "crates/ref-mining-evaluation",
     "benchmark_diffs",
     "hyper_app",
     "hyperast_wasm",
-    "egui_addon",
-    "polyglote",
-    "tsquery",
+    "lib/egui_addon",
+    "lib/polyglote",
+    "crates/tsquery",
     "benchmark_smells",
 ]
-exclude = ["gen/tree-sitter/java/tree-sitter-java"]
+exclude = []
 default-members = [
-    "hyper_ast",
-    "hyper_diff",
+    "crates/hyper_ast",
+    "crates/hyper_diff",
     "gen/tree-sitter/java",
     "gen/tree-sitter/cpp",
     "gen/tree-sitter/xml",
@@ -28,28 +28,28 @@ default-members = [
     "cvs/git",
     "benchmark",
     "hyperast_wasm",
-    "ref-mining-evaluation",
+    "crates/ref-mining-evaluation",
     "benchmark_diffs",
-    "egui_addon",
-    "polyglote",
-    "tsquery",
+    "lib/egui_addon",
+    "lib/polyglote",
+    "crates/tsquery",
     "benchmark_smells",
 ]
 
 [workspace.dependencies]
 tree-sitter-graph = { version = "0.12.0" }
 tree-sitter = { version = "0.23.0" }
-hyper_diff = { path = "./hyper_diff" }
-hyper_ast = { path = "./hyper_ast" }
-hyper_ast_tsquery = { path = "./tsquery" }
-hyper_ast_cvs_git = { path = "./cvs/git" }
-polyglote = { path = "./polyglote" }
+hyper_diff = { path = "./crates/hyper_diff" }
+hyperast = { path = "./crates/hyper_ast" }
+hyperast_tsquery = { path = "./crates/tsquery" }
+hyperast_vcs_git = { path = "./cvs/git" }
+polyglote = { path = "./lib/polyglote" }
 
-hyper_ast_gen_ts_cpp = { path = "./gen/tree-sitter/cpp" }
-hyper_ast_gen_ts_java = { path = "./gen/tree-sitter/java" }
-hyper_ast_gen_ts_xml = { path = "./gen/tree-sitter/xml" }
-hyper_ast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
-hyper_ast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
+hyperast_gen_ts_cpp = { path = "./gen/tree-sitter/cpp" }
+hyperast_gen_ts_java = { path = "./gen/tree-sitter/java" }
+hyperast_gen_ts_xml = { path = "./gen/tree-sitter/xml" }
+hyperast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
+hyperast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
 
 [patch.crates-io] 
 tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12" }

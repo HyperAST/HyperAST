@@ -4,7 +4,7 @@ use std::{fmt::Debug, vec};
 use legion::world::EntryRef;
 use tuples::CombinConcat;
 
-use hyper_ast::{
+use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
@@ -33,7 +33,7 @@ use crate::{
     TNode,
 };
 
-pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
+pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
 
 pub struct XmlTreeGen<'stores, TS = TStore> {
     pub line_break: Vec<u8>,
@@ -116,7 +116,7 @@ impl<'a> Debug for TTreeCursor<'a> {
             .finish()
     }
 }
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor for TTreeCursor<'a> {
+impl<'a> hyperast::tree_gen::parser::TreeCursor for TTreeCursor<'a> {
     type N = TNode<'a>;
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
@@ -264,7 +264,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
 }
 
 pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
+    hyperast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
 impl<'a, TS> XmlTreeGen<'a, TS> {

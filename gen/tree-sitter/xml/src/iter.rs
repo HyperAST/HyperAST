@@ -1,8 +1,8 @@
 use std::fmt::{self, Debug};
 
 use crate::types::TIdN;
-use hyper_ast::types::TypedHyperAST;
-use hyper_ast::{
+use hyperast::types::TypedHyperAST;
+use hyperast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
     types::{HyperAST, IterableChildren, NodeId, Tree, TypedNodeStore, WithChildren},
@@ -82,7 +82,7 @@ where
                     let child = children[offset.to_usize().unwrap()];
                     self.path.check(self.stores).unwrap();
                     {
-                        let b = hyper_ast::types::NodeStore::resolve(
+                        let b = hyperast::types::NodeStore::resolve(
                             self.stores.node_store(),
                             node.id(),
                         );
@@ -137,7 +137,7 @@ where
                     Id::Query(node) => self.stores.typed_node_store().resolve(node),
                     Id::Other(node) => {
                         let b =
-                            hyper_ast::types::NodeStore::resolve(self.stores.node_store(), node);
+                            hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
                         if b.has_children() {
                             let children = b.children();
                             let children = children.unwrap();

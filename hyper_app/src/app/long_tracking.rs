@@ -11,7 +11,7 @@ use egui_addon::{
     multi_split::multi_splitter::MultiSplitter,
 };
 use epaint::{ahash::HashSet, Pos2};
-use hyper_ast::{
+use hyperast::{
     store::nodes::fetched::NodeIdentifier,
     types::{AnyType, HyperType, Labeled, TypeStore},
 };
@@ -1649,7 +1649,7 @@ fn show_detached_element(
                     cui.label(format!("{:?}", id));
                 }
                 if let Some(r) = store.node_store.read().unwrap().try_resolve::<AnyType>(*id) {
-                    use hyper_ast::types::{Tree, Typed, WithStats};
+                    use hyperast::types::{Tree, Typed, WithStats};
                     if options.kind {
                         let kind = store.resolve_type(id);
                         cui.label(format!("{}", kind));
@@ -1668,7 +1668,7 @@ fn show_detached_element(
                         cui.label(format!("size: {}", size));
                     }
                     if options.extra {
-                        use hyper_ast::types::{Labeled, WithChildren};
+                        use hyperast::types::{Labeled, WithChildren};
                         let mut q: VecDeque<NodeIdentifier> = Default::default();
                         if let Some(cs) = r.children() {
                             cs.0.iter().for_each(|x| q.push_back(*x));
@@ -1687,7 +1687,7 @@ fn show_detached_element(
                             {
                                 let t = store.resolve_type(&r_id);
                                 // wasm_rs_dbg::dbg!(t);
-                                if t.generic_eq(&hyper_ast_gen_ts_cpp::types::Type::NumberLiteral) {
+                                if t.generic_eq(&hyperast_gen_ts_cpp::types::Type::NumberLiteral) {
                                     if value.is_none() {
                                         let l = r.get_label_unchecked();
                                         if let Some(l) =
@@ -1712,7 +1712,7 @@ fn show_detached_element(
                                         }
                                     }
                                 } else if t
-                                    .generic_eq(&hyper_ast_gen_ts_cpp::types::Type::Identifier)
+                                    .generic_eq(&hyperast_gen_ts_cpp::types::Type::Identifier)
                                 {
                                     if name.is_none() {
                                         let l = r.get_label_unchecked();
@@ -2262,10 +2262,10 @@ fn show_tree_view(
                     tree_view::Action::Clicked(p) => Some(p),
                     tree_view::Action::SerializeKind(k) => {
                         let k = &k.as_any();
-                        if let Some(k) = k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>() {
+                        if let Some(k) = k.downcast_ref::<hyperast_gen_ts_cpp::types::Type>() {
                             aspects.ser_opt_cpp.insert(k.to_owned());
                         } else if let Some(k) =
-                            k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                            k.downcast_ref::<hyperast_gen_ts_java::types::Type>()
                         {
                             aspects.ser_opt_java.insert(k.to_owned());
                         }
@@ -2274,10 +2274,10 @@ fn show_tree_view(
                     }
                     tree_view::Action::HideKind(k) => {
                         let k = &k.as_any();
-                        if let Some(k) = k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>() {
+                        if let Some(k) = k.downcast_ref::<hyperast_gen_ts_cpp::types::Type>() {
                             aspects.hide_opt_cpp.insert(k.to_owned());
                         } else if let Some(k) =
-                            k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                            k.downcast_ref::<hyperast_gen_ts_java::types::Type>()
                         {
                             aspects.hide_opt_java.insert(k.to_owned());
                         }

@@ -1,0 +1,35 @@
+[package]
+name = "hyperast_tsquery"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter = { workspace = true }
+tree-sitter-graph = { workspace = true, optional = true }
+# tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
+# stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
+# tree-sitter-stack-graphs = { version = "0.10.0", optional = true } # TODO reenable by updating or forking
+# stack-graphs = { version = "0.14.0", optional = true} # TODO reenable by updating or forking
+
+log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
+
+hyperast = { workspace = true, optional = true }
+num = "0.4.0"
+
+regex = "1.10.5"
+
+ref-cast = "1.0" # help with transparent unit structs, it makes proper layout assertions
+
+[dev-dependencies]
+tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
+
+[features]
+default = ["hyperast"]
+tsg = [
+    "dep:tree-sitter-graph",
+    # "dep:stack-graphs",
+    # "dep:tree-sitter-stack-graphs",
+]
+hyperast = [
+    "dep:hyperast",
+]

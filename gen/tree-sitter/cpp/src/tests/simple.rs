@@ -1,10 +1,10 @@
-use hyper_ast::tree_gen::NoOpMore;
+use hyperast::tree_gen::NoOpMore;
 use tree_sitter::Parser;
 
 use crate::{legion::tree_sitter_parse, types::TStore};
 
 type CppTreeGen<'store, 'cache, HAST, Acc> = crate::legion::CppTreeGen<'store, 'cache, TStore, NoOpMore<HAST, Acc>, true>;
-type SimpleStores = hyper_ast::store::SimpleStores<TStore>;
+type SimpleStores = hyperast::store::SimpleStores<TStore>;
 #[test]
 pub(crate) fn cpp_tree_sitter_simple() {
     let mut parser = Parser::new();
@@ -84,15 +84,15 @@ int main(int argl, int* argv) {
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 #[test]
@@ -118,15 +118,15 @@ f.value < s;
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -153,15 +153,15 @@ void f() {
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -188,15 +188,15 @@ void f() {
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -226,15 +226,15 @@ ScaleFactor ScalingFunction<KNPK>::apply() const {
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -277,15 +277,15 @@ void f() {}
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -329,15 +329,15 @@ __attribute__((__may_alias__))
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -368,15 +368,15 @@ struct TBEntry {};
     // println!("{}", tree.root_node().to_sexp());
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
 
@@ -397,7 +397,7 @@ pub(crate) fn cpp_def_bl_test() {
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     // println!("{}", tree.root_node().to_sexp());
 }
@@ -427,15 +427,15 @@ pub(crate) fn cpp_char_literal_test() {
     let entity = x.compressed_node;
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, entity)
+        hyperast::nodes::SyntaxSerializer::new(&stores, entity)
     );
     println!(
         "{}",
-        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
     );
     println!(
         "{}",
-        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
     // println!("{}", tree.root_node().to_sexp());
 }
@@ -480,7 +480,7 @@ pub(crate) fn cpp_asm_test() {
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     // println!("{}", tree.root_node().to_sexp());
 }
@@ -515,7 +515,7 @@ pub(crate) fn cpp_op_test() {
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     // println!("{}", tree.root_node().to_sexp());
 }
@@ -562,7 +562,7 @@ pub(crate) fn cpp_3_test() {
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
     // println!("{}", tree.root_node().to_sexp());
 }

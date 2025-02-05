@@ -1,6 +1,6 @@
 use std::{env, path::Path};
 
-use hyper_ast_benchmark_diffs::{buggy_fixed::run_dir, with_profiling};
+use hyperast_benchmark_diffs::{buggy_fixed::run_dir, with_profiling};
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 use std::io::Write;

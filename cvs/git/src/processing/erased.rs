@@ -62,7 +62,7 @@ pub trait CommitProc {
     ) -> Box<dyn PreparedCommitProc + 'repo>;
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit>;
-    fn get_precomp_query(&self) -> Option<hyper_ast_tsquery::ZeroSepArrayStr> {
+    fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         None
     }
     fn get_lang_handle(&self, _lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
@@ -219,7 +219,7 @@ fn t() {
 }
 
 pub type ProcessorMap = spreaded::ProcessorMap<Box<dyn spreaded::ErasableProcessor>>;
-use hyper_ast::store::defaults::NodeIdentifier;
+use hyperast::store::defaults::NodeIdentifier;
 pub use spreaded::ErasableProcessor;
 
 mod spreaded {

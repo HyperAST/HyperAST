@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use hyper_ast::tree_gen::utils_ts::{TsEnableTS, TsType};
-use hyper_ast::types::{
+use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
+use hyperast::types::{
     AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
@@ -10,9 +10,9 @@ mod legion_impls {
 
     use super::*;
     impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
             n: &N,
-        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
             let k = n.kind_id();
             Type::from_u16(k)
         }
@@ -28,7 +28,7 @@ mod legion_impls {
         }
     }
 
-    impl<'a> hyper_ast::types::ETypeStore for TStore {
+    impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
 
         fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -47,7 +47,7 @@ mod legion_impls {
 }
 
 pub trait TsEnabledTypeStore:
-    hyper_ast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
 {
     fn resolve(t: Self::Ty) -> Type;
 }
@@ -168,7 +168,7 @@ impl LangRef<TType> for Lang {
     }
 }
 
-impl hyper_ast::types::Lang<Type> for Ts {
+impl hyperast::types::Lang<Type> for Ts {
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -211,8 +211,8 @@ impl HyperType for Type {
         todo!()
     }
 
-    fn as_shared(&self) -> hyper_ast::types::Shared {
-        use hyper_ast::types::Shared;
+    fn as_shared(&self) -> hyperast::types::Shared {
+        use hyperast::types::Shared;
 
         match self {
             Type::ClassDeclaration => Shared::TypeDeclaration,
@@ -232,8 +232,8 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Ts as hyper_ast::types::Lang<Type>>::to_u16(*self);
-        let t = <Ts as hyper_ast::types::Lang<Type>>::make(t);
+        let t = <Ts as hyperast::types::Lang<Type>>::to_u16(*self);
+        let t = <Ts as hyperast::types::Lang<Type>>::make(t);
         t
     }
 
@@ -253,13 +253,13 @@ impl HyperType for Type {
         todo!()
     }
 
-    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
+    fn get_lang(&self) -> hyperast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
         From::<&'static (dyn LangRef<Self>)>::from(&Lang)
     }
-    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+    fn lang_ref(&self) -> hyperast::types::LangWrapper<AnyType> {
         todo!()
     }
 }
@@ -356,16 +356,16 @@ impl Display for Type {
     }
 }
 
-type TType = hyper_ast::types::TypeU16<Lang>;
+type TType = hyperast::types::TypeU16<Lang>;
 
-impl hyper_ast::types::LLang<TType> for Ts {
+impl hyperast::types::LLang<TType> for Ts {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
 
-    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+    fn as_lang_wrapper() -> hyperast::types::LangWrapper<TType> {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }

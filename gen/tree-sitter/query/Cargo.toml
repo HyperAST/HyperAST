@@ -1,5 +1,5 @@
 [package]
-name = "hyper_ast_gen_ts_tsquery"
+name = "hyperast_gen_ts_tsquery"
 version = "0.2.0"
 edition = "2021"
 
@@ -14,8 +14,8 @@ cfg-if = "1.0"
 hashbrown = { version = "0.14.5", default-features = false, optional = true }
 log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
 
-hyper_ast = { workspace = true, default-features = false }
-hyper_ast_tsquery = { workspace = true, optional = true }
+hyperast = { workspace = true, default-features = false }
+hyperast_tsquery = { workspace = true, optional = true }
 
 libc = "0.2"
 
@@ -29,9 +29,9 @@ serde = { version = "1.0.130" }
 [dev-dependencies]
 pretty_assertions = "1.0.0"
 env_logger = "0.11.3"
-hyper_ast_gen_ts_cpp = { workspace = true }
+hyperast_gen_ts_cpp = { workspace = true }
 tree-sitter-java = "0.23.0"
-hyper_ast_gen_ts_xml = { workspace = true }
+hyperast_gen_ts_xml = { workspace = true }
 criterion = { version = "0.4", features = [
     "rayon",
     "plotters",
@@ -50,14 +50,14 @@ harness = false
 
 [features]
 default = ["impl"]
-legion = ["hyper_ast/legion", "dep:legion"]
+legion = ["hyperast/legion", "dep:legion"]
 impl = [
-    "hyper_ast/jemalloc",
+    "hyperast/jemalloc",
     "legion",
     "dep:hashbrown",
-    "hyper_ast/native",
+    "hyperast/native",
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-query",
-    "dep:hyper_ast_tsquery",
+    "dep:hyperast_tsquery",
 ]

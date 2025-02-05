@@ -1,5 +1,5 @@
 [package]
-name = "hyper_ast_gen_ts_java"
+name = "hyperast_gen_ts_java"
 version = "0.2.0"
 edition = "2021"
 include = ["/src", "tree-sitter-java/"]
@@ -21,8 +21,8 @@ hashbrown = { version = "0.14.5", default-features = false, optional = true }
 # fasthash = "0.4.0"
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
-hyper_ast = { path = "../../../hyper_ast", default-features = false }
-# hyper_ast = { workspace = true, default-features = false } # issue with hyper_app + wasm
+hyperast = { path = "../../../crates/hyper_ast", default-features = false }
+# hyperast = { workspace = true, default-features = false } # issue with hyper_app + wasm
 tree-sitter-graph = { workspace = true, optional = true }
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
 # stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
@@ -50,8 +50,8 @@ cc = "*"
 pretty_assertions = "1.0.0"
 env_logger = "0.11.3"
 criterion = { version = "0.5.1", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
-hyper_ast_tsquery = { workspace = true }
-hyper_ast_gen_ts_tsquery = { workspace = true }
+hyperast_tsquery = { workspace = true }
+hyperast_gen_ts_tsquery = { workspace = true }
 
 [[example]]
 name = "querying"
@@ -91,22 +91,22 @@ harness = false
 
 [features]
 default = ["impl"]
-legion = ["hyper_ast/legion", "dep:legion"]
+legion = ["hyperast/legion", "dep:legion"]
 impact = ["dep:string-interner"] # TODO cleanly separate feature, for now impl needs it
 impl = [
-    "hyper_ast/jemalloc",
+    "hyperast/jemalloc",
     "legion",
-    "hyper_ast/native",
+    "hyperast/native",
     "dep:hashbrown",
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-java",
-    "hyper_ast/ts",
+    "hyperast/ts",
 ]
 tsg = [
     # "dep:tree-sitter-graph",
     # "dep:stack-graphs",
     # "dep:tree-sitter-stack-graphs",
 ]
-subtree-stats=["hyper_ast/subtree-stats"]
+subtree-stats=["hyperast/subtree-stats"]
 all_examples=[]

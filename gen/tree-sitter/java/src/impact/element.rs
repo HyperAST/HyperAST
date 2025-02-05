@@ -4,11 +4,11 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::{Deref, Index};
 
-use hyper_ast::filter::default::VaryHasher;
-use hyper_ast::impact::serialize::{
+use hyperast::filter::default::VaryHasher;
+use hyperast::impact::serialize::{
     CachedHasher, Keyed, MySerialize, MySerializePar, MySerializeSco, MySerializer, Table,
 };
-use hyper_ast::utils;
+use hyperast::utils;
 use string_interner::{DefaultSymbol, Symbol};
 
 use super::java_element::Primitive;

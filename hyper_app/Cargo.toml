@@ -45,14 +45,14 @@ chrono = "0.4.23"
 serde_qs = "0.12.0"
 crossbeam-queue = "0.3.8"
 
-hyper_ast = { path = "../hyper_ast", default-features = false, features = [
+hyperast = { path = "../crates/hyper_ast", default-features = false, features = [
     "serialize",
     "web",
 ] }
-hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
-hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }
-hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml", default-features = false }
-egui_addon = { path = "../egui_addon" }
+hyperast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
+hyperast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }
+hyperast_gen_ts_xml = { path = "../gen/tree-sitter/xml", default-features = false }
+egui_addon = { path = "../lib/egui_addon" }
 
 nohash-hasher = "0.2.0"
 

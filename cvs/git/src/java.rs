@@ -4,22 +4,22 @@ use crate::{
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
-use hyper_ast::store::defaults::NodeIdentifier;
-use hyper_ast::tree_gen;
-use hyper_ast::{
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast::tree_gen;
+use hyperast::{
     hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
 };
-use hyper_ast_gen_ts_java::types::TStore;
-use hyper_ast_gen_ts_java::{legion_with_refs::PartialAnalysis, types::Type};
+use hyperast_gen_ts_java::types::TStore;
+use hyperast_gen_ts_java::{legion_with_refs::PartialAnalysis, types::Type};
 
-use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     tree_gen: &mut java_tree_gen::JavaTreeGen<
         'stores,
         'cache,
         TStore,
-        hyper_ast::store::SimpleStores<TStore>,
+        hyperast::store::SimpleStores<TStore>,
         More,
     >,
     name: &ObjectName,
@@ -29,7 +29,7 @@ where
     More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
         + tree_gen::More<
             TS = TStore,
-            T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
             Acc = java_tree_gen::Acc,
         >,
 {
@@ -53,16 +53,16 @@ type PrecompQueries = u16;
 pub struct JavaAcc {
     /// Identifying elements and fundamental derived metrics used to accelerate deduplication.
     /// For example, hashing subtrees accelerates the deduplication process,
-    /// but it requires to hash children and it can be done by accumulating hashes iteratively per child (see [`hyper_ast::hashed::inner_node_hash`]).
+    /// but it requires to hash children and it can be done by accumulating hashes iteratively per child (see [`hyperast::hashed::inner_node_hash`]).
     pub primary: BasicDirAcc<NodeIdentifier, LabelIdentifier, SubTreeMetrics<SyntaxNodeHashs<u32>>>,
     pub skiped_ana: bool,
     pub ana: PartialAnalysis,
     pub precomp_queries: PrecompQueries,
-    pub scripting_acc: Option<hyper_ast::scripting::Acc>,
+    pub scripting_acc: Option<hyperast::scripting::Acc>,
 }
 
 impl JavaAcc {
-    pub fn new(name: String, prepro: Option<hyper_ast::scripting::Acc>) -> Self {
+    pub fn new(name: String, prepro: Option<hyperast::scripting::Acc>) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
             ana: PartialAnalysis::init(&Type::Directory, None, |_| panic!()),
@@ -131,7 +131,7 @@ impl JavaAcc {
     }
 }
 
-impl hyper_ast::tree_gen::Accumulator for JavaAcc {
+impl hyperast::tree_gen::Accumulator for JavaAcc {
     type Node = (LabelIdentifier, (java_tree_gen::Local, IsSkippedAna));
     fn push(&mut self, (name, (full_node, skiped_ana)): Self::Node) {
         self.primary

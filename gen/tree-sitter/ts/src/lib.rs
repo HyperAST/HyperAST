@@ -5,7 +5,7 @@ pub mod types;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    pub use hyper_ast::tree_gen::utils_ts::TNode;
+    pub use hyperast::tree_gen::utils_ts::TNode;
 }
 
 #[cfg(feature = "legion")]

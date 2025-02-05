@@ -1,5 +1,5 @@
 [package]
-name = "hyper_ast_benchmark"
+name = "hyperast_benchmark"
 version = "0.2.0"
 edition = "2021"
 
@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 tree-sitter = { workspace = true }
 hyper_diff = { workspace = true }
-hyper_ast_gen_ts_java = { workspace = true, features = ["impl"] }
-hyper_ast_cvs_git = { workspace = true }
+hyperast_gen_ts_java = { workspace = true, features = ["impl"] }
+hyperast_vcs_git = { workspace = true }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
     "max_level_debug",
@@ -48,4 +48,4 @@ path = "src/reserializing.rs"
 # panic = "abort"
 
 [features]
-impact = ["hyper_ast_gen_ts_java/impact"]
+impact = ["hyperast_gen_ts_java/impact"]

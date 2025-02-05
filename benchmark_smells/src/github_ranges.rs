@@ -1,16 +1,16 @@
-use hyper_ast::{position::position_accessors::SolvedPosition, store::defaults::NodeIdentifier};
+use hyperast::{position::position_accessors::SolvedPosition, store::defaults::NodeIdentifier};
 
 type GithubUrl = String;
 
 pub fn compute_formated_ranges(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
+    query: &hyperast_tsquery::Query,
     repo: &str,
     oid: &str,
 ) -> Vec<Vec<GithubUrl>> {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
     let mut result = vec![vec![]; query.enabled_pattern_count()];
     let cid = query.capture_index_for_name("root").expect(r#"you should put a capture named "root" on the pattern you can to capture (can be something else that the root pattern btw)"#);
@@ -113,12 +113,12 @@ pub fn format_pos_as_github_diff_url(repo: &str, oid: &CommitId, position: impl 
 }
 
 pub fn compute_ranges(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
+    query: &hyperast_tsquery::Query,
 ) -> Vec<Vec<(String, usize, usize)>> {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
     let mut result = vec![vec![]; query.enabled_pattern_count()];
     let cid = query.capture_index_for_name("root").expect(r#"you should put a capture named "root" on the pattern you can to capture (can be something else that the root pattern btw)"#);
@@ -141,18 +141,18 @@ pub struct PositionWithContext {
     pub start: usize,
     pub end: usize,
     pub id: NodeIdentifier,
-    pub pos: hyper_ast::position::StructuralPosition<NodeIdentifier, u16>, // pub test_method: Option<NodeIdentifier>,
+    pub pos: hyperast::position::StructuralPosition<NodeIdentifier, u16>, // pub test_method: Option<NodeIdentifier>,
                                                                            // pub test_class: Option<NodeIdentifier>,
                                                                            // pub blob: NodeIdentifier,
 }
 
 pub fn compute_postions_with_context(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
+    stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
+    query: &hyperast_tsquery::Query,
 ) -> Vec<Vec<PositionWithContext>> {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
     let mut result = vec![vec![]; query.enabled_pattern_count()];
     let cid = query.capture_index_for_name("root").expect(r#"you should put a capture named "root" on the pattern you can to capture (can be something else that the root pattern btw)"#);

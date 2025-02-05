@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, fmt::Display, io::Write, path::Path, time::Instant};
 
-use hyper_ast::{
+use hyperast::{
     position::{
         Position, SpHandle, StructuralPosition, StructuralPositionStore, TreePath, TreePathMut,
         TypedTreePath,
@@ -14,7 +14,7 @@ use hyper_ast::{
         WithChildren,
     },
 };
-use hyper_ast_gen_ts_java::{
+use hyperast_gen_ts_java::{
     impact::{
         element::{IdentifierFormat, LabelPtr, RefPtr, RefsEnum},
         partial_analysis::PartialAnalysis,
@@ -34,10 +34,10 @@ const REFERENCES_SERIALIZATION_SUMMARY: bool = false;
 /// By recusive search on for example methods, I mean searching for refs to members with type (including ret type) of containing class of prev member.
 const SEARCH_MEMBERS: bool = false;
 
-type JavaIdN = hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>;
+type JavaIdN = hyperast_gen_ts_java::types::TIdN<NodeIdentifier>;
 
-type Scout = hyper_ast::position::Scout<NodeIdentifier, u16>;
-type TypedScout = hyper_ast::position::TypedScout<JavaIdN, u16>;
+type Scout = hyperast::position::Scout<NodeIdentifier, u16>;
+type TypedScout = hyperast::position::TypedScout<JavaIdN, u16>;
 
 /// Write in [`out`], the JSON formated reprentation of the reference relations at [`root`] in [`prepro`].
 pub fn write_referencial_relations<W: Write>(
@@ -1037,7 +1037,7 @@ impl<'a> RefsFinder<'a> {
         let mut package_ref = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // go through classes if inner
         let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-        let b = hyper_ast::types::TypedNodeStore::resolve(&self.stores.node_store, &x);
+        let b = hyperast::types::TypedNodeStore::resolve(&self.stores.node_store, &x);
         let t = b.get_type();
         assert_eq!(t, Type::Program);
         log::debug!(
@@ -1052,7 +1052,7 @@ impl<'a> RefsFinder<'a> {
         before_p_ref = max_qual_ref;
         for (i, xx) in b.children().unwrap().iter_children().enumerate() {
             let (bb, xx) =
-                hyper_ast::types::TypedNodeStore::try_resolve(&self.stores.node_store, xx).unwrap();
+                hyperast::types::TypedNodeStore::try_resolve(&self.stores.node_store, xx).unwrap();
             cursor.scout.goto_typed(xx, num::cast(i).unwrap());
             let tt = bb.get_type();
             log::debug!("in program {:?}", tt);

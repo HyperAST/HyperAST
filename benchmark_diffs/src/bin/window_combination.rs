@@ -1,9 +1,9 @@
 // window of one is just consecutive commits
 
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 use std::{env, io::Write, path::PathBuf, str::FromStr};
 
-use hyper_ast_benchmark_diffs::window_combination::windowed_commits_compare;
+use hyperast_benchmark_diffs::window_combination::windowed_commits_compare;
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;

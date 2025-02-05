@@ -1,11 +1,11 @@
-use hyper_ast::{
+use hyperast::{
     nodes::TextSerializer,
     position::{position_accessors::WithPreOrderOffsets, StructuralPosition, TreePath},
     store::defaults::NodeIdentifier,
     types::{Typed, WithChildren},
 };
-use hyper_ast_gen_ts_cpp::iter::IterAll as CppIter;
-use hyper_ast_gen_ts_xml::iter::IterAll as XmlIter;
+use hyperast_gen_ts_cpp::iter::IterAll as CppIter;
+use hyperast_gen_ts_xml::iter::IterAll as XmlIter;
 
 use crate::{
     auto::{
@@ -41,11 +41,11 @@ const C4: &str = r#"int f() {
     return b + b;
 }"#;
 
-type XmlTIdN = hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>;
-type CppTIdN = hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>;
+type XmlTIdN = hyperast_gen_ts_xml::types::TIdN<NodeIdentifier>;
+type CppTIdN = hyperast_gen_ts_cpp::types::TIdN<NodeIdentifier>;
 
-type Cpp = hyper_ast_gen_ts_cpp::types::Type;
-type Xml = hyper_ast_gen_ts_xml::types::Type;
+type Cpp = hyperast_gen_ts_cpp::types::Type;
+type Xml = hyperast_gen_ts_xml::types::Type;
 
 // Possible useful stuff:
 // - test if subtree is conforming to ts query
@@ -71,7 +71,7 @@ fn gen_match_simple() {
     println!();
     println!(
         "{}",
-        hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&code_store, pat)
+        hyperast::nodes::SyntaxSerializer::<_, _, true>::new(&code_store, pat)
     );
     println!();
     println!("{}", TextSerializer::new(&code_store, pat));
@@ -132,7 +132,7 @@ fn gen_match_xml() {
     let pat = code_store.node_store.resolve(pat).child(&3).unwrap();
     println!(
         "{}",
-        &hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&code_store, pat).to_string()[..70]
+        &hyperast::nodes::SyntaxSerializer::<_, _, true>::new(&code_store, pat).to_string()[..70]
     );
     println!();
     println!("{}", TextSerializer::new(&code_store, pat));

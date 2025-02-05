@@ -295,7 +295,7 @@ pub(crate) fn validate_pasted_project_url(
     paste: &str,
 ) -> Result<(super::types::Repo, Vec<String>), &'static str> {
     use std::str::FromStr;
-    match hyper_ast::utils::Url::from_str(paste) {
+    match hyperast::utils::Url::from_str(paste) {
         Ok(url) if &url.domain == "github.com" && &url.protocol == "https" => {
             let path = url.path.split_once('&').map_or(url.path.as_str(), |x| x.0);
             let path: Vec<_> = path.split('/').collect();

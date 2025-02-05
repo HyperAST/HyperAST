@@ -1,4 +1,4 @@
-use hyper_ast::{
+use hyperast::{
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{IterableChildren, Labeled},
     PrimInt,
@@ -150,11 +150,11 @@ pub fn regen_query(
         // dbg!(t);
         // println!(
         //     "{}",
-        //     hyper_ast::nodes::SyntaxSerializer::<_, _, false>::new(ast.stores, c) // hyper_ast::nodes::TextSerializer::new(ast.stores, c)
+        //     hyperast::nodes::SyntaxSerializer::<_, _, false>::new(ast.stores, c) // hyperast::nodes::TextSerializer::new(ast.stores, c)
         // );
         let l = n.try_get_label().copied();
         let mut cs: Vec<NodeIdentifier> = vec![];
-        use hyper_ast::types::WithChildren;
+        use hyperast::types::WithChildren;
 
         let cs_nodes = n.children()?.iter_children().copied().collect::<Vec<_>>();
         let mut cs_nodes = cs_nodes.iter();

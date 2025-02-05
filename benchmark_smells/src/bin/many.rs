@@ -1,19 +1,19 @@
 use std::collections::HashSet;
 
-use hyper_ast::{position, types::DecompressedSubtree as _, utils::memusage_linux};
-use hyper_ast_benchmark_smells::{
+use hyperast::{position, types::DecompressedSubtree as _, utils::memusage_linux};
+use hyperast_benchmark_smells::{
     diffing,
     github_ranges::{format_pos_as_github_diff_url, format_pos_as_github_url, PositionWithContext},
     simple::count_matches,
     DATASET,
 };
-use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
 use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
-/// enables uses of [`hyper_ast::utils::memusage_linux()`]
+/// enables uses of [`hyperast::utils::memusage_linux()`]
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -60,22 +60,22 @@ fn many(
     commit: &str,
     limit: usize,
     query: &str,
-    subs: impl hyper_ast_tsquery::ArrayStr,
+    subs: impl hyperast_tsquery::ArrayStr,
 ) {
     let query = if INCREMENTAL_QUERIES {
-        hyper_ast_tsquery::Query::with_precomputed(&query, hyper_ast_gen_ts_java::language(), subs)
+        hyperast_tsquery::Query::with_precomputed(&query, hyperast_gen_ts_java::language(), subs)
             .map_err(|x| x.to_string())
             .unwrap()
             .1
     } else {
-        hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language()).unwrap()
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language()).unwrap()
     };
 
     assert!(query.enabled_pattern_count() > 0);
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oids = preprocessed.pre_process_first_parents_with_limit(
-        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
+        &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         "",
         commit,
         "",
@@ -99,10 +99,10 @@ fn many(
         let commit = preprocessed.commits.get_key_value(&oid).unwrap();
         let time = commit.1.processing_time();
         let tr = commit.1.ast_root;
-        use hyper_ast::types::WithStats;
+        use hyperast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
 
-        let matches = hyper_ast_benchmark_smells::github_ranges::compute_postions_with_context(
+        let matches = hyperast_benchmark_smells::github_ranges::compute_postions_with_context(
             stores, tr, &query,
         );
         let matches_count: Vec<usize> = matches.iter().map(|x| x.len()).collect();
@@ -280,7 +280,7 @@ fn assertion_roulette_dubbo() {
     eprintln!("{}:", repo_name);
     let commit = data.2;
     let limit = 2000;
-    let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
+    let query = hyperast_benchmark_smells::queries::assertion_roulette();
     eprint!("{}", query);
     let subs = [
         r#"(method_invocation
@@ -301,7 +301,7 @@ fn exception_handling() {
     let repo_name = "dubbo/dubbo";
     let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
     let limit = 2000;
-    let query = hyper_ast_benchmark_smells::queries::exception_handling();
+    let query = hyperast_benchmark_smells::queries::exception_handling();
     let query = format!("{} @root\n{} @root", query[0], query[1]);
     println!("{}:", repo_name);
     println!("{}", query);
@@ -315,7 +315,7 @@ fn exception_handling_graphhopper() {
     eprintln!("{}:", repo_name);
     let commit = data.2;
     let limit = 1000;
-    let query = hyper_ast_benchmark_smells::queries::exception_handling();
+    let query = hyperast_benchmark_smells::queries::exception_handling();
     let query = format!("{} @root", query[0]);
     println!("{}:", repo_name);
     println!("{}", query);

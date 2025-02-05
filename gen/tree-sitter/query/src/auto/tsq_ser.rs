@@ -1,7 +1,7 @@
-use hyper_ast::nodes::Space;
-use hyper_ast::types;
-use hyper_ast::types::HyperType;
-use hyper_ast::types::IterableChildren;
+use hyperast::nodes::Space;
+use hyperast::types;
+use hyperast::types::HyperType;
+use hyperast::types::IterableChildren;
 use std::fmt::{Debug, Display, Write};
 
 pub struct TreeToQuery<

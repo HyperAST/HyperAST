@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use hyper_ast_gen_ts_tsquery::search::utils;
+use hyperast_gen_ts_tsquery::search::utils;
 
 fn compare_capture_names_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("Capture Names");

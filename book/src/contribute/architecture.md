@@ -4,7 +4,7 @@ This document describes the architecture of the project. It is suppose to be hig
 
 ## Overview of the structure
 
-- **hyper_ast** core crate representing the HyperAST structure
+- **hyperast** core crate representing the HyperAST structure
 
 - **hyper_app** graphical interface to interact with the HyperAST (web and native support)
     - compute metrics 

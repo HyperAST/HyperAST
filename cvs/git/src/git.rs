@@ -4,7 +4,7 @@ use std::{
 
 pub use git2::Oid;
 use git2::{RemoteCallbacks, Repository, Revwalk, TreeEntry};
-use hyper_ast::{position::Position, utils::Url};
+use hyperast::{position::Position, utils::Url};
 
 use crate::processing::ObjectName;
 

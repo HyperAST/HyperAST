@@ -23,7 +23,7 @@
 
 ---
 
-### [Doc](https://hyperast.github.io/doc/hyper_ast/index.html)
+### [Doc](https://hyperast.github.io/doc/hyperast/index.html)
 
 ## Summary
 
