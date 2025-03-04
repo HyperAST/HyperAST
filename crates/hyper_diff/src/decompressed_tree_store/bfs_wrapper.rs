@@ -8,12 +8,14 @@ use crate::decompressed_tree_store::{
 };
 use hyperast::types::{NodeStore, WithChildren};
 
+use super::BreadthFirstIt;
+
 /// Wrap or just map a decommpressed tree in breadth-first eg. post-order,
 pub struct SimpleBfsMapper<
     'a,
     T: WithChildren,
     IdD,
-    DTS: DecompressedTreeStore<'a, T, IdD>,
+    DTS: DecompressedTreeStore<T, IdD>,
     D: Borrow<DTS> = DTS,
 > {
     map: Vec<IdD>,
@@ -29,7 +31,7 @@ impl<
         'a,
         T: WithChildren,
         IdD: Debug,
-        DTS: DecompressedTreeStore<'a, T, IdD> + Debug,
+        DTS: DecompressedTreeStore<T, IdD> + Debug,
         D: Borrow<DTS>,
     > Debug for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
@@ -43,12 +45,12 @@ impl<
     }
 }
 
-impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borrow<DTS>>
+impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<T, IdD>, D: Borrow<DTS>>
     SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
     pub fn from<S>(store: &'a S, back: D) -> Self
     where
-        S: NodeStore<T::TreeId, R<'a> = T>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
         let x: &DTS = back.borrow();
         let mut map = Vec::with_capacity(x.len());
@@ -59,7 +61,7 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borr
 
         while map.len() < x.len() {
             let curr = &map[i];
-            let cs = x.children(store, curr);
+            let cs = x.children4(store, curr);
             rev[(*curr).to_usize().unwrap()] = cast(i).unwrap();
             map.extend(cs);
             i += 1;
@@ -87,8 +89,8 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borr
 //     }
 // }
 
-impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
-    ShallowDecompressedTreeStore<'a, T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>
+impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<T, IdD>, D: Borrow<DTS>>
+    ShallowDecompressedTreeStore<T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
     fn len(&self) -> usize {
         self.map.len()
@@ -102,38 +104,51 @@ impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow
         self.back.borrow().root()
     }
 
-    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    fn child<S>(&self, store: &S, x: &IdD, p: &[T::ChildIdx]) -> IdD
     where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        S: for<'b> NodeStore<T::TreeId, R<'b> = T>,
     {
         let b: &DTS = self.back.borrow();
         b.child(store, x, p)
     }
 
-    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn child4<S>(&self, store: &S, x: &IdD, p: &[<T as WithChildren>::ChildIdx]) -> IdD
     where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+    {
+        let b: &DTS = self.back.borrow();
+        b.child4(store, x, p)
+    }
+
+    fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
+    where
+        S: for<'b> NodeStore<T::TreeId, R<'b> = T>,
     {
         let b: &DTS = self.back.borrow();
         b.children(store, x)
     }
+    fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
+    where
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+    {
+        let b: &DTS = self.back.borrow();
+        b.children4(store, x)
+    }
 }
 
-impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
-    DecompressedTreeStore<'a, T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>
+impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<T, IdD>, D: Borrow<DTS>>
+    DecompressedTreeStore<T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
-    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
     where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
         self.back.borrow().descendants(store, x)
     }
 
-    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
+    fn descendants_count<S>(&self, store: &S, x: &IdD) -> usize
     where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
-        // S: 'b + NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
         self.back.borrow().descendants_count(store, x)
     }
@@ -150,9 +165,9 @@ impl<
         'd,
         T: WithChildren,
         IdD: PrimInt,
-        DTS: DecompressedTreeStore<'d, T, IdD> + DecompressedWithParent<'d, T, IdD>,
+        DTS: DecompressedTreeStore<T, IdD> + DecompressedWithParent<T, IdD>,
         D: Borrow<DTS>,
-    > DecompressedWithParent<'d, T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
+    > DecompressedWithParent<T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
 {
     fn has_parent(&self, id: &IdD) -> bool {
         self.back.borrow().has_parent(id)
@@ -166,7 +181,11 @@ impl<
         self.back.borrow().position_in_parent(c)
     }
 
-    type PIt<'a>=DTS::PIt<'a> where D: 'a, Self:'a;
+    type PIt<'a>
+        = DTS::PIt<'a>
+    where
+        D: 'a,
+        Self: 'a;
 
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
         self.back.borrow().parents(id)
@@ -185,13 +204,22 @@ impl<
         'd,
         T: WithChildren,
         IdD: 'static + Clone,
-        DTS: DecompressedTreeStore<'d, T, IdD>,
+        DTS: DecompressedTreeStore<T, IdD>,
         D: Borrow<DTS>,
-    > BreadthFirstIterable<'d, T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
+    > BreadthFirstIt<T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
 {
-    type It = Iter<'d, IdD>;
+    type It<'b> = Iter<'b, IdD>;
+}
 
-    fn iter_bf(&'_ self) -> Iter<'_, IdD> {
+impl<
+        'd,
+        T: WithChildren,
+        IdD: 'static + Clone,
+        DTS: DecompressedTreeStore<T, IdD>,
+        D: Borrow<DTS>,
+    > BreadthFirstIterable<T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
+{
+    fn iter_bf(&self) -> Iter<'_, IdD> {
         Iter {
             curr: zero(),
             len: self.map.len(),

@@ -317,7 +317,6 @@ impl<'a, GD> std::ops::Deref for SpacedGlobalData<'a, GD> {
     }
 }
 impl<'a, GD> std::ops::DerefMut for SpacedGlobalData<'a, GD> {
-
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner.inner
     }
@@ -1051,12 +1050,10 @@ pub trait More {
     type Acc: WithChildren<<Self::T as crate::types::Stored>::TreeId>;
     const ENABLED: bool;
     fn match_precomp_queries<
-        'a,
         HAST: crate::types::HyperAST<
-                'a,
                 IdN = <Self::T as crate::types::Stored>::TreeId,
                 TS = Self::TS,
-                T = Self::T,
+                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -1086,12 +1083,10 @@ where
     type Acc = Acc;
     const ENABLED: bool = false;
     fn match_precomp_queries<
-        'a,
         HAST: crate::types::HyperAST<
-                'a,
                 IdN = <Self::T as crate::types::Stored>::TreeId,
                 TS = Self::TS,
-                T = Self::T,
+                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -1103,22 +1098,19 @@ where
     }
 }
 
-impl<'a, TS, T, Acc> PreproTSG<'a> for NoOpMore<(TS, T), Acc>
+impl<'a, TS, T, Acc> PreproTSG for NoOpMore<(TS, T), Acc>
 where
     T: crate::types::Tree,
     Acc: WithChildren<<T as crate::types::Stored>::TreeId>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
-        HAST: 'static
-            + crate::types::HyperAST<
-                'a,
+        HAST: crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
                 Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
                 TS = Self::TS,
-                T = Self::T,
-            >
-            + std::clone::Clone,
+                RT = Self::T,
+            > + std::clone::Clone,
     >(
         &self,
         stores: HAST,
@@ -1129,24 +1121,36 @@ where
     }
 }
 
-pub trait PreproTSG<'a>: More {
+pub trait PreproTSG: More {
     const GRAPHING: bool;
     fn compute_tsg<
-        HAST: 'static
-            + crate::types::HyperAST<
-                'a,
+        HAST: crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
                 Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
                 TS = Self::TS,
-                T = Self::T,
-            >
-            + std::clone::Clone,
+                RT = Self::T,
+            > + std::clone::Clone,
     >(
         &self,
         stores: HAST,
         acc: &Self::Acc,
         label: Option<&str>,
     ) -> Result<usize, String>;
+    fn compute_tsg2<
+        HAST: crate::types::HyperAST<
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
+                TS = Self::TS,
+                RT = Self::T,
+            > + std::clone::Clone,
+    >(
+        &self,
+        stores: HAST,
+        acc: &Self::Acc,
+        label: Option<&str>,
+    ) -> Result<usize, String> {
+        todo!()
+    }
 }
 
 pub mod metric_definition;

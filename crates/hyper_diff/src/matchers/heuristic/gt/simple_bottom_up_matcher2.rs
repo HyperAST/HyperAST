@@ -27,11 +27,11 @@ pub struct SimpleBottomUpMatcher<
 impl<
         'a,
         Dsrc: 'a
-            + BreathFirstContiguousSiblings<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>,
+            + BreathFirstContiguousSiblings<T, IdD>
+            + DecompressedWithParent<T, IdD>,
         Ddst: 'a
-            + BreathFirstContiguousSiblings<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>,
+            + BreathFirstContiguousSiblings<T, IdD>
+            + DecompressedWithParent<T, IdD>,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
@@ -73,11 +73,11 @@ where
 impl<
         'a,
         Dsrc: 'a
-            + BreathFirstContiguousSiblings<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>,
+            + BreathFirstContiguousSiblings<T, IdD>
+            + DecompressedWithParent<T, IdD>,
         Ddst: 'a
-            + BreathFirstContiguousSiblings<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>,
+            + BreathFirstContiguousSiblings<T, IdD>
+            + DecompressedWithParent<T, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,

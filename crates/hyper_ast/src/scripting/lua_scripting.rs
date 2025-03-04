@@ -603,12 +603,10 @@ impl<
     type Acc = Acc;
     const ENABLED: bool = false;
     fn match_precomp_queries<
-        'a,
         HAST: crate::types::HyperAST<
-                'a,
                 IdN = <Self::T as crate::types::Stored>::TreeId,
                 TS = Self::TS,
-                T = Self::T,
+                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -625,15 +623,14 @@ impl<
         TS,
         T: crate::types::Tree,
         Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
-    > crate::tree_gen::PreproTSG<'a> for Prepro<(TS, T), &Acc>
+    > crate::tree_gen::PreproTSG for Prepro<(TS, T), &Acc>
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
-        HAST: crate::types::HyperAST<
-                'a,
+        HAST: for<'t> crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
                 TS = Self::TS,
-                T = Self::T,
+                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,

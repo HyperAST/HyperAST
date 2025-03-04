@@ -5,8 +5,8 @@ use hyperast_tsquery::stepped_query::{Node, QueryMatcher};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
-pub type Functions<Node> =
-    tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::GraphErazing<Node>>;
+// pub type Functions<Node> =
+//     tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::GraphErazing<Node>>;
 
 #[derive(Deserialize, Clone)]
 pub struct Param {
@@ -148,7 +148,7 @@ fn simple_aux(
     let mut globals = tree_sitter_graph::Variables::new();
     let mut graph = Graph::default();
     init_globals(&mut globals, &mut graph);
-    let mut functions = Functions::stdlib();
+    let mut functions = tree_sitter_graph::functions::Functions::stdlib();
     // tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
     let mut config = configure(&globals, &functions);
     let cancellation_flag = tree_sitter_graph::NoCancellation;
@@ -160,7 +160,7 @@ fn simple_aux(
 
     let code =
         hyperast_vcs_git::preprocessed::child_at_path(stores, code, path.split('/')).unwrap();
-
+    dbg!();
     let tree = Node::new(stores, hyperast::position::StructuralPosition::new(code));
     // SAFETY: just circumventing a limitation in the borrow checker, ie. all associated lifetimes considered as being 'static
     let tree = unsafe { std::mem::transmute(tree) };
@@ -170,6 +170,7 @@ fn simple_aux(
         let tsg_path = std::path::Path::new(&"");
         eprintln!("{}", err.display_pretty(&source_path, "", &tsg_path, query));
     }
+    dbg!();
     let result = serde_json::to_value(graph).unwrap();
     let compute_time = now.elapsed().as_secs_f64();
     Ok(ComputeResult {
@@ -185,10 +186,10 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_NAME: &str = "a/b/AAA.java";
 
-fn configure<'a, 'g, Node>(
-    globals: &'a tree_sitter_graph::Variables<'g>,
-    functions: &'a Functions<Node>,
-) -> tree_sitter_graph::ExecutionConfig<'a, 'g, tree_sitter_graph::graph::GraphErazing<Node>> {
+fn configure<'a, 'b, 'g, Node>(
+    globals: &'b tree_sitter_graph::Variables<'g>,
+    functions: &'a tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::Graph<Node>>,
+) -> tree_sitter_graph::ExecutionConfig<'a, 'g, 'b, tree_sitter_graph::graph::Graph<Node>> {
     let config = tree_sitter_graph::ExecutionConfig::new(functions, globals)
         .lazy(true)
         .debug_attributes(

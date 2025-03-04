@@ -13,8 +13,11 @@ impl Debug for NodeStore {
     }
 }
 
-impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
+impl crate::types::NodStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+}
+
+impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         self.internal
             .entity(id.clone())

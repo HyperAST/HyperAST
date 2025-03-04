@@ -631,7 +631,7 @@ impl Tab {
 pub(crate) struct Sharing<T> {
     pub(crate) content: T,
     #[serde(skip)]
-    rt: crdt_over_ws::Rt,
+    rt: crdt_over_ws::Rt, // TODO do not init
     #[serde(skip)]
     ws: Option<crdt_over_ws::WsDoc>,
     #[serde(skip)]

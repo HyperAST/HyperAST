@@ -24,9 +24,9 @@ pub fn compute_range<'store, It, HAST>(
     stores: &'store HAST,
 ) -> (usize, usize, HAST::IdN)
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     HAST::IdN: Copy,
-    HAST::T: WithSerialization,
+    for<'t> HAST::T<'t>: WithSerialization,
     It: Iterator,
     It::Item: PrimInt,
 {
@@ -64,8 +64,8 @@ pub fn compute_position<'store, HAST, It>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization + WithChildren,
     It: Iterator<Item = HAST::Idx>,
 {
     let mut offset = 0;
@@ -133,8 +133,8 @@ pub fn compute_position_and_nodes<'store, HAST, It: Iterator>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
@@ -196,44 +196,43 @@ where
     (Position::new(file, offset, len), path_ids)
 }
 
-pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
-    _root: HAST::IdN,
-    _offsets: &mut It,
-    _stores: &HAST,
-) -> (Position, Vec<HAST::IdN>)
-where
-    It::Item: Clone,
-    HAST: 'store + crate::types::HyperASTShared,
-    HAST::IdN: Clone,
-    &'store HAST: crate::types::HyperASTLean,
-    // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>:
-    //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
-    <&'store HAST as crate::types::HyperASTLean>::T:
-        WithSerialization + WithChildren<ChildIdx = It::Item>,
-{
-    todo!()
-}
+// pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
+//     _root: HAST::IdN,
+//     _offsets: &mut It,
+//     _stores: &HAST,
+// ) -> (Position, Vec<HAST::IdN>)
+// where
+//     It::Item: Clone,
+//     HAST: 'store + crate::types::HyperASTShared,
+//     HAST::IdN: Clone,
+//     &'store HAST: crate::types::HyperASTLean,
+//     // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>:
+//     //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
+//     <&'store HAST as crate::types::HyperASTLean>::T:
+//         WithSerialization + WithChildren<ChildIdx = It::Item>,
+// {
+//     todo!()
+// }
 
-pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
-    _root: HAST::IdN,
-    _offsets: &mut It,
-    _stores: &HAST,
-) -> (Position, Vec<HAST::IdN>)
-where
-    It::Item: Clone,
-    HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
-    HAST::IdN: Clone,
-    HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
-{
-    todo!()
-}
+// pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
+//     _root: HAST::IdN,
+//     _offsets: &mut It,
+//     _stores: &HAST,
+// ) -> (Position, Vec<HAST::IdN>)
+// where
+//     It::Item: Clone,
+//     HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
+//     HAST::IdN: Clone,
+//     HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
+// {
+//     todo!()
+// }
 
 impl StructuralPosition<NodeIdentifier, u16> {
     pub fn make_position<'store, HAST>(&self, stores: &'store HAST) -> Position
     where
-        HAST: HyperAST<
-            'store,
-            T = HashedNodeRef<'store>,
+        HAST: for<'t> HyperAST<
+            T<'t> = HashedNodeRef<'t>,
             IdN = NodeIdentifier,
             Label = LabelIdentifier,
         >,
@@ -335,9 +334,8 @@ impl StructuralPosition<NodeIdentifier, u16> {
 
     pub fn make_file_line_range<'store, HAST>(&self, stores: &'store HAST) -> (String, usize, usize)
     where
-        HAST: HyperAST<
-            'store,
-            T = HashedNodeRef<'store>,
+        HAST: for<'t> HyperAST<
+            T<'t> = HashedNodeRef<'t>,
             IdN = NodeIdentifier,
             Label = LabelIdentifier,
         >,

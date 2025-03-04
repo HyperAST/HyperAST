@@ -154,7 +154,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
             u32,
         >,
     >,
@@ -162,7 +162,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
             u32,
         >,
     >,
@@ -183,7 +183,7 @@ fn lazy_subtree_mapping<'a, 'b>(
     let (mut decompress_src, mut decompress_dst) = {
         use hyperast::types::DecompressedSubtree;
         let mut cached_decomp = |id: &NodeIdentifier| -> Option<
-            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<HashedNodeRef<'a>, u32>>,
+            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<HashedNodeRef<'static>, u32>>,
         > {
             let decompress = partial_comp_cache
                 .try_entry(*id)?
@@ -238,11 +238,12 @@ fn lazy_subtree_mapping<'a, 'b>(
         mapper.mapping.dst_arena.len(),
     );
     dbg!();
+
     let mm = LazyGreedySubtreeMatcher::<
         'a,
         SimpleStores<TStore>,
-        &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-        &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
+        &mut LazyPostOrder<_, u32>,
+        &mut LazyPostOrder<_, u32>,
         VecStore<_>,
     >::compute_multi_mapping::<DefaultMultiMappingStore<_>>(&mut mapper);
     dbg!();
@@ -254,7 +255,7 @@ fn lazy_subtree_mapping<'a, 'b>(
     }
 }
 
-pub fn child_by_type<'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
+pub fn child_by_type<'store, HAST: HyperAST<IdN = NodeIdentifier>>(
     stores: &'store HAST,
     d: NodeIdentifier,
     t: &<HAST::TS as types::TypeStore>::Ty,

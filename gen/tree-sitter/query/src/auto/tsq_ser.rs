@@ -6,8 +6,8 @@ use std::fmt::{Debug, Display, Write};
 
 pub struct TreeToQuery<
     'a,
-    HAST: types::HyperAST<'a>,
-    F: Fn(&HAST::T) -> bool,
+    HAST: types::HyperAST,
+    F: Fn(&HAST::T<'_>) -> bool,
     const TY: bool = true,
     const LABELS: bool = false,
     const IDS: bool = false,
@@ -18,17 +18,17 @@ pub struct TreeToQuery<
     pred: F, // TODO use a TS query, the list. Could even validate at compile time with proc macro
 }
 
-pub fn to_query<'store, HAST: types::HyperAST<'store>>(
+pub fn to_query<'store, HAST: types::HyperAST>(
     stores: &'store HAST,
     root: HAST::IdN,
-) -> TreeToQuery<'store, HAST, impl for<'a> Fn(&'a HAST::T) -> bool, true, true, false, false> {
+) -> TreeToQuery<'store, HAST, impl for<'a> Fn(&'a HAST::T<'_>) -> bool, true, true, false, false> {
     TreeToQuery::with_pred(stores, root, |_| true)
 }
 
 impl<
         'store,
-        HAST: types::HyperAST<'store>,
-        F: Fn(&HAST::T) -> bool,
+        HAST: types::HyperAST,
+        F: Fn(&HAST::T<'_>) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -42,8 +42,8 @@ impl<
 
 impl<
         'store,
-        HAST: types::HyperAST<'store>,
-        F: Fn(&HAST::T) -> bool,
+        HAST: types::HyperAST,
+        F: Fn(&HAST::T<'_>) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -59,8 +59,8 @@ where
 
 impl<
         'store,
-        HAST: types::HyperAST<'store>,
-        F: Fn(&HAST::T) -> bool,
+        HAST: types::HyperAST,
+        F: Fn(&HAST::T<'_>) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,

@@ -53,7 +53,7 @@ pub struct QueryLattice<E> {
 impl QueryLattice<NodeIdentifier> {
     fn generate_query0<'hast, HAST>(&mut self, stores: &'hast HAST, from: HAST::IdN) -> QueryId
     where
-        HAST: hyperast::types::HyperAST<'hast>,
+        HAST: hyperast::types::HyperAST,
         HAST::IdN: std::fmt::Debug,
     {
         use hyperast_gen_ts_tsquery::auto::tsq_ser::TreeToQuery;

@@ -6,7 +6,7 @@ use std::{fmt::Debug, marker::PhantomData};
 use num_traits::{cast, one, PrimInt};
 
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
     LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots,
     Shallow, ShallowDecompressedTreeStore,
 };
@@ -25,7 +25,7 @@ pub struct GreedyBottomUpMatcher<
     'a,
     Dsrc,
     Ddst,
-    HAST: HyperAST<'a>,
+    HAST: HyperAST,
     M: MonoMappingStore,
     MZs: MonoMappingStore = M,
     const SIZE_THRESHOLD: usize = 1000,
@@ -121,27 +121,11 @@ const SLICE: bool = true;
 /// TODO PostOrder might not be necessary
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, HAST::T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, HAST::T, Dsrc::IdD>
-            + PostOrder<'a, HAST::T, Dsrc::IdD, M::Src>
-            + PostOrderIterable<'a, HAST::T, Dsrc::IdD, M::Src>
-            + DecompressedSubtree<'a, HAST::T>
-            + ContiguousDescendants<'a, HAST::T, Dsrc::IdD, M::Src>
-            + LazyPOBorrowSlice<'a, HAST::T, Dsrc::IdD, M::Src>
-            + ShallowDecompressedTreeStore<'a, HAST::T, Dsrc::IdD, M::Src>
-            + LazyDecompressedTreeStore<'a, HAST::T, M::Src>,
-        Ddst: DecompressedTreeStore<'a, HAST::T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, HAST::T, Ddst::IdD>
-            + PostOrder<'a, HAST::T, Ddst::IdD, M::Dst>
-            + PostOrderIterable<'a, HAST::T, Ddst::IdD, M::Dst>
-            + DecompressedSubtree<'a, HAST::T>
-            + ContiguousDescendants<'a, HAST::T, Ddst::IdD, M::Dst>
-            + LazyPOBorrowSlice<'a, HAST::T, Ddst::IdD, M::Dst>
-            + ShallowDecompressedTreeStore<'a, HAST::T, Ddst::IdD, M::Dst>
-            + LazyDecompressedTreeStore<'a, HAST::T, M::Dst>,
-        HAST: HyperAST<'a>,
-        M: MonoMappingStore,
-        MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
+        Dsrc: LazyDecompressed<M::Src>,
+        Ddst: LazyDecompressed<M::Dst>,
+        HAST,
+        M,
+        MZs,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
         const SIM_THRESHOLD_DEN: u64,
@@ -158,13 +142,36 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    HAST::T: 'a + Tree + WithHashs + WithStats,
-    HAST::IdN: 'a + Clone + Eq + Debug,
+    for<'t> HAST::T<'t>: Tree + WithHashs + WithStats,
+    HAST::RT: WithStats,
+    HAST::IdN: Clone + Eq + Debug,
     // <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
-    Dsrc::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
-    Ddst::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
-    M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: 'a + PrimInt + std::ops::SubAssign + Debug,
+    Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
+    Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = <Ddst as LazyDecompressed<M::Dst>>::IdD> + Default,
+    HAST: HyperAST,
+    M: MonoMappingStore,
+    Dsrc: DecompressedTreeStore<HAST::RT, Dsrc::IdD, M::Src>
+        + DecompressedWithParent<HAST::RT, Dsrc::IdD>
+        + PostOrder<HAST::RT, Dsrc::IdD, M::Src>
+        + PostOrderIterable<HAST::RT, Dsrc::IdD, M::Src>
+        + DecompressedSubtree<HAST::RT>
+        + ContiguousDescendants<HAST::RT, Dsrc::IdD, M::Src>
+        + LazyPOBorrowSlice<HAST::RT, Dsrc::IdD, M::Src>
+        + ShallowDecompressedTreeStore<HAST::RT, Dsrc::IdD, M::Src>
+        + LazyDecompressedTreeStore<HAST::RT, M::Src>,
+    Ddst: DecompressedTreeStore<HAST::RT, Ddst::IdD, M::Dst>
+        + DecompressedWithParent<HAST::RT, Ddst::IdD>
+        + PostOrder<HAST::RT, Ddst::IdD, M::Dst>
+        + PostOrderIterable<HAST::RT, Ddst::IdD, M::Dst>
+        + DecompressedSubtree<HAST::RT>
+        + ContiguousDescendants<HAST::RT, Ddst::IdD, M::Dst>
+        + LazyPOBorrowSlice<HAST::RT, Ddst::IdD, M::Dst>
+        + ShallowDecompressedTreeStore<HAST::RT, Ddst::IdD, M::Dst>
+        + LazyDecompressedTreeStore<HAST::RT, M::Dst>
+        + LazyDecompressed<M::Dst>,
 {
     pub fn match_it(
         mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
@@ -282,7 +289,8 @@ where
         } else {
             let o_src = src_arena.original(&src);
             let o_dst = dst_arena.original(&dst);
-            let src_arena = ZsTree::<HAST::T, Dsrc::IdD>::decompress(node_store, &o_src);
+            let src_arena =
+                ZsTree::<HAST::RT, Dsrc::IdD>::decompress2(internal.hyperast, &o_src);
             src_offset = src - src_arena.root();
             if cfg!(debug_assertions) {
                 let src_arena_z = mapping.src_arena.slice_po(node_store, &src);
@@ -298,7 +306,8 @@ where
                 assert!(src_arena.kr[src_arena.kr.len() - 1]);
                 dbg!(last == src_arena_z.root());
             }
-            let dst_arena = ZsTree::<HAST::T, Ddst::IdD>::decompress(node_store, &o_dst);
+            let dst_arena =
+                ZsTree::<HAST::RT, Ddst::IdD>::decompress2(internal.hyperast, &o_dst);
             dst_offset = dst - dst_arena.root();
             if cfg!(debug_assertions) {
                 let dst_arena_z = mapping.dst_arena.slice_po(node_store, &dst);

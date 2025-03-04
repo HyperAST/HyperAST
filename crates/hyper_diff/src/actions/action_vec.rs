@@ -40,7 +40,7 @@ pub fn actions_vec_f<'store, P: TreePath<Item = u16>, HAST>(
     ori: NodeIdentifier,
 ) where
     HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t>HyperAST<T<'t> = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
     HAST::TS: TypeStore<Ty = AnyType>,
 {
     v.iter().for_each(|a| print_action(ori, stores, a));
@@ -53,7 +53,7 @@ fn format_action_pos<'store, P: TreePath<Item = u16>, HAST>(
 ) -> String
 where
     HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t>HyperAST<T<'t> = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
 {
     // TODO make whole thing more specific to a path in a tree
     let mut end = None;
@@ -115,7 +115,7 @@ fn print_action<'store, P: TreePath<Item = u16>, HAST>(
     a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
 ) where
     HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t>HyperAST<T<'t> = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
     // <HAST::TS as TypeStore<AnyType>>::Ty: Eq,
     HAST::TS: TypeStore<Ty = AnyType>,
 {

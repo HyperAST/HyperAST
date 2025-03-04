@@ -44,16 +44,16 @@ impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'a, 
 impl<
         'a,
         T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: TypedHyperAST<'a, crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
+        HAST: TypedHyperAST<crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     > Iterator for IterDeclarations<'a, T, HAST>
 where
     // HAST::TS: JavaEnabledTypeStore<HAST::T>,
-    <HAST::TT as Typed>::Type: Copy + Send + Sync,
+    for<'t> <HAST::TT<'t> as Typed>::Type: Copy + Send + Sync,
     HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
     // HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
-    for<'b> <HAST::NS as TypedNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
+    for<'b> <HAST::NS as hyperast::types::TyNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
         TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
-    <HAST::NS as NodeStore<HAST::IdN>>::R<'a>:
+    <HAST::NS as hyperast::types::NodStore<HAST::IdN>>::R<'a>:
         TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
 {
     type Item = T;
@@ -130,8 +130,7 @@ where
                 let b = match &node {
                     Id::Java(node) => TypedNodeStore::resolve(self.stores.node_store(), node),
                     Id::Other(node) => {
-                        let b =
-                            hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
+                        let b = hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
                         if b.has_children() {
                             let children = b.children();
                             let children = children.unwrap();
@@ -247,7 +246,7 @@ where
     }
 }
 
-impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<'a, IdN = NodeIdentifier>>
+impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<IdN = NodeIdentifier>>
     IterDeclarations<'a, T, HAST>
 where
     HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
@@ -291,7 +290,7 @@ mod experiment {
         }
     }
 
-    impl<'a, HAST: HyperAST<'a>> Iterator for IterDeclarationsUnstableOpti<'a, HAST> {
+    impl<'a, HAST: HyperAST> Iterator for IterDeclarationsUnstableOpti<'a, HAST> {
         type Item = NodeIdentifier;
 
         fn next(&mut self) -> Option<Self::Item> {

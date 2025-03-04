@@ -16,7 +16,7 @@ pub mod lazy_greedy_subtree_matcher;
 
 pub fn size<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where
-    S: 'a + NodeStore<IdC>,
+    S: NodeStore<IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);
@@ -31,7 +31,7 @@ where
 /// todo specilize if T impl [WithStats]
 pub fn height<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where
-    S: 'a + NodeStore<IdC>,
+    S: NodeStore<IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);

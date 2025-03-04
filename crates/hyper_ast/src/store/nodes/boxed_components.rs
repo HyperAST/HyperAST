@@ -27,7 +27,7 @@ impl NodeId for NodeIdentifier {
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
     type TyErazed = crate::types::AnyType;
-    
+
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
         ty
     }
@@ -37,17 +37,25 @@ pub struct NodeStore {
     nodes: std::collections::HashMap<NodeIdentifier, boxing::ErasedMap>,
 }
 
-impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
+impl crate::types::NodStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, NodeIdentifier>; // TODO
+}
+
+impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         HashedNodeRef(self.nodes.get(id).unwrap(), PhantomData)
     }
 }
 
-impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
+impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TyNodeStore<TIdN>
     for NodeStore
 {
     type R<'a> = HashedNodeRef<'a, TIdN>; // TODO
+}
+
+impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
+    for NodeStore
+{
     fn resolve(&self, id: &TIdN) -> Self::R<'_> {
         let r = self.nodes.get(id.as_id()).unwrap();
         let r: HashedNodeRef<<TIdN as NodeId>::IdN> = HashedNodeRef(r, PhantomData);
@@ -69,7 +77,7 @@ impl NodeStore {
     pub fn resolve<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>>(
         &self,
         id: NodeIdentifier,
-    ) -> <Self as crate::types::TypedNodeStore<TIdN>>::R<'_> {
+    ) -> <Self as crate::types::TyNodeStore<TIdN>>::R<'_> {
         let r = self.nodes.get(id.as_id()).unwrap();
         let r: HashedNodeRef<<TIdN as NodeId>::IdN> = HashedNodeRef(r, PhantomData);
         assert!(r.get_component::<TIdN::Ty>().is_ok());

@@ -6,7 +6,7 @@ use crate::{
 };
 use hyperast::{types::WithStats, utils::memusage_linux};
 use hyperast_vcs_git::{
-    git::fetch_github_repository, no_space::as_nospaces, preprocessed::PreProcessedRepository,
+    git::fetch_github_repository, no_space::as_nospaces2 as as_nospaces, preprocessed::PreProcessedRepository,
 };
 use hyper_diff::algorithms::{self, ComputeTime};
 use num_traits::ToPrimitive;

@@ -187,8 +187,8 @@ where
     T::Label: Debug,
     T::TreeId: Debug,
     IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-    T: 'store + Stored + Labeled + WithChildren,
-    SS: DecompressedWithParent<'a1, T, IdD>,
+    T: Stored + Labeled + WithChildren,
+    SS: DecompressedWithParent<T, IdD>,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
     pub store: &'store S,
@@ -219,27 +219,27 @@ impl<
         'a1: 'm,
         'a2: 'm,
         'm,
-        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
-        T: 'store + Tree,
-        SS: DecompressedTreeStore<'a1, T, IdD>
-            + DecompressedWithParent<'a1, T, IdD>
-            + PostOrder<'a1, T, IdD>
-            + PostOrderIterable<'a1, T, IdD>
+        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+        T: Tree,
+        SS: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + PostOrder<T, IdD>
+            + PostOrderIterable<T, IdD>
             + Debug,
-        SD: DecompressedTreeStore<'a2, T, IdD>
-            + DecompressedWithParent<'a2, T, IdD>
-            + BreadthFirstIterable<'a2, T, IdD>,
+        SD: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreadthFirstIterable<T, IdD>,
         S,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = T::ChildIdx>,
     > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
 where
-    S: NodeStore<T::TreeId, R<'store> = T>,
+    S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Clone,
     P: From<Vec<T::ChildIdx>> + Debug,
 {
-    pub fn compute_actions<'a: 'a1 + 'a2, HAST: HyperAST<'store, NS = S>>(
+    pub fn compute_actions<'a: 'a1 + 'a2, HAST: HyperAST<NS = S>>(
         hyperast: &'store HAST,
         mapping: &'a Mapping<SS, SD, M>,
     ) -> Result<ActionsVec<SimpleAction<T::Label, P, T::TreeId>>, String>
@@ -261,16 +261,16 @@ impl<
         'a1: 'm,
         'a2: 'm,
         'm,
-        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
-        T: 'store + Tree,
-        SS: DecompressedTreeStore<'a1, T, IdD>
-            + DecompressedWithParent<'a1, T, IdD>
-            + PostOrder<'a1, T, IdD>
-            + PostOrderIterable<'a1, T, IdD>
+        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+        T: Tree,
+        SS: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + PostOrder<T, IdD>
+            + PostOrderIterable<T, IdD>
             + Debug,
-        SD: DecompressedTreeStore<'a2, T, IdD>
-            + DecompressedWithParent<'a2, T, IdD>
-            + BreadthFirstIterable<'a2, T, IdD>,
+        SD: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreadthFirstIterable<T, IdD>,
         S,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = T::ChildIdx>,
@@ -305,22 +305,22 @@ impl<
         'a1: 'm,
         'a2: 'm,
         'm,
-        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
-        T: 'store + Tree,
-        SS: DecompressedTreeStore<'a1, T, IdD>
-            + DecompressedWithParent<'a1, T, IdD>
-            + PostOrder<'a1, T, IdD>
-            + PostOrderIterable<'a1, T, IdD>
+        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+        T: Tree,
+        SS: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + PostOrder<T, IdD>
+            + PostOrderIterable<T, IdD>
             + Debug,
-        SD: DecompressedTreeStore<'a2, T, IdD>
-            + DecompressedWithParent<'a2, T, IdD>
-            + BreadthFirstIterable<'a2, T, IdD>,
+        SD: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreadthFirstIterable<T, IdD>,
         S,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = T::ChildIdx>,
     > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
 where
-    S: NodeStore<T::TreeId, R<'store> = T>,
+    S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     T::Label: Debug + Copy,
     T::TreeId: Debug,
     P: From<Vec<T::ChildIdx>> + Debug,
@@ -336,7 +336,7 @@ where
         let root = self.src_arena_dont_use.root();
         // self.moved.resize(len, false);
         for x in self.src_arena_dont_use.iter_df_post::<true>() {
-            let children = self.src_arena_dont_use.children(self.store, &x);
+            let children = self.src_arena_dont_use.children4(self.store, &x);
             let children = if children.len() > 0 {
                 Some(children)
             } else {
@@ -365,22 +365,22 @@ impl<
         'a1: 'm,
         'a2: 'm,
         'm,
-        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
-        T: 'store + Tree,
-        SS: DecompressedTreeStore<'a1, T, IdD>
-            + DecompressedWithParent<'a1, T, IdD>
-            + PostOrder<'a1, T, IdD>
-            + PostOrderIterable<'a1, T, IdD>
+        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+        T: Tree,
+        SS: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + PostOrder<T, IdD>
+            + PostOrderIterable<T, IdD>
             + Debug,
-        SD: DecompressedTreeStore<'a2, T, IdD>
-            + DecompressedWithParent<'a2, T, IdD>
-            + BreadthFirstIterable<'a2, T, IdD>,
+        SD: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreadthFirstIterable<T, IdD>,
         S,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = T::ChildIdx>,
     > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
 where
-    S: NodeStore<T::TreeId, R<'store> = T>,
+    S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Clone,
     P: From<Vec<T::ChildIdx>> + Debug,
@@ -525,12 +525,12 @@ where
                 let w_l = {
                     let c = self.mid_arena[w.to_usize().unwrap()].compressed.clone();
                     w_t = c.clone();
-                    self.store.resolve(&c).try_get_label().cloned()
+                    self.store.scoped(&c, |x| x.try_get_label().cloned())
                 };
                 let x_l = {
                     let c = self.dst_arena.original(&x).clone();
                     x_t = c.clone();
-                    self.store.resolve(&c).try_get_label().cloned()
+                    self.store.scoped(&c, |x| x.try_get_label().cloned())
                 };
                 f(&w_t, &x_t);
 
@@ -807,7 +807,7 @@ where
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
         self.src_in_order.remove_all(&w_c);
-        let x_c = self.dst_arena.children(self.store, x);
+        let x_c = self.dst_arena.children4(self.store, x);
         self.dst_in_order.remove_all(x_c.as_slice());
 
         // todo use iter filter collect
@@ -892,7 +892,7 @@ where
 
     /// find position of x in parent on dst_arena
     pub(crate) fn find_pos(&self, x: &IdD, y: &IdD) -> T::ChildIdx {
-        let siblings = self.dst_arena.children(self.store, y);
+        let siblings = self.dst_arena.children4(self.store, y);
 
         for c in &siblings {
             if self.dst_in_order.contains(c) {

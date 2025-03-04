@@ -21,7 +21,7 @@ fn _top_down<'store, HAST: HyperAST<'store>>(
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 {
     let mm = LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
         DefaultMultiMappingStore<_>,
@@ -44,7 +44,7 @@ where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 {
     let mappings = VecStore::<u32>::default();
     let mut mapper = Mapper {

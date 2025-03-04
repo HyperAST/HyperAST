@@ -83,7 +83,7 @@ pub(crate) fn diff(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let with_spaces_stores = &repositories.processor.main_stores;
-    let stores = &hyperast_vcs_git::no_space::as_nospaces(with_spaces_stores);
+    let stores = &hyperast_vcs_git::no_space::as_nospaces2(with_spaces_stores);
 
     if src_tr == dst_tr {
         return Ok(Diff {
@@ -133,7 +133,7 @@ pub(crate) fn diff(
                     mapper.mapping.src_arena.len(),
                     mapper.mapping.dst_arena.len(),
                 );
-                crate::matching::full2(hyperast, &mut mapper);
+                crate::matching::full2(&mut mapper);
 
                 // TODO match decls by sig/path
 
@@ -173,7 +173,7 @@ pub(crate) fn diff(
     };
     let actions = {
         let mapping = &mapping;
-        let store = stores.node_store();
+        let store = &stores.node_store;
 
         let mut this = ScriptGenerator::new(store, &mapping.src_arena, &mapping.dst_arena)
             .init_cpy(&mapping.mappings);
@@ -269,7 +269,7 @@ pub(crate) fn extract_moves<'a>(
         &a_tree.atomics,
         hyperast::position::StructuralPosition::new(dst_tr),
         &mut |p, nn, n, id| {
-            let t = stores.resolve_type(&id);
+            let t = hyperast::types::HyperAST::resolve_type(stores, &id);
             // dbg!(t.as_static_str(), p);
             // if t.is_hidden() {
             //     return false
@@ -610,8 +610,8 @@ pub(crate) fn extract_focuses<'a>(
 
 pub(crate) type _R = hyperast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>;
 
-pub(crate) type Stores<'a> = hyperast::types::SimpleHyperAST<
-    NoSpaceWrapper<'a, NodeIdentifier>,
+pub(crate) type Stores<'a> = hyperast::store::SimpleStores<
+    // NoSpaceWrapper<'static, NodeIdentifier>,
     hyperast_vcs_git::TStore,
     hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper<'a>,
     &'a LabelStore,

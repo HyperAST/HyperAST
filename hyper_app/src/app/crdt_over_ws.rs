@@ -5,6 +5,7 @@ use async_executors::JoinHandle;
 use autosurgeon::{reconcile, Hydrate, Reconcile};
 use egui_addon::code_editor::generic_text_buffer::TextBuffer;
 use futures_util::{Future, SinkExt, StreamExt};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::task::JoinHandle;
@@ -304,20 +305,25 @@ impl WsDocsDb {
 // # Cross platform async utils
 
 #[derive(Clone)]
-pub(super) struct Rt(#[cfg(not(target_arch = "wasm32"))] pub(super) Arc<tokio::runtime::Runtime>);
+pub(super) struct Rt(#[cfg(not(target_arch = "wasm32"))] Arc<tokio::runtime::Runtime>);
 
 impl Default for Rt {
     fn default() -> Self {
         Self(
             #[cfg(not(target_arch = "wasm32"))]
-            Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap(),
-            ),
+            RT.clone(),
         )
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+lazy_static! {
+    static ref RT: Arc<tokio::runtime::Runtime> = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap(),
+    );
 }
 
 pub(super) struct H(#[cfg(not(target_arch = "wasm32"))] JoinHandle<()>);

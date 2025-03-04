@@ -396,6 +396,7 @@ impl<Node: self::Node> QueryMatch<Node> {
         &'a self,
         index: CaptureId,
     ) -> impl Iterator<Item = &'a Node> {
+        dbg!();
         self.captures.nodes_for_capture_index(index)
     }
 }
@@ -405,3 +406,178 @@ pub use precompute_pattern_predicate::PreparedQuerying;
 mod graph_overlaying;
 pub use graph_overlaying::PreparedOverlay;
 
+// mod staged_graph {
+//     use std::collections::VecDeque;
+//     use std::collections::HashMap;
+//     use tree_sitter_graph::graph::Erzd;
+//     use tree_sitter_graph::graph::GraphNode;
+//     use tree_sitter_graph::graph::LErazng;
+//     use tree_sitter_graph::graph::SyntaxNodeRef;
+//     use tree_sitter_graph::graph::GraphNodeRef;
+//     use tree_sitter_graph::graph::SyntaxNodeExt;
+//     use tree_sitter_graph::graph::WithOutGoingEdges;
+//     use tree_sitter_graph::graph::WithAttrs;
+
+//     use std::ops::IndexMut;
+//     use std::ops::Index;
+
+//     /// The one that exists while preprocessing a subtree
+//     pub struct PartialGraph<S, N = GraphNode> {
+//         pub(crate) syntax_nodes: HashMap<SyntaxNodeID, S>,
+//         graph_nodes: VecDeque<(u32, N)>,
+//     }
+
+//     /// The one stored on the subtree, ie. immutable
+//     /// TODO look at other variants
+//     pub struct ImmGraph<S, N = GraphNode> {
+//         pub(crate) syntax_node_ids: Box<[SyntaxNodeID]>,
+//         pub(crate) syntax_nodes: Box<[S]>,
+//         graph_node_ids: Box<[u32]>,
+//         graph_nodes: Box<[N]>,
+//         added: u8,
+//         /// if added >0 then graph_node_ids[-1] == total
+//         total: u32
+//     }
+
+//     /// Complete, but kind of append only.
+//     /// mutating an attribute only shadows it
+//     pub struct StagedGraph<S, N = GraphNode> {
+//         pub(crate) syntax_nodes: HashMap<SyntaxNodeID, S>,
+//         graph_nodes: Vec<N>,
+//         // hast: HAST,
+//         // acc: Acc,
+//     }
+
+//     impl<S, N> Default for StagedGraph<S, N> {
+//         fn default() -> Self {
+//             Self {
+//                 syntax_nodes: Default::default(),
+//                 graph_nodes: Default::default(),
+//             }
+//         }
+//     }
+
+//     /// Should probably correspond to a topological id of some category of node,
+//     /// eg. Identifier, TypeIdentifier, ClassDeclaration, Body, File
+//     /// but not static, public, curly, paren, space
+//     ///
+//     /// the topo id is great to search through a recursive tree struct,
+//     /// anyway must continue descending until attr is found at a certain subtree depth
+//     pub(crate) type SyntaxNodeID = u32;
+//     type GraphNodeID = u32;
+
+//     impl<S, N> StagedGraph<S, N> {
+//         /// Creates a new, empty graph.
+//         pub fn new() -> Self {
+//             StagedGraph::default()
+//         }
+//     }
+
+//     pub trait WithSynNodes:
+//         LErazng + Index<GraphNodeRef, Output = Self::Node> + IndexMut<GraphNodeRef, Output = Self::Node>
+//     {
+//         type Node: WithAttrs + Default + WithOutGoingEdges;
+//         type SNode: SyntaxNodeExt + Clone;
+//         fn node(&self, r: SyntaxNodeRef) -> Option<&Self::SNode>;
+
+//         /// Adds a new graph node to the graph, returning a graph DSL reference to it.
+//         fn add_graph_node(&mut self) -> GraphNodeRef;
+//         fn add_syntax_node(&mut self, node: Self::SNode) -> SyntaxNodeRef;
+//     }
+
+//     pub struct GraphErazing<S>(std::marker::PhantomData<S>);
+
+//     impl<S> Default for GraphErazing<S> {
+//         fn default() -> Self {
+//             Self(Default::default())
+//         }
+//     }
+
+//     impl<S: Erzd> Erzd for GraphErazing<S> {
+//         type Original<'a> = StagedGraph<S::Original<'a>>;
+//     }
+
+//     impl<S: LErazng, N> LErazng for StagedGraph<S, N> {
+//         type LErazing = GraphErazing<S::LErazing>;
+//     }
+
+//     impl<S: LErazng + SyntaxNodeExt + Clone, N: WithAttrs + Default + WithOutGoingEdges> WithSynNodes for StagedGraph<S, N> {
+//         type Node = N;
+//         type SNode = S;
+
+//         fn node(&self, r: SyntaxNodeRef) -> Option<&Self::SNode> {
+//             todo!()
+//             // self.syntax_nodes.get(&r.index)
+//         }
+
+//         fn add_graph_node(&mut self) -> GraphNodeRef {
+//             self.add_graph_node()
+//         }
+
+//         fn add_syntax_node(&mut self, node: S) -> SyntaxNodeRef {
+//             self.add_syntax_node(node)
+//         }
+//     }
+
+//     impl<S: SyntaxNodeExt, N: Default> StagedGraph<S, N> {
+//         /// Adds a syntax node to the graph, returning a graph DSL reference to it.
+//         ///
+//         /// The graph won't contain _every_ syntax node in the parsed syntax tree; it will only contain
+//         /// those nodes that are referenced at some point during the execution of the graph DSL file.
+//         pub fn add_syntax_node(&mut self, node: S) -> SyntaxNodeRef {
+//             todo!()
+//             // let index = node.id() as SyntaxNodeID;
+//             // let index = index as SyntaxNodeID;
+//             // let node_ref = SyntaxNodeRef {
+//             //     index,
+//             //     kind: node.kind(),
+//             //     position: node.start_position(),
+//             // };
+//             // self.syntax_nodes.entry(index).or_insert(node);
+//             // node_ref
+//         }
+
+//         /// Adds a new graph node to the graph, returning a graph DSL reference to it.
+//         pub fn add_graph_node(&mut self) -> GraphNodeRef {
+//             todo!()
+//             // let graph_node = N::default();
+//             // let index = self.graph_nodes.len() as GraphNodeID;
+//             // self.graph_nodes.push(graph_node);
+//             // GraphNodeRef(index)
+//         }
+
+//         // Returns an iterator of references to all of the nodes in the graph.
+//         pub fn iter_nodes(&self) -> impl Iterator<Item = GraphNodeRef> {
+//             vec![todo!()].into_iter()
+//             // (0..self.graph_nodes.len() as u32).map(GraphNodeRef)
+//         }
+
+//         // Returns the number of nodes in the graph.
+//         pub fn node_count(&self) -> usize {
+//             self.graph_nodes.len()
+//         }
+//     }
+
+//     impl<S, N> Index<SyntaxNodeRef> for StagedGraph<S, N> {
+//         type Output = S;
+//         fn index(&self, node_ref: SyntaxNodeRef) -> &S {
+//             todo!()
+//             // &self.syntax_nodes[&node_ref.index]
+//         }
+//     }
+
+//     impl<S, N> Index<GraphNodeRef> for StagedGraph<S, N> {
+//         type Output = N;
+//         fn index(&self, index: GraphNodeRef) -> &N {
+//             todo!()
+//             // &self.graph_nodes[index.0 as usize]
+//         }
+//     }
+
+//     impl<S, N> IndexMut<GraphNodeRef> for StagedGraph<S, N> {
+//         fn index_mut(&mut self, index: GraphNodeRef) -> &mut N {
+//             todo!()
+//             // &mut self.graph_nodes[index.0 as usize]
+//         }
+//     }
+// }

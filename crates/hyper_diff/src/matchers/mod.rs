@@ -1,14 +1,14 @@
 //! Matchers associate nodes in pairs of tree.
-//! 
+//!
 //! Originally, the matching was a phase in a tree-diff algorithm,
 //! where interpreting the matchings would allow to produce a set of actions to transform a given tree into another.
 //! In this context, the objective is to minimise the transformation cost, e.g., the number and types of actions.
-//! 
+//!
 //! Later the notion of matchings was extended,
 //! leading to many different matching approaches.
 //! Certain matching approaches also consider more semantic interpretations.
 //! Moreover, matchers can also be composed.
- 
+
 pub mod heuristic;
 pub mod mapping_store;
 pub mod matcher;
@@ -107,13 +107,15 @@ impl<'store, HAST: HyperASTShared, Dsrc, Ddst, M> HyperASTShared
     type Idx = HAST::Idx;
 
     type Label = HAST::Label;
+
+    type T<'t> = HAST::T<'t>;
+
+    type RT = HAST::RT;
 }
 
-impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
+impl<'store, HAST: HyperAST, Dsrc, Ddst, M> HyperAST
     for Mapper<'store, HAST, Dsrc, Ddst, M>
 {
-    type T = HAST::T;
-
     type NS = HAST::NS;
 
     fn node_store(&self) -> &Self::NS {
@@ -169,8 +171,8 @@ impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
 //     }
 // }
 use crate::decompressed_tree_store::{CompletePostOrder, PersistedNode};
-impl<'store, HAST: HyperAST<'store>, M>
-    Mapper<'store, HAST, CompletePostOrder<HAST::T, u32>, CompletePostOrder<HAST::T, u32>, M>
+impl<'store, HAST: HyperAST, M>
+    Mapper<'store, HAST, CompletePostOrder<HAST::RT, u32>, CompletePostOrder<HAST::RT, u32>, M>
 where
     HAST::IdN: Eq,
 {
@@ -197,14 +199,14 @@ where
             CompletePostOrder<PersistedNode<HAST::IdN>, u32>,
             M,
         >,
-    ) -> &'a Mapping<CompletePostOrder<HAST::T, u32>, CompletePostOrder<HAST::T, u32>, M> {
+    ) -> &'a Mapping<CompletePostOrder<HAST::RT, u32>, CompletePostOrder<HAST::RT, u32>, M> {
         unsafe { std::mem::transmute(p) }
     }
 }
 
 use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-impl<'store, HAST: HyperAST<'store>, M>
-    Mapper<'store, HAST, LazyPostOrder<HAST::T, u32>, LazyPostOrder<HAST::T, u32>, M>
+impl<'store, HAST: HyperAST, M>
+    Mapper<'store, HAST, LazyPostOrder<HAST::RT, u32>, LazyPostOrder<HAST::RT, u32>, M>
 where
     HAST::IdN: Eq,
 {
@@ -231,7 +233,7 @@ where
             LazyPostOrder<PersistedNode<HAST::IdN>, u32>,
             M,
         >,
-    ) -> &'a mut Mapping<LazyPostOrder<HAST::T, u32>, LazyPostOrder<HAST::T, u32>, M> {
+    ) -> &'a mut Mapping<LazyPostOrder<HAST::RT, u32>, LazyPostOrder<HAST::RT, u32>, M> {
         unsafe { std::mem::transmute(p) }
     }
 }

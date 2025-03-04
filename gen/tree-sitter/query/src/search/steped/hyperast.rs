@@ -14,13 +14,13 @@ pub struct Node<'hast, HAST: HyperASTShared> {
     pub pos: hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
 }
 
-impl<'hast, HAST: HyperAST<'hast>> PartialEq for Node<'hast, HAST> {
+impl<'hast, HAST: HyperAST> PartialEq for Node<'hast, HAST> {
     fn eq(&self, other: &Self) -> bool {
         self.pos == other.pos
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST> {
+impl<'hast, HAST: HyperAST> Node<'hast, HAST> {
     pub fn new(
         stores: &'hast HAST,
         pos: hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
@@ -29,7 +29,7 @@ impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST> {
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> Clone for Node<'hast, HAST> {
+impl<'hast, HAST: HyperAST> Clone for Node<'hast, HAST> {
     fn clone(&self) -> Self {
         Self {
             stores: self.stores,
@@ -74,11 +74,11 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> super::Cursor for self::TreeCursor<'hast, HAST>
+impl<'hast, HAST: HyperAST> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
+    for<'t> HAST::T<'t>: WithRoles,
 {
     type Node = self::Node<'hast, HAST>;
 
@@ -155,7 +155,7 @@ where
         s.goto_parent().then_some(s.current_node())
     }
 
-    type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF>;
+    type Status = CursorStatus<<<HAST as HyperAST>::TS as RoleStore>::IdF>;
 
     #[inline]
     fn current_status(&self) -> Self::Status {
@@ -199,11 +199,11 @@ where
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> self::TreeCursor<'hast, HAST>
+impl<'hast, HAST: HyperAST> self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
+    for<'t> HAST::T<'t>: WithRoles,
 {
     fn role(&self) -> Option<<HAST::TS as RoleStore>::Role> {
         use hyperast::types::NodeStore;
@@ -232,8 +232,8 @@ where
     fn compute_current_role(
         &self,
     ) -> (
-        Option<<<HAST as HyperAST<'hast>>::TS as RoleStore>::Role>,
-        <<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF,
+        Option<<<HAST as HyperAST>::TS as RoleStore>::Role>,
+        <<HAST as HyperAST>::TS as RoleStore>::IdF,
     ) {
         use hyperast::types::NodeStore;
         let mut p = self.clone();
@@ -262,11 +262,11 @@ where
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> super::Node for self::Node<'hast, HAST>
+impl<'hast, HAST: HyperAST> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
+    for<'t> HAST::T<'t>: WithRoles,
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
@@ -359,11 +359,11 @@ where
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
+impl<'hast, HAST: HyperAST> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
+    for<'t> HAST::T<'t>: WithRoles,
 {
     fn child_by_role(&mut self, role: <HAST::TS as RoleStore>::Role) -> Option<()> {
         // TODO what about multiple children with same role?
@@ -402,7 +402,7 @@ where
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
+impl<'hast, HAST: HyperAST> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
 {
@@ -411,7 +411,7 @@ where
     }
 }
 
-impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
+impl<'hast, HAST: HyperAST> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
 {

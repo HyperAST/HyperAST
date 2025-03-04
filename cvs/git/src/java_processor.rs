@@ -451,23 +451,35 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
                     M::check(&mut file).unwrap();
 
-                    let mut functions = tree_sitter_graph::functions::Functions::<
-                        tree_sitter_graph::graph::GraphErazing<
-                            hyperast_tsquery::MyNodeErazing<
-                                hyperast::store::SimpleStores<
-                                    TStore,
-                                    &hyperast::store::nodes::legion::NodeStoreInner,
-                                    &hyperast::store::labels::LabelStore,
-                                >,
-                                &Acc,
-                            >,
-                        >,
-                    >::stdlib();
-                    // TODO port those path functions to the generified variant in my fork
-                    // hyperast_tsquery::add_path_functions(&mut functions);
-                    let functions = functions.as_any();
+                    // let mut functions = tree_sitter_graph::functions::Functions::<
+                    //     tree_sitter_graph::graph::Graph<
+                    //         hyperast_tsquery::Node<
+                    //             hyperast::store::SimpleStores<
+                    //                 TStore,
+                    //                 &hyperast::store::nodes::legion::NodeStoreInner,
+                    //                 &hyperast::store::labels::LabelStore,
+                    //             >,
+                    //             &Acc,
+                    //         >,
+                    //     >,
+                    //     // tree_sitter_graph::graph::GraphErazing<
+                    //     //     hyperast_tsquery::MyNodeErazing<
+                    //     //         hyperast::store::SimpleStores<
+                    //     //             TStore,
+                    //     //             &hyperast::store::nodes::legion::NodeStoreInner,
+                    //     //             &hyperast::store::labels::LabelStore,
+                    //     //         >,
+                    //     //         &Acc,
+                    //     //     >,
+                    //     // >,
+                    // >::default();
+                    // todo!();
+                    // // TODO port those path functions to the generified variant in my fork
+                    // // hyperast_tsquery::add_path_functions(&mut functions);
+                    // let functions = functions.as_any();
+                    todo!()
 
-                    Some((file.as_any(), functions))
+                    // Some((file.as_any(), functions))
                 } else {
                     // unsafe { crate::java_processor::TSG }
                     None
@@ -732,9 +744,7 @@ impl RepositoryProcessor {
                     {
                         let spec: &tree_sitter_graph::ast::File<
                             hyperast_tsquery::QueryMatcher<
-                                &hyperast::store::SimpleStores<
-                                    hyperast_gen_ts_java::types::TStore,
-                                >,
+                                &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
                                 &Acc,
                             >,
                         > = tsg.0.downcast_ref().unwrap();

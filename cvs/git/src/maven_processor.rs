@@ -331,6 +331,7 @@ impl MavenModuleAcc {
         >,
     ) -> Self {
         if let Some(more) = prep_scripting {
+            log::info!("prep_scripting");
             use hyperast::tree_gen::Prepro;
             match more.preprocessing(Type::MavenDirectory) {
                 Ok(acc) => self.scripting_acc = Some(acc),
@@ -339,7 +340,7 @@ impl MavenModuleAcc {
                 }
             }
         } else {
-            log::warn!("no prep_scripting");
+            log::trace!("no prep_scripting");
         };
         self
     }

@@ -234,6 +234,7 @@ impl<Node> Captures<Node> {
         &'a self,
         index: CaptureId,
     ) -> impl Iterator<Item = &'a Node> {
+        dbg!();
         self.0
             .iter()
             .filter(move |x| x.index == index)

@@ -11,8 +11,8 @@ pub fn resolve_range<'store, HAST>(
     stores: &'store HAST,
 ) -> (HAST::IdN, Vec<usize>)
 where
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization,
     HAST::IdN: Copy,
 {
     let mut offset = 0;

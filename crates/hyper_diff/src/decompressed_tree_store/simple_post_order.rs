@@ -84,7 +84,7 @@ impl<'a, T: Stored, IdD> Deref for SimplePOSlice<'a, T, IdD> {
 //     }
 // }
 
-impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -104,8 +104,7 @@ where
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithParent<'d, T, IdD>
-    for SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> DecompressedWithParent<T, IdD> for SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -126,7 +125,12 @@ where
         Some(self._position_in_parent(c, &p))
     }
 
-    type PIt<'a> = IterParents<'a, IdD> where IdD: 'a, T::TreeId:'a, T: 'a;
+    type PIt<'a>
+        = IterParents<'a, IdD>
+    where
+        IdD: 'a,
+        T::TreeId: 'a,
+        T: 'a;
 
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
         IterParents {
@@ -169,8 +173,7 @@ where
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
-    for SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<T, IdD> for SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -199,7 +202,7 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> PostOrder<T, IdD> for SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -212,13 +215,13 @@ where
     }
 }
 
-// impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD> {
+// impl<T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD> {
 //     pub(crate) fn size(&self, i: &IdD) -> IdD {
 //         *i - self.llds[(*i).to_usize().unwrap()] + one()
 //     }
 // }
 
-// impl<'d, T: WithChildren, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for SimplePostOrder<T, IdD>
+// impl<T: WithChildren, IdD: PrimInt> PostOrderIterable<T, IdD> for SimplePostOrder<T, IdD>
 // where
 //     T::TreeId: Clone + Eq + Debug,
 // {
@@ -231,7 +234,7 @@ where
 //     }
 // }
 
-impl<'a, T, IdD: PrimInt> super::DecompressedSubtree<'a, T> for SimplePostOrder<T, IdD>
+impl<'b, T, IdD: PrimInt> super::DecompressedSubtree<T> for SimplePostOrder<T, IdD>
 where
     T: WithChildren,
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
@@ -239,9 +242,9 @@ where
 {
     type Out = Self;
 
-    fn decompress<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn decompress<S>(store: &S, root: &<T as types::Stored>::TreeId) -> Self
     where
-        S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
+        S: types::inner_ref::NodeStore<<T as types::Stored>::TreeId, Ref = T>,
     {
         let simple = SimplePostOrder::make(store, root);
         Self {
@@ -251,14 +254,14 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn make<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn make<S>(store: &S, root: &<T as types::Stored>::TreeId) -> Self
     where
-        S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
+        S: types::inner_ref::NodeStore<<T as types::Stored>::TreeId, Ref = T>,
     {
         let mut stack = vec![Element {
             curr: root.clone(),
@@ -276,9 +279,12 @@ where
             children,
         }) = stack.pop()
         {
-            let x = store.resolve(&curr);
-            let l = x.children().filter(|x| !x.is_empty());
-            if let Some(child) = l.and_then(|l| l.get(idx)) {
+            let l = store.scoped(&curr, |x| {
+                x.children()
+                    .filter(|x| !x.is_empty())
+                    .map(|l| l.get(idx).cloned())
+            });
+            if let Some(Some(child)) = l {
                 stack.push(Element {
                     curr,
                     idx: idx + one(),
@@ -293,7 +299,7 @@ where
                 });
             } else {
                 let curr_idx = cast(id_compressed.len()).unwrap();
-                let value = if l.is_none() {
+                let value = if l.is_some() {
                     curr_idx
                 } else {
                     for x in children {
@@ -333,8 +339,7 @@ struct Element<IdC, Idx, IdD> {
     children: Vec<IdD>,
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
-    for SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<T, IdD> for SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -350,9 +355,9 @@ where
         cast(self.len() - 1).unwrap()
     }
 
-    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    fn child<S>(&self, store: &S, x: &IdD, p: &[T::ChildIdx]) -> IdD
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        S: for<'b> NodeStore<T::TreeId, R<'b> = T>,
     {
         let mut r = *x;
         for d in p {
@@ -373,9 +378,33 @@ where
         r
     }
 
-    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn child4<S>(&self, store: &S, x: &IdD, p: &[<T as WithChildren>::ChildIdx]) -> IdD
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+    {
+        let mut r = *x;
+        for d in p {
+            let a = self.original(&r);
+            r = store.scoped(&a, |node| {
+                let cs = node.children().filter(|x| !x.is_empty());
+                let Some(cs) = cs else {
+                    panic!("no children in this tree")
+                };
+                let mut z = 0;
+                let cs = cs.before(*d + one());
+                let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
+                for x in cs {
+                    z += Self::size4(store, &x);
+                }
+                self.first_descendant(&r) + cast(z).unwrap() - one()
+            });
+        }
+        r
+    }
+
+    fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
+    where
+        S: for<'b> NodeStore<T::TreeId, R<'b> = T>,
     {
         let a = self.original(x);
         let node = store.resolve(&a);
@@ -399,23 +428,48 @@ where
         );
         r
     }
+
+    fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
+    where
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+    {
+        let a = self.original(x);
+        store.scoped(&a, |node| {
+            let cs_len = node.child_count().to_usize().unwrap();
+            if cs_len == 0 {
+                return vec![];
+            }
+            let mut r = vec![zero(); cs_len];
+            let mut c = *x - one();
+            let mut i = cs_len - 1;
+            r[i] = c;
+            while i > 0 {
+                i -= 1;
+                let s = self.size(&c);
+                c = c - s;
+                r[i] = c;
+            }
+            assert_eq!(
+                self.lld(x).to_usize().unwrap(),
+                self.lld(&c).to_usize().unwrap()
+            );
+            r
+        })
+    }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> FullyDecompressedTreeStore<'a, T, IdD>
-    for SimplePostOrder<T, IdD>
-where
-    <T as Stored>::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
+impl<T: WithChildren, IdD: PrimInt> FullyDecompressedTreeStore<T, IdD> for SimplePostOrder<T, IdD> where
+    <T as Stored>::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>
 {
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
-    for SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> DecompressedTreeStore<T, IdD> for SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
-    fn descendants<'b, S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<S>(&self, _store: &S, x: &IdD) -> Vec<IdD>
     where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
         (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
             .map(|x| cast(x).unwrap())
@@ -426,9 +480,9 @@ where
         self.llds[(*i).to_usize().unwrap()] // TODO use ldd
     }
 
-    fn descendants_count<'b, S>(&self, _store: &'b S, x: &IdD) -> usize
+    fn descendants_count<S>(&self, _store: &S, x: &IdD) -> usize
     where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
@@ -438,8 +492,7 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD>
-    for SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt> ContiguousDescendants<T, IdD> for SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -447,7 +500,10 @@ where
         self.first_descendant(x)..*x
     }
 
-    type Slice<'b> = SimplePOSlice<'b,T,IdD> where Self: 'b;
+    type Slice<'b>
+        = SimplePOSlice<'b, T, IdD>
+    where
+        Self: 'b;
 
     fn slice(&self, x: &IdD) -> Self::Slice<'_> {
         let range = self.slice_range(x);
@@ -462,7 +518,7 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Eq> SimplePostOrder<T, IdD>
+impl<T: WithChildren, IdD: PrimInt + Eq> SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -486,9 +542,9 @@ impl<'a, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
-    fn size2<'b, S>(store: &'b S, x: &T::TreeId) -> usize
+    fn size2<S>(store: &S, x: &T::TreeId) -> usize
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        S: for<'b> NodeStore<T::TreeId, R<'b> = T>,
     {
         let tmp = store.resolve(x);
         let Some(cs) = tmp.children() else {
@@ -500,6 +556,22 @@ where
             z += Self::size2(store, x);
         }
         z + 1
+    }
+    fn size4<S>(store: &S, x: &T::TreeId) -> usize
+    where
+        S: types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+    {
+        store.scoped(x, |tmp| {
+            let Some(cs) = tmp.children() else {
+                return 1;
+            };
+
+            let mut z = 0;
+            for x in cs.iter_children() {
+                z += Self::size4(store, x);
+            }
+            z + 1
+        })
     }
 }
 
@@ -537,7 +609,7 @@ impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> From<(&'a SimplePostOrder<T,
 impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, IdD> {
     pub fn position<'b, HAST>(&mut self, stores: &'b HAST, c: &IdD) -> &Position
     where
-        HAST: HyperAST<'b, IdN = T::TreeId, T = T, Label = T::Label>,
+        HAST: for<'t> HyperAST<IdN = T::TreeId, T<'t> = T, Label = T::Label>,
         T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
         // T::Type: Copy + Send + Sync,
         T: WithSerialization,
@@ -665,8 +737,7 @@ where
 {
     pub fn position<'b, HAST>(&mut self, stores: &'b HAST, c: &IdD) -> &U
     where
-        HAST: HyperAST<'b, IdN = T::TreeId, T = T, Label = T::Label>,
-        // S: NodeStore<T::TreeId, R<'b> = T>,
+        HAST: for<'t> HyperAST<IdN = T::TreeId, T<'t> = T, Label = T::Label>,
         T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
         T: Tree + WithSerialization,
     {

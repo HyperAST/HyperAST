@@ -88,17 +88,20 @@ where
     }
 }
 
+impl<IdN, TS, NS, LS> crate::types::NodStore<IdN> for SimpleStores<TS, NS, LS>
+where
+    for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
+    IdN: crate::types::NodeId<IdN = IdN>,
+    NS: crate::types::NodeStore<IdN>,
+{
+    type R<'a> = NS::R<'a>;
+}
 impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
 where
     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
     IdN: crate::types::NodeId<IdN = IdN>,
     NS: crate::types::NodeStore<IdN>,
 {
-    type R<'a>
-        = NS::R<'a>
-    where
-        Self: 'a;
-
     fn resolve(&self, id: &IdN) -> Self::R<'_> {
         self.node_store.resolve(id)
     }

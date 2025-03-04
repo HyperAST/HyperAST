@@ -5,13 +5,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use hyperast::{
-    position::Position,
-    types::{
-        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, WithChildren,
-        WithSerialization,
-    },
-};
 use hyper_diff::{
     decompressed_tree_store::{
         complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
@@ -23,6 +16,13 @@ use hyper_diff::{
     tree::tree_path::CompressedTreePath,
 };
 use hyper_diff::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
+use hyperast::{
+    position::Position,
+    types::{
+        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, WithChildren,
+        WithSerialization,
+    },
+};
 use num_traits::{PrimInt, ToPrimitive};
 use rayon::prelude::ParallelIterator;
 
@@ -64,8 +64,8 @@ impl CompressedBfPostProcess {
 }
 
 pub mod compressed_bf_post_process {
-    use hyperast::types::{self, HyperAST};
     use hyper_diff::matchers::Mapper;
+    use hyperast::types::{self, HyperAST};
 
     use super::*;
     pub struct PP0 {
@@ -136,15 +136,15 @@ pub mod compressed_bf_post_process {
             mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
         ) -> ValidityRes<usize>
         where
-            HAST: HyperAST<'store>,
+            HAST: HyperAST,
             HAST::IdN: Clone + Debug + Eq,
-            HAST::T: types::Tree,
-            SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
-            DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
+            // for<'t> HAST::T<'t>: types::Tree,
+            SD: ShallowDecompressedTreeStore<HAST::RT, u32>
+                + PostOrder<HAST::RT, u32>
+                + DecompressedWithSiblings<HAST::RT, u32>,
+            DD: ShallowDecompressedTreeStore<HAST::RT, u32>
+                + PostOrder<HAST::RT, u32>
+                + DecompressedWithSiblings<HAST::RT, u32>,
         {
             let hyperast = mapper.hyperast;
             let mapping = &mapper.mapping;
@@ -171,15 +171,15 @@ pub mod compressed_bf_post_process {
             mappings: &VecStore<u32>,
         ) -> ValidityRes<usize>
         where
-            HAST: HyperAST<'store>,
+            HAST: HyperAST,
             HAST::IdN: Clone + Debug + Eq,
-            HAST::T: types::Tree,
-            SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
-            DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
+            for<'t> HAST::T<'t>: types::Tree,
+            SD: ShallowDecompressedTreeStore<HAST::RT, u32>
+                + PostOrder<HAST::RT, u32>
+                + DecompressedWithSiblings<HAST::RT, u32>,
+            DD: ShallowDecompressedTreeStore<HAST::RT, u32>
+                + PostOrder<HAST::RT, u32>
+                + DecompressedWithSiblings<HAST::RT, u32>,
         {
             use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
             let bf_f = self.file.read_u32::<BigEndian>().unwrap() as usize;
@@ -204,7 +204,7 @@ pub mod compressed_bf_post_process {
 
             type V<'store, NS, IdN> = Option<(
                 md5::Digest,
-                <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
+                <<NS as types::NodStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
             )>;
 
             let with_p = |pos: V<'store, HAST::NS, HAST::IdN>,
@@ -472,16 +472,16 @@ impl SimpleJsonPostProcess {
         mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        HAST: HyperAST<'store>
-            + NodeStore<HAST::IdN, R<'store> = HAST::T>,
+        HAST: HyperAST,
+        //  + NodeStore<HAST::IdN, R<'store> = HAST::T>,
         HAST::IdN: Clone + Debug + Eq,
-        HAST::T: types::Tree + WithSerialization,
-        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
-        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        for<'t> HAST::T<'t>: types::Tree + WithSerialization,
+        SD: ShallowDecompressedTreeStore<HAST::RT, u32>
+            + PostOrder<HAST::RT, u32>
+            + DecompressedWithSiblings<HAST::RT, u32>,
+        DD: ShallowDecompressedTreeStore<HAST::RT, u32>
+            + PostOrder<HAST::RT, u32>
+            + DecompressedWithSiblings<HAST::RT, u32>,
     {
         let hyperast = mapper.hyperast;
         let mapping = &mapper.mapping;
@@ -508,16 +508,16 @@ impl SimpleJsonPostProcess {
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        HAST: HyperAST<'store>
-            + NodeStore<HAST::IdN, R<'store> = HAST::T>,
+        HAST: HyperAST,
+        //  + NodeStore<HAST::IdN, R<'store> = HAST::T>,
         HAST::IdN: Clone + Debug,
-        HAST::T: WithSerialization,
-        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
-        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        for<'t> HAST::T<'t>: WithSerialization,
+        SD: ShallowDecompressedTreeStore<HAST::RT, u32>
+            + PostOrder<HAST::RT, u32>
+            + DecompressedWithSiblings<HAST::RT, u32>,
+        DD: ShallowDecompressedTreeStore<HAST::RT, u32>
+            + PostOrder<HAST::RT, u32>
+            + DecompressedWithSiblings<HAST::RT, u32>,
     {
         use hyperast::types::Labeled;
         let with_p = |mut pos: Position, ori| {
@@ -607,15 +607,15 @@ impl PathJsonPostProcess {
         mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
     where
-        HAST: HyperAST<'store>,
+        HAST: HyperAST,
         HAST::IdN: Clone + Debug + Eq,
-        HAST::T: types::Tree,
-        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
-        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        for<'t> HAST::T<'t>: types::Tree,
+        SD: ShallowDecompressedTreeStore<HAST::RT, u32>
+            + PostOrder<HAST::RT, u32>
+            + DecompressedWithSiblings<HAST::RT, u32>,
+        DD: ShallowDecompressedTreeStore<HAST::RT, u32>
+            + PostOrder<HAST::RT, u32>
+            + DecompressedWithSiblings<HAST::RT, u32>,
     {
         let hyperast = mapper.hyperast;
         let mapping = &mapper.mapping;
@@ -647,20 +647,20 @@ impl PathJsonPostProcess {
     where
         IdN: Clone + Debug,
         NS: 'store + types::NodeStore<IdN>,
-        <NS as types::NodeStore<IdN>>::R<'store>: types::Tree<TreeId = IdN, Label = LS::I>,
+        <NS as types::NodStore<IdN>>::R<'store>: types::Tree<TreeId = IdN, Label = LS::I>,
         LS: types::LabelStore<str>,
-        SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
-            + PostOrder<'a, NS::R<'store>, u32>
-            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
-        DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
-            + PostOrder<'a, NS::R<'store>, u32>
-            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
+        SD: ShallowDecompressedTreeStore<NS::R<'store>, u32>
+            + PostOrder<NS::R<'store>, u32>
+            + DecompressedWithSiblings<NS::R<'store>, u32>,
+        DD: ShallowDecompressedTreeStore<NS::R<'store>, u32>
+            + PostOrder<NS::R<'store>, u32>
+            + DecompressedWithSiblings<NS::R<'store>, u32>,
     {
         type CP<'store, NS, IdN> = Option<(
             CompressedTreePath<
-                <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
+                <<NS as types::NodStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
             >,
-            <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
+            <<NS as types::NodStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
         )>;
         let with_p = |pos: CP<'store, NS, IdN>, _ori: IdN| -> CP<'store, NS, IdN> {
             Some((
@@ -748,11 +748,9 @@ impl<'store, 'a, S, T: WithChildren, D, U, F: Clone, G: Clone>
 impl<'store: 'a, 'a, S, T: Tree + WithSerialization, D, U: Clone + Default, F, G>
     FormatCached<'store, 'a, S, T, D, U, F, G>
 where
-    S: HyperAST<'store, T = T, IdN = T::TreeId>,
+    S: HyperAST<T = T, IdN = T::TreeId>,
     T::TreeId: Clone + Debug,
-    D: ShallowDecompressedTreeStore<'a, T, u32>
-        + PostOrder<'a, T, u32>
-        + DecompressedWithSiblings<'a, T, u32>,
+    D: ShallowDecompressedTreeStore<T, u32> + PostOrder<T, u32> + DecompressedWithSiblings<T, u32>,
     F: Fn(U, T::TreeId) -> U,
     G: Fn(U, T::TreeId) -> U,
 {
@@ -782,9 +780,7 @@ impl<'a, T: WithChildren, D, U, F: Clone, G: Clone> From<(&'a D, T::TreeId, F, G
 impl<'a, T: Tree, D, U: Clone + Default, F, G> PathCached<'a, T, D, U, F, G>
 where
     T::TreeId: Clone + Debug,
-    D: ShallowDecompressedTreeStore<'a, T, u32>
-        + PostOrder<'a, T, u32>
-        + DecompressedWithSiblings<'a, T, u32>,
+    D: ShallowDecompressedTreeStore<T, u32> + PostOrder<T, u32> + DecompressedWithSiblings<T, u32>,
     F: Fn(U, T::TreeId) -> U,
     G: Fn(U, T::TreeId) -> U,
 {
@@ -798,7 +794,7 @@ pub fn print_mappings<
     'a,
     IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Src = IdD, Dst = IdD> + Debug,
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     // IdN: Clone + Eq + Debug,
     // NS: NodeStore<IdN>,
     // LS: LabelStore<str>,
@@ -810,12 +806,12 @@ pub fn print_mappings<
     stores: &'store HAST,
     mappings: &M,
 ) where
-    HAST::T: WithSerialization,
+    for<'t> HAST::T<'t>: WithSerialization,
     // <NS as types::NodeStore<IdN>>::R<'store>:
     //     'store + Tree<TreeId = IdN, Label = LS::I> + types::WithSerialization,
     // <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
-    SD: FullyDecompressedTreeStore<'a, HAST::T, IdD> + PostOrder<'a, HAST::T, IdD>, // + DecompressedWithParent<'a, HAST::T, IdD>,
-    DD: FullyDecompressedTreeStore<'a, HAST::T, IdD> + PostOrder<'a, HAST::T, IdD>, //+ DecompressedWithParent<'a, HAST::T, IdD>,
+    SD: FullyDecompressedTreeStore<HAST::RT, IdD> + PostOrder<HAST::RT, IdD>, // + DecompressedWithParent<HAST::RT, IdD>,
+    DD: FullyDecompressedTreeStore<HAST::RT, IdD> + PostOrder<HAST::RT, IdD>, //+ DecompressedWithParent<HAST::RT, IdD>,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
@@ -877,10 +873,10 @@ pub fn print_mappings_no_ranges<
     'a,
     IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     // IdN: Clone + Eq + Debug,
-    DD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
-    SD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
+    DD: PostOrder<HAST::RT, IdD> + FullyDecompressedTreeStore<HAST::RT, IdD>,
+    SD: PostOrder<HAST::RT, IdD> + FullyDecompressedTreeStore<HAST::RT, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,
@@ -957,8 +953,8 @@ mod tests {
     };
     use hyperast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
     // use hyperast_gen_ts_java::types::TStore;
-    use hyperast_vcs_git::TStore;
     use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
+    use hyperast_vcs_git::TStore;
 
     #[test]
     fn test() {

@@ -11,7 +11,7 @@ use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
 impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
-        HAST: TypedHyperAST<'store, TIdN>,
+        HAST: TypedHyperAST<TIdN>,
         TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
             + hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
@@ -42,7 +42,7 @@ impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         id: HAST::IdN,
     ) -> Option<Captured<HAST::IdN, HAST::Idx>>
     where
-        HAST: TypedHyperAST<'store, TIdN>,
+        HAST: TypedHyperAST<TIdN>,
         TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
             + hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
@@ -135,7 +135,7 @@ impl<Ty> Pattern<Ty> {
         id: HAST::IdN,
     ) -> MatchingRes<HAST::IdN, HAST::Idx>
     where
-        HAST: TypedHyperAST<'store, TIdN>,
+        HAST: TypedHyperAST<TIdN>,
         TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
             + hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,

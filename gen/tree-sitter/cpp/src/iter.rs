@@ -38,7 +38,7 @@ impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterAll<'a, T, HAST> 
     }
 }
 
-impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<'a, IdN = NodeIdentifier>>
+impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<IdN = NodeIdentifier>>
     IterAll<'a, T, HAST>
 where
     HAST::NS: TypedNodeStore<TIdN<HAST::IdN>>,
@@ -61,7 +61,7 @@ where
 impl<
         'a,
         T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: TypedHyperAST<'a, TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
+        HAST: TypedHyperAST<TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     > Iterator for IterAll<'a, T, HAST>
 where
 // HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,

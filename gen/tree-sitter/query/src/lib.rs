@@ -45,7 +45,7 @@ pub struct IterMatched<M, HAST, It, TIdN> {
 impl<'a, HAST, It: Iterator, TIdN> Iterator
     for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>, &'a HAST, It, TIdN>
 where
-    HAST: hyperast::types::HyperAST<'a> + hyperast::types::TypedHyperAST<'a, TIdN>,
+    HAST: hyperast::types::HyperAST + hyperast::types::TypedHyperAST<TIdN>,
     TIdN: 'static
         + hyperast::types::TypedNodeId<IdN = <HAST as hyperast::types::HyperASTShared>::IdN>,
     It::Item:
@@ -111,7 +111,7 @@ impl<Ty> crate::search::PreparedMatcher<Ty, Conv<Ty>> {
         TIdN,
     >
     where
-        HAST: 'a + hyperast::types::HyperAST<'a> + hyperast::types::TypedHyperAST<'a, TIdN>,
+        HAST: hyperast::types::HyperAST + hyperast::types::TypedHyperAST<TIdN>,
         // HAST::TS: hyperast::types::TypeStore<HAST::T, Ty = Ty>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = Ty>,
         It: From<(&'a HAST, It::Item)>,
@@ -153,7 +153,7 @@ impl<'a, HAST, It: Iterator, TIdN> Iterator
         TIdN,
     >
 where
-    HAST: hyperast::types::HyperAST<'a> + hyperast::types::TypedHyperAST<'a, TIdN>,
+    HAST: hyperast::types::HyperAST + hyperast::types::TypedHyperAST<TIdN>,
     TIdN: 'static
         + hyperast::types::TypedNodeId<IdN = <HAST as hyperast::types::HyperASTShared>::IdN>,
     It::Item: hyperast::position::TreePath<TIdN::IdN, <HAST as hyperast::types::HyperASTShared>::Idx>

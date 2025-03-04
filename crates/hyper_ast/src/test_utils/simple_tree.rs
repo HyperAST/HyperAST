@@ -59,13 +59,19 @@ fn store<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 
     ns.get_or_insert(t)
 }
 
+use crate::store::SimpleStores;
 pub fn vpair_to_stores<'a>(
     (src, dst): (SimpleTree<u8>, SimpleTree<u8>),
-) -> (LS<u16>, NS<Tree>, u16, u16) {
+) -> (SimpleStores<TStore, NS<Tree>, LS<u16>>, u16, u16) {
     let (mut label_store, mut compressed_node_store) = make_stores();
     let src = store(&mut label_store, &mut compressed_node_store, &src);
     let dst = store(&mut label_store, &mut compressed_node_store, &dst);
-    (label_store, compressed_node_store, src, dst)
+    let stores = SimpleStores {
+        type_store: std::marker::PhantomData::<TStore>,
+        node_store: compressed_node_store,
+        label_store,
+    };
+    (stores, src, dst)
 }
 
 impl AsRef<Tree> for &Tree {
@@ -498,15 +504,42 @@ pub struct NS<T> {
 //     }
 // }
 
-impl<T: crate::types::Tree> NodeStore<T::TreeId> for NS<T>
+impl<T: 'static + crate::types::Tree> crate::types::NStore for NS<T> {
+    type IdN = <T as crate::types::Stored>::TreeId;
+    type Idx = T::ChildIdx;
+}
+
+impl<T: 'static + crate::types::Tree> crate::types::inner_ref::NodeStore<T::TreeId> for NS<T> where
+    T::TreeId: ToPrimitive
+{
+    type Ref = TreeRef<'static, T>;
+    fn scoped<R>(&self, id: &T::TreeId, f: impl Fn(&Self::Ref) -> R) -> R {
+        let t = &TreeRef(&self.v[id.to_usize().unwrap()]);
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe{std::mem::transmute(t)};
+        f(t)
+    }
+    fn scoped_mut<R>(&self, id: &T::TreeId, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+        let t = &TreeRef(&self.v[id.to_usize().unwrap()]);
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe{std::mem::transmute(t)};
+        f(t)
+    }
+    fn multi<R, const N: usize>(&self, id: &[T::TreeId; N], f: impl Fn(&[Self::Ref;N]) -> R) -> R {
+        todo!()
+    }
+}
+impl<T: 'static + crate::types::Tree> crate::types::NodStore<T::TreeId> for NS<T>
 where
     T::TreeId: ToPrimitive,
 {
-    type R<'a>
-        = TreeRef<'a, T>
-    where
-        T: 'a;
+    type R<'a> = TreeRef<'a, T>;
+}
 
+impl<T: 'static + crate::types::Tree> NodeStore<T::TreeId> for NS<T>
+where
+    T::TreeId: ToPrimitive,
+{
     fn resolve(&self, id: &T::TreeId) -> TreeRef<'_, T> {
         TreeRef(&self.v[id.to_usize().unwrap()])
     }
@@ -635,10 +668,14 @@ where
 //     }
 // }
 
-pub struct LS<I: PrimInt> {
+pub struct LS<I> {
     // v: RefCell<Vec<crate::types::OwnedLabel>>,
     v: Vec<crate::types::OwnedLabel>,
     phantom: PhantomData<*const I>,
+}
+
+impl<'a, I> crate::types::LStore for LS<I> {
+    type I = I;
 }
 
 impl<'a, I: PrimInt> LabelStore<crate::types::SlicedLabel> for LS<I> {

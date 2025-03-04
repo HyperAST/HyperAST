@@ -38,8 +38,8 @@ impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterAll<'a, T, HAST> 
     }
 }
 
-impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<'a, IdN = NodeIdentifier>>
-    From<(&'a HAST, T)> for IterAll<'a, T, HAST>
+impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<IdN = NodeIdentifier>> From<(&'a HAST, T)>
+    for IterAll<'a, T, HAST>
 where
     HAST::NS: TypedNodeStore<TIdN<HAST::IdN>>,
 {
@@ -49,7 +49,7 @@ where
     }
 }
 
-impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<'a, IdN = NodeIdentifier>>
+impl<'a, T: TreePath<NodeIdentifier, u16>, HAST: HyperAST<IdN = NodeIdentifier>>
     IterAll<'a, T, HAST>
 where
     HAST::NS: TypedNodeStore<TIdN<HAST::IdN>>,
@@ -72,7 +72,7 @@ where
 impl<
         'a,
         T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: TypedHyperAST<'a, TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
+        HAST: TypedHyperAST<TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     > Iterator for IterAll<'a, T, HAST>
 where
 // HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
@@ -148,8 +148,7 @@ where
                 let b = match &node {
                     Id::Java(node) => self.stores.typed_node_store().resolve(node),
                     Id::Other(node) => {
-                        let b =
-                            hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
+                        let b = hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
                         if b.has_children() {
                             let children = b.children();
                             let children = children.unwrap();

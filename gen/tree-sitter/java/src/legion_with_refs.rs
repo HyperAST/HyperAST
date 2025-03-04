@@ -276,8 +276,8 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
-        + tree_gen::PreproTSG<'stores>
-        + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
+        + tree_gen::PreproTSG
+        + tree_gen::More<TS = TS, T = HashedNodeRef<'static, NodeIdentifier>, Acc = Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -516,8 +516,7 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
         cursor: tree_sitter::TreeCursor,
     ) -> FullNode<StatsGlobalData, Local>
     where
-        for<'s> More:
-            tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores> + tree_gen::More<Acc = Acc>,
+        for<'s> More: tree_gen::Prepro<Type> + tree_gen::PreproTSG + tree_gen::More<Acc = Acc>,
     {
         todo!()
     }
@@ -575,10 +574,10 @@ where
         + 'static
         + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
-        + tree_gen::PreproTSG<'stores>
+        + tree_gen::PreproTSG
         + tree_gen::More<
             TS = TS,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
             Acc = Acc,
         >,
 {
@@ -774,8 +773,8 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
-        + tree_gen::PreproTSG<'stores>
-        + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
+        + tree_gen::PreproTSG
+        + tree_gen::More<TS = TS, T = HashedNodeRef<'static, NodeIdentifier>, Acc = Acc>,
 {
     type Acc = Acc;
     type Global = Global<'stores>;
@@ -860,14 +859,14 @@ where
             }
             if More::GRAPHING {
                 // TODO find a way of removing those 'static, probably an even lower API would work (the File<G> is really bad in the end)
-                // SAFETY: it is just an issue with associated types and invariants raising everything to 'static... 
-                let stores: SimpleStores<
-                    TS,
-                    &'static hyperast::store::nodes::legion::NodeStoreInner,
-                    &'static hyperast::store::labels::LabelStore,
-                > = unsafe { std::mem::transmute(stores.clone()) };
+                // SAFETY: it is just an issue with associated types and invariants raising everything to 'static...
+                // let stores: SimpleStores<
+                //     TS,
+                //     &'static hyperast::store::nodes::legion::NodeStoreInner,
+                //     &'static hyperast::store::labels::LabelStore,
+                // > = unsafe { std::mem::transmute(stores.clone()) };
                 self.more
-                    .compute_tsg(stores, &acc, label.as_deref())
+                    .compute_tsg2(stores, &acc, label.as_deref())
                     .unwrap();
             }
 
@@ -944,8 +943,8 @@ impl<
         'cache,
         TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
         More: tree_gen::Prepro<Type>
-            + tree_gen::PreproTSG<'stores>
-            + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
+            + tree_gen::PreproTSG
+            + tree_gen::More<TS = TS, T = HashedNodeRef<'static, NodeIdentifier>, Acc = Acc>,
         const HIDDEN_NODES: bool,
     > NodeStoreExt<HashedNode>
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>

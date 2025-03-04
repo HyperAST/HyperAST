@@ -23,24 +23,26 @@ type IdD = u16;
 
 #[test]
 fn test_no_actions() {
-    let (label_store, node_store, s_src, s_dst) =
+    let (stores, s_src, s_dst) =
         vpair_to_stores((example_delete_action().0, example_delete_action().0));
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[0, 0]), from_dst(&[0, 0]));
@@ -75,7 +77,7 @@ fn test_no_actions() {
         })
     );
 
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions: ActionsVec<_> = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -84,17 +86,19 @@ fn test_no_actions() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
-    let mut node_store = node_store;
+    let mut stores = stores;
     let mut root = vec![s_src];
-    apply_actions::<_, NS<Tree>, CompressedTreePath<_>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, CompressedTreePath<_>>(actions, &mut root, &mut stores.node_store);
     let then = *root.last().unwrap();
 
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "then tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, then)
+        DisplayTree::new(label_store, node_store, then)
     );
 
     assert_eq!(then, s_dst);
@@ -102,23 +106,25 @@ fn test_no_actions() {
 
 #[test]
 fn test_delete_actions_1() {
-    let (label_store, node_store, s_src, s_dst) = vpair_to_stores(example_delete_action());
+    let (stores, s_src, s_dst) = vpair_to_stores(example_delete_action());
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[1]), from_dst(&[1]));
@@ -151,7 +157,7 @@ fn test_delete_actions_1() {
             write!(f, "")
         })
     );
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -160,7 +166,7 @@ fn test_delete_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
     println!("{:?}", actions);
@@ -172,7 +178,8 @@ fn test_delete_actions_1() {
 
     assert_eq!(1, actions.len());
 
-    let mut node_store = node_store;
+    let mut node_store = stores.node_store;
+    let label_store = stores.label_store;
     let mut root = vec![s_src];
     apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
@@ -187,24 +194,26 @@ fn test_delete_actions_1() {
 
 #[test]
 fn test_insert_actions_1() {
-    let (label_store, node_store, s_src, s_dst) =
+    let (stores, s_src, s_dst) =
         vpair_to_stores((example_delete_action().1, example_delete_action().0));
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[1]), from_dst(&[1]));
@@ -237,7 +246,7 @@ fn test_insert_actions_1() {
             write!(f, "")
         })
     );
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -246,7 +255,7 @@ fn test_insert_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
     println!("{:?}", actions);
@@ -261,7 +270,8 @@ fn test_insert_actions_1() {
 
     assert_eq!(1, actions.len());
 
-    let mut node_store = node_store;
+    let mut node_store = stores.node_store;
+    let label_store = stores.label_store;
     let mut root = vec![s_src];
     apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
@@ -276,23 +286,25 @@ fn test_insert_actions_1() {
 
 #[test]
 fn test_rename_actions_1() {
-    let (label_store, node_store, s_src, s_dst) = vpair_to_stores(example_rename_action());
+    let (stores, s_src, s_dst) = vpair_to_stores(example_rename_action());
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[0, 0]), from_dst(&[0, 0]));
@@ -327,7 +339,7 @@ fn test_rename_actions_1() {
         })
     );
 
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -336,7 +348,7 @@ fn test_rename_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
     println!("{:?}", actions);
@@ -353,7 +365,8 @@ fn test_rename_actions_1() {
 
     assert_eq!(1, actions.len());
 
-    let mut node_store = node_store;
+    let mut node_store = stores.node_store;
+    let label_store = stores.label_store;
     let mut root = vec![s_src];
     apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
@@ -368,23 +381,25 @@ fn test_rename_actions_1() {
 
 #[test]
 fn test_move_actions_1() {
-    let (label_store, node_store, s_src, s_dst) = vpair_to_stores(example_move_action());
+    let (stores, s_src, s_dst) = vpair_to_stores(example_move_action());
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[0, 0]), from_dst(&[1, 1]));
@@ -419,7 +434,7 @@ fn test_move_actions_1() {
         })
     );
 
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -428,7 +443,7 @@ fn test_move_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
     println!("{:?}", actions);
@@ -440,7 +455,8 @@ fn test_move_actions_1() {
 
     assert_eq!(1, actions.len());
 
-    let mut node_store = node_store;
+    let mut node_store = stores.node_store;
+    let label_store = stores.label_store;
     let mut root = vec![s_src];
     apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
@@ -455,23 +471,25 @@ fn test_move_actions_1() {
 
 #[test]
 fn test_subdelete_actions_1() {
-    let (label_store, node_store, s_src, s_dst) = vpair_to_stores(example_subdelete_action());
+    let (stores, s_src, s_dst) = vpair_to_stores(example_subdelete_action());
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[1]), from_dst(&[1]));
@@ -504,7 +522,7 @@ fn test_subdelete_actions_1() {
             write!(f, "")
         })
     );
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -513,7 +531,7 @@ fn test_subdelete_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
     println!("{:?}", actions);
@@ -525,7 +543,8 @@ fn test_subdelete_actions_1() {
 
     assert_eq!(1, actions.len());
 
-    let mut node_store = node_store;
+    let mut node_store = stores.node_store;
+    let label_store = stores.label_store;
     let mut root = vec![s_src];
     apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
@@ -540,23 +559,25 @@ fn test_subdelete_actions_1() {
 
 #[test]
 fn test_subdelete_actions_2() {
-    let (label_store, node_store, s_src, s_dst) = vpair_to_stores(example_subdelete_action2());
+    let (stores, s_src, s_dst) = vpair_to_stores(example_subdelete_action2());
+    let node_store = &stores.node_store;
+    let label_store = &stores.label_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_src)
+        DisplayTree::new(label_store, node_store, s_src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, s_dst)
+        DisplayTree::new(label_store, node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
-    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
-    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+    let from_src = |path: &[u8]| src_arena.child4(node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child4(node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
     // ms.link(from_src(&[0]), from_dst(&[0]));
     ms.link(from_src(&[1]), from_dst(&[1]));
@@ -590,7 +611,7 @@ fn test_subdelete_actions_2() {
             write!(f, "")
         })
     );
-    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
     let actions = ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -599,7 +620,7 @@ fn test_subdelete_actions_2() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
+    >::_compute_actions(node_store, &src_arena, &dst_arena, &ms)
     .unwrap();
 
     println!("{:?}", actions);
@@ -611,7 +632,8 @@ fn test_subdelete_actions_2() {
 
     assert_eq!(1, actions.len());
 
-    let mut node_store = node_store;
+    let mut node_store = stores.node_store;
+    let label_store = stores.label_store;
     let mut root = vec![s_src];
     apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();

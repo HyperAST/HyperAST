@@ -113,27 +113,27 @@ impl<
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, T, Dsrc::IdD>
-            + PostOrder<'a, T, Dsrc::IdD, M::Src>
-            + PostOrderIterable<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedSubtree<'a, T>
-            + ContiguousDescendants<'a, T, Dsrc::IdD, M::Src>
-            + LazyPOBorrowSlice<'a, T, Dsrc::IdD, M::Src>
-            + ShallowDecompressedTreeStore<'a, T, Dsrc::IdD, M::Src>
-            + LazyDecompressedTreeStore<'a, T, M::Src>,
+            + DecompressedTreeStore<T, Dsrc::IdD, M::Src>
+            + DecompressedWithParent<T, Dsrc::IdD>
+            + PostOrder<T, Dsrc::IdD, M::Src>
+            + PostOrderIterable<T, Dsrc::IdD, M::Src>
+            + DecompressedSubtree<T>
+            + ContiguousDescendants<T, Dsrc::IdD, M::Src>
+            + LazyPOBorrowSlice<T, Dsrc::IdD, M::Src>
+            + ShallowDecompressedTreeStore<T, Dsrc::IdD, M::Src>
+            + LazyDecompressedTreeStore<T, M::Src>,
         Ddst: 'a
-            + DecompressedTreeStore<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, T, Ddst::IdD>
-            + PostOrder<'a, T, Ddst::IdD, M::Dst>
-            + PostOrderIterable<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedSubtree<'a, T>
-            + ContiguousDescendants<'a, T, Ddst::IdD, M::Dst>
-            + LazyPOBorrowSlice<'a, T, Ddst::IdD, M::Dst>
-            + ShallowDecompressedTreeStore<'a, T, Ddst::IdD, M::Dst>
-            + LazyDecompressedTreeStore<'a, T, M::Dst>,
-        T: 'a + Tree + WithHashs + WithStats,
-        HAST: HyperAST<'a, IdN = T::TreeId, T = T, Label = T::Label>,
+            + DecompressedTreeStore<T, Ddst::IdD, M::Dst>
+            + DecompressedWithParent<T, Ddst::IdD>
+            + PostOrder<T, Ddst::IdD, M::Dst>
+            + PostOrderIterable<T, Ddst::IdD, M::Dst>
+            + DecompressedSubtree<T>
+            + ContiguousDescendants<T, Ddst::IdD, M::Dst>
+            + LazyPOBorrowSlice<T, Ddst::IdD, M::Dst>
+            + ShallowDecompressedTreeStore<T, Ddst::IdD, M::Dst>
+            + LazyDecompressedTreeStore<T, M::Dst>,
+        T: Tree + WithHashs + WithStats,
+        HAST: HyperAST<IdN = T::TreeId, RT = T, Label = T::Label>,
         M: MonoMappingStore,
         MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
         const SIZE_THRESHOLD: usize,
@@ -169,8 +169,8 @@ where
     // ) -> Self {
     //     let src_arena = Dsrc::new(compressed_node_store, src);
     //     let dst_arena = Ddst::new(compressed_node_store, dst);
-    //     let src_len = ShallowDecompressedTreeStore::<'a, T, Dsrc::IdD, M::Src>::len(&src_arena);
-    //     let dst_len = ShallowDecompressedTreeStore::<'a, T, Ddst::IdD, M::Dst>::len(&dst_arena);
+    //     let src_len = ShallowDecompressedTreeStore::<T, Dsrc::IdD, M::Src>::len(&src_arena);
+    //     let dst_len = ShallowDecompressedTreeStore::<T, Ddst::IdD, M::Dst>::len(&dst_arena);
     //     mappings.topit(src_len + 1, src_len + 1);
     //     let mut matcher = Self::new(
     //         compressed_node_store,
@@ -316,7 +316,7 @@ where
         } else {
             let o_src = self.internal.src_arena.original(&src);
             let o_dst = self.internal.dst_arena.original(&dst);
-            let src_arena = ZsTree::<T, Dsrc::IdD>::decompress(node_store, &o_src);
+            let src_arena = ZsTree::<T, Dsrc::IdD>::decompress2(self.internal.stores, &o_src);
             src_offset = src - src_arena.root();
             if cfg!(debug_assertions) {
                 let src_arena_z = self.internal.src_arena.slice_po(node_store, &src);
@@ -332,7 +332,7 @@ where
                 assert!(src_arena.kr[src_arena.kr.len() - 1]);
                 dbg!(last == src_arena_z.root());
             }
-            let dst_arena = ZsTree::<T, Ddst::IdD>::decompress(node_store, &o_dst);
+            let dst_arena = ZsTree::<T, Ddst::IdD>::decompress2(self.internal.stores, &o_dst);
             dst_offset = dst - dst_arena.root();
             if cfg!(debug_assertions) {
                 let dst_arena_z = self.internal.dst_arena.slice_po(node_store, &dst);

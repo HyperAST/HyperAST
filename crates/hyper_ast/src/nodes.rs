@@ -525,7 +525,7 @@ impl<
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool> Display
     for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     HAST::IdN: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -536,11 +536,11 @@ where
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool> Display
     for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     HAST::TS: RoleStore,
     HAST::IdN: std::fmt::Debug,
     <HAST::TS as RoleStore>::Role: std::fmt::Display,
-    HAST::T: crate::types::WithRoles,
+    for<'t> HAST::T<'t>: crate::types::WithRoles,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -550,7 +550,7 @@ where
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
     SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     HAST::IdN: std::fmt::Debug,
 {
     fn serialize(
@@ -644,11 +644,11 @@ where
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
     SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     HAST::TS: RoleStore,
     HAST::IdN: std::fmt::Debug,
     <HAST::TS as RoleStore>::Role: std::fmt::Display,
-    HAST::T: crate::types::WithRoles,
+    for<'t> HAST::T<'t>: crate::types::WithRoles,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(
@@ -783,17 +783,17 @@ pub type JsonSerializer<'a, 'b, IdN, HAST, const SPC: bool> =
     IndentedSerializer<'a, 'b, IdN, HAST, Json, SPC>;
 pub type TextSerializer<'a, 'b, IdN, HAST> = IndentedSerializer<'a, 'b, IdN, HAST, Text, true>;
 
-pub struct IndentedSerializer<'a, 'b, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
+pub struct IndentedSerializer<'hast, 'a, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
     stores: &'a HAST,
     root: IdN,
-    root_indent: &'b str,
-    phantom: PhantomData<Fmt>,
+    root_indent: &'static str,
+    phantom: PhantomData<(&'hast (),Fmt)>,
 }
 
 impl<'store, 'b, IdN, HAST, Fmt: Format, const SPC: bool>
     IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC>
 {
-    pub fn new(stores: &'store HAST, root: IdN) -> Self {
+    pub fn new(stores: &'b HAST, root: IdN) -> Self {
         Self {
             stores,
             root,
@@ -807,7 +807,7 @@ impl<'store, 'b, IdN, HAST, const SPC: bool> Display
     for IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: HyperAST<'store, IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.serialize(&self.root, &self.root_indent, f) {
@@ -821,7 +821,7 @@ impl<'store, 'b, IdN, HAST, const SPC: bool> Display
     for IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: HyperAST<'store, IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.serialize(&self.root, &self.root_indent, f) {
@@ -834,7 +834,7 @@ where
 impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: HyperAST<'store, IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
 {
     fn serialize(
         &self,
@@ -846,7 +846,7 @@ where
         use crate::types::Labeled;
         use crate::types::NodeStore;
         use crate::types::WithChildren;
-        let b = self.stores.node_store().resolve(id);
+        let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
         let kind = self.stores.resolve_type(id);
         let label = b.try_get_label();
@@ -909,7 +909,7 @@ where
 impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: HyperAST<'store, IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
 {
     fn serialize(
         &self,
@@ -921,7 +921,7 @@ where
         use crate::types::Labeled;
         use crate::types::NodeStore;
         use crate::types::WithChildren;
-        let b = self.stores.node_store().resolve(id);
+        let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
         let kind = self.stores.resolve_type(id);
         let label = b.try_get_label();
@@ -1031,7 +1031,7 @@ impl<'store, IdN, HAST, Fmt: Format, const SPC: bool> PrettyPrinter<'store, IdN,
 
 impl<'store, HAST, const SPC: bool> Display for PrettyPrinter<'store, HAST::IdN, HAST, Text, SPC>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, 0, f)
@@ -1040,7 +1040,7 @@ where
 
 impl<'store, HAST, const SPC: bool> Display for PrettyPrinter<'store, HAST::IdN, HAST, Sexp, SPC>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, 0, f)
@@ -1049,7 +1049,7 @@ where
 
 impl<'store, HAST, const SPC: bool> PrettyPrinter<'store, HAST::IdN, HAST, Text, SPC>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
 {
     fn serialize(
         &self,
@@ -1096,7 +1096,7 @@ where
 
 impl<'store, HAST, const SPC: bool> PrettyPrinter<'store, HAST::IdN, HAST, Sexp, SPC>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
 {
     fn serialize(
         &self,

@@ -11,7 +11,7 @@ use hyperast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, Wi
 
 use super::FullyDecompressedTreeStore;
 
-pub struct SimplePreOrderMapper<'a, T: WithChildren, IdD, D: DecompressedTreeStore<'a, T, IdD>> {
+pub struct SimplePreOrderMapper<'a, T, IdD, D> {
     pub map: Vec<IdD>,
     // fc: Vec<IdD>,
     rev: Vec<IdD>,
@@ -20,7 +20,7 @@ pub struct SimplePreOrderMapper<'a, T: WithChildren, IdD, D: DecompressedTreeSto
     phantom: PhantomData<*const T>,
 }
 
-impl<'a, T: WithChildren, IdD: Debug, D: Debug + DecompressedTreeStore<'a, T, IdD>> Debug
+impl<'a, T: WithChildren, IdD: Debug, D: Debug + DecompressedTreeStore<T, IdD>> Debug
     for SimplePreOrderMapper<'a, T, IdD, D>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -33,10 +33,24 @@ impl<'a, T: WithChildren, IdD: Debug, D: Debug + DecompressedTreeStore<'a, T, Id
     }
 }
 
-impl<'a, T: 'a + WithChildren, IdD: PrimInt, D: PostOrder<'a, T, IdD>> From<&'a D>
+impl<'a, IdD, D> SimplePreOrderMapper<'a, (), IdD, D> {
+    pub(crate) fn with_t<T: WithChildren>(&self) -> &SimplePreOrderMapper<'a, T, IdD, D> {
+        // SAFETY: T is just a PhantomData
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl<'a, IdD, T: WithChildren, D> SimplePreOrderMapper<'a, T, IdD, D> {
+    pub(crate) fn without_t(&self) -> &SimplePreOrderMapper<'a, (), IdD, D> {
+        // SAFETY: T is just a PhantomData
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl<'a, T: 'a + WithChildren, IdD: PrimInt, D: PostOrder<T, IdD>> From<&'a D>
     for SimplePreOrderMapper<'a, T, IdD, D>
 where
-    D: FullyDecompressedTreeStore<'a, T, IdD>,
+    D: FullyDecompressedTreeStore<T, IdD>,
 {
     fn from(x: &'a D) -> Self {
         let mut map: Vec<IdD> = vec![zero(); x.len()];
@@ -98,22 +112,22 @@ pub struct DisplaySimplePreOrderMapper<
     'a: 'b,
     'b,
     IdD: PrimInt,
-    HAST: HyperAST<'store>,
-    D: PostOrder<'a, HAST::T, IdD>,
+    HAST: HyperAST,
+    D: for<'t> PostOrder<HAST::T<'t>, IdD>,
 > {
-    pub inner: &'b SimplePreOrderMapper<'a, HAST::T, IdD, D>,
+    pub inner: &'b SimplePreOrderMapper<'a, (), IdD, D>,
     pub stores: &'store HAST,
 }
 
 impl<'store: 'a, 'a: 'b, 'b, IdD: PrimInt, HAST, D> Display
     for DisplaySimplePreOrderMapper<'store, 'a, 'b, IdD, HAST, D>
 where
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization,
     // T::TreeId: Clone + Debug + Eq,
     // T::Type: Copy + Send + Sync,
     // T::Type: Debug,
-    D: PostOrder<'a, HAST::T, IdD>,
+    D: for<'t> PostOrder<HAST::T<'t>, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut pos = 0;
@@ -143,9 +157,9 @@ impl<'store: 'a, 'a: 'b, 'b, IdD: PrimInt, HAST, D> Debug
 where
     // HAST::IdN: Clone + Debug + Eq,
     // T::Type: Copy + Send + Sync,
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     // T::Type: Debug,
-    D: PostOrder<'a, HAST::T, IdD>,
+    D: for<'t> PostOrder<HAST::T<'t>, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {

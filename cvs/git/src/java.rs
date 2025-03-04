@@ -26,10 +26,10 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()>
 where
-    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG
         + tree_gen::More<
             TS = TStore,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
             Acc = java_tree_gen::Acc,
         >,
 {

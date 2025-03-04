@@ -2,7 +2,7 @@
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use hyperast::types::{Labeled, NodeStore, Stored, Typed, WithChildren};
+use hyperast::types::{Labeled, Stored, Typed, WithChildren};
 use num_traits::{cast, PrimInt};
 
 use crate::{
@@ -136,20 +136,23 @@ struct MidNode<IdC, IdD> {
 }
 
 pub struct ScriptGenerator<
+    's,
     'a,
+    'b,
+    'c,
     IdD: PrimInt + Debug,
     T: 'a + Stored + Labeled + WithChildren,
     SS,
-    SD: BreadthFirstIterable<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+    SD: BreadthFirstIterable<T, IdD> + DecompressedWithParent<T, IdD>,
     S,
 > {
-    store: &'a S,
+    store: &'s S,
     src_arena_dont_use: &'a SS,
     mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,
     mid_root: IdD,
-    dst_arena: &'a SD,
+    dst_arena: &'b SD,
     // ori_to_copy: DefaultMappingStore<IdD>,
-    ori_mappings: Option<&'a DefaultMappingStore<IdD>>,
+    ori_mappings: Option<&'c DefaultMappingStore<IdD>>,
     cpy_mappings: DefaultMappingStore<IdD>,
     moved: bitvec::vec::BitVec,
 
@@ -160,20 +163,23 @@ pub struct ScriptGenerator<
 }
 
 impl<
+        's,
         'a,
+        'b,
+        'c,
         IdD: PrimInt + Debug,
         T: 'a + Stored + Typed + Labeled + WithChildren,
-        SS: DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + PostOrderIterable<'a, T, IdD>
-            + PostOrder<'a, T, IdD>,
-        SD: DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + BreadthFirstIterable<'a, T, IdD>,
+        SS: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + PostOrderIterable<T, IdD>
+            + PostOrder<T, IdD>,
+        SD: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreadthFirstIterable<T, IdD>,
         S: 'a, //:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-    > ScriptGenerator<'a, IdD, T, SS, SD, S>
+    > ScriptGenerator<'s, 'a, 'b, 'c, IdD, T, SS, SD, S>
 where
-    S: NodeStore<T::TreeId, R<'a> = T>,
+    S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     // S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
     //     hyperast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
@@ -183,26 +189,27 @@ where
     T::ChildIdx: Debug,
 {
     pub fn compute_actions(
-        store: &'a S,
+        store: &'s S,
         src_arena: &'a SS,
-        dst_arena: &'a SD,
-        ms: &'a DefaultMappingStore<IdD>,
+        dst_arena: &'b SD,
+        ms: &'c DefaultMappingStore<IdD>,
     ) -> ActionsVec<SimpleAction<IdD, IdD, T>> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
+        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
             .actions
     }
     pub fn precompute_actions(
-        store: &'a S,
+        store: &'s S,
         src_arena: &'a SS,
-        dst_arena: &'a SD,
-        ms: &'a DefaultMappingStore<IdD>,
-    ) -> ScriptGenerator<'a, IdD, T, SS, SD, S> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena).init_cpy(ms)
+        dst_arena: &'b SD,
+        ms: &'c DefaultMappingStore<IdD>,
+    ) -> ScriptGenerator<'s, 'a, 'b, 'c, IdD, T, SS, SD, S> {
+        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
+            .init_cpy(ms)
     }
 
-    fn new(store: &'a S, src_arena: &'a SS, dst_arena: &'a SD) -> Self {
+    fn new(store: &'s S, src_arena: &'a SS, dst_arena: &'b SD) -> Self {
         Self {
             store,
             src_arena_dont_use: src_arena,
@@ -218,13 +225,13 @@ where
         }
     }
 
-    fn init_cpy(mut self, ms: &'a DefaultMappingStore<IdD>) -> Self {
+    fn init_cpy(mut self, ms: &'c DefaultMappingStore<IdD>) -> Self {
         // copy mapping
         self.ori_mappings = Some(ms);
         self.cpy_mappings = ms.clone();
         self.moved.resize(self.src_arena_dont_use.len(), false);
         for x in self.src_arena_dont_use.iter_df_post::<true>() {
-            let children = self.src_arena_dont_use.children(self.store, &x);
+            let children = self.src_arena_dont_use.children4(self.store, &x);
             let children = if children.len() > 0 {
                 Some(children)
             } else {
@@ -294,11 +301,11 @@ where
                 };
                 let w_l = {
                     let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;
-                    self.store.resolve(c).try_get_label().copied()
+                    self.store.scoped(c, |x| x.try_get_label().copied())
                 };
                 let x_l = {
                     let c = &self.dst_arena.original(&x);
-                    self.store.resolve(c).try_get_label().copied()
+                    self.store.scoped(c, |x| x.try_get_label().copied())
                 };
 
                 if w_l != x_l && z != v {
@@ -420,7 +427,7 @@ where
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
         self.src_in_order.remove_all(&w_c);
-        let x_c: Vec<IdD> = self.dst_arena.children(self.store, x);
+        let x_c: Vec<IdD> = self.dst_arena.children4(self.store, x);
         self.dst_in_order.remove_all(&x_c);
 
         // todo use iter filter collect
@@ -469,7 +476,7 @@ where
     /// find position of x in parent on dst_arena
     pub(crate) fn find_pos(&self, x: &IdD, parent: &IdD) -> T::ChildIdx {
         let y = parent;
-        let siblings = self.dst_arena.children(self.store, y);
+        let siblings = self.dst_arena.children4(self.store, y);
 
         for c in &siblings {
             if self.dst_in_order.contains(c) {
@@ -611,10 +618,10 @@ where
         self.apply_insert(action, z, w, x);
     }
 
-    fn iter_mid_in_post_order<'b>(
+    fn iter_mid_in_post_order<'d>(
         root: IdD,
-        mid_arena: &'b [MidNode<T::TreeId, IdD>],
-    ) -> Iter<'b, T::TreeId, IdD> {
+        mid_arena: &'d [MidNode<T::TreeId, IdD>],
+    ) -> Iter<'d, T::TreeId, IdD> {
         let parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
         Iter { parent, mid_arena }
     }

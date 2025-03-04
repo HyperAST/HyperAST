@@ -8,6 +8,8 @@ use hyperast::{
     types::{self, AnyType, Children, MySlice, NodeId, SimpleHyperAST, TypedNodeId},
 };
 
+use crate::SimpleStores;
+
 // pub trait NoSpaceNodeStoreContainer: types::HyperASTAsso {
 //     type NST<'store>: types::Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx> where Self: 'store;
 
@@ -221,7 +223,7 @@ where
 pub fn as_nospaces<'a, TS>(
     stores: &'a hyperast::store::SimpleStores<TS>,
 ) -> SimpleHyperAST<
-    NoSpaceWrapper<'a, NodeIdentifier>,
+    NoSpaceWrapper<'static, NodeIdentifier>,
     TS,
     NoSpaceNodeStoreWrapper<'a>,
     &'a hyperast::store::labels::LabelStore,
@@ -233,6 +235,23 @@ pub fn as_nospaces<'a, TS>(
         node_store,
         label_store,
         _phantom: std::marker::PhantomData,
+    }
+}
+
+pub fn as_nospaces2<'a, TS>(
+    stores: &'a hyperast::store::SimpleStores<TS>,
+) -> hyperast::store::SimpleStores<
+    TS,
+    NoSpaceNodeStoreWrapper<'a>,
+    &'a hyperast::store::labels::LabelStore,
+> {
+    let label_store = &stores.label_store;
+    let node_store = &stores.node_store;
+    let node_store = node_store.into();
+    hyperast::store::SimpleStores {
+        node_store,
+        label_store,
+        type_store: std::marker::PhantomData,
     }
 }
 
@@ -533,11 +552,18 @@ impl<'a> types::Tree for NoSpaceWrapper<'a, NodeIdentifier> {
 //     }
 // }
 
+
+impl<'store> types::NStore for NoSpaceNodeStoreWrapper<'store> {
+    type IdN=NodeIdentifier;
+
+    type Idx=u16;
+}
+
+impl<'store> types::NodStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+    type R<'a> = NoSpaceWrapper<'a, NodeIdentifier>;
+}
+
 impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
-    type R<'a>
-        = NoSpaceWrapper<'a, NodeIdentifier>
-    where
-        Self: 'a;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         NoSpaceWrapper {
             inner: unsafe { self.s._resolve(id.as_id()) },
@@ -545,11 +571,60 @@ impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store
     }
 }
 
+impl<'store> types::inner_ref::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+    type Ref = NoSpaceWrapper<'static, NodeIdentifier>;
+
+    fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
+        let t = &NoSpaceWrapper {
+            inner: unsafe { self.s._resolve::<NodeIdentifier>(id.as_id()) },
+        };
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe { std::mem::transmute(t) };
+        f(t)
+    }
+
+    fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+        let t = &NoSpaceWrapper {
+            inner: unsafe { self.s._resolve::<NodeIdentifier>(id.as_id()) },
+        };
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe { std::mem::transmute(t) };
+        f(t)
+    }
+
+    fn multi<R, const N: usize>(&self, id: &[NodeIdentifier; N], f: impl Fn(&[Self::Ref;N]) -> R) -> R {
+        todo!()
+    }
+}
+
+
+impl<'store> types::inner_ref::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
+    type Ref = NoSpaceWrapper<'static, NodeIdentifier>;
+
+    fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
+        (*self).scoped(id, f)
+    }
+
+    fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+        (*self).scoped_mut(id, f)
+    }
+
+    fn multi<R, const N: usize>(&self, id: &[NodeIdentifier; N], f: impl Fn(&[Self::Ref;N]) -> R) -> R {
+        (*self).multi(id, f)
+    }
+}
+
+impl<'store> types::NStore for &NoSpaceNodeStoreWrapper<'store> {
+    type IdN=NodeIdentifier;
+
+    type Idx=u16;
+}
+
+impl<'store> types::NodStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
+    type R<'a> = NoSpaceWrapper<'a, NodeIdentifier>;
+}
+
 impl<'store> types::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
-    type R<'a>
-        = NoSpaceWrapper<'a, NodeIdentifier>
-    where
-        Self: 'a;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         NoSpaceWrapper {
             inner: unsafe { self.s._resolve(id.as_id()) },

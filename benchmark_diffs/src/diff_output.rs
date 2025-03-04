@@ -55,8 +55,8 @@ pub enum Kind {
 
 impl<'a, HAST> From<(&'a HAST, HAST::IdN, &CompressedTreePath<HAST::Idx>)> for Tree
 where
-    HAST: types::HyperAST<'a>,
-    HAST::T: types::Tree + WithSerialization,
+    HAST: types::HyperAST,
+    for<'t> HAST::T<'t>: types::Tree + WithSerialization,
 {
     fn from((stores, ori, p): (&'a HAST, HAST::IdN, &CompressedTreePath<HAST::Idx>)) -> Self {
         (stores, compute_position(ori, &mut p.iter(), stores)).into()
@@ -65,8 +65,8 @@ where
 
 impl<'a, HAST> From<(&'a HAST, (Position, HAST::IdN))> for Tree
 where
-    HAST: types::HyperAST<'a>,
-    HAST::T: types::Tree,
+    HAST: types::HyperAST,
+    for<'t> HAST::T<'t>: types::Tree,
 {
     fn from((stores, (pos, x)): (&'a HAST, (Position, HAST::IdN))) -> Self {
         let Range { start, end } = pos.range();

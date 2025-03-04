@@ -20,8 +20,8 @@ pub fn path_with_spaces<'store, HAST, It: Iterator>(
 where
     It::Item: Clone + PrimInt,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut x = root;
     let mut path_ids = vec![];
@@ -106,8 +106,8 @@ impl<'store, 'src, 'a, Idx: PrimInt, HAST>
     where
         It::Item: Clone + PrimInt,
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+        HAST: HyperAST,
+        for<'t> HAST::T<'t>: WithSerialization + WithChildren<ChildIdx = It::Item>,
     {
         todo!()
     }
@@ -158,8 +158,8 @@ pub fn compute_position_with_no_spaces<'store, HAST, It: Iterator>(
 where
     It::Item: Clone + PrimInt,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let (pos, mut path_ids, no_spaces) =
         compute_position_and_nodes_with_no_spaces(root, offsets, stores);
@@ -173,8 +173,8 @@ pub fn compute_position_and_nodes_with_no_spaces<'store, HAST, It>(
 ) -> (Position, Vec<HAST::IdN>, Vec<It::Item>)
 where
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST: HyperAST,
+    for<'t> HAST::T<'t>: WithSerialization + WithChildren<ChildIdx = It::Item>,
     It: Iterator,
     It::Item: Clone + PrimInt,
 {
@@ -280,7 +280,7 @@ type FileAndOffsetFull =
 impl<'store, 'src, 'a, HAST, S> WithHyperAstPositionConverter<'store, 'src, S, HAST>
 // WithHyperAstPositionConverter<'store, 'src, PathNoSpace<HAST::IdN, HAST::Idx>, HAST>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     S: super::position_accessors::WithPreOrderOffsets<Idx = HAST::Idx>,
     S: super::position_accessors::RootedPosition<HAST::IdN>,
     S: super::node_filter_traits::Full,
@@ -291,8 +291,8 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
+        HAST: HyperAST,
+        for<'t> HAST::T<'t>: WithSerialization + WithChildren,
     {
         let stores = self.stores;
         // get root
@@ -363,9 +363,9 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
-        for<'b> <HAST::T as WithChildren>::Children<'b>: Clone,
+        HAST: HyperAST,
+        for<'t> HAST::T<'t>: WithSerialization + WithChildren,
+        for<'b,'t> <HAST::T<'t> as WithChildren>::Children<'b>: Clone,
     {
         let stores = self.stores;
         let mut x = self.src.root();
@@ -458,9 +458,9 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
-        for<'b> <HAST::T as WithChildren>::Children<'b>: Clone,
+        HAST: HyperAST,
+        for<'t> HAST::T<'t>: WithSerialization + WithChildren,
+        for<'b,'t> <HAST::T<'t> as WithChildren>::Children<'b>: Clone,
         B: TopDownPosBuilder<HAST::IdN, HAST::Idx, usize, NoSpacePrepareParams<HAST::Idx>>
             + Default,
     {
@@ -551,8 +551,8 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
+        HAST: HyperAST,
+        for<'t> HAST::T<'t>: WithSerialization + WithChildren,
         // B: receivers_traits::top_down::ReceiveDir2<HAST::IdN, HAST::Idx, usize, O>
         B: building::top_down::ReceiveDir<HAST::IdN, HAST::Idx, O>
             + building::top_down::CreateBuilder,

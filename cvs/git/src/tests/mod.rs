@@ -189,39 +189,50 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
         hyperast_tsquery::QueryMatcher<&hyperast::store::SimpleStores<TStore>, &Acc>,
     > = &tsg;
     let query: Option<&hyperast_tsquery::Query> = None;
-    let functions = tree_sitter_graph::functions::Functions::<
-        tree_sitter_graph::graph::GraphErazing<
-            hyperast_tsquery::MyNodeErazing<
-                hyperast::store::SimpleStores<
-                    TStore,
-                    &hyperast::store::nodes::legion::NodeStoreInner,
-                    &hyperast::store::labels::LabelStore,
-                >,
-                &Acc,
-            >,
-        >,
-    >::stdlib();
-    let functions = functions.as_any();
-    let more = hyperast_tsquery::PreparedOverlay {
-        query,
-        overlayer: spec,
-        functions,
-    };
-    let mut stores = hyperast::store::SimpleStores::default();
-    let mut md_cache = std::collections::HashMap::default();
-    let line_break = "\n".as_bytes().to_vec();
-    let mut java_tree_gen = hyperast_gen_ts_java::legion_with_refs::JavaTreeGen::<
-        hyperast_gen_ts_java::types::TStore,
-        _,
-        _,
-    >::with_preprocessing(&mut stores, &mut md_cache, more)
-    .with_line_break(line_break);
-    let r = crate::java::handle_java_file(&mut java_tree_gen, &b"".into(), t.as_bytes()).unwrap();
-    log::error!("height : {:3?}", r.local.metrics.height);
-    log::error!("{:?}", stores.node_store);
-    // ASSERT one node per class_declaration
-    // TODO make an automatic test once nodes can be accessed after the contruction
-    Ok(())
+    // let functions = tree_sitter_graph::functions::Functions::<
+    // tree_sitter_graph::graph::Graph<
+    //     hyperast_tsquery::Node<
+    //         hyperast::store::SimpleStores<
+    //             TStore,
+    //             &hyperast::store::nodes::legion::NodeStoreInner,
+    //             &hyperast::store::labels::LabelStore,
+    //         >,
+    //         &Acc,
+    //     >,
+    // >,
+    // // tree_sitter_graph::graph::GraphErazing<
+    // //     hyperast_tsquery::MyNodeErazing<
+    // //         hyperast::store::SimpleStores<
+    // //             TStore,
+    // //             &hyperast::store::nodes::legion::NodeStoreInner,
+    // //             &hyperast::store::labels::LabelStore,
+    // //         >,
+    // //         &Acc,
+    // //     >,
+    // // >,
+    // >::default();
+    todo!();
+    // let functions = functions.as_any();
+    // let more = hyperast_tsquery::PreparedOverlay {
+    //     query,
+    //     overlayer: spec,
+    //     functions,
+    // };
+    // let mut stores = hyperast::store::SimpleStores::default();
+    // let mut md_cache = std::collections::HashMap::default();
+    // let line_break = "\n".as_bytes().to_vec();
+    // let mut java_tree_gen = hyperast_gen_ts_java::legion_with_refs::JavaTreeGen::<
+    //     hyperast_gen_ts_java::types::TStore,
+    //     _,
+    //     _,
+    // >::with_preprocessing(&mut stores, &mut md_cache, more)
+    // .with_line_break(line_break);
+    // let r = crate::java::handle_java_file(&mut java_tree_gen, &b"".into(), t.as_bytes()).unwrap();
+    // log::error!("height : {:3?}", r.local.metrics.height);
+    // log::error!("{:?}", stores.node_store);
+    // // ASSERT one node per class_declaration
+    // // TODO make an automatic test once nodes can be accessed after the contruction
+    // Ok(())
 }
 
 static INNER_CLASSES: &str = r#"package spoon.test.imports.testclasses;

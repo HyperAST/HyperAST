@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 pub struct TreeToQuery<
     'a,
-    HAST: types::HyperAST<'a>,
+    HAST: types::HyperAST,
     TIdN: hyperast::types::TypedNodeId,
     C: Converter,
     const PP: bool = true,
@@ -52,13 +52,15 @@ impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNo
 
     type Idx = u16;
     type Label = store::labels::DefaultLabelIdentifier;
+
+    type T<'t> = store::nodes::legion::HashedNodeRef<'t, Self::IdN>;
+    type RT = store::nodes::legion::HashedNodeRef<'static, Self::IdN>;
 }
 
-impl<'store, 'a, TS> types::HyperAST<'store> for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
+impl<'a, TS> types::HyperAST for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
 where
     TS: types::TypeStore<Ty = types::AnyType>,
 {
-    type T = store::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 
     type NS = store::nodes::legion::NodeStore;
 
@@ -103,7 +105,7 @@ where
 impl<
         'store,
         'a,
-        HAST: types::TypedHyperAST<'store, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
     > TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
 where
@@ -121,7 +123,7 @@ where
 impl<
         'store,
         'a,
-        HAST: types::TypedHyperAST<'store, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
         C: Converter<Ty = TIdN::Ty>,
     > TreeToQuery<'store, HAST, TIdN, C>
@@ -155,7 +157,7 @@ impl<
 
 impl<
         'store,
-        HAST: types::TypedHyperAST<'store, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
@@ -170,7 +172,7 @@ where
 
 impl<
         'store,
-        HAST: types::TypedHyperAST<'store, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,

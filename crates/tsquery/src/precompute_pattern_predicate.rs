@@ -28,7 +28,7 @@ impl<T, HAST, Acc> tree_gen::Prepro<T> for PreparedQuerying<&crate::Query, HAST,
     }
 }
 
-impl<'s, TS, T, Acc> tree_gen::More for PreparedQuerying<&crate::Query, (TS, T), Acc>
+impl<TS, T, Acc> tree_gen::More for PreparedQuerying<&crate::Query, (TS, T), Acc>
 where
     TS: 'static
         + Clone
@@ -45,8 +45,7 @@ where
     type TS = TS;
     const ENABLED: bool = true;
     fn match_precomp_queries<
-        'a,
-        HAST: HyperAST<'a, IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, T = Self::T>
+        HAST: HyperAST<IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, RT = Self::T>
             + std::clone::Clone,
     >(
         &self,
@@ -70,7 +69,7 @@ where
     }
 }
 
-impl<'s, TS, T, Acc> tree_gen::PreproTSG<'s> for PreparedQuerying<&crate::Query, (TS, T), Acc>
+impl<TS, T, Acc> tree_gen::PreproTSG for PreparedQuerying<&crate::Query, (TS, T), Acc>
 where
     TS: 'static
         + Clone
@@ -84,7 +83,7 @@ where
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
-        HAST: HyperAST<'s, IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, T = Self::T>
+        HAST: HyperAST<IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, RT = Self::T>
             + std::clone::Clone,
     >(
         &self,

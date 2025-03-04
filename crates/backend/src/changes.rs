@@ -46,7 +46,7 @@ pub(crate) fn added_deleted(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let with_spaces_stores = &repositories.processor.main_stores;
-    let stores = &no_space::as_nospaces(with_spaces_stores);
+    let stores = &no_space::as_nospaces2(with_spaces_stores);
 
     if src_tr == dst_tr {
         return Ok((
@@ -156,7 +156,7 @@ pub(crate) fn added_deleted(
                     mapper.mapping.src_arena.len(),
                     mapper.mapping.dst_arena.len(),
                 );
-                matching::full2(hyperast, &mut mapper);
+                matching::full2(&mut mapper);
                 let vec_store = mapper.mappings.clone();
 
                 dbg!();

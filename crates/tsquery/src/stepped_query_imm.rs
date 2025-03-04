@@ -13,13 +13,32 @@ use std::{fmt::Debug, vec};
 
 use crate::CaptureId;
 
+#[derive(Clone)]
+pub struct NodeR<P> {
+    /// the offset in acc
+    // offset: Idx,
+    pub pos: P,
+}
+
+impl<HAST: hyperast::types::HyperASTShared, Acc: hyperast::tree_gen::WithLabel, Idx, P: Clone>
+    From<Node<'_, HAST, Acc, Idx, P>> for NodeR<P>
+{
+    fn from(value: Node<'_, HAST, Acc, Idx, P>) -> Self {
+        let pos = value.0.pos.clone();
+        Self { pos }
+    }
+}
+
 #[repr(transparent)]
 pub struct Node<
     'hast,
     HAST: HyperASTShared,
     Acc: hyperast::tree_gen::WithLabel,
     Idx = <HAST as HyperASTShared>::Idx,
-    P = hyperast::position::StructuralPosition<<HAST as HyperASTShared>::IdN, Idx>,
+    P = hyperast::position::StructuralPosition<
+        <HAST as HyperASTShared>::IdN,
+        <HAST as HyperASTShared>::Idx,
+    >,
     L = <Acc as hyperast::tree_gen::WithLabel>::L,
 >(
     // NOTE actually a bad idea to directly wrap cursor_on_unbuild::Node,
@@ -54,10 +73,10 @@ type IdF = u16;
 
 impl<'hast, 'acc, 'l, HAST, Acc> crate::Node for self::Node<'hast, HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS: ETypeStore<Ty2 = Acc::Type>,
     HAST::TS: hyperast::types::RoleStore<IdF = IdF, Role = Role>,
-    HAST::T: hyperast::types::WithRoles,
+    HAST::RT: hyperast::types::WithRoles,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
@@ -104,10 +123,10 @@ where
 
 impl<'hast, 'acc, HAST, Acc> crate::Cursor for Node<'hast, HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS: ETypeStore<Ty2 = Acc::Type> + RoleStore<IdF = IdF, Role = Role>,
     HAST::IdN: Copy,
-    HAST::T: WithRoles,
+    HAST::RT: WithRoles,
     Acc: hyperast::tree_gen::WithRole<Role>,
     Acc: hyperast::tree_gen::WithChildren<HAST::IdN>,
     Acc: hyperast::types::Typed,
@@ -245,22 +264,26 @@ impl<HAST, Acc> Debug for QueryMatcher<'_, HAST, Acc> {
     }
 }
 
+impl<'acc, 'hast, HAST, Acc> tree_sitter_graph::QueryWithLang
+    for QueryMatcher<'hast, HAST, &'acc Acc>
+{
+    type Lang = tree_sitter::Language;
+}
+
 #[cfg(feature = "tsg")]
 impl<'acc, 'hast, HAST, Acc> tree_sitter_graph::GenQuery for QueryMatcher<'hast, HAST, &'acc Acc>
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST: 'hast + HyperAST + Clone,
     HAST::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats + WithRoles,
-    HAST::TS: ETypeStore<Ty2 = Acc::Type>
-        + hyperast::types::RoleStore<IdF = IdF, Role = Role>
-        + hyperast::types::RoleStore,
+    HAST::RT: WithSerialization + WithStats + WithRoles,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
     Acc: hyperast::tree_gen::WithRole<Role>,
     Acc: hyperast::tree_gen::WithChildren<HAST::IdN>,
     Acc: hyperast::types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
 {
-    type Lang = tree_sitter::Language;
+    // type Lang = tree_sitter::Language;
 
     type Ext = ExtendingStringQuery<Self, Self::Lang>;
 
@@ -397,13 +420,11 @@ impl<Q, L> ExtendingStringQuery<Q, L> {
 impl<'acc, 'hast, HAST, Acc> tree_sitter_graph::ExtendedableQuery
     for ExtendingStringQuery<QueryMatcher<'hast, HAST, &'acc Acc>, tree_sitter::Language>
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST: 'hast + HyperAST + Clone,
     HAST::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats + WithRoles,
-    HAST::TS: ETypeStore<Ty2 = Acc::Type>
-        + hyperast::types::RoleStore<IdF = IdF, Role = Role>
-        + hyperast::types::RoleStore,
+    HAST::RT: WithSerialization + WithStats + WithRoles,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
     Acc: hyperast::tree_gen::WithChildren<HAST::IdN>
         + hyperast::tree_gen::WithRole<Role>
         + hyperast::types::Typed,
@@ -457,13 +478,11 @@ where
 impl<'hast, 'acc, 'l, HAST, Acc> tree_sitter_graph::graph::SyntaxNode
     for Node<'hast, HAST, &'acc Acc>
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::IdN: std::hash::Hash + Copy + Debug,
     HAST::Idx: std::hash::Hash,
-    HAST::T: WithSerialization + types::WithChildren + WithStats + WithRoles,
-    HAST::TS: ETypeStore<Ty2 = Acc::Type>
-        + hyperast::types::RoleStore<IdF = IdF, Role = Role>
-        + hyperast::types::RoleStore,
+    HAST::RT: WithSerialization + types::WithChildren + WithStats + WithRoles,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
     Acc: hyperast::tree_gen::WithChildren<HAST::IdN>
         + hyperast::tree_gen::WithRole<Role>
         + hyperast::types::Typed,
@@ -528,7 +547,8 @@ where
 
     fn text(&self) -> String {
         use hyperast::position::TreePath;
-        let stores: &HAST = unsafe { std::mem::transmute(&self.0.stores) };
+        let stores: &HAST = &self.0.stores;
+        // let stores: &HAST = unsafe { std::mem::transmute(&self.0.stores) };
         if let Some(root) = self.0.pos.node() {
             hyperast::nodes::TextSerializer::new(stores, *root).to_string()
         } else {
@@ -560,13 +580,11 @@ where
 impl<'acc, 'hast, HAST, Acc> tree_sitter_graph::graph::SyntaxNodeExt
     for Node<'hast, HAST, &'acc Acc>
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats + WithRoles,
-    HAST::TS: ETypeStore<Ty2 = Acc::Type>
-        + hyperast::types::RoleStore<IdF = IdF, Role = Role>
-        + hyperast::types::RoleStore,
+    HAST::RT: WithSerialization + WithStats + WithRoles,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
     Acc: hyperast::tree_gen::WithRole<Role>,
     Acc: hyperast::tree_gen::WithChildren<HAST::IdN>,
     Acc: hyperast::types::Typed,
@@ -614,27 +632,36 @@ pub struct MyQMatch<
 impl<'cursor, 'hast, 'acc, HAST, Acc> tree_sitter_graph::graph::QMatch
     for MyQMatch<'cursor, 'hast, HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
-    HAST::T: hyperast::types::WithRoles,
+    HAST::RT: hyperast::types::WithRoles,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
+    // syn_node_ref
+    HAST::IdN: std::hash::Hash + Debug,
+    HAST::Idx: std::hash::Hash,
+    HAST::RT: WithSerialization + types::WithChildren + WithStats,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
 {
     type I = u32;
 
     type Item = Node<'hast, HAST, &'acc Acc>;
 
+    type Simple = NodeR<hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>>;
+
     fn nodes_for_capture_index(&self, index: Self::I) -> impl Iterator<Item = Self::Item> {
-        // log::error!("{}", index);
         self.qm
             .nodes_for_capture_index(CaptureId::new(index))
             .cloned()
     }
 
     fn pattern_index(&self) -> usize {
-        // self.qm.pattern_index.to_usize()
         self.i as usize
+    }
+
+    fn syn_node_ref(&self, node: &Self::Item) -> tree_sitter_graph::graph::SyntaxNodeRef {
+        tree_sitter_graph::graph::SyntaxNodeRef::new(node)
     }
 }
 
@@ -658,7 +685,7 @@ pub struct MyQMatches<
 impl<'query, 'cursor, 'hast, 'acc, It, HAST, Acc> Iterator
     for MyQMatches<'query, 'cursor, 'hast, It, HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     It: Iterator<Item = crate::QueryMatch<Node<'hast, HAST, &'acc Acc>>>,
     &'acc Acc: hyperast::tree_gen::WithLabel,
 {

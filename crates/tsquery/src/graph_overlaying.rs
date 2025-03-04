@@ -1,5 +1,6 @@
 use super::stepped_query_imm;
 use hyperast::{
+    store::SimpleStores,
     tree_gen,
     types::{self, HyperAST},
 };
@@ -18,10 +19,10 @@ impl<'aaa, 'hast, 'g, 'q, 'm, HAST, Acc> tree_gen::More
         &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<'hast, HAST, &Acc>>,
     >
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Hash,
-    HAST::T: types::WithSerialization + types::WithStats + types::WithRoles,
+    HAST::RT: types::WithSerialization + types::WithStats + types::WithRoles,
     HAST::TS: 'static
         + Clone
         + types::ETypeStore<Ty2 = Acc::Type>
@@ -31,13 +32,12 @@ where
 {
     type TS = HAST::TS;
     type Acc = Acc;
-    type T = HAST::T;
+    type T = HAST::RT;
 
     const ENABLED: bool = true;
 
     fn match_precomp_queries<
-        'a,
-        HAST2: HyperAST<'a, IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, T = Self::T>
+        HAST2: HyperAST<IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, RT = Self::T>
             + std::clone::Clone,
     >(
         &self,
@@ -71,10 +71,10 @@ impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc> tree_gen::Prepro<<HAST::TS as types::ET
         &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<'hast, HAST, &Acc>>,
     >
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Hash,
-    HAST::T: types::WithSerialization + types::WithStats + types::WithRoles,
+    HAST::RT: types::WithSerialization + types::WithStats + types::WithRoles,
     HAST::TS: 'static
         + Clone
         + types::ETypeStore<Ty2 = Acc::Type>
@@ -97,16 +97,16 @@ where
 }
 
 #[cfg(feature = "tsg")]
-impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc> tree_gen::PreproTSG<'hast>
+impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc> tree_gen::PreproTSG
     for PreparedOverlay<
         &'q crate::Query,
         &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<'hast, HAST, &Acc>>,
     >
 where
-    HAST: 'hast + HyperAST<'hast> + Clone,
-    HAST::IdN: Copy + Hash + Debug,
-    HAST::Idx: Hash,
-    HAST::T: types::WithSerialization + types::WithStats + types::WithRoles,
+    HAST: HyperAST + Clone,
+    HAST::IdN: 'static + Copy + Hash + Debug,
+    HAST::Idx: 'static + Hash,
+    HAST::RT: types::WithSerialization + types::WithStats + types::WithRoles,
     HAST::TS: 'static
         + Clone
         + types::ETypeStore<Ty2 = Acc::Type>
@@ -125,38 +125,198 @@ where
     // - holding graph as mutable to often
     // - bubling the mutability invariant from graph to HAST... (very bad)
     fn compute_tsg<
-        HAST2: 'static
-            + HyperAST<
-                'hast,
+        HAST2: HyperAST<
                 IdN = <Self::T as types::Stored>::TreeId,
                 Idx = <Self::T as types::WithChildren>::ChildIdx,
                 TS = Self::TS,
-                T = Self::T,
-            >
-            + std::clone::Clone,
+                RT = Self::T,
+            > + std::clone::Clone,
     >(
         &self,
         stores: HAST2,
         acc: &Acc,
         label: Option<&str>,
     ) -> Result<usize, String> {
+        todo!()
+        // // NOTE I had to do a lot of unsafe magic :/
+        // // mostly exending lifetime and converting HAST to HAST2 on compatible structures
+
+        // use tree_sitter_graph::graph::Graph;
+        // let cancellation_flag = tree_sitter_graph::NoCancellation;
+        // let mut globals = tree_sitter_graph::Variables::new();
+        // let mut graph: Graph<stepped_query_imm::Node<'_, HAST2, &Acc>> =
+        //     tree_sitter_graph::graph::Graph::default();
+        // init_globals(&mut globals, &mut graph);
+
+        // // retreive the custom functions
+        // // NOTE need the concrete type of the stores to instanciate
+        // // WARN cast will fail if the original instance type was not identical
+        // type Fcts<HAST, Acc> = tree_sitter_graph::functions::Functions<
+        //     tree_sitter_graph::graph::GraphErazing<stepped_query_imm::MyNodeErazing<HAST, Acc>>,
+        // >;
+        // let functions: &Fcts<HAST2, &Acc> = std::ops::Deref::deref(&self.functions)
+        //     .downcast_ref()
+        //     .expect("identical instance type");
+
+        // // tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
+
+        // let mut config = configure(&globals, functions);
+
+        // let pos = hyperast::position::StructuralPosition::empty();
+        // let tree = stepped_query_imm::Node::new(stores, acc, label, pos);
+
+        // // NOTE could not use the execute_lazy_into due to limitations with type checks (needed some transmutes)
+        // // ORI: self.overlayer.execute_lazy_into2(&mut graph, tree, &config, &cancellation_flag).unwrap();
+        // // {
+        // let mut ctx = tree_sitter_graph::execution::Ctx::new();
+
+        // let mut cursor = vec![];
+        // // NOTE could not find a way to make it type check without inlining
+        // // ORI: let mut matches = this.query.matches(&mut cursor, tree);
+        // let mut matches = {
+        //     let q: &stepped_query_imm::QueryMatcher<_, &Acc> =
+        //         unsafe { std::mem::transmute(self.overlayer.query.as_ref().unwrap()) };
+        //     // log::error!("{:?}",this.query.as_ref().unwrap().query.capture_names);
+        //     let node = &tree;
+        //     let cursor = &mut cursor;
+        //     // log::error!("{:?}",this.query.as_ref().unwrap().query);
+        //     // log::error!("{}",this.query.as_ref().unwrap().query);
+        //     let qm = self.overlayer.query.as_ref().unwrap();
+        //     let matchs = qm.query.matches_immediate(node.clone());
+        //     let node = node.clone();
+        //     stepped_query_imm::MyQMatches::<_, HAST2, _> {
+        //         q,
+        //         cursor,
+        //         matchs,
+        //         node,
+        //     }
+        // };
+        // let graph = &mut graph;
+        // loop {
+        //     // NOTE needed to make a transmute to type check
+        //     // ORI: ... matches.next() ...
+        //     let mat: stepped_query_imm::MyQMatch<_, &Acc> = {
+        //         let Some(mat) = matches.next() else { break };
+        //         let mat = stepped_query_imm::MyQMatch {
+        //             stores: tree.0.stores.clone(),
+        //             b: mat.b,
+        //             c: &(),
+        //             qm: unsafe { std::mem::transmute(mat.qm) },
+        //             i: mat.i,
+        //         };
+        //         mat
+        //     };
+        //     use tree_sitter_graph::graph::QMatch;
+        //     let stanza = &self.overlayer.stanzas[mat.pattern_index()];
+        //     // NOTE could not type check it either
+        //     // ORI: stanza.execute_lazy2(
+        //     {
+        //         let inherited_variables = &self.overlayer.inherited_variables;
+        //         let shorthands = &self.overlayer.shorthands;
+        //         let mat = &mat;
+        //         let config = &mut config;
+        //         let cancellation_flag = &cancellation_flag;
+        //         let current_regex_captures = vec![];
+        //         ctx.clear();
+        //         let node = mat
+        //             .nodes_for_capture_index(stanza.full_match_file_capture_index)
+        //             .next()
+        //             .expect("missing capture for full match");
+        //         log::error!("{:?}", node.0.pos);
+        //         // debug!("match {:?} at {}", node, self.range.start);
+        //         // trace!("{{");
+        //         for statement in &stanza.statements {
+        //             // NOTE could not properly get the source location, just use a zeroed location
+        //             // ORI: let error_context = StatementContext::new(...
+        //             let error_context = {
+        //                 let stmt: &tree_sitter_graph::ast::Statement = &statement;
+        //                 let stanza = &stanza;
+        //                 let source_node = &node;
+        //                 // use crate::graph::SyntaxNode;
+        //                 // let source_location: Location::from(source_node.start_position()), // TODO make a better location for hyperast;
+        //                 let source_location = tree_sitter_graph::Location { row: 0, column: 0 };
+        //                 tree_sitter_graph::execution::error::StatementContext::raw(
+        //                     stmt,
+        //                     stanza.range.start,
+        //                     source_location,
+        //                     source_node.0.kind().to_string(),
+        //                 )
+        //             };
+        //             if let Err(err) = ctx.exec(
+        //                 graph,
+        //                 inherited_variables,
+        //                 cancellation_flag,
+        //                 stanza.full_match_file_capture_index,
+        //                 shorthands,
+        //                 mat,
+        //                 config,
+        //                 &current_regex_captures,
+        //                 &statement,
+        //                 error_context,
+        //             ) {
+        //                 log::trace!("{}", graph.pretty_print());
+        //                 let source_path = std::path::Path::new(&"");
+        //                 let tsg_path = std::path::Path::new(&"");
+        //                 log::error!("{}", err.display_pretty(&source_path, "", &tsg_path, ""));
+        //             }
+        //             // .with_context(|| exec.error_context.into())?
+        //         }
+        //     };
+        // }
+        // if let Err(err) = ctx.eval(
+        //     graph,
+        //     functions,
+        //     &self.overlayer.inherited_variables,
+        //     &cancellation_flag,
+        // ) {
+        //     log::trace!("{}", graph.pretty_print());
+        //     let source_path = std::path::Path::new(&"");
+        //     let tsg_path = std::path::Path::new(&"");
+        //     log::error!("{}", err.display_pretty(&source_path, "", &tsg_path, ""));
+        // }
+        // // }
+
+        // // TODO properly return and use the graph (also handle the error propagation)
+        // if graph.node_count() > 2 {
+        //     log::error!("curr kind {}", hyperast::types::Typed::get_type(acc));
+        //     let s = graph.to_json().unwrap();
+        //     log::error!("graph: {}", s);
+        // }
+        // Ok(graph.node_count())
+    }
+    fn compute_tsg2<
+        HAST2: HyperAST<
+                IdN = <Self::T as types::Stored>::TreeId,
+                Idx = <Self::T as types::WithChildren>::ChildIdx,
+                TS = Self::TS,
+                RT = Self::T,
+            > + std::clone::Clone,
+    >(
+        &self,
+        stores: HAST2,
+        acc: &Acc,
+        label: Option<&str>,
+    ) -> Result<usize, String> {
+        // todo!("sane generalization")
+
         // NOTE I had to do a lot of unsafe magic :/
         // mostly exending lifetime and converting HAST to HAST2 on compatible structures
 
         use tree_sitter_graph::graph::Graph;
         let cancellation_flag = tree_sitter_graph::NoCancellation;
         let mut globals = tree_sitter_graph::Variables::new();
-        let mut graph: Graph<stepped_query_imm::Node<'_, HAST2, &Acc>> =
-            tree_sitter_graph::graph::Graph::default();
+        let mut graph: Graph<
+            stepped_query_imm::NodeR<hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>>,
+        > = tree_sitter_graph::graph::Graph::default();
         init_globals(&mut globals, &mut graph);
 
         // retreive the custom functions
         // NOTE need the concrete type of the stores to instanciate
         // WARN cast will fail if the original instance type was not identical
-        type Fcts<HAST, Acc> = tree_sitter_graph::functions::Functions<
-            tree_sitter_graph::graph::GraphErazing<stepped_query_imm::MyNodeErazing<HAST, Acc>>,
+        type Fcts<T> = tree_sitter_graph::functions::Functions<
+            T, // tree_sitter_graph::graph::GraphErazing<stepped_query_imm::MyNodeErazing<HAST, Acc>>,
         >;
-        let functions: &Fcts<HAST2, &Acc> = std::ops::Deref::deref(&self.functions)
+        let functions: &Fcts<_> = std::ops::Deref::deref(&self.functions)
             .downcast_ref()
             .expect("identical instance type");
 
@@ -244,18 +404,27 @@ where
                             source_node.0.kind().to_string(),
                         )
                     };
-                    if let Err(err) = ctx.exec(
-                        graph,
-                        inherited_variables,
-                        cancellation_flag,
-                        stanza.full_match_file_capture_index,
-                        shorthands,
-                        mat,
-                        config,
-                        &current_regex_captures,
-                        &statement,
-                        error_context,
-                    ) {
+                    let mat: &QM<HAST2, &Acc, HAST::IdN, HAST::Idx> = mat;
+                    type G<IdN, Idx> = Graph<
+                        stepped_query_imm::NodeR<hyperast::position::StructuralPosition<IdN, Idx>>,
+                    >;
+                    type P<IdN, Idx> = hyperast::position::StructuralPosition<IdN, Idx>;
+                    type QM<'c, 'hast, HAST, Acc, IdN, Idx> =
+                        stepped_query_imm::MyQMatch<'c, 'hast, HAST, Acc, Idx, P<IdN, Idx>>;
+                    if let Err(err) = ctx
+                        .exec::<G<HAST::IdN, HAST::Idx>, QM<HAST2, &Acc, HAST::IdN, HAST::Idx>, u32, _>(
+                            graph,
+                            inherited_variables,
+                            cancellation_flag,
+                            stanza.full_match_file_capture_index,
+                            shorthands,
+                            todo!(),
+                            config,
+                            &current_regex_captures,
+                            &statement,
+                            error_context,
+                        )
+                    {
                         log::trace!("{}", graph.pretty_print());
                         let source_path = std::path::Path::new(&"");
                         let tsg_path = std::path::Path::new(&"");
@@ -265,6 +434,7 @@ where
                 }
             };
         }
+
         if let Err(err) = ctx.eval(
             graph,
             functions,
@@ -298,12 +468,10 @@ static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_NAME: &str = "a/b/AAA.java";
 
 #[cfg(feature = "tsg")]
-pub fn configure<'a, 'g, Node>(
-    globals: &'a tree_sitter_graph::Variables<'g>,
-    functions: &'a tree_sitter_graph::functions::Functions<
-        tree_sitter_graph::graph::GraphErazing<Node>,
-    >,
-) -> tree_sitter_graph::ExecutionConfig<'a, 'g, tree_sitter_graph::graph::GraphErazing<Node>> {
+pub fn configure<'a, 'g, 'b, G>(
+    globals: &'b tree_sitter_graph::Variables<'g>,
+    functions: &'a tree_sitter_graph::functions::Functions<G>,
+) -> tree_sitter_graph::ExecutionConfig<'a, 'g, 'b, G> {
     let config = tree_sitter_graph::ExecutionConfig::new(functions, globals).lazy(true);
     if !cfg!(debug_assertions) {
         config.debug_attributes(
@@ -320,17 +488,17 @@ pub fn configure<'a, 'g, Node>(
 }
 
 #[cfg(feature = "tsg")]
-pub fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
+pub fn init_globals<Node>(
     globals: &mut tree_sitter_graph::Variables,
     graph: &mut tree_sitter_graph::graph::Graph<Node>,
 ) {
-    globals
-        .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
-        .expect("Failed to set ROOT_NODE");
     // globals
-    //     .add(FILE_PATH_VAR.into(), FILE_NAME.into())
-    //     .expect("Failed to set FILE_PATH");
-    globals
-        .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
-        .expect("Failed to set JUMP_TO_SCOPE_NODE");
+    //     .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
+    //     .expect("Failed to set ROOT_NODE");
+    // // globals
+    // //     .add(FILE_PATH_VAR.into(), FILE_NAME.into())
+    // //     .expect("Failed to set FILE_PATH");
+    // globals
+    //     .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
+    //     .expect("Failed to set JUMP_TO_SCOPE_NODE");
 }

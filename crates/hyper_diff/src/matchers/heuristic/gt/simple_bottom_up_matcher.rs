@@ -28,15 +28,15 @@ where
 // impl<
 //         'a,
 //         Dsrc: 'a
-//             + DecompressedTreeStore<'a, T, IdD>
-//             + DecompressedWithParent<'a, T, IdD>
-//             + DecompressedSubtree<'a, T>
-//             + BreathFirstContiguousSiblings<'a, T, IdD>,
+//             + DecompressedTreeStore<T, IdD>
+//             + DecompressedWithParent<T, IdD>
+//             + DecompressedSubtree<T>
+//             + BreathFirstContiguousSiblings<T, IdD>,
 //         Ddst: 'a
-//             + DecompressedTreeStore<'a, T, IdD>
-//             + DecompressedWithParent<'a, T, IdD>
-//             + DecompressedSubtree<'a, T>
-//             + BreathFirstContiguousSiblings<'a, T, IdD>,
+//             + DecompressedTreeStore<T, IdD>
+//             + DecompressedWithParent<T, IdD>
+//             + DecompressedSubtree<T>
+//             + BreathFirstContiguousSiblings<T, IdD>,
 //         T: 'a + Tree + WithHashs,
 //         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
 //         M: MonoMappingStore<Src = IdD, Dst = IdD>,
@@ -72,14 +72,14 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + BreathFirstContiguousSiblings<'a, T, IdD>,
-        Ddst: DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + BreathFirstContiguousSiblings<'a, T, IdD>,
-        T: 'a + Tree + WithHashs,
-        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
+        Dsrc: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreathFirstContiguousSiblings<T, IdD>,
+        Ddst: DecompressedTreeStore<T, IdD>
+            + DecompressedWithParent<T, IdD>
+            + BreathFirstContiguousSiblings<T, IdD>,
+        T: Tree + WithHashs,
+        HAST: HyperAST<IdN = T::TreeId, RT = T>,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where

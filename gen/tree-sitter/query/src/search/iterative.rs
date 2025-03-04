@@ -9,8 +9,8 @@ use hyperast::types::{
 pub(crate) struct MatchingIter<
     'a,
     'store,
-    HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
     C: Converter,
 > {
     slf: &'a PreparedMatcher<TIdN::Ty, C>,
@@ -38,8 +38,8 @@ struct S<IdN, Idx, Ty> {
 impl<
         'a,
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -82,8 +82,8 @@ impl<
 impl<
         'a,
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -168,25 +168,26 @@ impl<
                 let matched = Quant::One;
                 return MatchingRes { matched, captures };
             };
-            let Some((n, _)) = self.code_store.typed_node_store().try_resolve(&child) else {
-                dbg!();
-                return MatchingRes::zero();
-            };
-            let t = n.get_type();
-            if t.is_spaces() {
-                continue;
-            }
-            match curr_p {
-                Pattern::Dot => {
-                    immediate = true;
-                    continue;
-                }
-                _ => (),
-            }
-            dbg!(t);
-            todo!("call to self.next()?");
-            assert_eq!(immediate, false);
-            i += num::one();
+            todo!("")
+            // let Some((n, _)) = self.code_store.typed_node_store().try_resolve(&child) else {
+            //     dbg!();
+            //     return MatchingRes::zero();
+            // };
+            // let t = n.get_type();
+            // if t.is_spaces() {
+            //     continue;
+            // }
+            // match curr_p {
+            //     Pattern::Dot => {
+            //         immediate = true;
+            //         continue;
+            //     }
+            //     _ => (),
+            // }
+            // dbg!(t);
+            // todo!("call to self.next()?");
+            // assert_eq!(immediate, false);
+            // i += num::one();
         }
 
         todo!()
@@ -267,7 +268,7 @@ impl<
 
     fn handle_hidden(
         &mut self,
-        n: HAST::T,
+        n: HAST::T<'_>,
         ty: TIdN::Ty,
         t: TIdN::Ty,
     ) -> MatchingRes<HAST::IdN, HAST::Idx> {
@@ -294,8 +295,8 @@ impl<
 impl<
         'a,
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -314,7 +315,7 @@ pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C: Converter>(
     id: HAST::IdN,
 ) -> bool
 where
-    HAST: TypedHyperAST<'store, TIdN>,
+    HAST: TypedHyperAST<TIdN>,
     TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
         + hyperast::types::TypedNodeId<Ty = Ty>
         + 'static,

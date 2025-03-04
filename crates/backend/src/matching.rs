@@ -18,38 +18,39 @@ use hyper_diff::matchers::Mapping;
 
 // impl<'store, HAST> AAA for HAST
 // where
-//     HAST: HyperAST<'store>,
+//     HAST: HyperAST,
 // {
 //     fn aaa<B, A, R, F: Fn(&Self, &mut B, &mut A) -> R>(&self, f: F, b: &mut B, a: &mut A) -> R {
 //         f(self, b, a)
 //     }
 // }
 
-// fn t<'store, HAST: HyperAST<'store>>(
+// fn t<'store, HAST: HyperAST>(
 //     hyperast: &'store HAST,
-//     src_arena: &mut LazyPostOrder<HAST::T, u32>,
-//     dst_arena: &mut LazyPostOrder<HAST::T, u32>,
+//     src_arena: &mut LazyPostOrder<HAST::RT, u32>,
+//     dst_arena: &mut LazyPostOrder<HAST::RT, u32>,
 // ) -> DefaultMultiMappingStore<u32>
 // where
 //     HAST::IdN: Clone + Debug + Eq,
 //     HAST::Label: Clone + Copy + Eq + Debug,
 //     <HAST::T as types::Typed>::Type: Debug,
 //     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-//     HAST::T: 'store + types::WithHashs + types::WithStats,
+//     for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 // {
 //     hyperast.aaa(top_down, src_arena, dst_arena)
 // }
 
-pub fn top_down<'store, HAST: HyperAST<'store>>(
+pub fn top_down<'store, HAST: HyperAST>(
     hyperast: &'store HAST,
-    src_arena: &mut LazyPostOrder<HAST::T, u32>,
-    dst_arena: &mut LazyPostOrder<HAST::T, u32>,
+    src_arena: &mut LazyPostOrder<HAST::RT, u32>,
+    dst_arena: &mut LazyPostOrder<HAST::RT, u32>,
 ) -> DefaultMultiMappingStore<u32>
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: types::WithHashs + types::WithStats,
 {
     let mut mm: DefaultMultiMappingStore<_> = Default::default();
     mm.topit(src_arena.len(), dst_arena.len());
@@ -59,20 +60,21 @@ where
     mm
 }
 
-pub fn full<'store, HAST: HyperAST<'store>>(
+pub fn full<'store, HAST: HyperAST>(
     hyperast: &'store HAST,
     mapper: &mut Mapper<
         'store,
         HAST,
-        &mut LazyPostOrder<HAST::T, u32>,
-        &mut LazyPostOrder<HAST::T, u32>,
+        &mut LazyPostOrder<HAST::RT, u32>,
+        &mut LazyPostOrder<HAST::RT, u32>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 {
     let mm = LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
         DefaultMultiMappingStore<_>,
@@ -81,21 +83,22 @@ pub fn full<'store, HAST: HyperAST<'store>>(
     GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, hyperast.label_store());
 }
 
-pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST<'store>>(
+pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST>(
     hyperast: &'store HAST,
     mm: &hyper_diff::matchers::mapping_store::MultiVecStore<u32>,
     mapper: &'b mut Mapper<
         'store,
         HAST,
-        &'a mut LazyPostOrder<HAST::T, u32>,
-        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: types::WithHashs + types::WithStats,
 {
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
     use hidding_wrapper::*;
@@ -142,41 +145,43 @@ pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST<'store>>(
     }
 }
 
-pub fn bottom_up<'store, 'a, 'b, HAST: HyperAST<'store>>(
+pub fn bottom_up<'store, 'a, 'b, HAST: HyperAST>(
     hyperast: &'store HAST,
     mm: &hyper_diff::matchers::mapping_store::MultiVecStore<u32>,
     mapper: &'b mut Mapper<
         'store,
         HAST,
-        &'a mut LazyPostOrder<HAST::T, u32>,
-        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 {
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
 
     GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, hyperast.label_store());
 }
 
-pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST<'store>>(
+pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST>(
     hyperast: &'store HAST,
     mapper: &'b mut Mapper<
         'store,
         HAST,
-        &'a mut LazyPostOrder<HAST::T, u32>,
-        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 {
     GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 2000, 1, 100>::execute(
         mapper,
@@ -184,20 +189,20 @@ pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST<'store>>(
     );
 }
 
-pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
-    hyperast: &'store HAST,
+pub fn full2<'store, 'a, 'b, HAST: HyperAST>(
     mapper: &'b mut Mapper<
         'store,
         HAST,
-        &'a mut LazyPostOrder<HAST::T, u32>,
-        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: types::WithHashs + types::WithStats,
 {
     let mut mm: DefaultMultiMappingStore<_> = Default::default();
     mm.topit(mapper.src_arena.len(), mapper.dst_arena.len());
@@ -211,25 +216,26 @@ pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
     let compute_multimapping_t = now.elapsed().as_secs_f64();
     dbg!(compute_multimapping_t);
     let now = std::time::Instant::now();
-    bottom_up_hiding(hyperast, &mm, mapper);
+    bottom_up_hiding(mapper.hyperast, &mm, mapper);
     let bottom_up_hiding_t = now.elapsed().as_secs_f64();
     dbg!(bottom_up_hiding_t);
 }
 
-pub fn full3<'store, 'a, 'b, HAST: HyperAST<'store>>(
+pub fn full3<'store, 'a, 'b, HAST: HyperAST>(
     hyperast: &'store HAST,
     mapper: &'b mut Mapper<
         'store,
         HAST,
-        &'a mut LazyPostOrder<HAST::T, u32>,
-        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
+        &'a mut LazyPostOrder<HAST::RT, u32>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    HAST::RT: types::WithStats,
+    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
 {
     let mut mm: DefaultMultiMappingStore<_> = Default::default();
     mm.topit(mapper.src_arena.len(), mapper.dst_arena.len());

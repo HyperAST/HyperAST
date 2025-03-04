@@ -110,12 +110,11 @@ pub(crate) mod store {
             std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
     }
 
-    impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        type R<'a>
-            = HashedNodeRef<'a, NodeIdentifier>
-        where
-            Self: 'a;
+    impl<'b> hyperast::types::NodStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+    }
 
+    impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
         fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
             if let Some(r) = self.node_store.try_resolve(*id) {
                 r
@@ -132,6 +131,29 @@ pub(crate) mod store {
                 // unimplemented!()
                 self.node_store.unavailable_node()
             }
+        }
+    }
+
+    impl<'b> hyperast::types::inner_ref::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        type Ref = HashedNodeRef<'static, NodeIdentifier>;
+        fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
+            let t = &hyperast::types::NodeStore::resolve(self, id);
+            // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+            let t = unsafe { std::mem::transmute(t) };
+            f(t)
+        }
+        fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+            let t = &hyperast::types::NodeStore::resolve(self, id);
+            // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+            let t = unsafe { std::mem::transmute(t) };
+            f(t)
+        }
+        fn multi<R, const N: usize>(
+            &self,
+            id: &[NodeIdentifier; N],
+            f: impl Fn(&[Self::Ref; N]) -> R,
+        ) -> R {
+            todo!()
         }
     }
 
@@ -174,69 +196,61 @@ pub(crate) mod store {
         type Idx = u16;
 
         type Label = LabelIdentifier;
+        type T<'store> = HashedNodeRef<'store, NodeIdentifier>;
+        type RT = HashedNodeRef<'static, NodeIdentifier>;
     }
 
-    impl<'a> hyperast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
-        type T<'store>
-            = HashedNodeRef<'store, NodeIdentifier>
-        where
-            Self: 'store;
+    // impl<'a> hyperast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
+    //     type NS<'store>
+    //         = Self
+    //     where
+    //         Self: 'store;
 
-        type NS<'store>
-            = Self
-        where
-            Self: 'store;
+    //     fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
+    //         self
+    //     }
 
-        fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
-            self
-        }
+    //     type LS = Self;
 
-        type LS = Self;
+    //     fn label_store(&self) -> &Self::LS {
+    //         self
+    //     }
 
-        fn label_store(&self) -> &Self::LS {
-            self
-        }
+    //     type TS<'store>
+    //         = Self
+    //     where
+    //         Self: 'store;
 
-        type TS<'store>
-            = Self
-        where
-            Self: 'store;
+    //     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as hyperast::types::TypeStore>::Ty {
+    //         let ns = &self.node_store;
+    //         let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
+    //             use hyperast::types::HyperType;
+    //             return hyperast_gen_ts_java::types::Type::Dot.as_static().into();
+    //         };
+    //         let lang = n.get_lang();
+    //         let raw = n.get_raw_type();
+    //         match lang {
+    //             "hyperast_gen_ts_java::types::Lang" => {
+    //                 let t: &'static dyn hyperast::types::HyperType =
+    //                     hyperast_gen_ts_java::types::Lang::make(raw);
+    //                 t.into()
+    //             }
+    //             "hyperast_gen_ts_cpp::types::Lang" => {
+    //                 let t: &'static dyn hyperast::types::HyperType =
+    //                     hyperast_gen_ts_cpp::types::Lang::make(raw);
+    //                 t.into()
+    //             }
+    //             "hyperast_gen_ts_xml::types::Lang" => {
+    //                 let t: &'static dyn hyperast::types::HyperType =
+    //                     hyperast_gen_ts_xml::types::Lang::make(raw);
+    //                 t.into()
+    //             }
+    //             l => unreachable!("{}", l),
+    //         }
+    //     }
+    // }
 
-        fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as hyperast::types::TypeStore>::Ty {
-            let ns = &self.node_store;
-            let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
-                use hyperast::types::HyperType;
-                return hyperast_gen_ts_java::types::Type::Dot.as_static().into();
-            };
-            let lang = n.get_lang();
-            let raw = n.get_raw_type();
-            match lang {
-                "hyperast_gen_ts_java::types::Lang" => {
-                    let t: &'static dyn hyperast::types::HyperType =
-                        hyperast_gen_ts_java::types::Lang::make(raw);
-                    t.into()
-                }
-                "hyperast_gen_ts_cpp::types::Lang" => {
-                    let t: &'static dyn hyperast::types::HyperType =
-                        hyperast_gen_ts_cpp::types::Lang::make(raw);
-                    t.into()
-                }
-                "hyperast_gen_ts_xml::types::Lang" => {
-                    let t: &'static dyn hyperast::types::HyperType =
-                        hyperast_gen_ts_xml::types::Lang::make(raw);
-                    t.into()
-                }
-                l => unreachable!("{}", l),
-            }
-        }
-    }
-
-    impl<'a, 'b: 'a> hyperast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
-    where
-        Self: 'b,
-    {
-        type T = HashedNodeRef<'b, NodeIdentifier>;
-
+    impl<'a> hyperast::types::HyperAST for AcessibleFetchedHyperAST<'a> {
         type NS = Self;
 
         fn node_store(&self) -> &Self::NS {
@@ -1915,11 +1929,12 @@ mod hyperast_layouter {
     }
 
     use hyperast::types::{
-        self, HyperAST, HyperASTAsso, HyperASTShared, HyperType, IterableChildren,
+        self, HyperAST, HyperASTShared, HyperType, IterableChildren,
     };
+
     impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
     where
-        HAST: HyperASTAsso<IdN = IdN>,
+        HAST: HyperAST<IdN = IdN>,
         IdN: NodeId<IdN = IdN>,
         HAST: types::NodeStore<IdN>,
         HAST: types::LabelStore<str>,

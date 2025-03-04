@@ -3,7 +3,7 @@ use std::{collections::HashMap, usize};
 use dashmap::{RwLock, SharedValue};
 use hyperast::{
     store::defaults::NodeIdentifier,
-    types::{HyperAST, WithStats},
+    types::{HyperAST, HyperASTShared, WithStats},
 };
 use hyper_diff::decompressed_tree_store::{lazy_post_order, PersistedNode};
 
@@ -12,14 +12,14 @@ type IdN = NodeIdentifier;
 
 /// CAUTION a cache should be used on a single HyperAST
 /// btw a given HyperAST can be used by multiple caches
-pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<'store, IdN = IdN>>(
+pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<IdN = IdN>>(
     partial_comp_cache: &'a crate::PartialDecompCache,
     hyperast: &'store HAST,
     src: &IdN,
     dst: &IdN,
-) -> (&'a mut LPO<HAST::T>, &'a mut LPO<HAST::T>)
+) -> (&'a mut LPO<HAST::RT>, &'a mut LPO<HAST::RT>)
 where
-    <HAST as HyperAST<'store>>::T: WithStats,
+    <HAST as HyperASTShared>::RT: WithStats,
 {
     use hyperast::types::DecompressedSubtree;
     use lazy_post_order::LazyPostOrder;
@@ -68,8 +68,8 @@ where
 
     // SAFETY: should be the same hyperast TODO check if it is the case, store identifier along map ?
     let res: (
-        &mut SharedValue<LazyPostOrder<<HAST as HyperAST<'store>>::T, u32>>,
-        &mut SharedValue<LazyPostOrder<<HAST as HyperAST<'store>>::T, u32>>,
+        &mut SharedValue<LazyPostOrder<<HAST as HyperASTShared>::RT, u32>>,
+        &mut SharedValue<LazyPostOrder<<HAST as HyperASTShared>::RT, u32>>,
     ) = unsafe { std::mem::transmute((v1, v2)) };
     res
 }

@@ -4,7 +4,8 @@ use num_traits::{PrimInt, ToPrimitive};
 
 use crate::{
     decompressed_tree_store::{
-        DecompressedTreeStore, DecompressedWithParent, LazyDecompressedTreeStore, Shallow,
+        DecompressedTreeStore, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
+        Shallow,
     },
     matchers::mapping_store::MonoMappingStore,
 };
@@ -21,15 +22,15 @@ pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, T, Dsrc::IdD>
-            + LazyDecompressedTreeStore<'a, T, M::Src>,
+            + DecompressedTreeStore<T, Dsrc::IdD, M::Src>
+            + DecompressedWithParent<T, Dsrc::IdD>
+            + LazyDecompressedTreeStore<T, M::Src>,
         Ddst: 'a
-            + DecompressedTreeStore<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, T, Ddst::IdD>
-            + LazyDecompressedTreeStore<'a, T, M::Dst>,
-        T: 'a + Tree + WithStats,
-        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
+            + DecompressedTreeStore<T, Ddst::IdD, M::Dst>
+            + DecompressedWithParent<T, Ddst::IdD>
+            + LazyDecompressedTreeStore<T, M::Dst>,
+        T: Tree + WithStats,
+        HAST: HyperAST<IdN = T::TreeId, RT = T>,
         M: MonoMappingStore,
     > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
@@ -79,22 +80,25 @@ use hyperast::types::HyperAST;
 
 impl<
         'a,
-        HAST: HyperAST<'a>,
-        Dsrc: DecompressedTreeStore<'a, HAST::T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, HAST::T, Dsrc::IdD>
-            + LazyDecompressedTreeStore<'a, HAST::T, M::Src>,
-        Ddst: DecompressedTreeStore<'a, HAST::T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, HAST::T, Ddst::IdD>
-            + LazyDecompressedTreeStore<'a, HAST::T, M::Dst>,
+        HAST: HyperAST,
+        Dsrc: LazyDecompressed<M::Src>,
+        Ddst: LazyDecompressed<M::Dst>,
         M: MonoMappingStore,
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
-    HAST::T: 'a + Tree + WithStats,
+    // for<'t> HAST::T<'t>: WithStats,
+    for<'t> HAST::RT: WithStats,
     // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
+    Dsrc: DecompressedTreeStore<HAST::RT, Dsrc::IdD, M::Src>
+        + DecompressedWithParent<HAST::RT, Dsrc::IdD>
+        + LazyDecompressedTreeStore<HAST::RT, M::Src>,
+    Ddst: DecompressedTreeStore<HAST::RT, Ddst::IdD, M::Dst>
+        + DecompressedWithParent<HAST::RT, Ddst::IdD>
+        + LazyDecompressedTreeStore<HAST::RT, M::Dst>,
 {
     pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         let node_store = self.hyperast.node_store();
@@ -103,7 +107,7 @@ where
         let mappings = &self.mapping.mappings;
         let mut seeds = vec![];
         let s = &src_arena.original(src);
-        for c in src_arena.descendants(node_store, src) {
+        for c in src_arena.descendants2(self.hyperast, src) {
             if mappings.is_src(&c) {
                 let m = mappings.get_dst_unchecked(&c);
                 let m = dst_arena.decompress_to(node_store, &m);

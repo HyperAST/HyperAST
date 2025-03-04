@@ -22,8 +22,8 @@ impl<'store, HAST> MappingTracker<'store, HAST> {
     }
     fn size(&self, other_tr: &HAST::IdN, current_tr: &HAST::IdN) -> usize
     where
-        HAST: HyperAST<'store>,
-        HAST::T: types::WithStats,
+        HAST: HyperAST,
+        for<'t> HAST::T<'t>: types::WithStats,
     {
         let node_store = self.stores.node_store();
         let src_size: usize = node_store.resolve(&other_tr).size();
@@ -66,7 +66,7 @@ where
     // );
     let with_spaces_stores = &repositories.processor.main_stores;
     let tracker_nospace = MappingTracker {
-        stores: &hyperast_vcs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
+        stores: &hyperast_vcs_git::no_space::as_nospaces2(with_spaces_stores),
     };
 
     let current_tr = target.root();
@@ -99,7 +99,7 @@ where
             return MappingResult::Direct { src, matches };
         }
     }
-    let stores = &no_space::as_nospaces(with_spaces_stores);
+    let stores = &no_space::as_nospaces2(with_spaces_stores);
     let (src_tree, dst_tree) =
         crate::utils::get_pair_simp(partial_decomps, stores, &current_tr, &other_tr);
     let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
@@ -236,11 +236,11 @@ where
     // }
 }
 
-fn track_with_mappings<'store, C, P>(
+fn track_with_mappings<'store, 's, C, P>(
     with_spaces_stores: &SimpleStores<TStore>,
-    stores: &'store NoSpaceStore<'_, 'store>,
-    src_tree: &mut DecompressedTree<'store>,
-    dst_tree: &mut DecompressedTree<'store>,
+    stores: &'s NoSpaceStore<'_, 'store>,
+    src_tree: &mut DecompressedTree<'static>,
+    dst_tree: &mut DecompressedTree<'static>,
     flags: &Flags,
     target: &P,
     mapping_target: IdD,
@@ -360,27 +360,34 @@ where
     }
 }
 
-type NoSpaceStore<'a, 'store> = types::SimpleHyperAST<
-    NoSpaceWrapper<'store, super::IdN>,
+// type NoSpaceStore<'a, 'store> = types::SimpleHyperAST<
+//     NoSpaceWrapper<'static, super::IdN>,
+//     TStore,
+//     no_space::NoSpaceNodeStoreWrapper<'store>,
+//     &'a hyperast::store::labels::LabelStore,
+// >;
+
+type NoSpaceStore<'a, 'store> = hyperast::store::SimpleStores<
+    // NoSpaceWrapper<'static, super::IdN>,
     TStore,
     no_space::NoSpaceNodeStoreWrapper<'store>,
     &'a hyperast::store::labels::LabelStore,
 >;
 
-fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
-    stores: &'store NoSpaceStore<'rest, 'store>,
+fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest, 's>(
+    _stores: &'s NoSpaceStore<'rest, 'store>,
     mappings_alone: &'alone MappingAloneCache,
     mapper: &'mapper mut Mapper<
-        'store,
+        's,
         NoSpaceStore<'rest, 'store>,
-        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'store, super::IdN>, u32>,
-        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'store, super::IdN>, u32>,
+        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'static, super::IdN>, u32>,
+        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'static, super::IdN>, u32>,
         mapping_store::VecStore<u32>,
     >,
     partial: Option<mapping_store::MultiVecStore<u32>>,
 ) -> MappingAloneCacheRef<'alone> {
     let mappings_cache = mappings_alone;
-    let hyperast = stores;
+    let hyperast = mapper.hyperast;
     match mappings_cache.entry((
         mapper.src_arena.original(&mapper.src_arena.root()),
         mapper.dst_arena.original(&mapper.dst_arena.root()),
@@ -427,11 +434,11 @@ fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
 
 const CONST_NODE_COUNTING: Option<usize> = Some(500_000);
 
-fn track_greedy<'store, C, P>(
-    with_spaces_stores: &'store SimpleStores<TStore>,
-    stores: &'store NoSpaceStore<'_, 'store>,
-    src_tree: &mut DecompressedTree<'store>,
-    dst_tree: &mut DecompressedTree<'store>,
+fn track_greedy<'store, 's, C, P>(
+    with_spaces_stores: &'s SimpleStores<TStore>,
+    stores: &'s NoSpaceStore<'_, 'store>,
+    src_tree: &mut DecompressedTree<'static>,
+    dst_tree: &mut DecompressedTree<'static>,
     subtree_mappings: &mapping_store::MultiVecStore<IdD>,
     // no_spaces_path_to_target: &[u16],
     flags: &Flags,
@@ -450,7 +457,7 @@ where
     assert_eq!(current_tr, src_tree.original(&src_tree.root()));
     let node_store = &stores.node_store;
     let tracker_nospace = MappingTracker {
-        stores: &hyperast_vcs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
+        stores: &hyperast_vcs_git::no_space::as_nospaces2(with_spaces_stores),
     };
     let mut curr = src_tree.root();
     let path = target.iter_offsets_nospaces().copied().collect::<Vec<_>>();

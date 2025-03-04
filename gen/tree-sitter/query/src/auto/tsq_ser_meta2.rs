@@ -10,7 +10,7 @@ use hyperast::types::WithRoles;
 
 pub struct TreeToQuery<
     'hast,
-    HAST: HyperAST<'hast>,
+    HAST: HyperAST,
     TIdN: hyperast::types::TypedNodeId,
     // vanilla tsq syntax
     const V: bool = false,
@@ -25,7 +25,7 @@ pub struct TreeToQuery<
 impl<
         'store,
         'a,
-        HAST: types::TypedHyperAST<'store, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
     > TreeToQuery<'store, HAST, TIdN>
 {
@@ -45,7 +45,7 @@ impl<
 
 impl<
         'hast,
-        HAST: types::TypedHyperAST<'hast, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         const V: bool,
         const PP: bool,
@@ -53,8 +53,8 @@ impl<
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> HAST::T<'t>: WithRoles,
+    for<'t> HAST::T<'t>: WithPrecompQueries,
     <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -64,7 +64,7 @@ where
 
 impl<
         'hast,
-        HAST: types::TypedHyperAST<'hast, TIdN>,
+        HAST: types::TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
         const V: bool,
         const PP: bool,
@@ -72,8 +72,8 @@ impl<
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> HAST::T<'t>: WithRoles,
+    for<'t> HAST::T<'t>: WithPrecompQueries,
     <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn serialize(

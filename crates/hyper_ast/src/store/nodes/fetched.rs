@@ -645,11 +645,11 @@ impl Default for SimplePackedBuilder {
 }
 
 impl SimplePackedBuilder {
-    pub fn add<'store, HAST: crate::types::HyperAST<'store>>(&mut self, 
+    pub fn add<'store, HAST: crate::types::HyperAST>(&mut self, 
         store: &'store HAST,
         id: &HAST::IdN)
     where
-        HAST::T: crate::types::WithStats,
+        for<'t> HAST::T<'t>: crate::types::WithStats,
         HAST::IdN: Into<NodeIdentifier> + Copy,
         HAST::Label: Into<LabelIdentifier> + Clone,
     {
@@ -852,8 +852,11 @@ pub struct SimplePacked<S> {
     storages_variants: Vec<RawVariant>,
 }
 
-impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
+impl crate::types::NodStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, AnyType>;
+}
+
+impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         self.try_resolve(*id).unwrap()
     }

@@ -72,12 +72,11 @@ struct AcessibleFetchedHyperAST<'a> {
         std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
 }
 
-impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-    type R<'a>
-        = HashedNodeRef<'a, NodeIdentifier>
-    where
-        Self: 'a;
+impl<'b> hyperast::types::NodStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+    type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+}
 
+impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         if let Some(r) = self.node_store.try_resolve(*id) {
             r
