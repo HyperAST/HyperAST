@@ -61,7 +61,8 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TStore,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::TMarker<NodeIdentifier>,
+            // T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
             Acc = cpp_tree_gen::Acc,
         >,
 {

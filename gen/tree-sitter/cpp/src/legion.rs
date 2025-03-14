@@ -195,7 +195,7 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TS,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::TMarker<NodeIdentifier>,
             Acc = Acc,
         >,
 {
@@ -388,7 +388,7 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TS,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::TMarker<NodeIdentifier>,
             Acc = Acc,
         >,
 {
@@ -534,7 +534,7 @@ where
     More: tree_gen::Prepro<Type>
         + tree_gen::More<
             TS = TS,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::TMarker<NodeIdentifier>,
             Acc = Acc,
         >,
     TS::Ty2: hyperast::tree_gen::utils_ts::TsType,

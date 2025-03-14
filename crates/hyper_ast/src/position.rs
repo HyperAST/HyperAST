@@ -46,7 +46,7 @@ pub trait TreePath<IdN = NodeIdentifier, Idx = u16> {
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
         HAST: HyperAST<IdN = IdN::IdN>,
-        // HAST::RT: WithChildren<ChildIdx = Idx>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>
@@ -165,7 +165,7 @@ pub mod position_accessors {
     where
         IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
         P: WithPreOrderPath<IdN> + RootedPosition<IdN>,
-        HAST: HyperAST<IdN = IdN::IdN, Idx = P::Idx>,
+        HAST: HyperAST<IdN = IdN, Idx = P::Idx>,
         <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
         <IdN as NodeId>::IdN: std::fmt::Debug,
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
@@ -183,7 +183,7 @@ pub mod position_accessors {
             if !set.insert(x.clone()) {
                 panic!("path returns 2 times the same node")
             }
-            let b = store.node_store().resolve(prev.as_id());
+            let b = store.node_store().resolve(&prev);
             assert_eq!(x.as_id(), &b.child(&o0).expect("should have a child"));
             prev = x.clone();
         }

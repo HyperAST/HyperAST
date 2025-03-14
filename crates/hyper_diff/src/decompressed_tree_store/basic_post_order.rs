@@ -1,14 +1,15 @@
 use std::fmt::Debug;
 
-use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
+use num_traits::{cast, one, zero, ToPrimitive};
 
 use hyperast::types::{
-    self, Children, HyperAST, IterableChildren, NodStore, NodeId, NodeStore, Stored, WithChildren,
+    self, AstLending, Children, Childrn, HyperAST, HyperASTShared, LendN, NLending, NodeId, NodeStore, Stored, WithChildren
 };
+use hyperast::PrimInt;
 
 use super::{
-    ContiguousDescendants, DecompressedTreeStore, Iter, PostOrder, PostOrderIterable,
-    ShallowDecompressedTreeStore,
+    CIdx, ContiguousDescendants, DecendantsLending, DecompressedTreeStore, Iter, PostOrder,
+    PostOrderIterable, ShallowDecompressedTreeStore,
 };
 
 pub struct BasicPostOrder<T: Stored, IdD> {
@@ -50,9 +51,11 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<T, IdD> for BasicPostOrder<T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> PostOrder<T, IdD> for BasicPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     fn lld(&self, i: &IdD) -> IdD {
         self.llds[(*i).to_usize().unwrap()]
@@ -63,8 +66,10 @@ where
     }
 }
 
-impl<T: WithChildren, IdD: PrimInt> PostOrderIterable<T, IdD> for BasicPostOrder<T, IdD>
+impl<T: Stored, IdD: PrimInt> PostOrderIterable<T, IdD> for BasicPostOrder<T, IdD>
 where
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     // TODO add a lifetime to make sure the len does not change
@@ -82,22 +87,32 @@ where
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD> {
+impl<'d, T: Stored, IdD: PrimInt> BasicPostOrder<T, IdD> {
     pub(crate) fn size(&self, i: &IdD) -> IdD {
         *i - self.llds[(*i).to_usize().unwrap()] + one()
     }
 }
 
+// impl<'a, T: Stored, IdD: PrimInt> types::NLending<'a, T::TreeId> for BasicPostOrder<T, IdD>
+// where
+//     T: for<'t> types::NLending<'t, T::TreeId>,
+// {
+//     type N = <T as types::NLending<'a, T::TreeId>>::N;
+// }
+
 impl<T, IdD: PrimInt> super::DecompressedSubtree<T> for BasicPostOrder<T, IdD>
 where
-    T: WithChildren,
+    T: Stored,
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    <T as WithChildren>::ChildIdx: PrimInt,
+    T: for<'a> NLending<'a, T::TreeId>,
+    for<'a> <T as NLending<'a, T::TreeId>>::N: WithChildren,
+    for<'a> <<T as NLending<'a, T::TreeId>>::N as WithChildren>::ChildIdx: PrimInt,
 {
     type Out = Self;
-    fn decompress<S>(store: &S, root: &<T as types::Stored>::TreeId) -> Self
+    fn decompress<S>(store: &S, root: &T::TreeId) -> Self
     where
-        S: types::inner_ref::NodeStore<<T as types::Stored>::TreeId, Ref = T>,
+        S: for<'t> NLending<'t, T::TreeId, N = LendN<'t, T, T::TreeId>>
+            + types::NodeStore<T::TreeId>,
     {
         let simple = BasicPostOrder::make(store, root);
         let BasicPostOrder::<T, IdD> {
@@ -114,9 +129,12 @@ where
     }
     fn decompress2<'a, HAST>(store: &HAST, root: &<T as Stored>::TreeId) -> Self::Out
     where
-        HAST: types::HyperAST<RT = T, IdN = T::TreeId>,
+        T: for<'t> hyperast::types::AstLending<'t>,
+        // T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
+        HAST: HyperAST<IdN = T::TreeId, TM = T>,
+        // HAST: HyperAST<IdN=T::TreeId, TM = T>,
     {
-        let simple = BasicPostOrder::make2(store, root);
+        let simple = make2(store, root);
         let BasicPostOrder::<T, IdD> {
             id_compressed,
             llds,
@@ -131,11 +149,11 @@ where
     }
 }
 
-impl<'a, T, IdD: PrimInt> BasicPOSlice<'a, T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> BasicPOSlice<'a, T, IdD>
 where
-    T: WithChildren,
-    T::TreeId: Clone,
-    <T as WithChildren>::ChildIdx: PrimInt,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
 {
     /// WARN oposite order than id_compressed
     pub fn compute_kr(&self) -> Box<[IdD]> {
@@ -172,11 +190,11 @@ where
     }
 }
 
-impl<'a, T, IdD: PrimInt> BasicPostOrder<T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> BasicPostOrder<T, IdD>
 where
-    T: WithChildren,
-    T::TreeId: Clone,
-    <T as WithChildren>::ChildIdx: PrimInt,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
 {
     /// WARN oposite order than id_compressed
     pub fn compute_kr(&self) -> Box<[IdD]> {
@@ -191,12 +209,14 @@ where
     }
 }
 
-impl<T: WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD> {
-    fn make<S>(store: &S, root: &<T as types::Stored>::TreeId) -> Self
+impl<T: Stored, IdD: PrimInt> BasicPostOrder<T, IdD> {
+    fn make<S>(store: &S, root: &T::TreeId) -> Self
     where
-        S: types::inner_ref::NodeStore<<T as types::Stored>::TreeId, Ref = T>,
-        T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-        <T as WithChildren>::ChildIdx: PrimInt,
+        for<'t> <S as NLending<'t, T::TreeId>>::N: WithChildren,
+        // S: types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: NodeStore<T::TreeId>,
+        T::TreeId: NodeId<IdN = T::TreeId>,
+        // <T as WithChildren>::ChildIdx: PrimInt,
     {
         let mut stack = vec![Element {
             curr: root.clone(),
@@ -213,11 +233,13 @@ impl<T: WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD> {
             children,
         }) = stack.pop()
         {
-            let l = store.scoped(&curr, |x| {
-                x.children()
-                    .filter(|x| !x.is_empty())
-                    .map(|l| l.get(idx).cloned())
-            });
+            let x: <S as NLending<'_, T::TreeId>>::N = store.resolve(&curr);
+            let children1: Option<
+                _, // &<<S as NLending<'_, T::TreeId>>::N as types::CLending<'_, _, T::TreeId>>::Children,
+            > = WithChildren::children(&x);
+            let l: Option<Option<T::TreeId>> = children1
+                .filter(|x| !x.is_empty())
+                .map(|l| l.get(idx).cloned());
             if let Some(Some(child)) = l {
                 stack.push(Element {
                     curr,
@@ -252,62 +274,75 @@ impl<T: WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD> {
             _phantom: Default::default(),
         }
     }
+
     fn make2<'a, HAST>(store: &HAST, root: &HAST::IdN) -> Self
     where
-        HAST: types::HyperAST<RT = T, IdN = <T as types::Stored>::TreeId>,
-        T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-        <T as WithChildren>::ChildIdx: PrimInt,
+        HAST: types::HyperAST<TM = T>,
+        T::TreeId: Clone + NodeId<IdN = HAST::IdN>,
+        // <T as WithChildren>::ChildIdx: PrimInt,
+        T: for<'t> AstLending<'t>,
+        T: for<'t> NLending<'t, T::TreeId>,
+        for<'t> <T as NLending<'t, T::TreeId>>::N: WithChildren,
+        HAST::IdN: types::NodeId<IdN = HAST::IdN>,
     {
-        let mut stack = vec![Element {
-            curr: root.clone(),
-            idx: zero(),
-            lld: IdD::zero(),
-            children: vec![],
-        }];
-        let mut llds: Vec<IdD> = vec![];
-        let mut id_compressed = vec![];
-        while let Some(Element {
-            curr,
-            idx,
-            lld,
-            children,
-        }) = stack.pop()
-        {
-            let x = store.resolve(&curr);
-            let l = x.children().filter(|x| !x.is_empty());
-            if let Some(child) = l.and_then(|l| l.get(idx)) {
-                stack.push(Element {
-                    curr,
-                    idx: idx + one(),
-                    lld,
-                    children,
-                });
-                stack.push(Element {
-                    curr: child.clone(),
-                    idx: zero(),
-                    lld: zero(),
-                    children: vec![],
-                });
-            } else {
-                let curr_idx = cast(id_compressed.len()).unwrap();
-                let value = if l.is_none() { curr_idx } else { lld };
-                if let Some(tmp) = stack.last_mut() {
-                    if tmp.idx == one() {
-                        tmp.lld = value;
-                    }
-                    tmp.children.push(curr_idx);
+        make2(store, root)
+    }
+}
+
+fn make2<'a, HAST, IdD: PrimInt>(store: &HAST, root: &HAST::IdN) -> BasicPostOrder<HAST::TM, IdD>
+where
+    HAST: types::HyperAST,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    let mut stack = vec![Element {
+        curr: root.clone(),
+        idx: zero(),
+        lld: IdD::zero(),
+        children: vec![],
+    }];
+    let mut llds: Vec<IdD> = vec![];
+    let mut id_compressed = vec![];
+    while let Some(Element {
+        curr,
+        idx,
+        lld,
+        children,
+    }) = stack.pop()
+    {
+        let x = store.resolve(&curr);
+        let l = x.children().filter(|x| !x.is_empty());
+        if let Some(child) = l.as_ref().and_then(|l| l.get(idx)) {
+            stack.push(Element {
+                curr,
+                idx: idx + one(),
+                lld,
+                children,
+            });
+            stack.push(Element {
+                curr: child.clone(),
+                idx: zero(),
+                lld: zero(),
+                children: vec![],
+            });
+        } else {
+            let curr_idx = cast(id_compressed.len()).unwrap();
+            let value = if l.is_none() { curr_idx } else { lld };
+            if let Some(tmp) = stack.last_mut() {
+                if tmp.idx == one() {
+                    tmp.lld = value;
                 }
-                llds.push(value);
-                id_compressed.push(curr);
+                tmp.children.push(curr_idx);
             }
+            llds.push(value);
+            id_compressed.push(curr);
         }
-        let id_compressed = id_compressed.into();
-        let llds = llds.into();
-        BasicPostOrder {
-            id_compressed,
-            llds,
-            _phantom: Default::default(),
-        }
+    }
+    let id_compressed = id_compressed.into();
+    let llds = llds.into();
+    BasicPostOrder {
+        id_compressed,
+        llds,
+        _phantom: Default::default(),
     }
 }
 
@@ -318,9 +353,11 @@ struct Element<IdC, Idx, IdD> {
     children: Vec<IdD>,
 }
 
-impl<T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<T, IdD> for BasicPostOrder<T, IdD>
+impl<T: Stored, IdD: PrimInt> ShallowDecompressedTreeStore<T, IdD> for BasicPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     fn len(&self) -> usize {
         self.id_compressed.len()
@@ -333,63 +370,89 @@ where
     fn root(&self) -> IdD {
         cast(self.len() - 1).unwrap()
     }
-    fn child<S>(&self, store: &S, x: &IdD, p: &[<T as WithChildren>::ChildIdx]) -> IdD
+
+    fn child<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdD
     where
-        S: for<'b> NodStore<<T>::TreeId, R<'b> = T> + NodeStore<T::TreeId>,
-    {
-        todo!("deprecated")
-    }
-    fn child2<S>(&self, store: &S, x: &IdD, p: &[<T as WithChildren>::ChildIdx]) -> IdD
-    where
-        S: for<'b> HyperAST<T<'b> = T, IdN = T::TreeId>,
+        // S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>,
+        S: NodeStore<T::TreeId, NMarker = T>,
     {
         let mut r = *x;
         for d in p {
             let a = self.original(&r);
-            let node = store.node_store().resolve(&a);
+            let node: T::N = store.resolve(&a);
+            use WithChildren;
             let cs = node.children();
-            let cs = cs.filter(|x| !x.is_empty());
+            let cs = cs.filter(|x| !types::Childrn::is_empty(x));
             let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
             let mut z = 0;
-            let cs = cs.before(*d + one());
-            let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
+            let cs = cs.before(cast(*d + one()).unwrap());
+            let cs: Vec<T::TreeId> = cs.iter_children().collect();
             for x in cs {
-                z += Self::size3(store, &x);
+                z += Self::size2(store, &x);
             }
             r = self.first_descendant(&r) + cast(z).unwrap() - one();
         }
         r
     }
-    fn child4<S>(&self, store: &S, x: &IdD, p: &[T::ChildIdx]) -> IdD
-    where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+
+    // fn child2<HAST>(&self, store: &HAST, x: &IdD, p: &[impl PrimInt]) -> IdD
+    // where
+    //     T: for<'a> hyperast::types::AstLending<'a>,
+    //     // T: for<'a> hyperast::types::AstLending<'a, IdN = T::TreeId>,
+    //     // T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
+    //     HAST: HyperAST<IdN = T::TreeId, TM = T>,
+    // {
+    //     let mut r = *x;
+    //     for d in p {
+    //         let a = self.original(&r);
+    //         let node = store.node_store().resolve(&a);
+    //         let cs = node.children();
+    //         let cs = cs.filter(|x| !types::Childrn::is_empty(x));
+    //         let Some(cs) = cs else {
+    //             panic!("no children in this tree")
+    //         };
+    //         let mut z = 0;
+    //         let cs = cs.before(cast(*d + one()).unwrap());
+    //         let cs: Vec<<<T as HyperASTShared>::IdN as NodeId>::IdN> = cs.iter_children().collect();
+    //         for x in cs {
+    //             z += size3(store, &x);
+    //         }
+    //         r = self.first_descendant(&r) + cast(z).unwrap() - one();
+    //     }
+    //     r
+    // }
+    fn child4<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdD
+where
+        // S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
-        let mut r = *x;
-        for d in p {
-            let a = self.original(&r);
-            r = store.scoped(&a, |node| {
-                let cs = node.children();
-                let cs = cs.filter(|x| !x.is_empty());
-                let Some(cs) = cs else {
-                    panic!("no children in this tree")
-                };
-                let mut z = 0;
-                let cs = cs.before(*d + one());
-                let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
-                for x in cs {
-                    z += Self::size2(store, &x);
-                }
-                self.first_descendant(&r) + cast(z).unwrap() - one()
-            });
-        }
-        r
+        unimplemented!()
+        // let mut r = *x;
+        // for d in p {
+        //     let a = self.original(&r);
+        //     r = store.scoped(&a, |node| {
+        //         let cs = node.children();
+        //         let cs = cs.filter(|x| !x.is_empty());
+        //         let Some(cs) = cs else {
+        //             panic!("no children in this tree")
+        //         };
+        //         let mut z = 0;
+        //         let cs = cs.before(*d + one());
+        //         let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
+        //         for x in cs {
+        //             z += Self::size2(store, &x);
+        //         }
+        //         self.first_descendant(&r) + cast(z).unwrap() - one()
+        //     });
+        // }
+        // r
     }
 
     fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
     where
-        S: for<'b> NodStore<T::TreeId, R<'b> = T> + NodeStore<T::TreeId>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         let a = self.original(x);
         let node = store.resolve(&a);
@@ -414,39 +477,44 @@ where
         r
     }
     fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
-    where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+where
+        // S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
-        let a = self.original(x);
-        let cs_len = store.scoped(&a, |node| node.child_count().to_usize().unwrap());
-        if cs_len == 0 {
-            return vec![];
-        }
-        let mut r = vec![zero(); cs_len];
-        let mut c = *x - one();
-        let mut i = cs_len - 1;
-        r[i] = c;
-        while i > 0 {
-            i -= 1;
-            let s = self.size(&c);
-            c = c - s;
-            r[i] = c;
-        }
-        assert_eq!(
-            self.lld(x).to_usize().unwrap(),
-            self.lld(&c).to_usize().unwrap()
-        );
-        r
+        unimplemented!()
+        // let a = self.original(x);
+        // let cs_len = store.scoped(&a, |node| node.child_count().to_usize().unwrap());
+        // if cs_len == 0 {
+        //     return vec![];
+        // }
+        // let mut r = vec![zero(); cs_len];
+        // let mut c = *x - one();
+        // let mut i = cs_len - 1;
+        // r[i] = c;
+        // while i > 0 {
+        //     i -= 1;
+        //     let s = self.size(&c);
+        //     c = c - s;
+        //     r[i] = c;
+        // }
+        // assert_eq!(
+        //     self.lld(x).to_usize().unwrap(),
+        //     self.lld(&c).to_usize().unwrap()
+        // );
+        // r
     }
 }
 
-impl<T: WithChildren, IdD: PrimInt> DecompressedTreeStore<T, IdD> for BasicPostOrder<T, IdD>
+impl<T: Stored, IdD: PrimInt> DecompressedTreeStore<T, IdD> for BasicPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     fn descendants<S>(&self, _store: &S, x: &IdD) -> Vec<IdD>
     where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
             .map(|x| cast(x).unwrap())
@@ -459,7 +527,8 @@ where
 
     fn descendants_count<S>(&self, _store: &S, x: &IdD) -> usize
     where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
@@ -469,29 +538,40 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD>
+impl<T: Stored, IdD: PrimInt> BasicPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
 {
     pub(super) fn slice_range(&self, x: &IdD) -> std::ops::RangeInclusive<usize> {
         self.first_descendant(x).to_usize().unwrap()..=x.to_usize().unwrap()
     }
 }
 
-impl<T: WithChildren, IdD: PrimInt> ContiguousDescendants<T, IdD> for BasicPostOrder<T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> DecendantsLending<'a> for BasicPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
+{
+    type Slice = BasicPOSlice<'a, T, IdD>;
+}
+
+impl<T: Stored, IdD: PrimInt> ContiguousDescendants<T, IdD> for BasicPostOrder<T, IdD>
+where
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         self.first_descendant(x)..*x
     }
 
-    type Slice<'b>
-        = BasicPOSlice<'b, T, IdD>
-    where
-        Self: 'b;
-
-    fn slice(&self, x: &IdD) -> Self::Slice<'_> {
+    fn slice(&self, x: &IdD) -> <Self as DecendantsLending<'_>>::Slice {
         let range = self.slice_range(x);
         BasicPOSlice {
             id_compressed: &self.id_compressed[range.clone()],
@@ -501,8 +581,11 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Eq> BasicPostOrder<T, IdD>
+impl<'a, T: Stored, IdD: PrimInt + Eq> BasicPostOrder<T, IdD>
 where
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
     T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
     pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
@@ -521,13 +604,17 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> BasicPostOrder<T, IdD>
 where
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     fn size2<S>(store: &S, x: &T::TreeId) -> usize
     where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         store.scoped(x, |tmp| {
             let Some(cs) = tmp.children() else {
@@ -535,27 +622,52 @@ where
             };
 
             let mut z = 0;
-            for x in cs.iter_children() {
-                z += Self::size2(store, x);
+            for x in cs {
+                z += Self::size2(store, &x);
             }
             z + 1
         })
     }
-    fn size3<S>(store: &S, x: &T::TreeId) -> usize
-    where
-        S: for<'t> HyperAST<T<'t> = T, IdN = T::TreeId>,
-    {
-        let tmp = store.resolve(x);
-        let Some(cs) = tmp.children() else {
-            return 1;
-        };
+    // fn size3<HAST>(store: &HAST, x: &T::TreeId) -> usize
+    // where
+    //     T: for<'t> hyperast::types::AstLending<'t, IdN = T::TreeId>,
+    //     T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
+    //     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    //     HAST: HyperAST<IdN = T::TreeId, TM = T>,
+    // {
+    //     let tmp = store.resolve(x);
+    //     let Some(cs) = tmp.children() else {
+    //         return 1;
+    //     };
 
-        let mut z = 0;
-        for x in cs.iter_children() {
-            z += Self::size3(store, x);
-        }
-        z + 1
+    //     let mut z = 0;
+    //     for x in cs {
+    //         z += Self::size3(store, &x);
+    //         // z += Self::size3(store, hyperast::types::NodeId::as_id(&x));
+    //     }
+    //     z + 1
+    // }
+}
+fn size3<T: Stored, HAST>(store: &HAST, x: &T::TreeId) -> usize
+where
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    // T: for<'t> types::NLending<'t, T::TreeId>,
+    T: for<'t> hyperast::types::AstLending<'t, IdN = T::TreeId>,
+    // T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    HAST: HyperAST<IdN = T::TreeId, TM = T>,
+{
+    let tmp = store.resolve(x);
+    let Some(cs) = tmp.children() else {
+        return 1;
+    };
+
+    let mut z = 0;
+    for x in cs {
+        z += size3(store, &x);
+        // z += Self::size3(store, hyperast::types::NodeId::as_id(&x));
     }
+    z + 1
 }
 
 pub struct BasicPOSlice<'a, T: Stored, IdD> {
@@ -568,7 +680,13 @@ pub struct BasicPOSlice<'a, T: Stored, IdD> {
     pub(super) _phantom: std::marker::PhantomData<*const T>,
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> BasicPOSlice<'d, T, IdD> {
+impl<'d, T: Stored, IdD: PrimInt> BasicPOSlice<'d, T, IdD>
+where
+// T: for<'t> types::NLending<'t, T::TreeId>,
+// for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+
+// for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+{
     pub(crate) fn size(&self, i: &IdD) -> IdD {
         *i - self.llds[(*i).to_usize().unwrap()] + one()
     }
@@ -577,9 +695,19 @@ impl<'d, T: WithChildren, IdD: PrimInt> BasicPOSlice<'d, T, IdD> {
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<T, IdD> for BasicPOSlice<'a, T, IdD>
+impl<'a, 'b, T: Stored, IdD: PrimInt> types::NLending<'b, T::TreeId> for BasicPOSlice<'a, T, IdD>
 where
-    T::TreeId: Clone + Eq + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+{
+    type N = <T as types::NLending<'b, T::TreeId>>::N;
+}
+
+impl<'a, T: Stored, IdD: PrimInt> PostOrder<T, IdD> for BasicPOSlice<'a, T, IdD>
+where
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     fn lld(&self, i: &IdD) -> IdD {
         self._lld(i.to_usize().unwrap())
@@ -590,10 +718,12 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<T, IdD>
-    for BasicPOSlice<'a, T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> ShallowDecompressedTreeStore<T, IdD> for BasicPOSlice<'a, T, IdD>
 where
-    T::TreeId: Clone + Eq + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     fn len(&self) -> usize {
         self.id_compressed.len()
@@ -606,15 +736,10 @@ where
     fn root(&self) -> IdD {
         cast(self.len() - 1).unwrap()
     }
-    fn child<S>(&self, store: &S, x: &IdD, p: &[<T as WithChildren>::ChildIdx]) -> IdD
+    fn child<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdD
     where
-        S: for<'b> NodStore<<T>::TreeId, R<'b> = T> + NodeStore<T::TreeId>,
-    {
-        todo!("deprecated")
-    }
-    fn child4<S>(&self, store: &S, x: &IdD, p: &[T::ChildIdx]) -> IdD
-    where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         let mut r = *x;
         for d in p {
@@ -625,8 +750,9 @@ where
                     panic!("no children in this tree")
                 };
                 let mut z = 0;
-                let cs = cs.before(*d + one());
-                let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
+                let cs = cs.before(cast(*d + one()).unwrap());
+                let cs = cs.iter_children();
+                let cs: Vec<T::TreeId> = cs.collect();
                 for x in cs {
                     z += BasicPostOrder::<T, IdD>::size2::<S>(store, &x);
                 }
@@ -636,16 +762,17 @@ where
         r
     }
 
-    fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
-    where
-        S: for<'b> NodStore<<T>::TreeId, R<'b> = T> + NodeStore<T::TreeId>,
+    fn child4<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdD
+where
+        // S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
     {
-        todo!("deprecated")
+        unimplemented!("depr")
     }
 
-    fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
+    fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
     where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         let a = self.original(x);
         let cs_len = store.scoped(&a, |x| x.child_count().to_usize().unwrap());
@@ -668,15 +795,46 @@ where
         );
         r
     }
+
+    fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
+where
+        // S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+    {
+        todo!("deprecated")
+        // let a = self.original(x);
+        // let cs_len = store.scoped(&a, |x| x.child_count().to_usize().unwrap());
+        // if cs_len == 0 {
+        //     return vec![];
+        // }
+        // let mut r = vec![zero(); cs_len];
+        // let mut c = *x - one();
+        // let mut i = cs_len - 1;
+        // r[i] = c;
+        // while i > 0 {
+        //     i -= 1;
+        //     let s = self.size(&c);
+        //     c = c - s;
+        //     r[i] = c;
+        // }
+        // assert_eq!(
+        //     self.lld(x).to_usize().unwrap(),
+        //     self.lld(&c).to_usize().unwrap()
+        // );
+        // r
+    }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<T, IdD> for BasicPOSlice<'a, T, IdD>
+impl<'a, T: Stored, IdD: PrimInt> DecompressedTreeStore<T, IdD> for BasicPOSlice<'a, T, IdD>
 where
-    T::TreeId: Clone + Eq + NodeId<IdN = T::TreeId>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> LendN<'t, T, T::TreeId>: WithChildren,
+    // for<'t> LendN<'t, Self, T::TreeId>: WithChildren,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     fn descendants<S>(&self, _store: &S, x: &IdD) -> Vec<IdD>
     where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
             .map(|x| cast(x).unwrap())
@@ -689,7 +847,8 @@ where
 
     fn descendants_count<S>(&self, _store: &S, x: &IdD) -> usize
     where
-        S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
+        S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>
+            + NodeStore<T::TreeId>,
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }

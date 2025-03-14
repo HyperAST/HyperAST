@@ -48,9 +48,10 @@ fn test_with_action_example() {
         DisplayTree::new(&label_store, &node_store, dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &dst);
-    let dst_arena2 = SimpleBfsMapper::from(node_store, &dst_arena);
+    let src_arena = CompletePostOrder::<_, u16>::decompress2(&stores, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress2(&stores, &dst);
+    let dst_arena2 =
+        SimpleBfsMapper::<_, _, CompletePostOrder<_, IdD>, _>::from((&stores, &dst_arena));
     let actions = {
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
@@ -95,14 +96,14 @@ fn test_with_action_example() {
         );
         let actions: ActionsVec<SimpleAction<u16, CompressedTreePath<u8>, u16>> =
             ScriptGenerator::<
-                _,
-                TreeRef<Tree>,
-                _,
-                SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
-                NS<Tree>,
-                _,
-                _,
-            >::_compute_actions(node_store, &src_arena, &dst_arena2, &ms)
+                // _,
+                // TreeRef<Tree>,
+                // _,
+                // SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
+                // NS<Tree>,
+                // _,
+                // _,
+            >::_compute_actions(&stores, &src_arena, &dst_arena2, &ms)
             .unwrap();
 
         log::debug!("{:?}", actions);
@@ -463,9 +464,10 @@ fn test_with_action_example2() {
         DisplayTree::new(label_store, node_store, dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::decompress(node_store, &src);
-    let dst_arena = CompletePostOrder::<_, u16>::decompress(node_store, &dst);
-    let dst_arena2 = SimpleBfsMapper::from(node_store, &dst_arena);
+    let src_arena = CompletePostOrder::<_, u16>::decompress2(&stores, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress2(&stores, &dst);
+    let dst_arena2 =
+        SimpleBfsMapper::<_, _, CompletePostOrder<_, IdD>, _>::from((&stores, &dst_arena));
 
     let actions = {
         let src = &(src_arena.root());
@@ -511,14 +513,14 @@ fn test_with_action_example2() {
         );
 
         let actions = ScriptGenerator::<
-            _,
-            TreeRef<Tree>,
-            _,
-            SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
-            NS<Tree>,
-            _,
-            _,
-        >::_compute_actions(node_store, &src_arena, &dst_arena2, &ms)
+            // _,
+            // TreeRef<Tree>,
+            // _,
+            // SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
+            // NS<Tree>,
+            // _,
+            // _,
+        >::_compute_actions(&stores, &src_arena, &dst_arena2, &ms)
         .unwrap();
 
         log::debug!("{:?}", actions);
@@ -734,9 +736,10 @@ fn test_with_zs_custom_example() {
         "dst tree:\n{:?}",
         DisplayTree::new(label_store, node_store, dst)
     );
-    let src_arena = CompletePostOrder::<_, IdD>::decompress(node_store, &src);
-    let dst_arena = CompletePostOrder::<_, IdD>::decompress(node_store, &dst);
-    let dst_arena2 = SimpleBfsMapper::from(node_store, &dst_arena);
+    let src_arena = CompletePostOrder::<_, IdD>::decompress2(&stores, &src);
+    let dst_arena = CompletePostOrder::<_, IdD>::decompress2(&stores, &dst);
+    let dst_arena2 =
+        SimpleBfsMapper::<_, _, CompletePostOrder<_, IdD>, _>::from((&stores, &dst_arena));
     let mut ms = DefaultMappingStore::default();
     let actions = {
         let src = &(src_arena.root());
@@ -758,14 +761,14 @@ fn test_with_zs_custom_example() {
         ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
 
         let actions = ScriptGenerator::<
-            _,
-            TreeRef<Tree>,
-            _,
-            SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
-            NS<Tree>,
-            _,
-            _,
-        >::_compute_actions(node_store, &src_arena, &dst_arena2, &ms)
+            // _,
+            // TreeRef<Tree>,
+            // _,
+            // SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
+            // NS<Tree>,
+            // _,
+            // _,
+        >::_compute_actions(&stores, &src_arena, &dst_arena2, &ms)
         .unwrap();
 
         log::debug!("{:?}", actions);
@@ -819,13 +822,21 @@ fn test_with_zs_custom_example() {
     for a in actions.iter() {
         log::debug!(
             "mid tree:\n{:?}",
-            DisplayTree::new(&stores.label_store, &stores.node_store, *root.last().unwrap())
+            DisplayTree::new(
+                &stores.label_store,
+                &stores.node_store,
+                *root.last().unwrap()
+            )
         );
         apply_action::<_, NS<Tree>, _>(a, &mut root, &mut stores.node_store);
     }
     log::debug!(
         "mid tree:\n{:?}",
-        DisplayTree::new(&stores.label_store, &stores.node_store, *root.last().unwrap())
+        DisplayTree::new(
+            &stores.label_store,
+            &stores.node_store,
+            *root.last().unwrap()
+        )
     );
     log::debug!("{:?}", root);
     let then = *root.last().unwrap(); //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);

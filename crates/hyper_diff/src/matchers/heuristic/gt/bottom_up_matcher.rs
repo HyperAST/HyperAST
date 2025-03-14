@@ -7,7 +7,7 @@ use crate::{
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyperast::types::{inner_ref::NodeStore, HashKind, Tree, TypeStore, WithHashs};
+use hyperast::types::{self, HashKind, NodeStore, TypeStore, WithHashs};
 
 pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
     pub(super) stores: &'a HAST,
@@ -19,12 +19,11 @@ pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<T, M::Src> + DecompressedWithParent<T, M::Src>,
-        Ddst: DecompressedTreeStore<T, M::Dst> + DecompressedWithParent<T, M::Dst>,
-        T: Tree,
-        HAST: HyperAST<IdN = T::TreeId, RT = T>,
+        Dsrc: DecompressedTreeStore<HAST::TM, M::Src> + DecompressedWithParent<HAST::TM, M::Src>,
+        Ddst: DecompressedTreeStore<HAST::TM, M::Dst> + DecompressedWithParent<HAST::TM, M::Dst>,
+        HAST: HyperAST,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
+    > BottomUpMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M>
 where
     // T::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
@@ -33,7 +32,7 @@ where
     pub(super) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
-        for c in self.src_arena.descendants(self.stores.node_store(), src) {
+        for c in self.src_arena.descendants2(self.stores, src) {
             if self.mappings.is_src(&c) {
                 let m = self.mappings.get_dst_unchecked(&c);
                 seeds.push(m);
@@ -67,16 +66,16 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<T, M::Src> + DecompressedWithParent<T, M::Src>,
-        Ddst: DecompressedTreeStore<T, M::Dst> + DecompressedWithParent<T, M::Dst>,
-        T: Tree + WithHashs,
-        HAST: HyperAST<IdN = T::TreeId, RT = T>,
+        Dsrc: DecompressedTreeStore<HAST::TM, M::Src> + DecompressedWithParent<HAST::TM, M::Src>,
+        Ddst: DecompressedTreeStore<HAST::TM, M::Dst> + DecompressedWithParent<HAST::TM, M::Dst>,
+        HAST: HyperAST,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
+    > BottomUpMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M>
 where
     <HAST::TS as TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    for<'b> <HAST as types::AstLending<'b>>::RT: WithHashs,
 {
     pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
@@ -102,7 +101,7 @@ where
         // look at descendants
         // in mappings
         self.src_arena
-            .descendants(self.stores.node_store(), src)
+            .descendants2(self.stores, src)
             .iter()
             .all(|x| !self.mappings.is_src(x))
     }
@@ -110,20 +109,16 @@ where
         // look at descendants
         // in mappings
         self.dst_arena
-            .descendants(self.stores.node_store(), dst)
+            .descendants2(self.stores, dst)
             .iter()
             .all(|x| !self.mappings.is_dst(x))
     }
 
     pub(crate) fn add_mapping_recursively(&mut self, src: &M::Src, dst: &M::Dst) {
         self.src_arena
-            .descendants(self.stores.node_store(), src)
+            .descendants2(self.stores, src)
             .iter()
-            .zip(
-                self.dst_arena
-                    .descendants(self.stores.node_store(), dst)
-                    .iter(),
-            )
+            .zip(self.dst_arena.descendants2(self.stores, dst).iter())
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 
@@ -133,8 +128,8 @@ where
         dst: &M::Dst,
         cmp: F,
     ) {
-        let src_children = &self.src_arena.children4(self.stores.node_store(), src);
-        let dst_children = &self.dst_arena.children4(self.stores.node_store(), dst);
+        let src_children = &self.src_arena.children(self.stores.node_store(), src);
+        let dst_children = &self.dst_arena.children(self.stores.node_store(), dst);
 
         // self.compressed_node_store
         // .get_node_at_id(&self.src_arena.original(src));
@@ -151,27 +146,40 @@ where
         }
     }
 
-    fn lcs_hash_matching(&mut self, h: &T::HK, src: &M::Src, dst: &M::Dst) {
+    fn lcs_hash_matching<HK: Clone>(&mut self, h: HK, src: &M::Src, dst: &M::Dst)
+    where
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithHashs<HK = HK>,
+    {
         // todo with longestCommonSubsequenceWithIsomorphism
-        self.lcs_matching(src, dst, |s, src, dst| {
-            let a = s
-                .stores
-                .node_store()
-                .scoped(&s.src_arena.original(src), |r| r.hash(h));
-            let b = s
-                .stores
-                .node_store()
-                .scoped(&s.dst_arena.original(dst), |r| r.hash(h));
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            let a = s.stores.node_store().resolve(&s.src_arena.original(src));
+            let a = a.hash(&h.clone());
+            let b = s.stores.node_store().resolve(&s.dst_arena.original(dst));
+            let b = b.hash(&h.clone());
             a == b
         })
     }
 
     pub(super) fn lcs_equal_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        self.lcs_hash_matching(&HashKind::label(), src, dst)
+        // self.lcs_hash_matching(&HK::label(), src, dst)
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            let a = s.stores.node_store().resolve(&s.src_arena.original(src));
+            let a = a.hash(&HashKind::label());
+            let b = s.stores.node_store().resolve(&s.dst_arena.original(dst));
+            let b = b.hash(&HashKind::label());
+            a == b
+        })
     }
 
     pub(super) fn lcs_structure_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        self.lcs_hash_matching(&HashKind::structural(), src, dst)
+        // self.lcs_hash_matching(&HK::structural(), src, dst)
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            let a = s.stores.node_store().resolve(&s.src_arena.original(src));
+            let a = a.hash(&HashKind::structural());
+            let b = s.stores.node_store().resolve(&s.dst_arena.original(dst));
+            let b = b.hash(&HashKind::structural());
+            a == b
+        })
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
@@ -213,12 +221,12 @@ use hyperast::types::HyperAST;
 impl<
         'a,
         HAST: HyperAST,
-        Dsrc: DecompressedTreeStore<HAST::RT, M::Src> + DecompressedWithParent<HAST::RT, M::Src>,
-        Ddst: DecompressedTreeStore<HAST::RT, M::Dst> + DecompressedWithParent<HAST::RT, M::Dst>,
+        Dsrc: DecompressedTreeStore<HAST::TM, M::Src> + DecompressedWithParent<HAST::TM, M::Src>,
+        Ddst: DecompressedTreeStore<HAST::TM, M::Dst> + DecompressedWithParent<HAST::TM, M::Dst>,
         M: MonoMappingStore,
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
-    // for<'t> HAST::T<'t>: 'a + Tree,
+    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: 'a + Tree,
     // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
@@ -264,15 +272,15 @@ where
 impl<'a, HAST: HyperAST, Dsrc, Ddst, M: MonoMappingStore>
     crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
-    HAST::RT: WithHashs,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     <HAST::TS as TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     M::Src: Shallow<M::Src>,
     M::Dst: Shallow<M::Dst>,
 
-    Dsrc: DecompressedTreeStore<HAST::RT, M::Src> + DecompressedWithParent<HAST::RT, M::Src>,
-    Ddst: DecompressedTreeStore<HAST::RT, M::Dst> + DecompressedWithParent<HAST::RT, M::Dst>,
+    Dsrc: DecompressedTreeStore<HAST::TM, M::Src> + DecompressedWithParent<HAST::TM, M::Src>,
+    Ddst: DecompressedTreeStore<HAST::TM, M::Dst> + DecompressedWithParent<HAST::TM, M::Dst>,
 {
     pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
@@ -325,8 +333,8 @@ where
         dst: &M::Dst,
         cmp: F,
     ) {
-        let src_children = &self.src_arena.children5(self.hyperast, src);
-        let dst_children = &self.dst_arena.children5(self.hyperast, dst);
+        let src_children = &self.src_arena.children2(self.hyperast, src);
+        let dst_children = &self.dst_arena.children2(self.hyperast, dst);
 
         // self.compressed_node_store
         // .get_node_at_id(&self.src_arena.original(src));
@@ -343,26 +351,90 @@ where
         }
     }
 
-    fn lcs_hash_matching<HK>(&mut self, h: &HK, src: &M::Src, dst: &M::Dst)
-    where
-        HK: HashKind,
-        HAST::RT: hyperast::types::WithHashs<HK = HK>,
-    {
-        // todo with longestCommonSubsequenceWithIsomorphism
-        self.lcs_matching(src, dst, |s, src, dst| {
-            let ns = s.hyperast.node_store();
-            let a = ns.scoped(&s.src_arena.original(src), |r| r.hash(h));
-            let b = ns.scoped(&s.dst_arena.original(dst), |r| r.hash(h));
+    fn lcs_hash_matching2<O: Eq>(
+        &mut self,
+        h: impl Fn(<HAST as hyperast::types::AstLending<'_>>::RT) -> O,
+        src: &M::Src,
+        dst: &M::Dst,
+    ) {
+        // let h = h.clone();
+        // let a = WithHashs::hash(&a, h);
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            let a = s
+                .hyperast
+                .node_store()
+                .resolve(&s.mapping.src_arena.original(src));
+            let a = h(a);
+            let b = s
+                .hyperast
+                .node_store()
+                .resolve(&s.mapping.dst_arena.original(dst));
+            let b = h(b);
             a == b
         })
     }
 
+    fn lcs_hash_matching(
+        &mut self,
+        h: <<HAST as hyperast::types::AstLending<'_>>::RT as WithHashs>::HK,
+        src: &M::Src,
+        dst: &M::Dst,
+    )
+    where
+    // HK: HashKind,
+    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithHashs<HK = HK>,
+    {
+        let h = h.clone();
+        // todo with longestCommonSubsequenceWithIsomorphism
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            // let a = s
+            //     .hyperast
+            //     .node_store()
+            //     .resolve(&s.src_arena.original(src))
+            //     .hash(h.clone())
+            //     .to_usize()
+            //     .unwrap();
+            // let b = s
+            //     .hyperast
+            //     .node_store()
+            //     .resolve(&s.dst_arena.original(dst))
+            //     .hash(h).to_usize().unwrap();
+            // a == b
+            todo!()
+        })
+    }
+
     pub(super) fn lcs_equal_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        self.lcs_hash_matching(&HashKind::label(), src, dst)
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            let a = s
+                .hyperast
+                .node_store()
+                .resolve(&s.mapping.src_arena.original(src));
+            let a = a.hash(&HashKind::label());
+            let b = s
+                .hyperast
+                .node_store()
+                .resolve(&s.mapping.dst_arena.original(dst));
+            let b = b.hash(&HashKind::label());
+            a == b
+        })
     }
 
     pub(super) fn lcs_structure_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        self.lcs_hash_matching(&HashKind::structural(), src, dst)
+        //     self.lcs_hash_matching(HK::structural(), src, dst)
+        self.lcs_matching(src, dst, move |s, src, dst| {
+            let a = s
+                .hyperast
+                .node_store()
+                .resolve(&s.mapping.src_arena.original(src));
+            let a = a.hash(&HashKind::structural());
+            let b = s
+                .hyperast
+                .node_store()
+                .resolve(&s.mapping.dst_arena.original(dst));
+            let b = b.hash(&HashKind::structural());
+            a == b
+        })
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {

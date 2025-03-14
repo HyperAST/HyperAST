@@ -8,12 +8,11 @@ use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 use crate::hashed::NodeHashs;
 use crate::hashed::SyntaxNodeHashs;
 use crate::types::Children;
-use crate::types::IterableChildren;
 use crate::{
     hashed::SyntaxNodeHashsKinds,
     nodes::HashSize,
     store::defaults::LabelIdentifier,
-    types::{Labeled, MySlice, NodeId, Typed, TypedNodeId, WithChildren},
+    types::{Labeled, NodeId, Typed, TypedNodeId, WithChildren},
 };
 
 pub struct HashedNodeRef<'a, Id>(pub(super) &'a boxing::ErasedMap, pub(super) PhantomData<Id>);
@@ -28,7 +27,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Eq for HashedNodeRef<'a, Id> {}
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Hash for HashedNodeRef<'a, Id> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        crate::types::WithHashs::hash(self, &Default::default()).hash(state)
+        crate::types::WithHashs::hash(self, SyntaxNodeHashsKinds::default()).hash(state)
     }
 }
 
@@ -107,27 +106,36 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Stored for HashedN
 }
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
-    pub fn cs(&self) -> Option<&<Self as crate::types::WithChildren>::Children<'_>> {
-        self.0
-            .get::<compo::CS<NodeIdentifier>>()
-            .map(|x| (*x.0).into())
+    pub fn cs(&self) -> Option<crate::types::LendC<'_, Self, u16, NodeIdentifier>> {
+        todo!()
+        // self.0
+        //     .get::<compo::CS<NodeIdentifier>>()
+        //     .map(|x| (*x.0).into())
     }
-    pub fn no_spaces(&self) -> Option<&<Self as crate::types::WithChildren>::Children<'_>> {
-        self.0
-            .get::<compo::NoSpacesCS<NodeIdentifier>>()
-            .map(|x| &*x.0)
-            .or_else(|| self.0.get::<compo::CS<NodeIdentifier>>().map(|x| &*x.0))
-            .map(|x| (*x).into())
+    pub fn no_spaces(&self) -> Option<crate::types::LendC<'_, Self, u16, NodeIdentifier>> {
+        todo!()
+        // self.0
+        //     .get::<compo::NoSpacesCS<NodeIdentifier>>()
+        //     .map(|x| &*x.0)
+        //     .or_else(|| self.0.get::<compo::CS<NodeIdentifier>>().map(|x| &*x.0))
+        //     .map(|x| (*x).into())
     }
 }
+
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::CLending<'a, u16, Id::IdN>
+    for HashedNodeRef<'_, Id>
+{
+    type Children = crate::types::ChildrenSlice<'a, Id::IdN>;
+}
+
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
     for HashedNodeRef<'a, Id>
 {
     type ChildIdx = u16;
-    type Children<'b>
-        = MySlice<<Self::TreeId as NodeId>::IdN>
-    where
-        Self: 'b;
+    // type Children<'b>
+    //     = MySlice<<Self::TreeId as NodeId>::IdN>
+    // where
+    //     Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.cs()
@@ -157,7 +165,9 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
         v.get(c).cloned()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         self.cs()
     }
 }
@@ -166,11 +176,11 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     type HK = SyntaxNodeHashsKinds;
     type HP = HashSize;
 
-    fn hash(&self, kind: &Self::HK) -> Self::HP {
+    fn hash(&self, kind: impl std::ops::Deref<Target=Self::HK>) -> Self::HP {
         self.0
             .get::<SyntaxNodeHashs<Self::HP>>()
             .unwrap()
-            .hash(kind)
+            .hash(&kind)
     }
 }
 
@@ -186,7 +196,7 @@ where
     Id::Ty: Copy + Hash + Eq,
 {
     fn has_children(&self) -> bool {
-        self.cs().map(|x| !x.is_empty()).unwrap_or(false)
+        self.cs().map(|x| !crate::types::Childrn::is_empty(&x)).unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {

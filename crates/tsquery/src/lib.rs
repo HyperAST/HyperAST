@@ -41,6 +41,7 @@ pub use indexed::CaptureId;
 pub use indexed::PatternId;
 pub use indexed::Symbol;
 
+use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::{collections::VecDeque, usize};
@@ -172,6 +173,13 @@ pub struct QueryCursor<'query, Cursor, Node> {
     did_exceed_match_limit: bool,
 }
 
+impl<'query, Cursor, N> QueryCursor<'query, Cursor, N>
+{
+    pub fn cursor(&self) -> &Cursor {
+        &self.cursor
+    }
+}
+
 #[derive(Clone)]
 pub struct Capture<Node> {
     pub node: Node,
@@ -199,18 +207,18 @@ pub enum TreeCursorStep {
     TreeCursorStepVisible,
 }
 
+// pub trait CursorLending<'a> {
+//     type NodeRef: Node<IdF = <Self::Node as Node>::IdF, TP<'a> = <Self::Node as Node>::TP<'a>>;
+// }
 pub trait Cursor {
     type Node: Node + Clone;
-    type NodeRef<'a>: Node<IdF = <Self::Node as Node>::IdF, TP<'a> = <Self::Node as Node>::TP<'a>>
-    where
-        Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep;
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep;
 
     fn goto_parent(&mut self) -> bool;
-    fn current_node(&self) -> Self::NodeRef<'_>;
+    fn current_node(&self) -> Self::Node;
 
     fn parent_is_error(&self) -> bool;
 
@@ -218,7 +226,7 @@ pub trait Cursor {
 
     fn current_status(&self) -> Self::Status;
 
-    fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
+    fn text_provider(&self) -> <Self::Node as TextLending<'_>>::TP;
 
     fn wont_match(&self, _needed: Precomps) -> bool {
         false
@@ -241,7 +249,10 @@ pub trait Status {
     fn contains_supertype(&self, sym: Symbol) -> bool;
 }
 
-pub trait Node {
+pub trait TextLending<'a> {
+    type TP: Copy;
+}
+pub trait Node: for<'a> TextLending<'a> {
     type IdF;
 
     fn symbol(&self) -> Symbol;
@@ -255,15 +266,49 @@ pub trait Node {
 
     fn equal(&self, other: &Self) -> bool;
     fn compare(&self, other: &Self) -> std::cmp::Ordering;
-    type TP<'a>: Copy;
-    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str>;
-    fn text_equal(&self, text_provider: Self::TP<'_>, other: impl Iterator<Item = u8>) -> bool {
-        self.text(text_provider)
+    fn text<'s, 'l>(&'s self, text_provider: <Self as TextLending<'l>>::TP) -> BB<'s, 'l, str>;
+    fn text_equal<'s, 'l>(
+        &'s self,
+        text_provider: <Self as TextLending<'l>>::TP,
+        other: impl Iterator<Item = u8>,
+    ) -> bool {
+        self.text(text_provider).deref()
             .as_bytes()
             .iter()
             .copied()
             .eq(other)
     }
+}
+
+pub enum BB<'a, 'b, B: ?Sized + 'a + 'b>
+where
+    B: ToOwned,
+{
+    A(&'a B),
+    B(&'b B),
+    O(<B as ToOwned>::Owned),
+}
+
+impl<'a, 'b, B: ?Sized + 'a + 'b> std::ops::Deref for BB<'a, 'b, B>
+where
+    B: ToOwned,
+    B::Owned: Borrow<B>,
+{
+    type Target = B;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            BB::A(s) => s,
+            BB::B(s) => s,
+            BB::O(s) => s.borrow(),
+        }
+    }
+}
+
+impl<'a, T> TextLending<'a> for &T
+where
+    T: TextLending<'a>,
+{
+    type TP = T::TP;
 }
 
 impl<T> Node for &T
@@ -300,9 +345,10 @@ where
         (*self).compare(other)
     }
 
-    type TP<'a> = T::TP<'a>;
-
-    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
+    fn text<'s, 'l>(
+        &'s self,
+        text_provider: <Self as TextLending<'l>>::TP,
+    ) -> BB<'s, 'l, str> {
         (*self).text(text_provider)
     }
 }
@@ -326,10 +372,11 @@ where
         }
     }
 }
+
 impl<Node: self::Node> QueryMatch<Node> {
-    pub(crate) fn satisfies_text_predicates<'a, 'b, T: 'a + AsRef<str>>(
-        &self,
-        text_provider: Node::TP<'b>,
+    pub(crate) fn satisfies_text_predicates<'a, 'b, 's: 'l, 'l, T: 'a + AsRef<str>>(
+        &'s self,
+        text_provider: <Node as TextLending<'l>>::TP,
         mut text_predicates: impl Iterator<Item = &'a TextPredicateCapture<T>>,
     ) -> bool {
         text_predicates.all(|predicate| match predicate {

@@ -4,6 +4,7 @@ use crate::{
     types::{TStore, Type},
     TNode,
 };
+use hyperast::store::nodes::legion::TMarker;
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
@@ -277,7 +278,7 @@ where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
         + tree_gen::PreproTSG
-        + tree_gen::More<TS = TS, T = HashedNodeRef<'static, NodeIdentifier>, Acc = Acc>,
+        + tree_gen::More<TS = TS, T = TMarker<NodeIdentifier>, Acc = Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -575,11 +576,7 @@ where
         + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
         + tree_gen::PreproTSG
-        + tree_gen::More<
-            TS = TS,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
-            Acc = Acc,
-        >,
+        + tree_gen::More<TS = TS, T = TMarker<NodeIdentifier>, Acc = Acc>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
@@ -774,7 +771,7 @@ where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
     More: tree_gen::Prepro<Type>
         + tree_gen::PreproTSG
-        + tree_gen::More<TS = TS, T = HashedNodeRef<'static, NodeIdentifier>, Acc = Acc>,
+        + tree_gen::More<TS = TS, T = TMarker<NodeIdentifier>, Acc = Acc>,
 {
     type Acc = Acc;
     type Global = Global<'stores>;
@@ -944,7 +941,7 @@ impl<
         TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
         More: tree_gen::Prepro<Type>
             + tree_gen::PreproTSG
-            + tree_gen::More<TS = TS, T = HashedNodeRef<'static, NodeIdentifier>, Acc = Acc>,
+            + tree_gen::More<TS = TS, T = TMarker<NodeIdentifier>, Acc = Acc>,
         const HIDDEN_NODES: bool,
     > NodeStoreExt<HashedNode>
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
@@ -1009,9 +1006,9 @@ where
                 } else {
                     let node: HashedNodeRef<_> = self.stores.node_store.resolve(c);
                     let hashs = SyntaxNodeHashs {
-                        structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
-                        label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
-                        syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
+                        structt: WithHashs::hash(&node, SyntaxNodeHashsKinds::Struct),
+                        label: WithHashs::hash(&node, SyntaxNodeHashsKinds::Label),
+                        syntax: WithHashs::hash(&node, SyntaxNodeHashsKinds::Syntax),
                     };
                     let kind: TS::Ty = todo!(); //node.get_type();
                     let metrics = SubTreeMetrics {

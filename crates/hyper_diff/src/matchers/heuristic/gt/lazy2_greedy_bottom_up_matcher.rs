@@ -3,7 +3,8 @@
 //!
 use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, one, PrimInt};
+use hyperast::PrimInt;
+use num_traits::{cast, one};
 
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
@@ -142,8 +143,8 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    for<'t> HAST::T<'t>: Tree + WithHashs + WithStats,
-    HAST::RT: WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: Tree + WithHashs + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     HAST::IdN: Clone + Eq + Debug,
     // <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
@@ -153,25 +154,28 @@ where
     MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = <Ddst as LazyDecompressed<M::Dst>>::IdD> + Default,
     HAST: HyperAST,
     M: MonoMappingStore,
-    Dsrc: DecompressedTreeStore<HAST::RT, Dsrc::IdD, M::Src>
-        + DecompressedWithParent<HAST::RT, Dsrc::IdD>
-        + PostOrder<HAST::RT, Dsrc::IdD, M::Src>
-        + PostOrderIterable<HAST::RT, Dsrc::IdD, M::Src>
-        + DecompressedSubtree<HAST::RT>
-        + ContiguousDescendants<HAST::RT, Dsrc::IdD, M::Src>
-        + LazyPOBorrowSlice<HAST::RT, Dsrc::IdD, M::Src>
-        + ShallowDecompressedTreeStore<HAST::RT, Dsrc::IdD, M::Src>
-        + LazyDecompressedTreeStore<HAST::RT, M::Src>,
-    Ddst: DecompressedTreeStore<HAST::RT, Ddst::IdD, M::Dst>
-        + DecompressedWithParent<HAST::RT, Ddst::IdD>
-        + PostOrder<HAST::RT, Ddst::IdD, M::Dst>
-        + PostOrderIterable<HAST::RT, Ddst::IdD, M::Dst>
-        + DecompressedSubtree<HAST::RT>
-        + ContiguousDescendants<HAST::RT, Ddst::IdD, M::Dst>
-        + LazyPOBorrowSlice<HAST::RT, Ddst::IdD, M::Dst>
-        + ShallowDecompressedTreeStore<HAST::RT, Ddst::IdD, M::Dst>
-        + LazyDecompressedTreeStore<HAST::RT, M::Dst>
+    Dsrc: DecompressedTreeStore<HAST::TM, Dsrc::IdD, M::Src>
+        + DecompressedWithParent<HAST::TM, Dsrc::IdD>
+        + PostOrder<HAST::TM, Dsrc::IdD, M::Src>
+        + PostOrderIterable<HAST::TM, Dsrc::IdD, M::Src>
+        + DecompressedSubtree<HAST::TM>
+        + ContiguousDescendants<HAST::TM, Dsrc::IdD, M::Src>
+        + LazyPOBorrowSlice<HAST::TM, Dsrc::IdD, M::Src>
+        + ShallowDecompressedTreeStore<HAST::TM, Dsrc::IdD, M::Src>
+        + LazyDecompressedTreeStore<HAST::TM, M::Src>,
+    Ddst: DecompressedTreeStore<HAST::TM, Ddst::IdD, M::Dst>
+        + DecompressedWithParent<HAST::TM, Ddst::IdD>
+        + PostOrder<HAST::TM, Ddst::IdD, M::Dst>
+        + PostOrderIterable<HAST::TM, Ddst::IdD, M::Dst>
+        + DecompressedSubtree<HAST::TM>
+        + ContiguousDescendants<HAST::TM, Ddst::IdD, M::Dst>
+        + LazyPOBorrowSlice<HAST::TM, Ddst::IdD, M::Dst>
+        + ShallowDecompressedTreeStore<HAST::TM, Ddst::IdD, M::Dst>
+        + LazyDecompressedTreeStore<HAST::TM, M::Dst>
         + LazyDecompressed<M::Dst>,
+        // PostOrderKeyRoots<HAST::TM, M::Src>
+    HAST::Label: Eq,
+    HAST::IdN: Debug,
 {
     pub fn match_it(
         mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
@@ -290,7 +294,7 @@ where
             let o_src = src_arena.original(&src);
             let o_dst = dst_arena.original(&dst);
             let src_arena =
-                ZsTree::<HAST::RT, Dsrc::IdD>::decompress2(internal.hyperast, &o_src);
+                ZsTree::<HAST::TM, Dsrc::IdD>::decompress2(internal.hyperast, &o_src);
             src_offset = src - src_arena.root();
             if cfg!(debug_assertions) {
                 let src_arena_z = mapping.src_arena.slice_po(node_store, &src);
@@ -307,7 +311,7 @@ where
                 dbg!(last == src_arena_z.root());
             }
             let dst_arena =
-                ZsTree::<HAST::RT, Ddst::IdD>::decompress2(internal.hyperast, &o_dst);
+                ZsTree::<HAST::TM, Ddst::IdD>::decompress2(internal.hyperast, &o_dst);
             dst_offset = dst - dst_arena.root();
             if cfg!(debug_assertions) {
                 let dst_arena_z = mapping.dst_arena.slice_po(node_store, &dst);

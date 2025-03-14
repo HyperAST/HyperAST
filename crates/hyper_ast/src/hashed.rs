@@ -1,11 +1,11 @@
 use std::{
     fmt::Debug,
-    hash::{Hash, Hasher},
+    hash::{Hash, Hasher}, ops::Deref,
 };
 
 use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use crate::{
-    types::{AnyType, HashKind, HyperType, MySlice, NodeId},
+    types::{AnyType, HashKind, HyperType, NodeId},
     PrimInt,
 };
 use num::traits::WrappingAdd;
@@ -84,10 +84,19 @@ impl<H: ComputableNodeHashs> IndexingHashBuilder<H> for HashesBuilder<H> {
 
 /// TODO use some compile time macro/lib to make it ieasy to extend.
 /// Moreover, only Syntax variant is possibly mandatory anyway
+#[derive(Clone, Copy)]
 pub enum SyntaxNodeHashsKinds {
     Struct,
     Label,
     Syntax,
+}
+
+impl std::ops::Deref for SyntaxNodeHashsKinds {
+    type Target = Self;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
 }
 
 impl<T: PrimInt> Debug for SyntaxNodeHashs<T> {
@@ -235,16 +244,24 @@ impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L: Eq, T> crate::types::Label
     }
 }
 
+impl<'a, H: Hash + PrimInt, U: NodeHashs<Hash = H>, N: NodeId<IdN = N> + Copy + Eq, L, T>
+    crate::types::CLending<'a, u16, N::IdN> for HashedCompressedNode<U, N, L, T>
+where
+    N::IdN: Copy + Eq,
+{
+    type Children = crate::types::ChildrenSlice<'a, N::IdN>;
+}
+
 impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N: NodeId<IdN = N> + Copy + Eq, L, T>
     crate::types::WithChildren for HashedCompressedNode<U, N, L, T>
 where
     N::IdN: Copy + Eq,
 {
     type ChildIdx = u16;
-    type Children<'a>
-        = MySlice<N::IdN>
-    where
-        Self: 'a;
+    // type Children<'a>
+    //     = MySlice<N::IdN>
+    // where
+    //     Self: 'a;
 
     fn child_count(&self) -> u16 {
         self.node.child_count()
@@ -270,7 +287,7 @@ where
     //     self.node.get_children_cpy()
     // }
 
-    fn children<'a>(&'a self) -> Option<&'a Self::Children<'a>> {
+    fn children(&self) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, N::IdN>> {
         self.node.children()
     }
 }
@@ -317,8 +334,8 @@ impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::WithHashs
     type HK = U::Kind;
     type HP = H;
 
-    fn hash(&self, kind: &Self::HK) -> H {
-        self.hashs.hash(kind)
+    fn hash(&self, kind: impl std::ops::Deref<Target=Self::HK>) -> H {
+        self.hashs.hash(&kind)
     }
 }
 

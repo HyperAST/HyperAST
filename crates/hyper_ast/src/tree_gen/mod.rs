@@ -1046,14 +1046,19 @@ pub type PrecompQueries = u16;
 
 pub trait More {
     type TS;
-    type T: crate::types::Tree;
+    type T: crate::types::MarkedT;
     type Acc: WithChildren<<Self::T as crate::types::Stored>::TreeId>;
     const ENABLED: bool;
     fn match_precomp_queries<
-        HAST: crate::types::HyperAST<
+        HAST: for<'t> crate::types::AstLending<
+                't,
+                Label = <Self::T as crate::types::MarkedT>::Label,
+                Idx = <Self::T as crate::types::MarkedT>::ChildIdx,
+                // RT = crate::types::LendN<'t, Self::T, <Self::T as crate::types::Stored>::TreeId>,
+            > + crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
+                TM = Self::T, // NOTE enable if next line has type missmatch
                 TS = Self::TS,
-                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -1075,20 +1080,15 @@ impl<T, Acc> Default for NoOpMore<T, Acc> {
 
 impl<TS, T, Acc> More for NoOpMore<(TS, T), Acc>
 where
-    T: crate::types::Tree,
+    T: crate::types::MarkedT,
+    // T: for<'t> crate::types::NLending<'t, T::TreeId>,
     Acc: WithChildren<<T as crate::types::Stored>::TreeId>,
 {
     type TS = TS;
     type T = T;
     type Acc = Acc;
     const ENABLED: bool = false;
-    fn match_precomp_queries<
-        HAST: crate::types::HyperAST<
-                IdN = <Self::T as crate::types::Stored>::TreeId,
-                TS = Self::TS,
-                RT = Self::T,
-            > + std::clone::Clone,
-    >(
+    fn match_precomp_queries<HAST: crate::types::HyperAST + std::clone::Clone>(
         &self,
         _stores: HAST,
         _acc: &Acc,
@@ -1100,16 +1100,16 @@ where
 
 impl<'a, TS, T, Acc> PreproTSG for NoOpMore<(TS, T), Acc>
 where
-    T: crate::types::Tree,
+    T: crate::types::MarkedT,
     Acc: WithChildren<<T as crate::types::Stored>::TreeId>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
         HAST: crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
-                Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
+                // Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
+                TM = Self::T,
                 TS = Self::TS,
-                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -1124,11 +1124,15 @@ where
 pub trait PreproTSG: More {
     const GRAPHING: bool;
     fn compute_tsg<
-        HAST: crate::types::HyperAST<
+        HAST: for<'t> crate::types::AstLending<
+                't,
+                Label = <Self::T as crate::types::MarkedT>::Label,
+                Idx = <Self::T as crate::types::MarkedT>::ChildIdx,
+                // RT = crate::types::LendN<'t, Self::T, <Self::T as crate::types::Stored>::TreeId>,
+            > + crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
-                Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
+                TM = Self::T, // NOTE enable if next line has type missmatch
                 TS = Self::TS,
-                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -1136,14 +1140,7 @@ pub trait PreproTSG: More {
         acc: &Self::Acc,
         label: Option<&str>,
     ) -> Result<usize, String>;
-    fn compute_tsg2<
-        HAST: crate::types::HyperAST<
-                IdN = <Self::T as crate::types::Stored>::TreeId,
-                Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
-                TS = Self::TS,
-                RT = Self::T,
-            > + std::clone::Clone,
-    >(
+    fn compute_tsg2<HAST: crate::types::HyperAST + std::clone::Clone>(
         &self,
         stores: HAST,
         acc: &Self::Acc,

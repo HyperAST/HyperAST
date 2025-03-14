@@ -35,7 +35,7 @@ where
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
         HAST: HyperAST<IdN = <TIdN::IdN as NodeId>::IdN>,
-        // for<'t> HAST::T<'t>: WithChildren<ChildIdx = Idx>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         TIdN::IdN: NodeId,
         <TIdN::IdN as NodeId>::IdN: NodeId<IdN = <TIdN::IdN as NodeId>::IdN>,

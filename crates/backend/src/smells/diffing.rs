@@ -2,17 +2,17 @@ use super::Diff;
 use super::Idx;
 use super::Pos;
 use super::*;
-use hyperast::store::defaults::LabelIdentifier;
-use hyperast::store::defaults::NodeIdentifier;
-use hyperast::store::labels::LabelStore;
-use hyperast::types::HyperAST;
-use hyperast_vcs_git::no_space::NoSpaceWrapper;
 use hyper_diff::actions::action_tree::ActionsTree;
 use hyper_diff::actions::action_vec::ActionsVec;
 use hyper_diff::actions::script_generator2::Act;
 use hyper_diff::actions::script_generator2::ScriptGenerator;
 use hyper_diff::actions::script_generator2::SimpleAction;
 use hyper_diff::tree::tree_path::CompressedTreePath;
+use hyperast::store::defaults::LabelIdentifier;
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast::store::labels::LabelStore;
+use hyperast::types::HyperAST;
+use hyperast_vcs_git::no_space::NoSpaceWrapper;
 
 pub(crate) struct T;
 
@@ -22,13 +22,17 @@ impl hyperast::types::Stored for T {
     type TreeId = NodeIdentifier;
 }
 
+impl<'a> hyperast::types::CLending<'a, u16, NodeIdentifier> for T {
+    type Children = hyperast::types::ChildrenSlice<'a, NodeIdentifier>;
+}
+
 impl hyperast::types::WithChildren for T {
     type ChildIdx = u16;
 
-    type Children<'a>
-        = hyperast::types::MySlice<NodeIdentifier>
-    where
-        Self: 'a;
+    // type Children<'a>
+    //     = hyperast::types::MySlice<NodeIdentifier>
+    // where
+    //     Self: 'a;
 
     fn child_count(&self) -> Self::ChildIdx {
         todo!()
@@ -48,7 +52,16 @@ impl hyperast::types::WithChildren for T {
         todo!()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<
+        hyperast::types::LendC<
+            '_,
+            Self,
+            Self::ChildIdx,
+            <Self::TreeId as hyperast::types::NodeId>::IdN,
+        >,
+    > {
         todo!()
     }
 }
@@ -95,8 +108,8 @@ pub(crate) fn diff(
     }
 
     let pair = crate::utils::get_pair_simp(&state.partial_decomps, stores, &src_tr, &dst_tr);
-    use hyperast::types::WithStats;
     use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
+    use hyperast::types::WithStats;
     let mapped = {
         let mappings_cache = &state.mappings_alone;
         use hyper_diff::matchers::mapping_store::MappingStore;

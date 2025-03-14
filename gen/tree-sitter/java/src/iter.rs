@@ -4,7 +4,7 @@ use hyperast::types::TypedHyperAST;
 use hyperast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
-    types::{HyperAST, IterableChildren, NodeId, Tree, TypedNodeStore, WithChildren},
+    types::{HyperAST, NodeId, Tree, TypedNodeStore, WithChildren, Childrn},
 };
 use num::ToPrimitive;
 
@@ -155,7 +155,7 @@ where
                             self.stack.push((
                                 Id::Other(*node),
                                 0,
-                                Some(children.iter_children().cloned().collect()),
+                                Some(children.iter_children().collect()),
                             ));
                         }
                         continue;
@@ -166,7 +166,7 @@ where
                     let children = b.children();
                     let children = children.unwrap();
                     self.stack
-                        .push((node, 0, Some(children.iter_children().cloned().collect())));
+                        .push((node, 0, Some(children.iter_children().collect())));
                 }
                 return Some(self.path.clone());
             }

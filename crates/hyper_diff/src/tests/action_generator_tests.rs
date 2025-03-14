@@ -84,7 +84,8 @@ fn test_with_action_example() {
         })
     );
 
-    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
+    let dst_arena =
+        SimpleBfsMapper::<_, u16, CompletePostOrder<_, IdD>, _>::from((&stores, &dst_arena));
     // let actions = script_generator::ScriptGenerator::<
     //     _,
     //     TreeRef<Tree>,
@@ -99,12 +100,13 @@ fn test_with_action_example() {
     // );
 
     let actions = script_generator::ScriptGenerator::<
-        _,
-        TreeRef<Tree>,
-        _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
-        _,
-    >::compute_actions(node_store, &src_arena, &dst_arena, &ms);
+        // _,
+        // _,
+        // SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
+        // _,
+        // _,
+        // _,
+    >::compute_actions(&stores, &src_arena, &dst_arena, &ms);
 
     let lab = |x: &IdD| {
         label_store
@@ -299,7 +301,7 @@ fn test_with_zs_custom_example() {
     ms.link(from_src(&[1, 2]), from_dst(&[0, 1, 2]));
     ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
 
-    let dst_arena = SimpleBfsMapper::from(node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::<_, u16, CompletePostOrder<_, IdD>,_>::from((&stores, &dst_arena));
     // let actions = script_generator::ScriptGenerator::<
     //     _,
     //     TreeRef<Tree>,
@@ -314,12 +316,12 @@ fn test_with_zs_custom_example() {
     // );
 
     let actions = script_generator::ScriptGenerator::<
-        _,
-        TreeRef<Tree>,
-        _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
-        _,
-    >::compute_actions(node_store, &src_arena, &dst_arena, &ms);
+        // _,
+        // TreeRef<Tree>,
+        // _,
+        // SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
+        // _,
+    >::compute_actions(&stores, &src_arena, &dst_arena, &ms);
 
     // new Delete(src.getChild("1.1"))
     assert!(actions.has_actions(&[SimpleAction::Delete {

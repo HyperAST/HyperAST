@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::{
     decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree},
     matchers::{
@@ -10,7 +8,7 @@ use crate::{
 };
 
 use hyperast::test_utils::simple_tree::{vpair_to_stores, DisplayTree, TStore};
-use hyperast::types::{LabelStore, SimpleHyperAST};
+use hyperast::types::LabelStore;
 
 #[test]
 fn test_zs_paper_for_initial_layout() {

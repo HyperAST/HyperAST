@@ -25,8 +25,8 @@ use crate::algorithms::MappingDurations;
 
 use super::{DiffResult, PreparedMappingDurations};
 
-pub type PersistableMappings<I> =
-    crate::matchers::Mapping<CDS<PersistedNode<I>>, CDS<PersistedNode<I>>, VecStore<u32>>;
+// pub type PersistableMappings<I> =
+//     crate::matchers::Mapping<CDS<PersistedNode<I>>, CDS<PersistedNode<I>>, VecStore<u32>>;
 
 pub fn diff<'store, HAST: HyperAST>(
     hyperast: &'store HAST,
@@ -35,21 +35,20 @@ pub fn diff<'store, HAST: HyperAST>(
 ) -> DiffResult<
     SimpleAction<
         HAST::Label,
-        CompressedTreePath<<HAST::T<'store> as types::WithChildren>::ChildIdx>,
+        CompressedTreePath<HAST::Idx>,
         HAST::IdN,
     >,
-    Mapper<'store, HAST, CDS<HAST::T<'store>>, CDS<HAST::T<'store>>, VecStore<u32>>,
+    Mapper<'store, HAST, CDS<HAST::TM>, CDS<HAST::TM>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     HAST::Idx: hyperast::PrimInt,
-    HAST::RT: 'store + types::WithHashs + types::WithStats,
-    for<'t> HAST::T<'t>: 'store + types::WithHashs + types::WithStats,
+    for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
     let now = Instant::now();
-    let mapper: (&HAST, (DS<_>, DS<_>)) = hyperast.decompress_pair(src, dst);
+    let mapper: (&HAST, (DS<HAST::TM>, DS<HAST::TM>)) = hyperast.decompress_pair(src, dst);
     // let mapper: Mapper<_, DS<HAST::T<'_>>, DS<HAST::T<'_>>, VecStore<_>> = mapper.into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     todo!()

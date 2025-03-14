@@ -31,7 +31,7 @@ hyperast_gen_ts_java = { workspace = true }#, features = ["subtree-stats"]
 
 [features]
 default = ["maven_java", "make_cpp", "npm_ts"]
-tsg = ["dep:tree-sitter-graph"]
+tsg = ["dep:tree-sitter-graph", "hyperast_tsquery/tsg"]
 maven_java = ["maven", "java"]
 maven = ["dep:hyperast_gen_ts_xml"]
 # gradle = []

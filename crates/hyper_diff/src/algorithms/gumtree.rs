@@ -28,17 +28,17 @@ pub fn diff<'store, HAST: HyperAST>(
 ) -> DiffResult<
     SimpleAction<
         HAST::Label,
-        CompressedTreePath<<HAST::RT as types::WithChildren>::ChildIdx>,
+        CompressedTreePath<HAST::Idx>,
         HAST::IdN,
     >,
-    Mapper<'store, HAST, CDS<HAST::RT>, CDS<HAST::RT>, VecStore<u32>>,
+    Mapper<'store, HAST, CDS<HAST::TM>, CDS<HAST::TM>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Idx: hyperast::PrimInt,
     HAST::Label: Debug + Clone + Copy,
-    for<'t> HAST::T<'t>: types::WithHashs + types::WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
     todo!("a");
     // let now = Instant::now();

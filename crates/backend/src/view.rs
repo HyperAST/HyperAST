@@ -5,7 +5,7 @@ use hyperast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{
-        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, TypeStore,
+        self, Children, HyperAST, Childrn, LabelStore, Labeled, NodeStore, TypeStore,
         WithChildren,
     },
 };

@@ -28,28 +28,35 @@ impl<T, HAST, Acc> tree_gen::Prepro<T> for PreparedQuerying<&crate::Query, HAST,
     }
 }
 
-impl<TS, T, Acc> tree_gen::More for PreparedQuerying<&crate::Query, (TS, T), Acc>
+impl<HAST, Acc> tree_gen::More for PreparedQuerying<&crate::Query, HAST, Acc>
 where
-    TS: 'static
-        + Clone
-        + types::ETypeStore<Ty2 = Acc::Type>
-        + types::RoleStore<IdF = u16, Role = types::Role>,
-    T: types::WithRoles,
-    T: types::Tree,
-    T::TreeId: Copy,
-    Acc: types::Typed + tree_gen::WithRole<types::Role> + tree_gen::WithChildren<T::TreeId>,
+    HAST: types::HyperAST,
+    HAST::TS: 'static + Clone + types::ETypeStore + types::RoleStore<IdF = u16, Role = types::Role>,
+    HAST::IdN: Copy,
+    Acc: types::Typed<Type = <HAST::TS as types::ETypeStore>::Ty2>
+        + tree_gen::WithRole<types::Role>
+        + tree_gen::WithChildren<HAST::IdN>,
     for<'c> &'c Acc: tree_gen::WithLabel<L = &'c str>,
+    // T: for<'t> types::AstLending<'t>,
+    // for<'t> types::LendT<'t, T>: types::WithChildren + types::WithRoles,
+    for<'t> types::LendT<'t, HAST>: types::WithRoles,
+    HAST::TM:
+        hyperast::types::MarkedT<TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = HAST::Idx>,
 {
     type Acc = Acc;
-    type T = T;
-    type TS = TS;
+    type T = HAST::TM;
+    type TS = HAST::TS;
     const ENABLED: bool = true;
     fn match_precomp_queries<
-        HAST: HyperAST<IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, RT = Self::T>
-            + std::clone::Clone,
+        HAST2: types::HyperASTShared<IdN = HAST::IdN, Label = HAST::Label, Idx = HAST::Idx>
+            + for<'t> types::AstLending<'t, RT = types::LendN<'t, Self::T, HAST::IdN>>
+            + HyperAST<
+                // TM = HAST::TM,
+                TS = HAST::TS,
+            > + std::clone::Clone,
     >(
         &self,
-        stores: HAST,
+        stores: HAST2,
         acc: &Acc,
         label: Option<&str>,
     ) -> tree_gen::PrecompQueries {
@@ -59,9 +66,9 @@ where
         let pos = hyperast::position::StructuralPosition::empty();
 
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
-        let qcursor = self.0.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let mut qcursor = self.0.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
-        for m in qcursor {
+        while let Some(m) = qcursor.next() {
             assert!(m.pattern_index.to_usize() < 16);
             r |= 1 << m.pattern_index.to_usize() as u16;
         }
@@ -69,25 +76,27 @@ where
     }
 }
 
-impl<TS, T, Acc> tree_gen::PreproTSG for PreparedQuerying<&crate::Query, (TS, T), Acc>
+impl<HAST, Acc> tree_gen::PreproTSG for PreparedQuerying<&crate::Query, HAST, Acc>
 where
-    TS: 'static
-        + Clone
-        + types::ETypeStore<Ty2 = Acc::Type>
-        + types::RoleStore<IdF = u16, Role = types::Role>,
-    T: types::WithRoles,
-    T: types::Tree,
-    T::TreeId: Copy,
-    Acc: types::Typed + tree_gen::WithRole<types::Role> + tree_gen::WithChildren<T::TreeId>,
+    HAST: types::HyperAST,
+    HAST::TS: 'static + Clone + types::ETypeStore + types::RoleStore<IdF = u16, Role = types::Role>,
+    HAST::IdN: Copy,
+    Acc: types::Typed<Type = <HAST::TS as types::ETypeStore>::Ty2>
+        + tree_gen::WithRole<types::Role>
+        + tree_gen::WithChildren<HAST::IdN>,
     for<'c> &'c Acc: tree_gen::WithLabel<L = &'c str>,
+    // T: for<'t> types::AstLending<'t>,
+    // for<'t> types::LendT<'t, T>: types::WithChildren + types::WithRoles,
+    for<'t> types::LendT<'t, HAST>: types::WithRoles,
+    HAST::TM:
+        hyperast::types::MarkedT<TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = HAST::Idx>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
-        HAST: HyperAST<IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS, RT = Self::T>
-            + std::clone::Clone,
+        HAST2: HyperAST<IdN = <Self::T as types::Stored>::TreeId, TS = Self::TS> + std::clone::Clone,
     >(
         &self,
-        _stores: HAST,
+        _stores: HAST2,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> Result<usize, String> {

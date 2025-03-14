@@ -12,8 +12,8 @@ use crate::{
         nodes::HashedNodeRef,
     },
     types::{
-        AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
-        TypeStore, WithChildren, WithSerialization,
+        AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeStore, TypeStore,
+        WithChildren, WithSerialization,
     },
 };
 /// precondition: root node do not contain a File node
@@ -26,7 +26,8 @@ pub fn compute_range<'store, It, HAST>(
 where
     HAST: HyperAST,
     HAST::IdN: Copy,
-    for<'t> HAST::T<'t>: WithSerialization,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator,
     It::Item: PrimInt,
 {
@@ -34,7 +35,8 @@ where
     let mut x = root;
     for o in offsets {
         let b = stores.node_store().resolve(&x);
-        if let Some(cs) = b.children() {
+        let cs = b.children();
+        if let Some(cs) = cs {
             for y in 0..o.to_usize().unwrap() {
                 let id = &cs[num::cast(y).unwrap()];
                 let b = stores.node_store().resolve(id);
@@ -64,8 +66,9 @@ pub fn compute_position<'store, HAST, It>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
     HAST: HyperAST,
-    for<'t> HAST::T<'t>: WithSerialization + WithChildren,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
     It: Iterator<Item = HAST::Idx>,
 {
     let mut offset = 0;
@@ -87,7 +90,7 @@ where
         if let Some(cs) = b.children() {
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
+                    let b = stores.node_store().resolve(&y);
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
@@ -106,7 +109,7 @@ where
             }
         } else {
             break;
-        }
+        };
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
@@ -133,8 +136,10 @@ pub fn compute_position_and_nodes<'store, HAST, It: Iterator>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
     HAST: HyperAST,
-    for<'t> HAST::T<'t>: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
@@ -156,7 +161,7 @@ where
         if let Some(cs) = b.children() {
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
+                    let b = stores.node_store().resolve(&y);
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
@@ -176,7 +181,7 @@ where
             }
         } else {
             break;
-        }
+        };
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
@@ -231,11 +236,9 @@ where
 impl StructuralPosition<NodeIdentifier, u16> {
     pub fn make_position<'store, HAST>(&self, stores: &'store HAST) -> Position
     where
-        HAST: for<'t> HyperAST<
-            T<'t> = HashedNodeRef<'t>,
-            IdN = NodeIdentifier,
-            Label = LabelIdentifier,
-        >,
+        HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t> HAST::NS:
+            crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
         HAST::TS: TypeStore<Ty = AnyType>,
         // HAST::Types: 'static + TypeTrait + Debug,
     {
@@ -334,11 +337,9 @@ impl StructuralPosition<NodeIdentifier, u16> {
 
     pub fn make_file_line_range<'store, HAST>(&self, stores: &'store HAST) -> (String, usize, usize)
     where
-        HAST: for<'t> HyperAST<
-            T<'t> = HashedNodeRef<'t>,
-            IdN = NodeIdentifier,
-            Label = LabelIdentifier,
-        >,
+        HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t> HAST::NS:
+            crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
         HAST::TS: TypeStore<Ty = AnyType>,
         // HAST::Types: 'static + TypeTrait + Debug,
     {

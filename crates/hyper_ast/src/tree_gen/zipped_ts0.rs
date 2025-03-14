@@ -160,7 +160,7 @@ impl<'store, 'cache, 's, TS: TsEnableTS>
         tree_gen::NoOpMore<
             (
                 TS,
-                crate::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+                crate::store::nodes::legion::TMarker<NodeIdentifier>,
             ),
             Acc<TS::Ty2>,
         >,

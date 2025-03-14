@@ -22,17 +22,17 @@ pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<T, Dsrc::IdD>
-            + LazyDecompressedTreeStore<T, M::Src>,
+            + DecompressedTreeStore<HAST::TM, Dsrc::IdD, M::Src>
+            + DecompressedWithParent<HAST::TM, Dsrc::IdD>
+            + LazyDecompressedTreeStore<HAST::TM, M::Src>,
         Ddst: 'a
-            + DecompressedTreeStore<T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<T, Ddst::IdD>
-            + LazyDecompressedTreeStore<T, M::Dst>,
-        T: Tree + WithStats,
-        HAST: HyperAST<IdN = T::TreeId, RT = T>,
+            + DecompressedTreeStore<HAST::TM, Ddst::IdD, M::Dst>
+            + DecompressedWithParent<HAST::TM, Ddst::IdD>
+            + LazyDecompressedTreeStore<HAST::TM, M::Dst>,
+        // T: Tree + WithStats,
+        HAST: HyperAST,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
+    > BottomUpMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M>
 where
     // T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
@@ -86,19 +86,19 @@ impl<
         M: MonoMappingStore,
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
-    // for<'t> HAST::T<'t>: WithStats,
-    for<'t> HAST::RT: WithStats,
+    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
-    Dsrc: DecompressedTreeStore<HAST::RT, Dsrc::IdD, M::Src>
-        + DecompressedWithParent<HAST::RT, Dsrc::IdD>
-        + LazyDecompressedTreeStore<HAST::RT, M::Src>,
-    Ddst: DecompressedTreeStore<HAST::RT, Ddst::IdD, M::Dst>
-        + DecompressedWithParent<HAST::RT, Ddst::IdD>
-        + LazyDecompressedTreeStore<HAST::RT, M::Dst>,
+    Dsrc: DecompressedTreeStore<HAST::TM, Dsrc::IdD, M::Src>
+        + DecompressedWithParent<HAST::TM, Dsrc::IdD>
+        + LazyDecompressedTreeStore<HAST::TM, M::Src>,
+    Ddst: DecompressedTreeStore<HAST::TM, Ddst::IdD, M::Dst>
+        + DecompressedWithParent<HAST::TM, Ddst::IdD>
+        + LazyDecompressedTreeStore<HAST::TM, M::Dst>,
 {
     pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         let node_store = self.hyperast.node_store();

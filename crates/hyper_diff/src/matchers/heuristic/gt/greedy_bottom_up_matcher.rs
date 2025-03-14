@@ -1,6 +1,7 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, one, PrimInt};
+use hyperast::PrimInt;
+use num_traits::{cast, one};
 
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
@@ -8,7 +9,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyperast::types::{DecompressedSubtree, HyperAST, NodeId, NodeStore, Tree, WithHashs};
+use hyperast::types::{DecompressedSubtree, HyperAST, NodeId, NodeStore, Stored, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
@@ -64,22 +65,22 @@ impl<
 /// TODO PostOrder might not be necessary
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<T, M::Src>
-            + DecompressedWithParent<T, M::Src>
-            + PostOrder<T, M::Src>
-            + PostOrderIterable<T, M::Src>
-            + DecompressedSubtree<T, Out = Dsrc>
-            + ContiguousDescendants<T, M::Src>
-            + POBorrowSlice<T, M::Src>,
-        Ddst: DecompressedTreeStore<T, M::Dst>
-            + DecompressedWithParent<T, M::Dst>
-            + PostOrder<T, M::Dst>
-            + PostOrderIterable<T, M::Dst>
-            + DecompressedSubtree<T, Out = Ddst>
-            + ContiguousDescendants<T, M::Dst>
-            + POBorrowSlice<T, M::Dst>,
-        HAST: for<'b> HyperAST<IdN = T::TreeId, RT = T, Label = T::Label>,
-        T: Tree + WithHashs,
+        Dsrc: DecompressedTreeStore<HAST::TM, M::Src>
+            + DecompressedWithParent<HAST::TM, M::Src>
+            + PostOrder<HAST::TM, M::Src>
+            + PostOrderIterable<HAST::TM, M::Src>
+            + DecompressedSubtree<HAST::TM, Out = Dsrc>
+            + ContiguousDescendants<HAST::TM, M::Src>
+            + POBorrowSlice<HAST::TM, M::Src>,
+        Ddst: DecompressedTreeStore<HAST::TM, M::Dst>
+            + DecompressedWithParent<HAST::TM, M::Dst>
+            + PostOrder<HAST::TM, M::Dst>
+            + PostOrderIterable<HAST::TM, M::Dst>
+            + DecompressedSubtree<HAST::TM, Out = Ddst>
+            + ContiguousDescendants<HAST::TM, M::Dst>
+            + POBorrowSlice<HAST::TM, M::Dst>,
+        HAST: HyperAST,
+        // T: Stored, // Tree + WithHashs,
         M: MonoMappingStore + Default,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
@@ -89,7 +90,7 @@ impl<
         'a,
         Dsrc,
         Ddst,
-        T,
+        HAST::TM,
         HAST,
         M,
         SIZE_THRESHOLD,
@@ -97,11 +98,14 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    HAST::RT: WithHashs,
-    T::TreeId: 'a + Clone + Debug + NodeId<IdN = T::TreeId>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
+    // T::TreeId: 'a + Clone + Debug + NodeId<IdN = T::TreeId>,
     // T::Type: Debug + Eq + Copy + Send + Sync,
-    M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: 'a + PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
+    HAST::Label: Eq,
+    HAST::IdN: Debug,
 {
     pub fn new(stores: &'a HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
         Self {
@@ -142,7 +146,7 @@ where
         }
     }
 
-    pub fn matchh(store: &'a HAST, src: &'a T::TreeId, dst: &'a T::TreeId, mappings: M) -> Self {
+    pub fn matchh(store: &'a HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M) -> Self {
         let mut matcher = Self::new(
             store,
             Dsrc::decompress2(store, src),
@@ -251,7 +255,7 @@ where
         } else {
             let o_src = self.internal.src_arena.original(&src);
             let o_dst = self.internal.dst_arena.original(&dst);
-            let src_arena = ZsTree::<T, M::Src>::decompress2(stores, &o_src);
+            let src_arena = ZsTree::<HAST::TM, M::Src>::decompress2(stores, &o_src);
             src_offset = src - src_arena.root();
             if cfg!(debug_assertions) {
                 let src_arena_z = self.internal.src_arena.slice_po(&src);
@@ -268,7 +272,7 @@ where
                 assert!(src_arena.kr[src_arena.kr.len() - 1]);
                 dbg!(last == src_arena_z.root());
             }
-            let dst_arena = ZsTree::<T, M::Dst>::decompress2(stores, &o_dst);
+            let dst_arena = ZsTree::<HAST::TM, M::Dst>::decompress2(stores, &o_dst);
             if cfg!(debug_assertions) {
                 let dst_arena_z = self.internal.dst_arena.slice_po(&dst);
                 for i in dst_arena.iter_df_post::<true>() {

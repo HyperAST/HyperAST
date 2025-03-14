@@ -660,7 +660,7 @@ pub trait Cursor {
     //     unimplemented!("related to query analysis, don't know how to handle that for now")
     // }
 
-    fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
+    fn text_provider(&self) -> <Self::Node as TextLending<'_>>::TP;
 }
 
 pub struct TSTreeCursor<'a> {
@@ -780,7 +780,7 @@ impl<'a> Cursor for TSTreeCursor<'a> {
         }
     }
 
-    fn text_provider(&self) -> <Self::Node as Node>::TP<'_> {
+    fn text_provider(&self) -> <Self::Node as TextLending<'_>>::TP {
         self.text
     }
 }
@@ -831,7 +831,10 @@ impl Status for TSStatus {
     }
 }
 
-pub trait Node: Clone {
+pub trait TextLending<'a> {
+    type TP: Copy;
+}
+pub trait Node: Clone + for<'a> TextLending<'a> {
     type IdF;
 
     fn symbol(&self) -> Symbol;
@@ -847,15 +850,18 @@ pub trait Node: Clone {
     fn equal(&self, other: &Self) -> bool;
     fn compare(&self, other: &Self) -> std::cmp::Ordering;
     // fn id(&self) -> usize;
-    type TP<'a>: Copy;
-    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str>;
-    fn text_equal(&self, text_provider: Self::TP<'_>, other: impl Iterator<Item = u8>) -> bool {
+    fn text(&self, text_provider: <Self as TextLending<'_>>::TP) -> std::borrow::Cow<str>;
+    fn text_equal(&self, text_provider: <Self as TextLending<'_>>::TP, other: impl Iterator<Item = u8>) -> bool {
         self.text(text_provider)
             .as_bytes()
             .iter()
             .copied()
             .eq(other)
     }
+}
+
+impl<'a, 'b> TextLending<'b> for tree_sitter::Node<'a> {
+    type TP = &'a [u8];
 }
 
 impl<'a> Node for tree_sitter::Node<'a> {
@@ -906,8 +912,8 @@ impl<'a> Node for tree_sitter::Node<'a> {
         }
         Equal
     }
-    type TP<'b> = &'a [u8];
-    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
+    // type TP<'b> = &'a [u8];
+    fn text(&self, text_provider: <Self as TextLending<'_>>::TP) -> std::borrow::Cow<str> {
         self.utf8_text(text_provider).unwrap().into()
     }
 
@@ -1247,7 +1253,7 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
         self.states.insert(index, element);
     }
 
-    fn text_provider(&self) -> <Cursor::Node as Node>::TP<'_> {
+    fn text_provider(&self) -> <Cursor::Node as TextLending<'_>>::TP {
         self.cursor.text_provider()
     }
 }

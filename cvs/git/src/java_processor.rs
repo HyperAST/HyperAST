@@ -429,12 +429,9 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                     let source: &str = tsg;
                     let language = hyperast_gen_ts_java::language();
 
-                    let mut file = tree_sitter_graph::ast::File::<
-                        M<
-                            &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
-                            &Acc,
-                        >,
-                    >::new(language.clone());
+                    let mut file = tree_sitter_graph::ast::File::<M<&SimpleStores, &Acc>>::new(
+                        language.clone(),
+                    );
 
                     // let mty: &[_] = &[];
                     // let query_source = ExtQ::new(language.clone(), Box::new(mty), source.len());
@@ -743,10 +740,7 @@ impl RepositoryProcessor {
                     #[cfg(feature = "tsg")]
                     {
                         let spec: &tree_sitter_graph::ast::File<
-                            hyperast_tsquery::QueryMatcher<
-                                &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
-                                &Acc,
-                            >,
+                            hyperast_tsquery::QueryMatcher<&SimpleStores, &Acc>,
                         > = tsg.0.downcast_ref().unwrap();
                         let query = java_proc.query.as_ref().map(|x| &x.0);
                         let functions = tsg.1.clone();
@@ -774,11 +768,11 @@ impl RepositoryProcessor {
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
-                    let more: hyperast_tsquery::PreparedQuerying<_, _, _> = more.into();
+                    let more: hyperast_tsquery::PreparedQuerying<_, SimpleStores, _> = more.into();
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
                             .with_line_break(line_break);
-                    crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                    crate::java::handle_java_file::<_>(&mut java_tree_gen, n, t)
                 } else {
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(stores, md_cache)
                         .with_line_break(line_break);

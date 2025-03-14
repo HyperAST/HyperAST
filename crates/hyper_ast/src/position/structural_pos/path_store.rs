@@ -64,12 +64,12 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         ends: &[SpHandle],
     ) -> Vec<Position>
     where
-        HAST: HyperAST<IdN = IdN::IdN, Label = LabelIdentifier, Idx = Idx>,
-        for<'t> HAST::T<'t>: Typed<Type = AnyType> + WithSerialization + WithChildren + WithStats,
+        HAST: HyperAST<IdN = IdN, Label = LabelIdentifier, Idx = Idx>,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren + WithStats,
         // HAST::Types: Eq + TypeTrait,
-        for<'t> <HAST::T<'t> as types::WithChildren>::ChildIdx: Debug,
+        HAST::Idx:  Debug,
         IdN: Copy + Eq + Debug + NodeId,
-        IdN::IdN: NodeId<IdN = IdN::IdN> + Debug,
+        IdN: NodeId<IdN = IdN> + Debug,
     {
         let mut r = vec![];
         for x in ends.iter() {
@@ -77,7 +77,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             let it = self.get(*x);
             let position_converter =
                 &crate::position::PositionConverter::new(&it).with_stores(stores);
-            r.push(position_converter.compute_pos_post_order::<_, Position, _>())
+            r.push(position_converter.compute_pos_post_order::<_, Position>())
             // r.push(it.make_position(stores));
         }
         r
@@ -104,8 +104,8 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             IdN = IdN,
             Label = LabelIdentifier,
         >,
-        for<'t> HAST::T<'t>: WithChildren<ChildIdx = Idx>,
-        for<'t> <HAST::T<'t> as types::WithChildren>::ChildIdx: Debug,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
+        HAST::Idx:  Debug,
         IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
     {
         scout.path.check(stores).map_err(|_| "bad path")?;
@@ -154,8 +154,8 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), String>
     where
         HAST: HyperAST<IdN = IdN::IdN>,
-        for<'t> HAST::T<'t>: WithChildren,
-        for<'t> <HAST::T<'t> as types::WithChildren>::ChildIdx: Debug,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren,
+        HAST::Idx:  Debug,
         IdN: Copy + Eq + Debug + NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>,
     {
@@ -169,7 +169,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         while i > 0 {
             let e = self.nodes[i];
             let o = self.offsets[i] - one();
-            let o: <HAST::T<'_> as WithChildren>::ChildIdx = num::cast(o).unwrap();
+            let o: HAST::Idx = num::cast(o).unwrap();
             let p = self.nodes[self.parents[i]];
             let b = stores.node_store().resolve(p.as_id());
             if !b.has_children() || Some(e.as_id()) != b.child(&o).as_ref() {

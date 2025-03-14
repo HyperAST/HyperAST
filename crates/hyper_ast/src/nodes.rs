@@ -8,8 +8,10 @@ use num::ToPrimitive;
 
 use crate::{
     impact::serialize::{Keyed, MySerialize},
-    types::{HyperAST, HyperType, IterableChildren, MySlice, NodeId, RoleStore},
+    types::{AstLending, HyperAST, HyperType, NodeId, RoleStore},
 };
+use crate::types::Children;
+use crate::types::Childrn;
 
 // pub type TypeIdentifier = Type;
 
@@ -178,12 +180,16 @@ impl<N, L: Eq, T> crate::types::Labeled for CompressedNode<N, L, T> {
     }
 }
 
+impl<'a, N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::CLending<'a, u16, N> for CompressedNode<N, L, T> {
+    type Children = crate::types::ChildrenSlice<'a, N>;
+}
+
 impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for CompressedNode<N, L, T> {
     type ChildIdx = u16;
-    type Children<'a>
-        = MySlice<N>
-    where
-        Self: 'a;
+    // type Children<'a>
+    //     = MySlice<N>
+    // where
+    //     Self: 'a;
     // type Children<'a> = [N] where Self:'a;
 
     fn child_count(&self) -> Self::ChildIdx {
@@ -229,7 +235,7 @@ impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for Compr
         }
     }
 
-    fn children<'a>(&'a self) -> Option<&'a <Self as crate::types::WithChildren>::Children<'a>> {
+    fn children(&self) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         fn f<'a, N, L, T>(x: &'a CompressedNode<N, L, T>) -> &'a [N] {
             match x {
                 CompressedNode::Children2 { children, kind: _ } => &*children,
@@ -527,6 +533,7 @@ impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SP
 where
     HAST: HyperAST,
     HAST::IdN: std::fmt::Debug,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -540,7 +547,8 @@ where
     HAST::TS: RoleStore,
     HAST::IdN: std::fmt::Debug,
     <HAST::TS as RoleStore>::Role: std::fmt::Display,
-    for<'t> HAST::T<'t>: crate::types::WithRoles,
+    for<'t> <HAST as AstLending<'t>>::RT: crate::types::WithRoles,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -552,6 +560,7 @@ impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SP
 where
     HAST: HyperAST,
     HAST::IdN: std::fmt::Debug,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn serialize(
         &self,
@@ -613,7 +622,7 @@ where
                     }
                 }
                 if !children.is_empty() {
-                    let it = children.iter_children();
+                    let it = children;
                     write!(out, "(")?;
                     w_kind(out)?;
                     for id in it {
@@ -648,7 +657,8 @@ where
     HAST::TS: RoleStore,
     HAST::IdN: std::fmt::Debug,
     <HAST::TS as RoleStore>::Role: std::fmt::Display,
-    for<'t> HAST::T<'t>: crate::types::WithRoles,
+    for<'t> <HAST as AstLending<'t>>::RT: crate::types::WithRoles,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(
@@ -711,7 +721,7 @@ where
                     }
                 }
                 if !children.is_empty() {
-                    let it = children.iter_children();
+                    let it = children;
                     write!(out, "(")?;
                     w_kind(out)?;
                     let mut i = num::zero();
@@ -787,7 +797,7 @@ pub struct IndentedSerializer<'hast, 'a, IdN, HAST, Fmt: Format = Text, const SP
     stores: &'a HAST,
     root: IdN,
     root_indent: &'static str,
-    phantom: PhantomData<(&'hast (),Fmt)>,
+    phantom: PhantomData<(&'hast (), Fmt)>,
 }
 
 impl<'store, 'b, IdN, HAST, Fmt: Format, const SPC: bool>
@@ -871,7 +881,7 @@ where
             return Ok(indent);
         }
 
-        match (label, children) {
+        let r = match (label, children) {
             (None, None) => {
                 out.write_str(&kind.to_string())?;
                 Err(IndentedAlt::NoIndent)
@@ -881,7 +891,7 @@ where
                     let s = self.stores.label_store().resolve(label);
                 }
                 if !children.is_empty() {
-                    let mut it = children.iter_children();
+                    let mut it = children;
                     let op = |alt| {
                         if alt == IndentedAlt::NoIndent {
                             Ok(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned())
@@ -903,7 +913,8 @@ where
                 out.write_str(&s)?;
                 Err(IndentedAlt::NoIndent)
             }
-        }
+        };
+        r
     }
 }
 impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
@@ -952,7 +963,7 @@ where
             });
         }
 
-        match (label, children) {
+        let r= match (label, children) {
             (None, None) => {
                 out.write_str("\"")?;
                 out.write_str(&escape(&kind.to_string()))?;
@@ -996,7 +1007,8 @@ where
                 out.write_str("\"}")?;
                 Err(IndentedAlt::NoIndent)
             }
-        }
+        };
+        r
     }
 }
 
@@ -1032,6 +1044,7 @@ impl<'store, IdN, HAST, Fmt: Format, const SPC: bool> PrettyPrinter<'store, IdN,
 impl<'store, HAST, const SPC: bool> Display for PrettyPrinter<'store, HAST::IdN, HAST, Text, SPC>
 where
     HAST: HyperAST,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, 0, f)
@@ -1041,6 +1054,7 @@ where
 impl<'store, HAST, const SPC: bool> Display for PrettyPrinter<'store, HAST::IdN, HAST, Sexp, SPC>
 where
     HAST: HyperAST,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, 0, f)
@@ -1050,6 +1064,7 @@ where
 impl<'store, HAST, const SPC: bool> PrettyPrinter<'store, HAST::IdN, HAST, Text, SPC>
 where
     HAST: HyperAST,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn serialize(
         &self,
@@ -1070,7 +1085,7 @@ where
             return Ok(());
         }
 
-        match (label, children) {
+        let r = match (label, children) {
             (None, None) => out.write_str(&kind.to_string()),
             (label, Some(children)) => {
                 if let Some(label) = label {
@@ -1078,7 +1093,7 @@ where
                     dbg!(s);
                 }
                 if !children.is_empty() {
-                    let it = children.iter_children();
+                    let it = children;
                     for id in it {
                         self.serialize(&id, indent + 1, out)?;
                     }
@@ -1090,13 +1105,15 @@ where
                 out.write_str(&s)?;
                 Ok(())
             }
-        }
+        };
+        r
     }
 }
 
 impl<'store, HAST, const SPC: bool> PrettyPrinter<'store, HAST::IdN, HAST, Sexp, SPC>
 where
     HAST: HyperAST,
+    HAST::IdN: NodeId<IdN=HAST::IdN>,
 {
     fn serialize(
         &self,
@@ -1109,8 +1126,8 @@ where
         use crate::types::NodeStore;
         use crate::types::WithChildren;
 
-        let b = self.stores.node_store().resolve(&id);
-        let kind = self.stores.resolve_type(&id);
+        let b = self.stores.node_store().resolve(id);
+        let kind = self.stores.resolve_type(id);
         let label = b.try_get_label();
         let children = b.children();
 
@@ -1118,7 +1135,7 @@ where
             return Ok(());
         }
 
-        match (label, children) {
+        let r = match (label, children) {
             (None, None) => {
                 write!(out, "\"{}\"", escape(&kind.to_string()))?;
                 Ok(())
@@ -1133,8 +1150,8 @@ where
                     write!(out, "\"")?;
                 }
                 if !children.is_empty() {
-                    let it = children.iter_children();
-                    for id in it {
+                    let it = children;
+                    for id in it.iter_children() {
                         let b = self.stores.node_store().resolve(&id);
                         let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
@@ -1153,6 +1170,7 @@ where
                 write!(out, "({}=\"{}\")", escape(&kind.to_string()), escape(&s))?;
                 Ok(())
             }
-        }
+        };
+        r
     }
 }

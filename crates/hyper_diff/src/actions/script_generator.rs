@@ -1,8 +1,11 @@
-/// inspired by the implementation in gumtree
-use std::fmt::Debug;
+//! inspired by the implementation in gumtree
+//!
+use std::{fmt::Debug, marker::PhantomData};
 
 use bitvec::order::Lsb0;
-use hyperast::types::{Labeled, Stored, Typed, WithChildren};
+use hyperast::types::{
+    HyperAST, HyperASTShared, Labeled, NLending, NodeStore as _, Stored, WithChildren,
+};
 use num_traits::{cast, PrimInt};
 
 use crate::{
@@ -26,54 +29,53 @@ impl<A: Debug> Debug for ActionsVec<A> {
 }
 
 #[derive(PartialEq, Eq)]
-pub enum SimpleAction<Src, Dst, T: Stored + Labeled + WithChildren> {
+pub enum SimpleAction<Src, Dst, IdN, IdL, Idx> {
     Delete {
         tree: Src,
     },
     Update {
         src: Src,
         dst: Dst,
-        old: T::Label,
-        new: T::Label,
+        old: IdL,
+        new: IdL,
     },
     Move {
         sub: Src,
         parent: Option<Dst>,
-        idx: T::ChildIdx,
+        idx: Idx,
     },
-    // Duplicate { sub: Src, parent: Dst, idx: T::ChildIdx },
+    // Duplicate { sub: Src, parent: Dst, idx: Idx },
     MoveUpdate {
         sub: Src,
         parent: Option<Dst>,
-        idx: T::ChildIdx,
-        old: T::Label,
-        new: T::Label,
+        idx: Idx,
+        old: IdL,
+        new: IdL,
     },
     Insert {
-        sub: T::TreeId,
+        sub: IdN,
         parent: Option<Dst>,
-        idx: T::ChildIdx,
+        idx: Idx,
     },
+    // A(PhantomData<T>),
 }
 
-impl<Src, Dst, T> ActionsVec<SimpleAction<Src, Dst, T>>
-where
-    T: Stored + Labeled + WithChildren,
-{
-    pub fn conv<U>(self) -> ActionsVec<SimpleAction<Src, Dst, U>>
-    where
-        U: Stored<TreeId = T::TreeId>
-            + Labeled<Label = T::Label>
-            + WithChildren<ChildIdx = T::ChildIdx>,
-    {
-        unsafe { std::mem::transmute(self) }
-    }
-}
+// impl<Src, Dst, T> ActionsVec<SimpleAction<Src, Dst, IdN, IdL, Idx>>
+// where
+//     T: Stored + Labeled + WithChildren,
+// {
+//     pub fn conv<U>(self) -> ActionsVec<SimpleAction<Src, Dst, U>>
+//     where
+//         U: Stored<TreeId = HAST::IdN>
+//             + Labeled<Label = T::Label>
+//             + WithChildren<ChildIdx = T::ChildIdx>,
+//     {
+//         unsafe { std::mem::transmute(self) }
+//     }
+// }
 
-impl<Src: Debug, Dst: Debug, T: Stored + Labeled + WithChildren> Debug for SimpleAction<Src, Dst, T>
-where
-    T::TreeId: Debug,
-    T::ChildIdx: Debug,
+impl<Src: Debug, Dst: Debug, IdN: Debug, IdL, Idx: Debug> Debug
+    for SimpleAction<Src, Dst, IdN, IdL, Idx>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -97,6 +99,7 @@ where
             SimpleAction::Insert { sub, parent, idx } => {
                 write!(f, "Ins {:?} {:?} {:?}", sub, parent, idx)
             }
+            _ => panic!(),
         }
     }
 }
@@ -107,23 +110,15 @@ impl<IdD: Debug> Actions for ActionsVec<IdD> {
     }
 }
 
-pub trait TestActions<IdD, T: Stored + Labeled + WithChildren> {
-    fn has_actions(&self, items: &[SimpleAction<IdD, IdD, T>]) -> bool;
+pub trait TestActions<A> {
+    fn has_actions(&self, items: &[A]) -> bool;
 }
 
-impl<
-        T: Stored + Labeled + WithChildren + std::cmp::PartialEq,
-        IdD: std::cmp::PartialEq + Debug,
-    > TestActions<IdD, T> for ActionsVec<SimpleAction<IdD, IdD, T>>
-where
-    T::TreeId: Debug,
-    T::ChildIdx: Debug,
-{
-    fn has_actions(&self, items: &[SimpleAction<IdD, IdD, T>]) -> bool {
+impl<A: Eq> TestActions<A> for ActionsVec<A> {
+    fn has_actions(&self, items: &[A]) -> bool {
         items.iter().all(|x| self.0.contains(x))
     }
 }
-
 struct InOrderNodes<IdD>(Option<Vec<IdD>>);
 
 /// FEATURE: share parents
@@ -141,14 +136,14 @@ pub struct ScriptGenerator<
     'b,
     'c,
     IdD: PrimInt + Debug,
-    T: 'a + Stored + Labeled + WithChildren,
     SS,
-    SD: BreadthFirstIterable<T, IdD> + DecompressedWithParent<T, IdD>,
-    S,
+    SD, //: BreadthFirstIterable<T, IdD> + DecompressedWithParent<T, IdD>,
+    HAST: HyperAST,
+    Idx = <HAST as HyperASTShared>::Idx,
 > {
-    store: &'s S,
+    store: &'s HAST,
     src_arena_dont_use: &'a SS,
-    mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,
+    mid_arena: Vec<MidNode<HAST::IdN, IdD>>, //SuperTreeStore<HAST::IdN>,
     mid_root: IdD,
     dst_arena: &'b SD,
     // ori_to_copy: DefaultMappingStore<IdD>,
@@ -156,7 +151,8 @@ pub struct ScriptGenerator<
     cpy_mappings: DefaultMappingStore<IdD>,
     moved: bitvec::vec::BitVec,
 
-    pub actions: ActionsVec<SimpleAction<IdD, IdD, T>>,
+    // pub actions: ActionsVec<SimpleAction<IdD, IdD, S::>>,
+    pub actions: ActionsVec<SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, Idx>>,
 
     src_in_order: InOrderNodes<IdD>,
     dst_in_order: InOrderNodes<IdD>,
@@ -168,48 +164,54 @@ impl<
         'b,
         'c,
         IdD: PrimInt + Debug,
-        T: 'a + Stored + Typed + Labeled + WithChildren,
-        SS: DecompressedTreeStore<T, IdD>
-            + DecompressedWithParent<T, IdD>
-            + PostOrderIterable<T, IdD>
-            + PostOrder<T, IdD>,
-        SD: DecompressedTreeStore<T, IdD>
-            + DecompressedWithParent<T, IdD>
-            + BreadthFirstIterable<T, IdD>,
-        S: 'a, //:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-    > ScriptGenerator<'s, 'a, 'b, 'c, IdD, T, SS, SD, S>
+        // T: Stored,
+        //  + Typed + Labeled + WithChildren,
+        SS: DecompressedTreeStore<HAST::TM, IdD>
+            + DecompressedWithParent<HAST::TM, IdD>
+            + PostOrderIterable<HAST::TM, IdD>
+            + PostOrder<HAST::TM, IdD>,
+        SD: DecompressedTreeStore<HAST::TM, IdD>
+            + DecompressedWithParent<HAST::TM, IdD>
+            + BreadthFirstIterable<HAST::TM, IdD>,
+        HAST: HyperAST, //:'a + NodeStore2<HAST::IdN, R<'a> = T>, //NodeStore<'a, HAST::IdN, T>,
+    > ScriptGenerator<'s, 'a, 'b, 'c, IdD, SS, SD, HAST>
 where
-    S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
-    // S: 'a + NodeStore<T::TreeId>,
-    // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
-    //     hyperast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
-    // S::R<'a>: hyperast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
-    T::Label: Copy,
-    T::TreeId: Debug,
-    T::ChildIdx: Debug,
+    // S: hyperast::types::NodeStore<HAST::IdN>,
+    // S: 'a + NodeStore<HAST::IdN>,
+    // for<'c> <<S as NodeStore2<HAST::IdN>>::R as GenericItem<'c>>::Item:
+    //     hyperast::types::Tree<TreeId = HAST::IdN, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
+    // S::R<'a>: hyperast::types::Tree<TreeId = HAST::IdN, Label = T::Label, ChildIdx = T::ChildIdx>,
+    // T::Label: Copy,
+    HAST::Label: Eq + Copy,
+    HAST::IdN: Debug,
+    // T::ChildIdx: Debug,
+    // for<'t> T: NLending<'t, <T as hyperast::types::Stored>::TreeId>,
+    // for<'t> <T as NLending<'t, HAST::IdN>>::N: hyperast::types::WithChildren,
+    // for<'t> <SS as NLending<'t, HAST::IdN>>::N: hyperast::types::WithChildren,
+    // for<'t> <SD as NLending<'t, HAST::IdN>>::N: hyperast::types::WithChildren,
 {
     pub fn compute_actions(
-        store: &'s S,
+        store: &'s HAST,
         src_arena: &'a SS,
         dst_arena: &'b SD,
         ms: &'c DefaultMappingStore<IdD>,
-    ) -> ActionsVec<SimpleAction<IdD, IdD, T>> {
-        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
+    ) -> ActionsVec<SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, HAST::Idx>> {
+        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
             .actions
     }
     pub fn precompute_actions(
-        store: &'s S,
+        store: &'s HAST,
         src_arena: &'a SS,
         dst_arena: &'b SD,
         ms: &'c DefaultMappingStore<IdD>,
-    ) -> ScriptGenerator<'s, 'a, 'b, 'c, IdD, T, SS, SD, S> {
-        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
+    ) -> ScriptGenerator<'s, 'a, 'b, 'c, IdD, SS, SD, HAST> {
+        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
     }
 
-    fn new(store: &'s S, src_arena: &'a SS, dst_arena: &'b SD) -> Self {
+    fn new(store: &'s HAST, src_arena: &'a SS, dst_arena: &'b SD) -> Self {
         Self {
             store,
             src_arena_dont_use: src_arena,
@@ -301,11 +303,15 @@ where
                 };
                 let w_l = {
                     let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;
-                    self.store.scoped(c, |x| x.try_get_label().copied())
+                    self.store
+                        .node_store()
+                        .scoped(c, |x| x.try_get_label().copied())
                 };
                 let x_l = {
                     let c = &self.dst_arena.original(&x);
-                    self.store.scoped(c, |x| x.try_get_label().copied())
+                    self.store
+                        .node_store()
+                        .scoped(c, |x| x.try_get_label().copied())
                 };
 
                 if w_l != x_l && z != v {
@@ -474,7 +480,7 @@ where
     }
 
     /// find position of x in parent on dst_arena
-    pub(crate) fn find_pos(&self, x: &IdD, parent: &IdD) -> T::ChildIdx {
+    pub(crate) fn find_pos(&self, x: &IdD, parent: &IdD) -> HAST::Idx {
         let y = parent;
         let siblings = self.dst_arena.children4(self.store, y);
 
@@ -487,7 +493,7 @@ where
                 }
             }
         }
-        let xpos = cast(self.dst_arena.position_in_parent(x).unwrap()).unwrap();
+        let xpos = self.dst_arena.position_in_parent(x).unwrap();
         let mut v: Option<IdD> = None;
         for i in 0..xpos {
             let c: &IdD = &siblings[i];
@@ -502,7 +508,7 @@ where
 
         let u = self.cpy_mappings.get_src_unchecked(&v.unwrap());
         // // let upos = self.src_arena.position_in_parent(self.store, &u);
-        let upos: T::ChildIdx = {
+        let upos: HAST::Idx = {
             let p = self.mid_arena[cast::<_, usize>(u).unwrap()].parent;
             let r = self.mid_arena[cast::<_, usize>(p).unwrap()]
                 .children
@@ -511,7 +517,7 @@ where
                 .iter()
                 .position(|y| *y == u)
                 .unwrap();
-            cast::<usize, T::ChildIdx>(r).unwrap()
+            cast::<usize, HAST::Idx>(r).unwrap()
         };
         upos + num_traits::one()
     }
@@ -552,7 +558,7 @@ where
 
     pub(crate) fn apply_insert(
         &mut self,
-        a: &SimpleAction<IdD, IdD, T>,
+        a: &SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, HAST::Idx>,
         z: &Option<IdD>,
         w: &IdD,
         x: &IdD,
@@ -591,7 +597,12 @@ where
         }
     }
 
-    pub(crate) fn apply_update(&mut self, action: &SimpleAction<IdD, IdD, T>, w: &IdD, x: &IdD) {
+    pub(crate) fn apply_update(
+        &mut self,
+        action: &SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, HAST::Idx>,
+        w: &IdD,
+        x: &IdD,
+    ) {
         match action {
             SimpleAction::Update { .. } => {}
             SimpleAction::MoveUpdate { .. } => {}
@@ -602,7 +613,7 @@ where
 
     pub(crate) fn apply_move(
         &mut self,
-        action: &SimpleAction<IdD, IdD, T>,
+        action: &SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, HAST::Idx>,
         z: &Option<IdD>,
         w: &IdD,
         x: &IdD,
@@ -620,8 +631,8 @@ where
 
     fn iter_mid_in_post_order<'d>(
         root: IdD,
-        mid_arena: &'d [MidNode<T::TreeId, IdD>],
-    ) -> Iter<'d, T::TreeId, IdD> {
+        mid_arena: &'d [MidNode<HAST::IdN, IdD>],
+    ) -> Iter<'d, HAST::IdN, IdD> {
         let parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
         Iter { parent, mid_arena }
     }
@@ -665,12 +676,8 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
     }
 }
 
-impl<T: Stored + Labeled + WithChildren, IdD: Debug> ActionsVec<SimpleAction<IdD, IdD, T>>
-where
-    T::TreeId: Debug,
-    T::ChildIdx: Debug,
-{
-    pub(crate) fn push(&mut self, action: SimpleAction<IdD, IdD, T>) {
+impl<A> ActionsVec<A> {
+    pub(crate) fn push(&mut self, action: A) {
         self.0.push(action)
     }
 

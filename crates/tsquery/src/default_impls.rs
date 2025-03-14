@@ -15,7 +15,7 @@ impl<'a> TreeCursor<'a> {
 
 impl<'a> Cursor for TreeCursor<'a> {
     type Node = tree_sitter::Node<'a>;
-    type NodeRef<'b> = tree_sitter::Node<'a> where Self: 'b;
+    // type NodeRef<'b> = tree_sitter::Node<'a> where Self: 'b;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         extern "C" {
@@ -45,7 +45,7 @@ impl<'a> Cursor for TreeCursor<'a> {
         self.cursor.goto_parent()
     }
 
-    fn current_node(&self) -> Self::NodeRef<'_> {
+    fn current_node(&self) -> Self::Node {
         self.cursor.node()
     }
 
@@ -129,7 +129,7 @@ impl<'a> Cursor for TreeCursor<'a> {
         }
     }
 
-    fn text_provider(&self) -> <Self::Node as super::Node>::TP<'_> {
+    fn text_provider(&self) -> <Self::Node as super::TextLending<'_>>::TP {
         self.text
     }
 }
@@ -168,6 +168,10 @@ impl Status for TSStatus {
     fn contains_supertype(&self, sym: Symbol) -> bool {
         self.supertypes.contains(&sym)
     }
+}
+
+impl<'a, 'b> super::TextLending<'a> for tree_sitter::Node<'b> {
+    type TP = &'a [u8];
 }
 
 impl<'a> super::Node for tree_sitter::Node<'a> {
@@ -218,9 +222,12 @@ impl<'a> super::Node for tree_sitter::Node<'a> {
         }
         Equal
     }
-    type TP<'b> = &'a [u8];
-    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
-        self.utf8_text(text_provider).unwrap().into()
+
+    fn text<'s, 'l>(&'s self, text_provider: <Self as super::TextLending<'l>>::TP) -> super::BB<'s, 'l, str> {
+        // self.utf8_text(text_provider).unwrap().into()
+        let r = std::str::from_utf8(&text_provider[self.start_byte()..self.end_byte()])
+            .unwrap();
+        super::BB::B(r)
     }
 
     // fn id(&self) -> usize {

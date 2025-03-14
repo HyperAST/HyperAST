@@ -9,7 +9,7 @@ use tree_sitter::CaptureQuantifier as Quant;
 
 use hyperast::types::HyperType;
 use hyperast::types::TypedHyperAST;
-use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
+use hyperast::types::{Childrn, Typed, TypedNodeStore, WithChildren};
 
 pub struct MatchingIter<
     'store,

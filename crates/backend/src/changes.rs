@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 use hyperast::{
     store::defaults::NodeIdentifier,
-    types::{HyperAST, HyperType, IterableChildren, TypeStore, WithChildren, WithStats},
+    types::{HyperAST, HyperType, Childrn, TypeStore, WithChildren, WithStats},
 };
 use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers::Mapper};
 

@@ -5,7 +5,7 @@ use super::{Capture, Pattern, Predicate, PreparedMatcher, QuickTrigger};
 
 use hyperast::store::nodes::legion::NodeIdentifier;
 use hyperast::store::SimpleStores;
-use hyperast::types::{HyperAST, IterableChildren, Labeled, Typed, WithChildren};
+use hyperast::types::{HyperAST, Children, Childrn, Labeled, Typed, WithChildren};
 
 use tree_sitter::CaptureQuantifier as Quant;
 
@@ -91,8 +91,8 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         assert_eq!(t, Type::Program);
         let Some(cs) = n.children() else { return res };
         for rule_id in cs.iter_children() {
-            let rule = query_store.node_store.resolve(*rule_id);
-            let t = query_store.resolve_type(rule_id);
+            let rule = query_store.node_store.resolve(rule_id);
+            let t = query_store.resolve_type(&rule_id);
             if t == Type::NamedNode {
                 res.quantifiers.push(Default::default());
                 let ty = rule.child(&1).unwrap();
@@ -101,7 +101,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 let l = ty.try_get_label();
                 let l = query_store.label_store.resolve(&l.unwrap());
                 let l = C::conv(l).expect("the node type does not exist");
-                let patt = Self::process_named_node(query_store, *rule_id, &mut res).into();
+                let patt = Self::process_named_node(query_store, rule_id, &mut res).into();
                 res.root_types.push(l);
                 res.patterns.push(patt);
             } else if t == Type::AnonymousNode {
@@ -114,17 +114,17 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 let cs = rule.children().unwrap();
                 let mut capture = vec![];
                 for id in cs.iter_children() {
-                    let i = query_store.node_store.resolve(*id);
-                    let i_ty = query_store.resolve_type(id);
+                    let i = query_store.node_store.resolve(id);
+                    let i_ty = query_store.resolve_type(&id);
                     if i_ty == Type::Capture {
                         let mut cs = i.children().unwrap().iter_children();
                         let n_id = cs.next().unwrap();
-                        let n = query_store.node_store.resolve(*n_id);
+                        let n = query_store.node_store.resolve(n_id);
                         let t = query_store.resolve_type(&n_id);
                         assert_eq!(t, Type::At);
                         let name = cs.next().unwrap();
-                        let ty = query_store.node_store.resolve(*name);
-                        assert_eq!(query_store.resolve_type(name), Type::Identifier);
+                        let ty = query_store.node_store.resolve(name);
+                        assert_eq!(query_store.resolve_type(&name), Type::Identifier);
                         let name = ty.try_get_label().unwrap();
                         let name = query_store.label_store.resolve(&name);
                         dbg!(name);
@@ -155,7 +155,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                         let l = ty.try_get_label();
                         let l = query_store.label_store.resolve(&l.unwrap());
                         let l = C::conv(l).expect("the node type does not exist");
-                        let patt = Self::process_named_node(query_store, *id, &mut res);
+                        let patt = Self::process_named_node(query_store, id, &mut res);
                         res.root_types.push(l);
                         patterns.push(patt);
                     } else {
@@ -184,7 +184,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     .pop()
                     .expect("a predicate should be preceded by a pattern");
 
-                let predicate = Self::preprocess_predicate(query_store, *rule_id);
+                let predicate = Self::preprocess_predicate(query_store, rule_id);
                 let predicate = predicate.resolve_name(&res.captures);
                 dbg!(&predicate);
                 let predicated = Pattern::Predicated {
@@ -238,17 +238,17 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 .unwrap();
             let t = rule.get_type();
             if t == Type::NamedNode {
-                patterns.push(Self::process_named_node(query_store, **rule_id, preparing).into())
+                patterns.push(Self::process_named_node(query_store, *rule_id, preparing).into())
             } else if t == Type::Spaces {
             } else if t == Type::RParen {
             } else if t == Type::AnonymousNode {
                 patterns
-                    .push(Self::process_anonymous_node(query_store, **rule_id, preparing).into())
+                    .push(Self::process_anonymous_node(query_store, *rule_id, preparing).into())
             } else if t == Type::Capture {
                 break;
             } else if t == Type::Predicate {
                 let prev = patterns.pop().expect("predicate must be preceded by node");
-                let predicate = Self::preprocess_predicate(query_store, **rule_id);
+                let predicate = Self::preprocess_predicate(query_store, *rule_id);
                 let predicate = predicate.resolve_name(&preparing.captures);
                 dbg!(&predicate);
                 patterns.push(Pattern::Predicated {
@@ -259,7 +259,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 break;
             } else if t == Type::FieldDefinition {
                 patterns
-                    .push(Self::process_field_definition(query_store, **rule_id, preparing).into())
+                    .push(Self::process_field_definition(query_store, *rule_id, preparing).into())
             } else if t == Type::Dot {
                 patterns.push(Pattern::Dot);
             } else if t == Type::NegatedField {
@@ -330,14 +330,14 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 let mut cs = n.children().unwrap().iter_children();
                 let n = query_store
                     .node_store
-                    .try_resolve_typed3::<TsQuery>(cs.next().unwrap())
+                    .try_resolve_typed3::<TsQuery>(&cs.next().unwrap())
                     .unwrap();
                 let t = n.get_type();
                 assert_eq!(t, Type::At);
                 let name = cs.next().unwrap();
                 let ty = query_store
                     .node_store
-                    .try_resolve_typed3::<TsQuery>(name)
+                    .try_resolve_typed3::<TsQuery>(&name)
                     .unwrap();
                 assert_eq!(ty.get_type(), Type::Identifier);
                 let name = ty.try_get_label().unwrap();
@@ -410,7 +410,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             };
             let n = query_store
                 .node_store
-                .try_resolve_typed3::<TsQuery>(rule_id)
+                .try_resolve_typed3::<TsQuery>(&rule_id)
                 .unwrap();
             let t = n.get_type();
             if t == Type::Capture {
@@ -454,15 +454,15 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             let Some(rule_id) = cs.next() else { panic!() };
             let rule = query_store
                 .node_store
-                .try_resolve_typed3::<TsQuery>(rule_id)
+                .try_resolve_typed3::<TsQuery>(&rule_id)
                 .unwrap();
             let t = rule.get_type();
             if t == Type::NamedNode {
                 assert!(cs.next().is_none());
-                break Self::process_named_node(query_store, *rule_id, preparing).into();
+                break Self::process_named_node(query_store, rule_id, preparing).into();
             } else if t == Type::Spaces {
             } else if t == Type::AnonymousNode {
-                break Self::process_anonymous_node(query_store, *rule_id, preparing).into();
+                break Self::process_anonymous_node(query_store, rule_id, preparing).into();
             } else {
                 todo!("{}", t)
             }
@@ -471,7 +471,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             let Some(rule_id) = cs.next() else { break };
             let rule = query_store
                 .node_store
-                .try_resolve_typed3::<TsQuery>(rule_id)
+                .try_resolve_typed3::<TsQuery>(&rule_id)
                 .unwrap();
             let t = rule.get_type();
             if t == Type::Spaces {
@@ -557,14 +557,14 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     let mut cs = rule.children().unwrap().iter_children();
                     let n = query_store
                         .node_store
-                        .try_resolve_typed3::<TsQuery>(cs.next().unwrap())
+                        .try_resolve_typed3::<TsQuery>(&cs.next().unwrap())
                         .unwrap();
                     let t = n.get_type();
                     assert_eq!(t, Type::At);
                     let name = cs.next().unwrap();
                     let ty = query_store
                         .node_store
-                        .try_resolve_typed3::<TsQuery>(name)
+                        .try_resolve_typed3::<TsQuery>(&name)
                         .unwrap();
                     assert_eq!(ty.get_type(), Type::Identifier);
                     let name = ty.try_get_label().unwrap();
@@ -673,7 +673,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                         let left = cs.next().unwrap();
                         let left = query_store
                             .node_store
-                            .try_resolve_typed3::<TsQuery>(left)
+                            .try_resolve_typed3::<TsQuery>(&left)
                             .unwrap();
                         let left = match left.get_type() {
                             Type::Capture => preprocess_capture_pred_arg(left, query_store),
@@ -683,7 +683,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                             let center = cs.next().unwrap();
                             let center = query_store
                                 .node_store
-                                .try_resolve_typed3::<TsQuery>(center)
+                                .try_resolve_typed3::<TsQuery>(&center)
                                 .unwrap();
                             let t = center.get_type();
                             assert_eq!(t, Type::Spaces);
@@ -691,7 +691,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                         let right = cs.next().unwrap();
                         let right = query_store
                             .node_store
-                            .try_resolve_typed3::<TsQuery>(right)
+                            .try_resolve_typed3::<TsQuery>(&right)
                             .unwrap();
                         return match right.get_type() {
                             Type::Capture => {

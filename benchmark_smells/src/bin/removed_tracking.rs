@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use hyperast::{
     position::{self, compute_position_with_no_spaces, position_accessors::WithPreOrderOffsets},
     types::{
-        Children, DecompressedSubtree as _, HyperAST as _, HyperType, IterableChildren, LabelStore,
+        Children, DecompressedSubtree as _, HyperAST as _, HyperType, LabelStore,
         Labeled, NodeStore, TypedNodeStore, WithChildren,
     },
     utils::memusage_linux,
@@ -245,7 +245,7 @@ fn removed_tracking(
                                                         let n = &stores.node_store.resolve(*child);
                                                         line_offset += n.line_count();
                                                         use hyperast::types::TypeStore;
-                                                        if !stores.resolve_type(child).is_spaces() {
+                                                        if !stores.resolve_type(&child).is_spaces() {
                                                             curr_off += 1;
                                                         }
                                                     }

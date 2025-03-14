@@ -29,7 +29,8 @@ where
     More: tree_gen::Prepro<Type> + tree_gen::PreproTSG
         + tree_gen::More<
             TS = TStore,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
+            T = hyperast::store::nodes::legion::TMarker<NodeIdentifier>,
+            // T = hyperast::store::nodes::legion::HashedNodeRef<'static, NodeIdentifier>,
             Acc = java_tree_gen::Acc,
         >,
 {

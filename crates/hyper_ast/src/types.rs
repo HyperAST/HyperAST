@@ -2,8 +2,10 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
+use std::ops::Deref;
 use std::str::FromStr;
 
+use lending::NodeStore as _;
 use num::ToPrimitive;
 use strum_macros::AsRefStr;
 use strum_macros::Display;
@@ -13,7 +15,7 @@ use strum_macros::EnumString;
 
 use crate::PrimInt;
 
-pub trait HashKind {
+pub trait HashKind: Copy + std::ops::Deref {
     fn structural() -> Self;
     fn label() -> Self;
 }
@@ -617,6 +619,24 @@ pub trait Stored: Node {
     type TreeId: NodeId;
 }
 
+pub trait MarkedT: Stored
+where
+    // Self: for<'t> crate::types::NLending<
+    //     't,
+    //     Self::TreeId,
+    //     N = <Self as crate::types::AstLending<'t>>::RT,
+    // >,
+    Self: for<'t> crate::types::AstLending<
+        't,
+        IdN = Self::TreeId,
+        Idx = <Self as MarkedT>::ChildIdx,
+        Label = <Self as MarkedT>::Label,
+    >,
+{
+    type Label;
+    type ChildIdx;
+}
+
 pub trait Typed {
     type Type: HyperType + Eq + Copy + Send + Sync; // todo try remove Copy
     fn get_type(&self) -> Self::Type; // TODO add TypeTrait bound on Self::Type to forbid AnyType from being given
@@ -625,29 +645,48 @@ pub trait Typed {
     }
 }
 
-pub trait WithChildren: Node + Stored {
+pub trait CLending<'a, Idx, IdN, __ImplBound = &'a Self> {
+    type Children: Children<Idx, IdN>;
+}
+
+pub type LendC<'n, S, Idx, IdN> = <S as CLending<'n, Idx, IdN>>::Children;
+
+pub trait Childrn<T>: Iterator<Item = T> {
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
+    fn iter_children(&self) -> Self;
+}
+pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + Childrn<T> {
+    fn child_count(&self) -> IdX;
+    fn get(&self, i: IdX) -> Option<&T>;
+    fn rev(&self, i: IdX) -> Option<&T>;
+    fn after(&self, i: IdX) -> Self;
+    fn before(&self, i: IdX) -> Self;
+    fn between(&self, start: IdX, end: IdX) -> Self;
+    fn inclusive(&self, start: IdX, end: IdX) -> Self;
+}
+
+pub trait WithChildren:
+    Node + Stored + for<'a> CLending<'a, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>
+{
     type ChildIdx: PrimInt;
-    type Children<'a>: Children<Self::ChildIdx, <Self::TreeId as NodeId>::IdN> + ?Sized
-    where
-        Self: 'a;
 
     fn child_count(&self) -> Self::ChildIdx {
-        self.children().map_or(num::zero(), |cs| {
-            num::cast(cs.iter_children().count()).unwrap()
-        })
+        self.children()
+            .map_or(num::zero(), |cs| num::cast(cs.count()).unwrap())
     }
     fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
-        let cs = self.children()?;
-        cs.iter_children().nth(idx.to_usize().unwrap()).cloned()
+        let mut cs = self.children()?;
+        cs.nth(idx.to_usize().unwrap())
     }
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
         let cs = self.children()?;
-        let cs: Vec<_> = cs.iter_children().collect();
+        let cs: Vec<_> = cs.collect();
         cs.get(cs.len() - idx.to_usize().unwrap())
             .cloned()
-            .map(|x| x.clone())
+            .map(|x| x)
     }
-    fn children(&self) -> Option<&Self::Children<'_>>;
+    fn children(&self) -> Option<LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>>;
 }
 
 pub trait WithRoles: WithChildren {
@@ -661,35 +700,16 @@ pub trait WithPrecompQueries {
     fn wont_match_given_precomputed_queries(&self, needed: u16) -> bool;
 }
 
-pub trait WithChildrenSameLang: WithChildren {
-    type TChildren<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
-    where
-        Self: 'a;
+// pub trait WithChildrenSameLang: WithChildren {
+//     type TChildren<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
+//     where
+//         Self: 'a;
 
-    fn child_count(&self) -> Self::ChildIdx;
-    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId>;
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId>;
-    fn children(&self) -> Option<&Self::Children<'_>>;
-}
-
-pub trait IterableChildren<T> {
-    type ChildrenIter<'a>: Iterator<Item = &'a T> + Clone
-    where
-        T: 'a,
-        Self: 'a;
-    fn iter_children(&self) -> Self::ChildrenIter<'_>;
-    fn is_empty(&self) -> bool;
-}
-
-pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + IterableChildren<T> {
-    fn child_count(&self) -> IdX;
-    fn get(&self, i: IdX) -> Option<&T>;
-    fn rev(&self, i: IdX) -> Option<&T>;
-    fn after(&self, i: IdX) -> &Self;
-    fn before(&self, i: IdX) -> &Self;
-    fn between(&self, start: IdX, end: IdX) -> &Self;
-    fn inclusive(&self, start: IdX, end: IdX) -> &Self;
-}
+//     fn child_count(&self) -> Self::ChildIdx;
+//     fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId>;
+//     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId>;
+//     fn children(&self) -> Option<LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>>;
+// }
 
 // pub trait AsSlice<'a, IdX, T: 'a> {
 //     type Slice: std::ops::Index<IdX, Output = [T]> + ?Sized;
@@ -697,79 +717,235 @@ pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + IterableChildren<
 //     fn as_slice(&self) -> &Self::Slice;
 // }
 
-impl<T> IterableChildren<T> for [T] {
-    type ChildrenIter<'a>
-        = core::slice::Iter<'a, T>
-    where
-        T: 'a;
+// impl<T> IterableChildren<T> for [T] {
+//     type ChildrenIter<'a>
+//         = core::slice::Iter<'a, T>
+//     where
+//         T: 'a;
 
-    fn iter_children(&self) -> Self::ChildrenIter<'_> {
-        <[T]>::iter(&self)
-    }
+//     fn iter_children(&self) -> Self::ChildrenIter<'_> {
+//         <[T]>::iter(&self)
+//     }
 
-    fn is_empty(&self) -> bool {
-        <[T]>::is_empty(&self)
-    }
-}
+//     fn is_empty(&self) -> bool {
+//         <[T]>::is_empty(&self)
+//     }
+// }
 
-impl<IdX: num::NumCast, T> Children<IdX, T> for [T]
-where
-    IdX: std::slice::SliceIndex<[T], Output = T>,
-{
-    fn child_count(&self) -> IdX {
-        IdX::from(<[T]>::len(&self)).unwrap()
-        // num::cast::<_, IdX>(<[T]>::len(&self)).unwrap()
-    }
+// impl<IdX: num::NumCast, T> Children<IdX, T> for [T]
+// where
+//     IdX: std::slice::SliceIndex<[T], Output = T>,
+// {
+//     fn child_count(&self) -> IdX {
+//         IdX::from(<[T]>::len(&self)).unwrap()
+//         // num::cast::<_, IdX>(<[T]>::len(&self)).unwrap()
+//     }
 
-    fn get(&self, i: IdX) -> Option<&T> {
-        self.get(i.to_usize()?)
-    }
+//     fn get(&self, i: IdX) -> Option<&T> {
+//         self.get(i.to_usize()?)
+//     }
 
-    fn rev(&self, idx: IdX) -> Option<&T> {
-        let c = <[T]>::len(&self);
-        let c = c.checked_sub(idx.to_usize()?.checked_add(1)?)?;
-        self.get(c.to_usize()?)
-    }
+//     fn rev(&self, idx: IdX) -> Option<&T> {
+//         let c = <[T]>::len(&self);
+//         let c = c.checked_sub(idx.to_usize()?.checked_add(1)?)?;
+//         self.get(c.to_usize()?)
+//     }
 
-    fn after(&self, i: IdX) -> &Self {
-        (&self[i.to_usize().unwrap()..]).into()
-    }
+//     fn after(&self, i: IdX) -> &Self {
+//         (&self[i.to_usize().unwrap()..]).into()
+//     }
 
-    fn before(&self, i: IdX) -> &Self {
-        (&self[..i.to_usize().unwrap()]).into()
-    }
+//     fn before(&self, i: IdX) -> &Self {
+//         (&self[..i.to_usize().unwrap()]).into()
+//     }
 
-    fn between(&self, start: IdX, end: IdX) -> &Self {
-        (&self[start.to_usize().unwrap()..end.to_usize().unwrap()]).into()
-    }
+//     fn between(&self, start: IdX, end: IdX) -> &Self {
+//         (&self[start.to_usize().unwrap()..end.to_usize().unwrap()]).into()
+//     }
 
-    fn inclusive(&self, start: IdX, end: IdX) -> &Self {
-        (&self[start.to_usize().unwrap()..=end.to_usize().unwrap()]).into()
-    }
-}
+//     fn inclusive(&self, start: IdX, end: IdX) -> &Self {
+//         (&self[start.to_usize().unwrap()..=end.to_usize().unwrap()]).into()
+//     }
+// }
 
-#[derive(ref_cast::RefCast)]
-#[repr(transparent)]
-pub struct MySlice<T>(pub [T]);
+// #[derive(ref_cast::RefCast)]
+// #[repr(transparent)]
+// pub struct MySlice<T>(pub [T]);
 
-impl<'a, T> From<&'a [T]> for &'a MySlice<T> {
+// impl<'a, T> From<&'a [T]> for &'a MySlice<T> {
+//     fn from(value: &'a [T]) -> Self {
+//         use ref_cast::RefCast;
+//         // NOTE it makes compile time layout assertions
+//         MySlice::ref_cast(value)
+//     }
+// }
+
+// impl<'a, T, const N: usize> From<&'a [T; N]> for &'a MySlice<T> {
+//     fn from(value: &'a [T; N]) -> Self {
+//         use ref_cast::RefCast;
+//         let value: &'a [T] = value;
+//         // NOTE it makes compile time layout assertions
+//         MySlice::ref_cast(value)
+//     }
+// }
+
+// impl<T> std::ops::Index<u16> for MySlice<T> {
+//     type Output = T;
+
+//     fn index(&self, index: u16) -> &Self::Output {
+//         &self.0[index as usize]
+//     }
+// }
+
+// impl<T> std::ops::Index<u8> for MySlice<T> {
+//     type Output = T;
+
+//     fn index(&self, index: u8) -> &Self::Output {
+//         &self.0[index as usize]
+//     }
+// }
+
+// impl<T> std::ops::Index<usize> for MySlice<T> {
+//     type Output = T;
+
+//     fn index(&self, index: usize) -> &Self::Output {
+//         &self.0[index]
+//     }
+// }
+
+// impl<T: Clone> From<&MySlice<T>> for Vec<T> {
+//     fn from(value: &MySlice<T>) -> Self {
+//         value.0.to_vec()
+//     }
+// }
+
+// impl<T: Debug> Debug for MySlice<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         Debug::fmt(&self.0, f)
+//     }
+// }
+
+// impl<T: Debug> Default for &MySlice<T> {
+//     fn default() -> Self {
+//         let r: &[T] = &[];
+//         r.into()
+//     }
+// }
+
+// impl<T> IterableChildren<T> for MySlice<T> {
+//     type ChildrenIter<'a>
+//         = core::slice::Iter<'a, T>
+//     where
+//         T: 'a;
+
+//     fn iter_children(&self) -> Self::ChildrenIter<'_> {
+//         <[T]>::iter(&self.0)
+//     }
+
+//     fn is_empty(&self) -> bool {
+//         <[T]>::is_empty(&self.0)
+//     }
+// }
+
+// impl<T> Children<u16, T> for MySlice<T> {
+//     fn child_count(&self) -> u16 {
+//         <[T]>::len(&self.0).to_u16().unwrap()
+//     }
+
+//     fn get(&self, i: u16) -> Option<&T> {
+//         self.0.get(usize::from(i))
+//     }
+
+//     fn rev(&self, idx: u16) -> Option<&T> {
+//         let c: u16 = self.child_count();
+//         let c = c.checked_sub(idx.checked_add(1)?)?;
+//         self.get(c)
+//     }
+
+//     fn after(&self, i: u16) -> &Self {
+//         (&self.0[i.into()..]).into()
+//     }
+
+//     fn before(&self, i: u16) -> &Self {
+//         (&self.0[..i.into()]).into()
+//     }
+
+//     fn between(&self, start: u16, end: u16) -> &Self {
+//         (&self.0[start.into()..end.into()]).into()
+//     }
+
+//     fn inclusive(&self, start: u16, end: u16) -> &Self {
+//         (&self.0[start.into()..=end.into()]).into()
+//     }
+
+//     fn is_empty(&self) -> bool {
+//         <[T]>::is_empty(&self.0)
+//     }
+// }
+
+// impl<T> Children<u8, T> for MySlice<T> {
+//     fn child_count(&self) -> u8 {
+//         <[T]>::len(&self.0).to_u8().unwrap()
+//     }
+
+//     fn get(&self, i: u8) -> Option<&T> {
+//         self.0.get(usize::from(i))
+//     }
+
+//     fn rev(&self, idx: u8) -> Option<&T> {
+//         let c: u8 = self.child_count();
+//         let c = c.checked_sub(idx.checked_add(1)?)?;
+//         self.get(c)
+//     }
+
+//     fn after(&self, i: u8) -> &Self {
+//         (&self.0[i.into()..]).into()
+//     }
+
+//     fn before(&self, i: u8) -> &Self {
+//         (&self.0[..i.into()]).into()
+//     }
+
+//     fn between(&self, start: u8, end: u8) -> &Self {
+//         (&self.0[start.into()..end.into()]).into()
+//     }
+
+//     fn inclusive(&self, start: u8, end: u8) -> &Self {
+//         (&self.0[start.into()..=end.into()]).into()
+//     }
+
+//     fn is_empty(&self) -> bool {
+//         <[T]>::is_empty(&self.0)
+//     }
+// }
+
+pub struct ChildrenSlice<'a, T>(pub &'a [T]);
+
+impl<'a, T> From<&'a [T]> for ChildrenSlice<'a, T> {
     fn from(value: &'a [T]) -> Self {
-        use ref_cast::RefCast;
-        // NOTE it makes compile time layout assertions
-        MySlice::ref_cast(value)
+        Self(value)
     }
 }
 
-impl<'a, T, const N: usize> From<&'a [T; N]> for &'a MySlice<T> {
+impl<'a, T> Default for ChildrenSlice<'a, T> {
+    fn default() -> Self {
+        Self(&[])
+    }
+}
+
+impl<'a, T, const N: usize> From<&'a [T; N]> for ChildrenSlice<'a, T> {
     fn from(value: &'a [T; N]) -> Self {
-        use ref_cast::RefCast;
-        let value: &'a [T] = value;
-        // NOTE it makes compile time layout assertions
-        MySlice::ref_cast(value)
+        Self(value)
     }
 }
 
-impl<T> std::ops::Index<u16> for MySlice<T> {
+impl<T: Clone> From<ChildrenSlice<'_, T>> for Vec<T> {
+    fn from(value: ChildrenSlice<'_, T>) -> Self {
+        value.0.to_vec()
+    }
+}
+
+impl<T> std::ops::Index<u16> for ChildrenSlice<'_, T> {
     type Output = T;
 
     fn index(&self, index: u16) -> &Self::Output {
@@ -777,7 +953,7 @@ impl<T> std::ops::Index<u16> for MySlice<T> {
     }
 }
 
-impl<T> std::ops::Index<u8> for MySlice<T> {
+impl<T> std::ops::Index<u8> for ChildrenSlice<'_, T> {
     type Output = T;
 
     fn index(&self, index: u8) -> &Self::Output {
@@ -785,7 +961,7 @@ impl<T> std::ops::Index<u8> for MySlice<T> {
     }
 }
 
-impl<T> std::ops::Index<usize> for MySlice<T> {
+impl<T> std::ops::Index<usize> for ChildrenSlice<'_, T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -793,43 +969,32 @@ impl<T> std::ops::Index<usize> for MySlice<T> {
     }
 }
 
-impl<T: Clone> From<&MySlice<T>> for Vec<T> {
-    fn from(value: &MySlice<T>) -> Self {
-        value.0.to_vec()
-    }
-}
-
-impl<T: Debug> Debug for MySlice<T> {
+impl<T: Debug> Debug for ChildrenSlice<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.0, f)
     }
 }
 
-impl<T: Debug> Default for &MySlice<T> {
-    fn default() -> Self {
-        let r: &[T] = &[];
-        r.into()
+impl<'a, T: Clone> Iterator for ChildrenSlice<'a, T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        let r = self.0.first()?.clone();
+        self.0 = &self.0[1..];
+        Some(r.clone())
     }
 }
 
-impl<T> IterableChildren<T> for MySlice<T> {
-    type ChildrenIter<'a>
-        = core::slice::Iter<'a, T>
-    where
-        T: 'a;
-
-    fn iter_children(&self) -> Self::ChildrenIter<'_> {
-        <[T]>::iter(&self.0)
-    }
-
-    fn is_empty(&self) -> bool {
-        <[T]>::is_empty(&self.0)
+impl<'a, T: Clone> DoubleEndedIterator for ChildrenSlice<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let r = self.0.last()?.clone();
+        self.0 = &self.0[..self.0.len() - 1];
+        Some(r.clone())
     }
 }
 
-impl<T> Children<u16, T> for MySlice<T> {
+impl<'a, T: Clone> Children<u16, T> for ChildrenSlice<'a, T> {
     fn child_count(&self) -> u16 {
-        <[T]>::len(&self.0).to_u16().unwrap()
+        <[T]>::len(self.0).to_u16().unwrap()
     }
 
     fn get(&self, i: u16) -> Option<&T> {
@@ -842,26 +1007,45 @@ impl<T> Children<u16, T> for MySlice<T> {
         self.get(c)
     }
 
-    fn after(&self, i: u16) -> &Self {
-        (&self.0[i.into()..]).into()
+    fn after(&self, i: u16) -> Self {
+        Self(&self.0[i.into()..])
     }
 
-    fn before(&self, i: u16) -> &Self {
-        (&self.0[..i.into()]).into()
+    fn before(&self, i: u16) -> Self {
+        Self(&self.0[..i.into()])
     }
 
-    fn between(&self, start: u16, end: u16) -> &Self {
-        (&self.0[start.into()..end.into()]).into()
+    fn between(&self, start: u16, end: u16) -> Self {
+        Self(&self.0[start.into()..end.into()])
     }
 
-    fn inclusive(&self, start: u16, end: u16) -> &Self {
-        (&self.0[start.into()..=end.into()]).into()
+    fn inclusive(&self, start: u16, end: u16) -> Self {
+        Self(&self.0[start.into()..=end.into()])
     }
 }
 
-impl<T> Children<u8, T> for MySlice<T> {
+impl<'a, T> ChildrenSlice<'a, T> {
+    fn is_empty(&self) -> bool {
+        <[T]>::is_empty(self.0)
+    }
+}
+
+impl<'a, T: Clone> Childrn<T> for ChildrenSlice<'a, T> {
+    fn len(&self) -> usize {
+        <[T]>::len(self.0)
+    }
+    fn is_empty(&self) -> bool {
+        <[T]>::is_empty(self.0)
+    }
+
+    fn iter_children(&self) -> Self {
+        Self(&self.0[..])
+    }
+}
+
+impl<'a, T: Clone> Children<u8, T> for ChildrenSlice<'a, T> {
     fn child_count(&self) -> u8 {
-        <[T]>::len(&self.0).to_u8().unwrap()
+        <[T]>::len(self.0).to_u8().unwrap()
     }
 
     fn get(&self, i: u8) -> Option<&T> {
@@ -874,20 +1058,20 @@ impl<T> Children<u8, T> for MySlice<T> {
         self.get(c)
     }
 
-    fn after(&self, i: u8) -> &Self {
-        (&self.0[i.into()..]).into()
+    fn after(&self, i: u8) -> Self {
+        Self(&self.0[i.into()..])
     }
 
-    fn before(&self, i: u8) -> &Self {
-        (&self.0[..i.into()]).into()
+    fn before(&self, i: u8) -> Self {
+        Self(&self.0[..i.into()])
     }
 
-    fn between(&self, start: u8, end: u8) -> &Self {
-        (&self.0[start.into()..end.into()]).into()
+    fn between(&self, start: u8, end: u8) -> Self {
+        Self(&self.0[start.into()..end.into()])
     }
 
-    fn inclusive(&self, start: u8, end: u8) -> &Self {
-        (&self.0[start.into()..=end.into()]).into()
+    fn inclusive(&self, start: u8, end: u8) -> Self {
+        Self(&self.0[start.into()..=end.into()])
     }
 }
 
@@ -927,7 +1111,7 @@ pub trait WithSerialization {
 pub trait WithHashs {
     type HK: HashKind;
     type HP: PrimInt + PartialEq + Eq;
-    fn hash(&self, kind: &Self::HK) -> Self::HP;
+    fn hash<'a>(&'a self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP;
 }
 
 pub trait Labeled {
@@ -959,22 +1143,37 @@ pub trait NStore {
     type Idx: PrimInt;
 }
 
-pub trait NodStore<IdN> {
-    type R<'a>;
-}
+pub mod assoc {
 
-pub trait NodeStore<IdN>: NodStore<IdN> {
-    fn resolve(&self, id: &IdN) -> Self::R<'_>;
+    pub trait NodStore<IdN> {
+        type R<'a>;
+    }
+
+    pub trait NodeStore<IdN>: NodStore<IdN> {
+        fn resolve(&self, id: &IdN) -> Self::R<'_>;
+    }
 }
 
 pub mod lending {
     pub trait NLending<'a, IdN, __ImplBound = &'a Self> {
-        type N: 'a;
+        type N: 'a + crate::types::Stored<TreeId = IdN>;
     }
-    pub trait NodeStore<IdN>: for<'a> NLending<'a, IdN> {
-        fn resolve(&self, id: &IdN) -> <Self as NLending<'_, IdN>>::N;
+
+    pub type LendN<'n, S, IdN> = <S as NLending<'n, IdN>>::N;
+
+    pub trait NodeStore<IdN>: for<'a> NLending<'a, IdN, N = LendN<'a, Self::NMarker, IdN>> {
+        fn resolve(&self, id: &IdN) -> LendN<'_, Self, IdN>;
+        fn scoped<R>(&self, id: &IdN, f: impl Fn(&LendN<'_, Self, IdN>) -> R) -> R {
+            f(&self.resolve(id))
+        }
+        fn scoped_mut<R>(&self, id: &IdN, mut f: impl FnMut(&LendN<'_, Self, IdN>) -> R) -> R {
+            f(&self.resolve(id))
+        }
+        type NMarker: crate::types::Stored<TreeId = IdN> + for<'a> NLending<'a, IdN>;
     }
 }
+
+pub use lending::*;
 
 pub mod inner_ref {
     pub trait NodeStore<IdN> {
@@ -998,13 +1197,15 @@ pub trait NodeStoreLife<'store, IdN> {
     fn resolve(&'store self, id: &IdN) -> Self::R<'store>;
 }
 
-pub trait NodeId: Eq + Clone {
-    type IdN: Eq + NodeId;
+pub trait NodeId: Eq + Clone + 'static {
+    type IdN: Eq + AAAA;
     fn as_id(&self) -> &Self::IdN;
     // fn as_ty(&self) -> &Self::Ty;
     unsafe fn from_id(id: Self::IdN) -> Self;
     unsafe fn from_ref_id(id: &Self::IdN) -> &Self;
 }
+
+impl AAAA for u16 {}
 
 impl NodeId for u16 {
     type IdN = u16;
@@ -1019,6 +1220,8 @@ impl NodeId for u16 {
         id
     }
 }
+
+pub trait AAAA: NodeId<IdN = Self> {}
 
 pub trait TypedNodeId: NodeId {
     type Ty: HyperType + Hash + Copy + Eq + Send + Sync;
@@ -1046,48 +1249,45 @@ pub trait TypedNodeStoreLean<IdN: TypedNodeId> {
     fn resolve(&self, id: &IdN) -> Self::R;
 }
 
-pub trait DecompressedSubtree<T: Stored> {
+pub trait DecompressedSubtree<T: Stored>
+where
+    T: for<'a> NLending<'a, T::TreeId>,
+{
     type Out: DecompressedSubtree<T>;
     fn decompress<S>(store: &S, id: &T::TreeId) -> Self::Out
     where
-        S: inner_ref::NodeStore<T::TreeId, Ref = T>;
-    fn decompress2<'a, HAST>(store: &HAST, id: &T::TreeId) -> Self::Out
+        S: lending::NodeStore<T::TreeId, NMarker = T>;
+    fn decompress2<HAST>(store: &HAST, id: &T::TreeId) -> Self::Out
     where
-        HAST: HyperAST<RT = T, IdN = T::TreeId>,
-    {
-        todo!()
-    }
-    fn decompress3<S>(store: &S, id: &T::TreeId) -> Self::Out
-    where
-        S: lending::NodeStore<T::TreeId, N = T>
-    {
-        todo!()
-    }
+        T: for<'a> AstLending<'a>,
+        HAST: HyperAST<IdN = T::TreeId, TM = T>;
 }
 
-pub trait DecompressibleNodeStore<IdN>: NodeStore<IdN> {
-    fn decompress<'a, D: DecompressedSubtree<Self::R<'a>>>(&self, id: &IdN) -> (&Self, D::Out)
+pub trait DecompressibleNodeStore<IdN: NodeId>: NodeStore<IdN> {
+    fn decompress<D>(&self, id: &IdN) -> (&Self, D::Out)
     where
         Self: Sized,
-        Self::R<'a>: Stored<TreeId = IdN>,
+        D: DecompressedSubtree<Self::NMarker>
+            + for<'t> lending::NLending<'t, IdN, N = <Self as lending::NLending<'t, IdN>>::N>,
     {
         todo!()
         // (self, D::decompress(self, id))
     }
 
-    fn decompress_pair<'a, 'b, D1, D2>(&self, id1: &IdN, id2: &IdN) -> (&Self, (D1::Out, D2::Out))
+    fn decompress_pair<D1, D2>(&self, id1: &IdN, id2: &IdN) -> (&Self, (D1::Out, D2::Out))
     where
         Self: Sized,
-        Self::R<'a>: Stored<TreeId = IdN>,
-        D1: DecompressedSubtree<Self::R<'a>>,
-        D2: DecompressedSubtree<Self::R<'a>>,
+        D1: DecompressedSubtree<Self::NMarker>
+            + for<'t> lending::NLending<'t, IdN, N = <Self as lending::NLending<'t, IdN>>::N>,
+        D2: DecompressedSubtree<Self::NMarker>
+            + for<'t> lending::NLending<'t, IdN, N = <Self as lending::NLending<'t, IdN>>::N>,
     {
         todo!()
         // (self, (D1::decompress(self, id1), D2::decompress(self, id2)))
     }
 }
 
-impl<IdN, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
+impl<IdN: NodeId, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
 
 pub trait NodeStoreMut<T: Stored> {
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
@@ -1102,7 +1302,7 @@ pub trait NodeStoreExt<T: TypedTree> {
     ) -> T::TreeId;
 }
 
-pub trait VersionedNodeStore<'a, IdN>: NodeStore<IdN> {
+pub trait VersionedNodeStore<'a, IdN: NodeId>: NodeStore<IdN> {
     fn resolve_root(&self, version: (u8, u8, u8), node: IdN);
 }
 
@@ -1464,11 +1664,21 @@ pub trait RoleStore: TypeStore {
     fn intern_role(lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF;
 }
 
-pub trait HyperAST: HyperASTShared {
-    type NS: for<'a> NodeStore<Self::IdN, R<'a> = Self::T<'a>>
-        + inner_ref::NodeStore<Self::IdN, Ref = Self::RT>
-        // + lending::NodeStore<Self::IdN, N = Self::RT>
-        ;
+// trait HyperAST2: HyperAST<TM = MT> {
+//     type MT: MarkedT;
+// }
+
+pub trait HyperAST:
+    for<'a> AstLending<'a, IdN = <Self::TM as HyperAST>::IdN, RT = <Self::TM as AstLending<'a>>::RT>
+{
+    // type TM: Stored<TreeId = Self::IdN>
+    //     + for<'a> AstLending<'a>
+    //     + HyperASTShared<IdN = Self::IdN, Idx = Self::Idx, Label = Self::Label>
+    //     + for<'a> lending::NLending<'a, Self::IdN, N = <Self::TM as AstLending<'a>>::RT>;
+    type TM: Stored + for<'a> AstLending<'a> + HyperASTShared<Idx = Self::Idx, Label = Self::Label>;
+    type NS: lending::NodeStore<<Self::TM as HyperAST>::IdN, NMarker = Self::TM>;
+    // type NS: for<'a> lending::NLending<'a, Self::IdN, N = <Self::TM as AstLending<'a>>::RT>
+    //     + lending::NodeStore<Self::IdN>;
     fn node_store(&self) -> &Self::NS;
 
     type LS: LabelStore<str, I = Self::Label>;
@@ -1476,25 +1686,25 @@ pub trait HyperAST: HyperASTShared {
 
     type TS: TypeStore;
 
-    fn decompress<D: DecompressedSubtree<Self::RT, Out = D>>(&self, id: &Self::IdN) -> (&Self, D)
+    fn decompress<D>(&self, id: &Self::IdN) -> (&Self, D)
     where
         Self: Sized,
+        D: DecompressedSubtree<Self::TM, Out = D>, // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>
     {
-        (self, D::decompress(self.node_store(), id))
+        (self, D::decompress2(self, id))
     }
 
     fn decompress_pair<D1, D2>(&self, id1: &Self::IdN, id2: &Self::IdN) -> (&Self, (D1, D2))
     where
         Self: Sized,
-        D1: DecompressedSubtree<Self::RT, Out = D1>,
-        D2: DecompressedSubtree<Self::RT, Out = D2>,
+        D1: DecompressedSubtree<Self::TM, Out = D1>,
+        // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>,
+        D2: DecompressedSubtree<Self::TM, Out = D2>,
+        // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>,
     {
         (
             self,
-            (
-                D1::decompress(self.node_store(), id1),
-                D2::decompress(self.node_store(), id2),
-            ),
+            (D1::decompress2(self, id1), D2::decompress2(self, id2)),
         )
     }
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
@@ -1502,10 +1712,10 @@ pub trait HyperAST: HyperASTShared {
         // // SAFETY: ns is released at the end of the function
         // let ns: &Self::NS = unsafe { std::mem::transmute(_ns) };
         let ns = _ns;
-        let n = ns.resolve(id);
+        let n: <Self as AstLending<'_>>::RT = ns.resolve(id);
         Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     }
-    fn resolve<'a>(&self, id: &'a Self::IdN) -> Self::T<'_> {
+    fn resolve<'a>(&self, id: &'a Self::IdN) -> <Self as AstLending<'_>>::RT {
         let _ns = self.node_store();
         // // SAFETY: ns is released at the end of the function
         // let ns: &Self::NS = unsafe { std::mem::transmute(_ns) };
@@ -1529,11 +1739,14 @@ pub trait HyperAST: HyperASTShared {
     //     let n = ns.resolve(id);
     //     Self::TS::decompress_ttype(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     // }
-    fn resolve_lang(&self, n: &Self::T<'_>) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
+    fn resolve_lang(
+        &self,
+        n: &<Self as AstLending<'_>>::RT,
+    ) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
         Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
             .get_lang()
     }
-    fn type_eq(&self, n: &Self::T<'_>, m: &Self::T<'_>) -> bool {
+    fn type_eq(&self, n: &<Self as AstLending<'_>>::RT, m: &<Self as AstLending<'_>>::RT) -> bool {
         Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
             .generic_eq(
                 Self::TS::decompress_type(m, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
@@ -1545,11 +1758,23 @@ pub trait HyperAST: HyperASTShared {
 pub trait NodeStorage<IdN> {}
 
 pub trait HyperASTShared {
-    type IdN: NodeId<IdN = Self::IdN>;
+    type IdN: NodeId;
     type Idx: PrimInt;
     type Label;
-    type T<'a>: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
-    type RT: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
+}
+
+pub trait AstLending<'a, __ImplBound = &'a Self>:
+    HyperASTShared + NLending<'a, Self::IdN, __ImplBound, N = Self::RT>
+{
+    type RT: 'a + Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
+}
+
+pub type LendT<'t, HAST> = <HAST as AstLending<'t>>::RT;
+
+pub trait TypedLending<'a, Ty: HyperType + Hash + Copy + Eq + Send + Sync, __ImplBound = &'a Self>:
+    AstLending<'a, __ImplBound, RT = Self::TT>
+{
+    type TT: TypedTree<Type = Ty, TreeId = Self::IdN, Label = Self::Label, ChildIdx = Self::Idx>;
 }
 
 // impl<T> HyperASTShared for &T
@@ -1664,15 +1889,22 @@ pub trait HyperASTShared {
 //     // fn typed_node_store(&self) -> Self::TNS<'_>;
 // }
 
-pub trait TypedHyperAST<TIdN: TypedNodeId<IdN = Self::IdN>>: HyperAST {
-    type TT<'t>: TypedTree<
-        Type = TIdN::Ty,
-        TreeId = TIdN::IdN,
-        Label = Self::Label,
-        ChildIdx = <Self as HyperASTShared>::Idx,
-    >;
-    type TNS: for<'t> TypedNodeStore<TIdN, R<'t> = Self::TT<'t>>;
-    fn typed_node_store(&self) -> &Self::TNS;
+pub trait TypedHyperAST<TIdN: TypedNodeId>:
+    HyperAST + for<'a> TypedLending<'a, TIdN::Ty, IdN = TIdN::IdN>
+{
+    // type TT<'t>: TypedTree<
+    //     Type = TIdN::Ty,
+    //     TreeId = TIdN::IdN,
+    //     Label = Self::Label,
+    //     ChildIdx = <Self as HyperASTShared>::Idx,
+    // >;
+    // type TNS: for<'t> TypedNodeStore<TIdN, R<'t> = Self::TT>;
+    // fn typed_node_store(&self) -> &Self::TNS;
+    fn try_typed(&self, id: &Self::IdN) -> Option<TIdN>;
+    fn try_resolve(&self, id: &Self::IdN) -> Option<(Self::TT, TIdN)> {
+        self.try_typed(id).map(|x| (self.resolve(&x), x))
+    }
+    fn resolve(&self, id: &TIdN) -> Self::TT;
 }
 
 pub struct SimpleHyperAST<T, TS, NS, LS> {
@@ -1718,20 +1950,20 @@ impl<T, TS: Default, NS: Default, LS: Default> Default for SimpleHyperAST<T, TS,
     }
 }
 
-impl<T, TS, NS, LS> NodStore<T::TreeId> for SimpleHyperAST<T, TS, NS, LS>
+impl<T, TS, NS, LS> assoc::NodStore<T::TreeId> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    NS: NodStore<T::TreeId>,
+    NS: assoc::NodStore<T::TreeId>,
 {
     type R<'a> = NS::R<'a>;
 }
 
-impl<T, TS, NS, LS> NodeStore<T::TreeId> for SimpleHyperAST<T, TS, NS, LS>
+impl<T, TS, NS, LS> assoc::NodeStore<T::TreeId> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    NS: NodeStore<T::TreeId>,
+    NS: assoc::NodeStore<T::TreeId>,
 {
     fn resolve(&self, id: &T::TreeId) -> Self::R<'_> {
         self.node_store.resolve(id)
@@ -1809,45 +2041,57 @@ pub struct TypeIndex {
     pub ty: TypeInternalSize,
 }
 
-impl<T, TS, NS, LS> HyperAST for SimpleHyperAST<T, TS, NS, LS>
-where
-    T: Tree,
-    T::TreeId: NodeId<IdN = T::TreeId>,
-    TS: TypeStore,
-    NS: for<'s> NodeStore<T::TreeId, R<'s> = T>,
-    NS: inner_ref::NodeStore<T::TreeId, Ref = T>,
-    NS: lending::NodeStore<T::TreeId, N = T>,
-    LS: LabelStore<str, I = T::Label>,
-{
-    type NS = NS;
+// impl<T, TS, NS, LS> HyperAST for SimpleHyperAST<T, TS, NS, LS>
+// where
+//     T: Stored,
+//     T::TreeId: NodeId<IdN = T::TreeId>,
+//     TS: TypeStore,
+//     NS: inner_ref::NodeStore<T::TreeId, Ref = T>,
+//     NS: lending::NodeStore<T::TreeId, N = T>,
+//     LS: LabelStore<str, I = T::Label>,
+//     T: for<'a> lending::NLending<'a, Self::IdN>,
+// {
+//     type NS = NS;
 
-    fn node_store(&self) -> &Self::NS {
-        &self.node_store
-    }
+//     fn node_store(&self) -> &Self::NS {
+//         &self.node_store
+//     }
 
-    type LS = LS;
+//     type LS = LS;
 
-    fn label_store(&self) -> &Self::LS {
-        &self.label_store
-    }
+//     fn label_store(&self) -> &Self::LS {
+//         &self.label_store
+//     }
 
-    type TS = TS;
-}
+//     type TS = TS;
+// }
 
-impl<'store, T, TS, NS, LS> HyperASTShared for SimpleHyperAST<T, TS, NS, LS>
-where
-    T: Tree,
-    T::TreeId: NodeId<IdN = T::TreeId>,
-{
-    type IdN = T::TreeId;
+// impl<'store, T, TS, NS, LS> HyperASTShared for SimpleHyperAST<T, TS, NS, LS>
+// where
+//     T: Stored,
+//     T::TreeId: NodeId<IdN = T::TreeId>,
+//     T: for<'a> lending::NLending<'a, Self::IdN>,
+// {
+//     type IdN = T::TreeId;
 
-    type Idx = T::ChildIdx;
+//     type Idx = T::N::ChildIdx;
 
-    type Label = T::Label;
+//     type Label = T::N::Label;
 
-    type T<'a> = T;
-    type RT = T;
-}
+//     type TM = T;
+//     // crate::store::nodes::legion::TMarker<T::TreeId>;
+// }
+
+// impl<'store, T, TS, NS, LS> AstLending<'store> for SimpleHyperAST<T, TS, NS, LS>
+// where
+//     T: Stored,
+//     T::TreeId: NodeId<IdN = T::TreeId>,
+//     T: for<'a> lending::NLending<'a, Self::IdN>,
+// {
+//     type RT =
+//         <T as lending::NLending<'store, <SimpleHyperAST<T, TS, NS, LS> as HyperASTShared>::IdN>>::N;
+// }
+
 // impl<T, TS, NS, LS> HyperASTAsso for SimpleHyperAST<T, TS, NS, LS>
 // where
 //     T: Tree,

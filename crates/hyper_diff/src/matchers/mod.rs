@@ -24,11 +24,41 @@ use hyperast::types::{HyperAST, HyperASTShared};
 
 use crate::matchers::mapping_store::MappingStore;
 
+pub struct Decompressible<HAST, D> {
+    /// the HyperAST which is being decompressed
+    pub hyperast: HAST,
+    /// the structure containing the (partially) decompressed subtree
+    pub decomp: D,
+}
+
 pub struct Mapper<'store, HAST, Dsrc, Ddst, M> {
     /// the hyperAST to whom mappings are coming
     pub hyperast: &'store HAST,
     /// the decompressed subtrees coming from hyperAST and their mappings
     pub mapping: Mapping<Dsrc, Ddst, M>,
+}
+impl<'store, HAST, Dsrc, Ddst, M> Mapper<'store, HAST, Dsrc, Ddst, M> {
+    fn split<'a>(
+        &'a mut self,
+    ) -> Mapping<
+        Decompressible<&'store HAST, &'a mut Dsrc>,
+        Decompressible<&'store HAST, &'a mut Ddst>,
+        &'a mut M,
+    > {
+        let hyperast = self.hyperast;
+        let mapping = &mut self.mapping;
+        Mapping {
+            src_arena: Decompressible {
+                hyperast,
+                decomp: &mut mapping.src_arena,
+            },
+            dst_arena: Decompressible {
+                hyperast,
+                decomp: &mut mapping.dst_arena,
+            },
+            mappings: &mut mapping.mappings,
+        }
+    }
 }
 // NOTE this is temporary, waiting for the refactoring of helpers
 // the refactoring is simple, do a spliting borrow, before accessing content
@@ -108,14 +138,41 @@ impl<'store, HAST: HyperASTShared, Dsrc, Ddst, M> HyperASTShared
 
     type Label = HAST::Label;
 
-    type T<'t> = HAST::T<'t>;
+    // type T<'t> = HAST::T<'t>;
 
-    type RT = HAST::RT;
+    // type RT = HAST::RT;
 }
 
-impl<'store, HAST: HyperAST, Dsrc, Ddst, M> HyperAST
+// impl<'a, TS, NS, LS>  for SimpleStores<TS, NS, LS>
+// where
+//     NS: crate::types::NStore,
+//     NS: crate::types::NodeStore<<NS as crate::types::NStore>::IdN>,
+//     LS: crate::types::LStore,
+//     <NS as crate::types::NStore>::IdN:
+//         crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
+//     for<'t> <NS as crate::types::NLending<'t, <NS as crate::types::NStore>::IdN>>::N:
+//         crate::types::Tree<
+//             Label = <LS as crate::types::LStore>::I,
+//             TreeId = <NS as crate::types::NStore>::IdN,
+//             ChildIdx = <NS as crate::types::NStore>::Idx,
+//         >,
+// {
+// }
+
+impl<'a, 'store, HAST: HyperAST, Dsrc, Ddst, M> hyperast::types::NLending<'a, HAST::IdN>
     for Mapper<'store, HAST, Dsrc, Ddst, M>
 {
+    type N = <HAST as hyperast::types::NLending<'a, HAST::IdN>>::N;
+}
+
+impl<'a, 'store, HAST: HyperAST, Dsrc, Ddst, M> hyperast::types::AstLending<'a>
+    for Mapper<'store, HAST, Dsrc, Ddst, M>
+{
+    type RT = <HAST as hyperast::types::AstLending<'a>>::RT;
+}
+
+impl<'store, HAST: HyperAST, Dsrc, Ddst, M> HyperAST for Mapper<'store, HAST, Dsrc, Ddst, M> {
+    type TM = HAST::TM;
     type NS = HAST::NS;
 
     fn node_store(&self) -> &Self::NS {
@@ -172,7 +229,7 @@ impl<'store, HAST: HyperAST, Dsrc, Ddst, M> HyperAST
 // }
 use crate::decompressed_tree_store::{CompletePostOrder, PersistedNode};
 impl<'store, HAST: HyperAST, M>
-    Mapper<'store, HAST, CompletePostOrder<HAST::RT, u32>, CompletePostOrder<HAST::RT, u32>, M>
+    Mapper<'store, HAST, CompletePostOrder<HAST::TM, u32>, CompletePostOrder<HAST::TM, u32>, M>
 where
     HAST::IdN: Eq,
 {
@@ -199,14 +256,14 @@ where
             CompletePostOrder<PersistedNode<HAST::IdN>, u32>,
             M,
         >,
-    ) -> &'a Mapping<CompletePostOrder<HAST::RT, u32>, CompletePostOrder<HAST::RT, u32>, M> {
+    ) -> &'a Mapping<CompletePostOrder<HAST::TM, u32>, CompletePostOrder<HAST::TM, u32>, M> {
         unsafe { std::mem::transmute(p) }
     }
 }
 
 use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 impl<'store, HAST: HyperAST, M>
-    Mapper<'store, HAST, LazyPostOrder<HAST::RT, u32>, LazyPostOrder<HAST::RT, u32>, M>
+    Mapper<'store, HAST, LazyPostOrder<HAST::TM, u32>, LazyPostOrder<HAST::TM, u32>, M>
 where
     HAST::IdN: Eq,
 {
@@ -233,7 +290,7 @@ where
             LazyPostOrder<PersistedNode<HAST::IdN>, u32>,
             M,
         >,
-    ) -> &'a mut Mapping<LazyPostOrder<HAST::RT, u32>, LazyPostOrder<HAST::RT, u32>, M> {
+    ) -> &'a mut Mapping<LazyPostOrder<HAST::TM, u32>, LazyPostOrder<HAST::TM, u32>, M> {
         unsafe { std::mem::transmute(p) }
     }
 }

@@ -592,21 +592,24 @@ impl<T: HyperType + 'static, HAST, Acc> crate::tree_gen::Prepro<T> for &Prepro<H
     }
 }
 
-impl<
-        TS,
-        T: crate::types::Tree,
-        Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
-    > crate::tree_gen::More for Prepro<(TS, T), &Acc>
+impl<TS, T, Acc> crate::tree_gen::More for Prepro<(TS, T), &Acc>
+where
+    Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
+    T: crate::types::MarkedT,
+    // T: for<'t> crate::types::NLending<'t, T::TreeId>,
 {
     type TS = TS;
     type T = T;
     type Acc = Acc;
     const ENABLED: bool = false;
     fn match_precomp_queries<
-        HAST: crate::types::HyperAST<
+        HAST: for<'t> crate::types::AstLending<
+                't,
+                // RT = crate::types::LendN<'t, Self::T, <Self::T as crate::types::Stored>::TreeId>,
+            > + crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
+                TM = Self::T,
                 TS = Self::TS,
-                RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,
@@ -618,19 +621,18 @@ impl<
     }
 }
 
-impl<
-        'a,
-        TS,
-        T: crate::types::Tree,
-        Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
-    > crate::tree_gen::PreproTSG for Prepro<(TS, T), &Acc>
+impl<'a, TS, T, Acc> crate::tree_gen::PreproTSG for Prepro<(TS, T), &Acc>
+where
+    Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
+    T: crate::types::MarkedT,
+    // T: for<'t> crate::types::NLending<'t, T::TreeId>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg<
         HAST: for<'t> crate::types::HyperAST<
                 IdN = <Self::T as crate::types::Stored>::TreeId,
-                TS = Self::TS,
-                RT = Self::T,
+                // TS = Self::TS,
+                // RT = Self::T,
             > + std::clone::Clone,
     >(
         &self,

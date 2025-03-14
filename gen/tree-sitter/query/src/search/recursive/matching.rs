@@ -6,7 +6,7 @@ use tree_sitter::CaptureQuantifier as Quant;
 
 use hyperast::types::HyperType;
 use hyperast::types::TypedHyperAST;
-use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
+use hyperast::types::{Childrn, Typed, TypedNodeStore, WithChildren};
 
 impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool

@@ -5,7 +5,7 @@ use hyperast::{
     position::{TreePath, TreePathMut},
     store::defaults::NodeIdentifier,
     types::{
-        AnyType, HyperAST, HyperType, IterableChildren, NodeId, NodeStore, Tree, TypeTrait, Typed,
+        AnyType, Children, HyperAST, HyperType, NodeId, NodeStore, Tree, TypeTrait, Typed,
         TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
     },
 };
@@ -41,208 +41,208 @@ impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'a, 
     }
 }
 
-impl<
-        'a,
-        T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: TypedHyperAST<crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
-    > Iterator for IterDeclarations<'a, T, HAST>
+impl<'a, T, HAST> Iterator for IterDeclarations<'a, T, HAST>
 where
+    // T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
+    // HAST: TypedHyperAST<crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     // HAST::TS: JavaEnabledTypeStore<HAST::T>,
-    for<'t> <HAST::TT<'t> as Typed>::Type: Copy + Send + Sync,
-    HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
+    // for<'t> <HAST::TT<'t> as Typed>::Type: Copy + Send + Sync,
+    // HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
     // HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
-    for<'b> <HAST::NS as hyperast::types::TyNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
-        TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
-    <HAST::NS as hyperast::types::NodStore<HAST::IdN>>::R<'a>:
-        TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+    // for<'b> <HAST::NS as hyperast::types::TyNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
+    //     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+    // // for<'t> <HAST as hyperast::types::AstLending<'t, HAST::IdN>>::RT:
+    // // // <HAST::NS as hyperast::types::NodStore<HAST::IdN>>::R<'a>:
+    // //     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
 {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let (node, offset, children) = self.stack.pop()?;
-            if let Some(children) = children {
-                if offset.to_usize().unwrap() < children.len() {
-                    let child = children[offset.to_usize().unwrap()];
-                    self.path.check(self.stores).unwrap();
-                    {
-                        let b = hyperast::types::NodeStore::resolve(
-                            self.stores.node_store(),
-                            node.id(),
-                        );
-                        if b.has_children() {
-                            assert!(offset < b.child_count());
-                            let cs = b.children();
-                            // println!("children: {:?} {} {:?}", node,cs.len(),cs);
-                            assert_eq!(child, cs.unwrap()[num::cast(offset).unwrap()]);
-                        } else {
-                            panic!()
-                        }
-                    }
-                    if offset == 0 {
-                        match self.path.node() {
-                            Some(x) => assert_eq!(x, node.id()),
-                            None => {}
-                        }
-                        self.path.goto(child, offset);
-                        self.path.check(self.stores).unwrap();
-                    } else {
-                        match self.path.node() {
-                            Some(x) => assert_eq!(*x, children[offset.to_usize().unwrap() - 1]),
-                            None => {}
-                        }
-                        self.path.inc(child);
-                        assert_eq!(*self.path.offset().unwrap(), offset + 1);
-                        // self.scout.check_size(&self.stores).expect(&format!(
-                        //     "{:?} {} {:?} {:?} {:?}",
-                        //     node,
-                        //     offset,
-                        //     child,
-                        //     children.len(),
-                        //     self.scout
-                        // ));
-                        self.path.check(self.stores).expect(&format!(
-                            "{:?} {} {:?} {:?} {:?}",
-                            node.id(),
-                            offset,
-                            child,
-                            children,
-                            self.path
-                        ));
-                    }
-                    self.stack.push((node, offset + 1, Some(children)));
-                    let child = if let Some(tid) =
-                        TypedNodeStore::try_typed(self.stores.node_store(), &child)
-                    {
-                        Id::Java(tid)
-                    } else {
-                        Id::Other(child)
-                    };
-                    self.stack.push((child, 0, None));
-                    continue;
-                } else {
-                    self.path.check(self.stores).unwrap();
-                    self.path.pop().expect("should not go higher than root");
-                    self.path.check(self.stores).unwrap();
-                    continue;
-                }
-            } else {
-                let b = match &node {
-                    Id::Java(node) => TypedNodeStore::resolve(self.stores.node_store(), node),
-                    Id::Other(node) => {
-                        let b = hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
-                        if b.has_children() {
-                            let children = b.children();
-                            let children = children.unwrap();
-                            self.stack.push((
-                                Id::Other(*node),
-                                0,
-                                Some(children.iter_children().cloned().collect()),
-                            ));
-                        }
-                        continue;
-                    }
-                };
-                let t = b.get_type();
-                // let t = self.stores.type_store().resolve(t);
+        todo!()
+        // loop {
+        //     let (node, offset, children) = self.stack.pop()?;
+        //     if let Some(children) = children {
+        //         if offset.to_usize().unwrap() < children.len() {
+        //             let child = children[offset.to_usize().unwrap()];
+        //             self.path.check(self.stores).unwrap();
+        //             {
+        //                 let b = hyperast::types::NodeStore::resolve(
+        //                     self.stores.node_store(),
+        //                     node.id(),
+        //                 );
+        //                 if b.has_children() {
+        //                     assert!(offset < b.child_count());
+        //                     let cs = b.children();
+        //                     // println!("children: {:?} {} {:?}", node,cs.len(),cs);
+        //                     assert_eq!(child, cs.unwrap()[num::cast(offset).unwrap()]);
+        //                 } else {
+        //                     panic!()
+        //                 }
+        //             }
+        //             if offset == 0 {
+        //                 match self.path.node() {
+        //                     Some(x) => assert_eq!(x, node.id()),
+        //                     None => {}
+        //                 }
+        //                 self.path.goto(child, offset);
+        //                 self.path.check(self.stores).unwrap();
+        //             } else {
+        //                 match self.path.node() {
+        //                     Some(x) => assert_eq!(*x, children[offset.to_usize().unwrap() - 1]),
+        //                     None => {}
+        //                 }
+        //                 self.path.inc(child);
+        //                 assert_eq!(*self.path.offset().unwrap(), offset + 1);
+        //                 // self.scout.check_size(&self.stores).expect(&format!(
+        //                 //     "{:?} {} {:?} {:?} {:?}",
+        //                 //     node,
+        //                 //     offset,
+        //                 //     child,
+        //                 //     children.len(),
+        //                 //     self.scout
+        //                 // ));
+        //                 self.path.check(self.stores).expect(&format!(
+        //                     "{:?} {} {:?} {:?} {:?}",
+        //                     node.id(),
+        //                     offset,
+        //                     child,
+        //                     children,
+        //                     self.path
+        //                 ));
+        //             }
+        //             self.stack.push((node, offset + 1, Some(children)));
+        //             let child = if let Some(tid) =
+        //                 TypedNodeStore::try_typed(self.stores.node_store(), &child)
+        //             {
+        //                 Id::Java(tid)
+        //             } else {
+        //                 Id::Other(child)
+        //             };
+        //             self.stack.push((child, 0, None));
+        //             continue;
+        //         } else {
+        //             self.path.check(self.stores).unwrap();
+        //             self.path.pop().expect("should not go higher than root");
+        //             self.path.check(self.stores).unwrap();
+        //             continue;
+        //         }
+        //     } else {
+        //         let b = match &node {
+        //             Id::Java(node) => TypedNodeStore::resolve(self.stores.node_store(), node),
+        //             Id::Other(node) => {
+        //                 let b = hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
+        //                 if b.has_children() {
+        //                     let children = b.children();
+        //                     let children = children.unwrap();
+        //                     self.stack.push((
+        //                         Id::Other(*node),
+        //                         0,
+        //                         Some(children.iter_children().cloned().collect()),
+        //                     ));
+        //                 }
+        //                 continue;
+        //             }
+        //         };
+        //         let t = b.get_type();
+        //         // let t = self.stores.type_store().resolve(t);
 
-                if t.is_spaces() {
-                    continue;
-                } else if t.is_comment() {
-                    continue;
-                } else if t == Type::PackageDeclaration {
-                    continue;
-                } else if t == Type::ImportDeclaration {
-                    continue;
-                } else if t == Type::Identifier {
-                    let mut p = self.path.clone();
-                    p.pop();
-                    let p = p.node().unwrap();
-                    let Id::Java(x) = &self.stack.last().unwrap().0 else {
-                        continue;
-                    };
-                    assert_eq!(p, x.as_id());
-                    let b = TypedNodeStore::resolve(self.stores.node_store(), x);
-                    let tt = b.get_type();
-                    // let tt = self.stores.type_store().resolve(tt);
-                    if self.path.offset() == Some(&1) && tt == Type::LambdaExpression {
-                        self.path.check(self.stores).unwrap();
-                        return Some(self.path.clone());
-                    } else if tt == Type::InferredParameters {
-                        self.path.check(self.stores).unwrap();
-                        return Some(self.path.clone());
-                    }
-                    continue;
-                }
+        //         if t.is_spaces() {
+        //             continue;
+        //         } else if t.is_comment() {
+        //             continue;
+        //         } else if t == Type::PackageDeclaration {
+        //             continue;
+        //         } else if t == Type::ImportDeclaration {
+        //             continue;
+        //         } else if t == Type::Identifier {
+        //             let mut p = self.path.clone();
+        //             p.pop();
+        //             let p = p.node().unwrap();
+        //             let Id::Java(x) = &self.stack.last().unwrap().0 else {
+        //                 continue;
+        //             };
+        //             assert_eq!(p, x.as_id());
+        //             let b = TypedNodeStore::resolve(self.stores.node_store(), x);
+        //             let tt = b.get_type();
+        //             // let tt = self.stores.type_store().resolve(tt);
+        //             if self.path.offset() == Some(&1) && tt == Type::LambdaExpression {
+        //                 self.path.check(self.stores).unwrap();
+        //                 return Some(self.path.clone());
+        //             } else if tt == Type::InferredParameters {
+        //                 self.path.check(self.stores).unwrap();
+        //                 return Some(self.path.clone());
+        //             }
+        //             continue;
+        //         }
 
-                if b.has_children() {
-                    let children = b.children();
-                    let children = children.unwrap();
-                    self.stack
-                        .push((node, 0, Some(children.iter_children().cloned().collect())));
-                }
+        //         if b.has_children() {
+        //             let children = b.children();
+        //             let children = children.unwrap();
+        //             self.stack
+        //                 .push((node, 0, Some(children.iter_children().cloned().collect())));
+        //         }
 
-                if t.is_type_declaration() || t.is_parameter() {
-                    assert!(b.has_children(), "{:?}", t);
-                    self.path.check(self.stores).unwrap();
-                    return Some(self.path.clone());
-                } else if t == Type::LocalVariableDeclaration
-                    // || t == Type::EnhancedForVariable // TODO trick to group nodes semantically
-                    || t == Type::CatchFormalParameter
-                {
-                    assert!(b.has_children(), "{:?}", t);
-                    self.path.check(self.stores).unwrap();
-                    return Some(self.path.clone());
-                } else if t == Type::TypeParameter {
-                    assert!(b.has_children(), "{:?}", t);
-                    self.path.check(self.stores).unwrap();
-                    return Some(self.path.clone());
-                } else if t == Type::ClassBody {
-                    let mut p = self.path.clone();
-                    p.pop();
-                    let p = p.node().unwrap();
-                    let Id::Java(x) = &self.stack.last().unwrap().0 else {
-                        continue;
-                    };
-                    assert_eq!(p, x.as_id());
-                    let b = TypedNodeStore::resolve(self.stores.node_store(), x);
-                    let tt = b.get_type();
-                    if tt == Type::ObjectCreationExpression {
-                        self.path.check(self.stores).unwrap();
-                        return Some(self.path.clone());
-                    } else if tt == Type::EnumDeclaration {
-                        self.path.check(self.stores).unwrap();
-                        return Some(self.path.clone());
-                    }
-                } else if t == Type::Resource {
-                    assert!(b.has_children(), "{:?}", t);
-                    self.path.check(self.stores).unwrap();
-                    // TODO also need to find an "=" and find the name just before
-                    let cs = b.children().unwrap();
-                    for xx in cs.iter_children() {
-                        let bb = TypedNodeStore::try_resolve(self.stores.node_store(), xx);
-                        let Some((bb, _)) = bb else {
-                            continue;
-                        };
-                        // let bb = self.stores.node_store().resolve(xx);
-                        if bb.get_type() == Type::GT {
-                            return Some(self.path.clone());
-                        }
-                    }
-                // } else if t.is_value_member()
-                // {
-                //     assert!(b.has_children(), "{:?}", t);
-                //     self.path.check(&self.stores).unwrap();
-                //     return Some(self.path.clone());
-                // } else if t.is_executable_member()
-                // {
-                //     assert!(b.has_children(), "{:?}", t);
-                //     self.path.check(&self.stores).unwrap();
-                //     return Some(self.path.clone());
-                } else {
-                }
-            }
-        }
+        //         if t.is_type_declaration() || t.is_parameter() {
+        //             assert!(b.has_children(), "{:?}", t);
+        //             self.path.check(self.stores).unwrap();
+        //             return Some(self.path.clone());
+        //         } else if t == Type::LocalVariableDeclaration
+        //             // || t == Type::EnhancedForVariable // TODO trick to group nodes semantically
+        //             || t == Type::CatchFormalParameter
+        //         {
+        //             assert!(b.has_children(), "{:?}", t);
+        //             self.path.check(self.stores).unwrap();
+        //             return Some(self.path.clone());
+        //         } else if t == Type::TypeParameter {
+        //             assert!(b.has_children(), "{:?}", t);
+        //             self.path.check(self.stores).unwrap();
+        //             return Some(self.path.clone());
+        //         } else if t == Type::ClassBody {
+        //             let mut p = self.path.clone();
+        //             p.pop();
+        //             let p = p.node().unwrap();
+        //             let Id::Java(x) = &self.stack.last().unwrap().0 else {
+        //                 continue;
+        //             };
+        //             assert_eq!(p, x.as_id());
+        //             let b = TypedNodeStore::resolve(self.stores.node_store(), x);
+        //             let tt = b.get_type();
+        //             if tt == Type::ObjectCreationExpression {
+        //                 self.path.check(self.stores).unwrap();
+        //                 return Some(self.path.clone());
+        //             } else if tt == Type::EnumDeclaration {
+        //                 self.path.check(self.stores).unwrap();
+        //                 return Some(self.path.clone());
+        //             }
+        //         } else if t == Type::Resource {
+        //             assert!(b.has_children(), "{:?}", t);
+        //             self.path.check(self.stores).unwrap();
+        //             // TODO also need to find an "=" and find the name just before
+        //             let cs = b.children().unwrap();
+        //             for xx in cs.iter_children() {
+        //                 let bb = TypedNodeStore::try_resolve(self.stores.node_store(), xx);
+        //                 let Some((bb, _)) = bb else {
+        //                     continue;
+        //                 };
+        //                 // let bb = self.stores.node_store().resolve(xx);
+        //                 if bb.get_type() == Type::GT {
+        //                     return Some(self.path.clone());
+        //                 }
+        //             }
+        //         // } else if t.is_value_member()
+        //         // {
+        //         //     assert!(b.has_children(), "{:?}", t);
+        //         //     self.path.check(&self.stores).unwrap();
+        //         //     return Some(self.path.clone());
+        //         // } else if t.is_executable_member()
+        //         // {
+        //         //     assert!(b.has_children(), "{:?}", t);
+        //         //     self.path.check(&self.stores).unwrap();
+        //         //     return Some(self.path.clone());
+        //         } else {
+        //         }
+        //     }
+        // }
     }
 }
 

@@ -778,7 +778,7 @@ mod test {
 //             .and_then(|x| x.rev(*idx).copied())
 //     }
 
-//     fn children(&self) -> Option<&Self::Children<'_>> {
+//     fn children(&self) -> Option<LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
 //         self.inner.no_spaces().ok()
 //     }
 // }

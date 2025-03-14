@@ -2,14 +2,14 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
-use crate::decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent};
+use crate::decompressed_tree_store::{BreadthFirstContiguousSiblings, DecompressedWithParent};
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{matcher::Matcher, similarity_metrics};
 use hyperast::types::{NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
-// use super::{decompressed_tree_store::BreathFirstContigousSiblings, mapping_store::DefaultMappingStore, matcher::Matcher, similarity_metrics};
+// use super::{decompressed_tree_store::BreadthFirstContigousSiblings, mapping_store::DefaultMappingStore, matcher::Matcher, similarity_metrics};
 
 pub struct SimpleBottomUpMatcher<
     'a,
@@ -27,10 +27,10 @@ pub struct SimpleBottomUpMatcher<
 impl<
         'a,
         Dsrc: 'a
-            + BreathFirstContiguousSiblings<T, IdD>
+            + BreadthFirstContiguousSiblings<T, IdD>
             + DecompressedWithParent<T, IdD>,
         Ddst: 'a
-            + BreathFirstContiguousSiblings<T, IdD>
+            + BreadthFirstContiguousSiblings<T, IdD>
             + DecompressedWithParent<T, IdD>,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
@@ -73,10 +73,10 @@ where
 impl<
         'a,
         Dsrc: 'a
-            + BreathFirstContiguousSiblings<T, IdD>
+            + BreadthFirstContiguousSiblings<T, IdD>
             + DecompressedWithParent<T, IdD>,
         Ddst: 'a
-            + BreathFirstContiguousSiblings<T, IdD>
+            + BreadthFirstContiguousSiblings<T, IdD>
             + DecompressedWithParent<T, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,

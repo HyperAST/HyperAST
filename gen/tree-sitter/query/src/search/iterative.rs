@@ -2,8 +2,7 @@ use crate::auto::tsq_ser_meta::Converter;
 
 use super::*;
 use hyperast::types::{
-    HyperType, IterableChildren, NodeStore, TypeStore, Typed, TypedHyperAST, TypedNodeStore,
-    WithChildren,
+    Childrn, HyperType, NodeStore, TypeStore, Typed, TypedHyperAST, WithChildren,
 };
 
 pub(crate) struct MatchingIter<
@@ -268,7 +267,7 @@ impl<
 
     fn handle_hidden(
         &mut self,
-        n: HAST::T<'_>,
+        n: <HAST as hyperast::types::AstLending<'_>>::RT,
         ty: TIdN::Ty,
         t: TIdN::Ty,
     ) -> MatchingRes<HAST::IdN, HAST::Idx> {
@@ -316,9 +315,8 @@ pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C: Converter>(
 ) -> bool
 where
     HAST: TypedHyperAST<TIdN>,
-    TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
-        + hyperast::types::TypedNodeId<Ty = Ty>
-        + 'static,
+    TIdN:
+        hyperast::types::NodeId<IdN = HAST::IdN> + hyperast::types::TypedNodeId<Ty = Ty> + 'static,
     Ty: std::fmt::Debug + Eq + Copy,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
     Ty: for<'b> TryFrom<&'b str> + HyperType,

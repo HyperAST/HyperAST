@@ -3,7 +3,7 @@ use std::hash::Hash;
 use num_traits::ToPrimitive;
 
 use crate::decompressed_tree_store::{
-    BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
+    BreadthFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
@@ -19,7 +19,7 @@ type IdD = u16;
 
 pub struct SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
-    T: hyperast::types::Tree + hyperast::types::WithHashs,
+    T: hyperast::types::Stored,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
     internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
@@ -31,12 +31,12 @@ where
 //             + DecompressedTreeStore<T, IdD>
 //             + DecompressedWithParent<T, IdD>
 //             + DecompressedSubtree<T>
-//             + BreathFirstContiguousSiblings<T, IdD>,
+//             + BreadthFirstContiguousSiblings<T, IdD>,
 //         Ddst: 'a
 //             + DecompressedTreeStore<T, IdD>
 //             + DecompressedWithParent<T, IdD>
 //             + DecompressedSubtree<T>
-//             + BreathFirstContiguousSiblings<T, IdD>,
+//             + BreadthFirstContiguousSiblings<T, IdD>,
 //         T: 'a + Tree + WithHashs,
 //         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
 //         M: MonoMappingStore<Src = IdD, Dst = IdD>,
@@ -72,20 +72,22 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<T, IdD>
-            + DecompressedWithParent<T, IdD>
-            + BreathFirstContiguousSiblings<T, IdD>,
-        Ddst: DecompressedTreeStore<T, IdD>
-            + DecompressedWithParent<T, IdD>
-            + BreathFirstContiguousSiblings<T, IdD>,
-        T: Tree + WithHashs,
-        HAST: HyperAST<IdN = T::TreeId, RT = T>,
+        Dsrc: DecompressedTreeStore<HAST::TM, IdD>
+            + DecompressedWithParent<HAST::TM, IdD>
+            + BreadthFirstContiguousSiblings<HAST::TM, IdD>,
+        Ddst: DecompressedTreeStore<HAST::TM, IdD>
+            + DecompressedWithParent<HAST::TM, IdD>
+            + BreadthFirstContiguousSiblings<HAST::TM, IdD>,
+        // T: hyperast::types::Stored,// + WithHashs,
+        HAST: HyperAST,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
+    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M>
 where
-    HAST::TS: hyperast::types::TypeStore<Ty = T::Type>,
-    T: hyperast::types::Typed,
-    T::Type: Hash + Copy + Eq + Send + Sync,
+    // HAST::TS: hyperast::types::TypeStore<Ty = T::Type>,
+    // T: hyperast::types::Typed,
+    // T::Type: Hash + Copy + Eq + Send + Sync,
+    <HAST::TS as hyperast::types::TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
+    for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
 {
     pub fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {

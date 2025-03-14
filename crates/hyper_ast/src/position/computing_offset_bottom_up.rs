@@ -3,8 +3,8 @@ use num::ToPrimitive;
 use crate::{
     store::{defaults::NodeIdentifier, nodes::HashedNodeRef},
     types::{
-        AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
-        TypeStore, WithChildren, WithSerialization,
+        NodeStore, AnyType, Children, Childrn, HyperAST, HyperType, LabelStore,
+        Labeled, TypeStore, WithChildren, WithSerialization,
     },
 };
 
@@ -13,10 +13,7 @@ use super::Position;
 ///
 /// precondition: slices are read from right to left eg.
 /// [dir, file, class, method, statement] ~> dir/file:20:40
-pub fn extract_file_postion<HAST: HyperAST>(
-    stores: &HAST,
-    parents: &[HAST::IdN],
-) -> Position {
+pub fn extract_file_postion<HAST: HyperAST>(stores: &HAST, parents: &[HAST::IdN]) -> Position {
     if parents.is_empty() {
         Position::default()
     } else {
@@ -44,7 +41,8 @@ pub fn extract_position<'store, HAST>(
     offsets: &[usize],
 ) -> Position
 where
-    for<'t> HAST: HyperAST<IdN = NodeIdentifier, T<'t> = HashedNodeRef<'t>>,
+    HAST: HyperAST<IdN = NodeIdentifier>,
+    for<'t> HAST::NS: crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
     HAST::TS: TypeStore<Ty = AnyType>,
 {
     if parents.is_empty() {
@@ -108,7 +106,7 @@ pub fn extract_position_it_rec<'store, HAST, It, It2>(stores: &'store HAST, mut 
 where
     HAST: HyperAST<IdN = NodeIdentifier, Idx = u16>,
     HAST::TS: TypeStore<Ty = AnyType>,
-    for<'t> HAST::T<'t>: WithSerialization,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
 {
@@ -119,7 +117,7 @@ where
     let b = stores.node_store().resolve(&p);
 
     let c = {
-        let v: Vec<&HAST::IdN> = b
+        let v: Vec<HAST::IdN> = b
             .children()
             .unwrap()
             .before(o.to_u16().unwrap() - 1)
@@ -127,7 +125,7 @@ where
             .collect();
         v.into_iter()
             .map(|x| {
-                let b = stores.node_store().resolve(x);
+                let b = stores.node_store().resolve(&x);
 
                 // println!("{:?}", b.get_type());
                 b.try_bytes_len().unwrap() as usize
@@ -171,7 +169,7 @@ where
 pub fn extract_position_it<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST<IdN = NodeIdentifier>,
-    for<'t> HAST::T<'t>: WithSerialization,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator<Item = (HAST::IdN, HAST::Idx)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
 {
@@ -179,7 +177,7 @@ where
     while let Some((p, o)) = it.next() {
         let b = stores.node_store().resolve(&p);
         let c: usize = {
-            let v: Vec<&HAST::IdN> = b
+            let v: Vec<HAST::IdN> = b
                 .children()
                 .unwrap()
                 .before(o - num::one())
@@ -187,7 +185,7 @@ where
                 .collect();
             v.into_iter()
                 .map(|x| {
-                    let b = stores.node_store().resolve(x);
+                    let b = stores.node_store().resolve(&x);
 
                     // println!("{:?}", b.get_type());
                     b.try_bytes_len().unwrap() as usize

@@ -4,7 +4,8 @@ use std::fmt::Display;
 use hyperast::types;
 use hyperast::types::HyperAST;
 use hyperast::types::HyperType as _;
-use hyperast::types::IterableChildren as _;
+use hyperast::types::Children as _;
+use hyperast::types::Childrn as _;
 use hyperast::types::WithPrecompQueries;
 use hyperast::types::WithRoles;
 
@@ -53,8 +54,8 @@ impl<
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
-    for<'t> HAST::T<'t>: WithRoles,
-    for<'t> HAST::T<'t>: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
     <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -72,8 +73,8 @@ impl<
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
-    for<'t> HAST::T<'t>: WithRoles,
-    for<'t> HAST::T<'t>: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
     <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn serialize(
@@ -110,10 +111,10 @@ where
                     let it = children.iter_children();
                     let mut f = false;
                     for id in it {
-                        if self.should_skip(id) {
+                        if self.should_skip(&id) {
                             continue;
                         }
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() && !kind.is_hidden() {
                             if PP {
                                 if f {
@@ -131,10 +132,10 @@ where
                     let it = children.iter_children();
                     let mut f = false;
                     for id in it {
-                        if self.should_skip(id) {
+                        if self.should_skip(&id) {
                             continue;
                         }
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() && !kind.is_hidden() {
                             if PP {
                                 if f {
@@ -153,11 +154,11 @@ where
                     write!(out, "(")?;
                     write!(out, "{}", kind.to_string())?;
                     for id in it {
-                        if self.should_skip(id) {
+                        if self.should_skip(&id) {
                             continue;
                         }
 
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
                             if PP {
                                 write!(out, "\n{}", "  ".repeat(ind + 1))?;

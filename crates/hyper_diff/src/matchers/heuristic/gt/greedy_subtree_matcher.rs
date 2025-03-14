@@ -10,8 +10,8 @@ use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyperast::compat::HashMap;
 use hyperast::types::{
-    DecompressedSubtree, HashKind, HyperAST, IterableChildren, Labeled as _, NodeId, NodeStore,
-    Tree, TypeStore, WithChildren, WithHashs,
+    self, Children, Childrn, DecompressedSubtree, HashKind, HyperAST, Labeled as _, NodeId,
+    NodeStore, Stored, Tree, TypeStore, WithChildren, WithHashs,
 };
 use num_traits::{one, zero, PrimInt, ToPrimitive};
 
@@ -22,30 +22,33 @@ pub struct GreedySubtreeMatcher<'a, Dsrc, Ddst, T, HAST, M, const MIN_HEIGHT: us
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<T, M::Src>
-            + DecompressedWithParent<T, M::Src>
-            + DecompressedSubtree<T, Out = Dsrc>
-            + ContiguousDescendants<T, M::Src>,
+            + DecompressedTreeStore<HAST::TM, M::Src>
+            + DecompressedWithParent<HAST::TM, M::Src>
+            + DecompressedSubtree<HAST::TM, Out = Dsrc>
+            + ContiguousDescendants<HAST::TM, M::Src>,
         Ddst: 'a
-            + DecompressedTreeStore<T, M::Dst>
-            + DecompressedWithParent<T, M::Dst>
-            + DecompressedSubtree<T, Out = Ddst>
-            + ContiguousDescendants<T, M::Dst>,
-        T: Tree + WithHashs,
-        HAST,
+            + DecompressedTreeStore<HAST::TM, M::Dst>
+            + DecompressedWithParent<HAST::TM, M::Dst>
+            + DecompressedSubtree<HAST::TM, Out = Ddst>
+            + ContiguousDescendants<HAST::TM, M::Dst>,
+        HAST: HyperAST,
         M: MonoMappingStore,
         const MIN_HEIGHT: usize, // = 2
-    > GreedySubtreeMatcher<'a, Dsrc, Ddst, T, HAST, M, MIN_HEIGHT>
+    > GreedySubtreeMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M, MIN_HEIGHT>
 where
-    HAST: HyperAST<IdN = T::TreeId, RT = T>,
-    // HAST::NS: hyperast::types::NodeStore<<T as hyperast::types::Stored>::TreeId>,
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    T::Label: Clone,
+    // HAST::NS: types::NodeStore<<T as types::Stored>::TreeId>,
+    // T::TreeId: NodeId<IdN = T::TreeId>,
+    // T::Label: Clone,
     // T::Type: Copy + Eq + Send + Sync,
     M::Src: 'a + PrimInt + Debug + Hash,
     M::Dst: 'a + PrimInt + Debug + Hash,
-    for<'t> HAST::T<'t>: hyperast::types::WithChildren + WithHashs,
+    for<'t> <HAST as types::AstLending<'t>>::RT: types::WithChildren + WithHashs,
     HAST::Label: Eq + Clone,
+    // for<'t> T: types::CLending<
+    //     't,
+    //     HAST::Idx,
+    //     HAST::IdN,
+    // >,
 {
     pub fn match_it<MM>(
         mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
@@ -80,14 +83,14 @@ where
 
     pub fn matchh<MM: MultiMappingStore<Src = M::Src, Dst = M::Dst> + Default>(
         stores: &'a HAST,
-        src: &'a T::TreeId,
-        dst: &'a T::TreeId,
+        src: &'a HAST::IdN,
+        dst: &'a HAST::IdN,
         mappings: M,
-    ) -> GreedySubtreeMatcher<'a, Dsrc, Ddst, T, HAST, M, MIN_HEIGHT>
+    ) -> GreedySubtreeMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M, MIN_HEIGHT>
     where
         Self: 'a,
     {
-        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc, Ddst, T, HAST, M, MIN_HEIGHT> {
+        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc, Ddst, HAST::TM, HAST, M, MIN_HEIGHT> {
             internal: SubtreeMatcher {
                 stores: stores,
                 src_arena: Dsrc::decompress2(stores, src),
@@ -282,7 +285,7 @@ where
                 self.internal.src_arena.parent(&x).map(|p| {
                     self.internal
                         .src_arena
-                        .position_in_parent(&x)
+                        .position_in_parent::<usize>(&x)
                         .unwrap()
                         .to_f64()
                         .unwrap()
@@ -302,7 +305,7 @@ where
                 self.internal.dst_arena.parent(&x).map(|p| {
                     self.internal
                         .dst_arena
-                        .position_in_parent(&x)
+                        .position_in_parent::<usize>(&x)
                         .unwrap()
                         .to_f64()
                         .unwrap()
@@ -462,19 +465,19 @@ pub struct SubtreeMatcher<'a, Dsrc, Ddst, T, HAST, M, const MIN_HEIGHT: usize> {
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<T, M::Src> + DecompressedWithParent<T, M::Src>,
-        Ddst: DecompressedTreeStore<T, M::Dst> + DecompressedWithParent<T, M::Dst>,
-        T: Tree + WithHashs,
+        Dsrc: DecompressedTreeStore<HAST::TM, M::Src> + DecompressedWithParent<HAST::TM, M::Src>,
+        Ddst: DecompressedTreeStore<HAST::TM, M::Dst> + DecompressedWithParent<HAST::TM, M::Dst>,
+        // T: Tree + WithHashs,
         HAST,
         M: MonoMappingStore,
         const MIN_HEIGHT: usize,
-    > SubtreeMatcher<'a, Dsrc, Ddst, T, HAST, M, MIN_HEIGHT>
+    > SubtreeMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M, MIN_HEIGHT>
 where
-    HAST: HyperAST<IdN = T::TreeId, RT = T>,
+    HAST: HyperAST,
     M::Src: PrimInt + Debug,
     M::Dst: PrimInt + Debug,
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    for<'t> HAST::T<'t>: hyperast::types::WithChildren + WithHashs,
+    // T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    for<'t> <HAST as types::AstLending<'t>>::RT: types::WithChildren + WithHashs,
     HAST::Label: Eq,
 {
     pub(crate) fn add_mapping_recursively(&mut self, src: &M::Src, dst: &M::Dst) {
@@ -492,8 +495,8 @@ where
 
     fn pop_larger<'b>(
         &self,
-        src_trees: &mut PriorityTreeList<'a, 'b, Dsrc, M::Src, T, HAST::NS, MIN_HEIGHT>,
-        dst_trees: &mut PriorityTreeList<'a, 'b, Ddst, M::Dst, T, HAST::NS, MIN_HEIGHT>,
+        src_trees: &mut PriorityTreeList<'a, 'b, Dsrc, M::Src, HAST::TM, HAST::NS, MIN_HEIGHT>,
+        dst_trees: &mut PriorityTreeList<'a, 'b, Ddst, M::Dst, HAST::TM, HAST::NS, MIN_HEIGHT>,
     ) {
         if src_trees.peek_height() > dst_trees.peek_height() {
             src_trees.open();
@@ -506,12 +509,12 @@ where
         &self,
         multi_mappings: &mut MM,
     ) {
-        let mut src_trees = PriorityTreeList::new(
+        let mut src_trees = PriorityTreeList::<_, _, HAST::TM, _, MIN_HEIGHT>::new(
             self.stores.node_store(),
             &self.src_arena,
             self.src_arena.root(),
         );
-        let mut dst_trees = PriorityTreeList::new(
+        let mut dst_trees = PriorityTreeList::<_, _, HAST::TM, _, MIN_HEIGHT>::new(
             self.stores.node_store(),
             &self.dst_arena,
             self.dst_arena.root(),
@@ -592,7 +595,7 @@ where
         let pos_src = if self.src_arena.has_parent(src) {
             zero()
         } else {
-            self.src_arena.position_in_parent(src).unwrap()
+            self.src_arena.position_in_parent::<usize>(src).unwrap()
         };
         let pos_dst = if self.dst_arena.has_parent(dst) {
             zero()
@@ -644,7 +647,7 @@ where
 
     /// if H then test the hash otherwise do not test it,
     /// considering hash colisions testing it should only be useful once.
-    pub(crate) fn isomorphic_aux<const H: bool>(&self, src: &T::TreeId, dst: &T::TreeId) -> bool {
+    pub(crate) fn isomorphic_aux<const H: bool>(&self, src: &HAST::IdN, dst: &HAST::IdN) -> bool {
         if src == dst {
             return true;
         }
@@ -703,7 +706,7 @@ where
     }
 }
 
-struct PriorityTreeList<'a, 'b, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
+struct PriorityTreeList<'a, 'b, D, IdD, T: Stored, S, const MIN_HEIGHT: usize> {
     trees: Vec<Option<Vec<IdD>>>,
 
     store: &'a S,
@@ -721,15 +724,18 @@ impl<
         'b,
         D: DecompressedTreeStore<T, IdD>,
         IdD: PrimInt,
-        T: Tree,
+        T: Stored,
         S,
         const MIN_HEIGHT: usize,
     > PriorityTreeList<'a, 'b, D, IdD, T, S, MIN_HEIGHT>
 where
+    for<'t> T: types::NLending<'t, T::TreeId>,
+    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    S: hyperast::types::inner_ref::NodeStore<<T as hyperast::types::Stored>::TreeId, Ref = T>,
-    S: hyperast::types::NodeStore<<T as hyperast::types::Stored>::TreeId>,
-    for<'t> S::R<'t>: hyperast::types::WithChildren<TreeId = T::TreeId>,
+    // S: types::inner_ref::NodeStore<<T as types::Stored>::TreeId, Ref = T>,
+    S: for<'t> types::NLending<'t, T::TreeId, N = types::LendN<'t, T, T::TreeId>>
+        + types::NodeStore<<T as types::Stored>::TreeId>,
+    // for<'t> S::R<'t>: types::WithChildren<TreeId = T::TreeId>,
 {
     pub(super) fn new(store: &'a S, arena: &'b D, tree: IdD) -> Self {
         let h = height(store, &arena.original(&tree)); // TODO subtree opti, use metadata

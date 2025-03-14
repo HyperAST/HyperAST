@@ -125,7 +125,7 @@ reqwest = { version = "0.12.5", features = ["blocking"] }
 
 [features]
 # default = ["rerun", "tsg"]
-default = ["tsg"]
+# default = ["tsg"]
 tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",

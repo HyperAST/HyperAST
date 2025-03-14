@@ -662,7 +662,7 @@ pub struct TextPred<L, R> {
 impl<Node: super::Node, P, I: std::cmp::PartialEq> QueryMatch<Node, P, I> {
     pub(crate) fn satisfies_text_predicates<'a, 'b, T: 'a + AsRef<str>>(
         &self,
-        text_provider: Node::TP<'b>,
+        text_provider: <Node as super::TextLending<'_>>::TP,
         mut text_predicates: impl Iterator<Item = &'a TextPredicateCapture<I, T>>,
     ) -> bool
     where

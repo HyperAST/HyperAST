@@ -6,8 +6,9 @@ use std::{
 use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrder};
-use hyperast::types::TypeStore;
-use hyperast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, WithSerialization};
+use hyperast::types::{
+    self, HyperAST, LabelStore, Labeled, NodeStore, Stored, WithChildren, WithSerialization,
+};
 
 use super::FullyDecompressedTreeStore;
 
@@ -20,8 +21,12 @@ pub struct SimplePreOrderMapper<'a, T, IdD, D> {
     phantom: PhantomData<*const T>,
 }
 
-impl<'a, T: WithChildren, IdD: Debug, D: Debug + DecompressedTreeStore<T, IdD>> Debug
-    for SimplePreOrderMapper<'a, T, IdD, D>
+impl<
+        'a,
+        T: Stored,
+        IdD: Debug,
+        D: Debug, //+ DecompressedTreeStore<T, IdD>
+    > Debug for SimplePreOrderMapper<'a, T, IdD, D>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SD")
@@ -47,10 +52,11 @@ impl<'a, IdD, T: WithChildren, D> SimplePreOrderMapper<'a, T, IdD, D> {
     }
 }
 
-impl<'a, T: 'a + WithChildren, IdD: PrimInt, D: PostOrder<T, IdD>> From<&'a D>
-    for SimplePreOrderMapper<'a, T, IdD, D>
+impl<'a, T: Stored, IdD: PrimInt, D> From<&'a D> for SimplePreOrderMapper<'a, T, IdD, D>
 where
-    D: FullyDecompressedTreeStore<T, IdD>,
+    T: for<'t> types::NLending<'t, T::TreeId>,
+    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    D: PostOrder<T, IdD> + FullyDecompressedTreeStore<T, IdD>,
 {
     fn from(x: &'a D) -> Self {
         let mut map: Vec<IdD> = vec![zero(); x.len()];
@@ -113,7 +119,7 @@ pub struct DisplaySimplePreOrderMapper<
     'b,
     IdD: PrimInt,
     HAST: HyperAST,
-    D: for<'t> PostOrder<HAST::T<'t>, IdD>,
+    D, //: for<'t> PostOrder<HAST::TM, IdD>,
 > {
     pub inner: &'b SimplePreOrderMapper<'a, (), IdD, D>,
     pub stores: &'store HAST,
@@ -123,11 +129,11 @@ impl<'store: 'a, 'a: 'b, 'b, IdD: PrimInt, HAST, D> Display
     for DisplaySimplePreOrderMapper<'store, 'a, 'b, IdD, HAST, D>
 where
     HAST: HyperAST,
-    for<'t> HAST::T<'t>: WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization,
     // T::TreeId: Clone + Debug + Eq,
     // T::Type: Copy + Send + Sync,
     // T::Type: Debug,
-    D: for<'t> PostOrder<HAST::T<'t>, IdD>,
+    D: PostOrder<HAST::TM, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut pos = 0;
@@ -159,7 +165,7 @@ where
     // T::Type: Copy + Send + Sync,
     HAST: HyperAST,
     // T::Type: Debug,
-    D: for<'t> PostOrder<HAST::T<'t>, IdD>,
+    D: PostOrder<HAST::TM, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {

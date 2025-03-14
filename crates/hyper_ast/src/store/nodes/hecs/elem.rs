@@ -36,7 +36,7 @@ impl NodeId for NodeIdentifier {
 impl TypedNodeId for NodeIdentifier {
     type Ty = AnyType;
     type TyErazed = crate::types::AnyType;
-    
+
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
         ty
     }
@@ -120,10 +120,11 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Stored for HashedN
 }
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
-    pub fn cs(&self) -> Option<<Self as crate::types::WithChildren>::Children<'_>> {
-        self.0
-            .get::<&'a compo::CS<NodeIdentifier>>()
-            .map(|x| ChildrenSlice(x))
+    pub fn cs(&self) -> Option<crate::types::LendC<'_, Self, u16, NodeIdentifier>> {
+        todo!()
+        // self.0
+        //     .get::<&'a compo::CS<NodeIdentifier>>()
+        //     .map(|x| ChildrenSlice(x))
     }
     // pub fn no_spaces(&self) -> Option<&<Self as crate::types::WithChildren>::Children<'_>> {
     //     self.0
@@ -157,20 +158,24 @@ impl<'a, 'b, IdN: Send + Sync + Eq + 'static> Iterator for ChildIter<'a, 'b, IdN
     }
 }
 
-impl<'b, T: Send + Sync + Eq + Clone + 'static> IterableChildren<T> for ChildrenSlice<'b, T> {
-    type ChildrenIter<'a> = ChildIter<'b, 'a, T> where T: 'a, Self: 'a;
+// impl<'b, T: Send + Sync + Eq + Clone + 'static> IterableChildren<T> for ChildrenSlice<'b, T> {
+//     type ChildrenIter<'a>
+//         = ChildIter<'b, 'a, T>
+//     where
+//         T: 'a,
+//         Self: 'a;
 
-    fn iter_children(&self) -> Self::ChildrenIter<'_> {
-        ChildIter {
-            index: 0,
-            children: self,
-        }
-    }
+//     fn iter_children(&self) -> Self::ChildrenIter<'_> {
+//         ChildIter {
+//             index: 0,
+//             children: self,
+//         }
+//     }
 
-    fn is_empty(&self) -> bool {
-        self.0 .0.is_empty()
-    }
-}
+//     fn is_empty(&self) -> bool {
+//         self.0 .0.is_empty()
+//     }
+// }
 
 impl<'b, T: Send + Sync + Eq + 'static> std::ops::Index<u16> for ChildrenSlice<'b, T> {
     type Output = T;
@@ -180,6 +185,23 @@ impl<'b, T: Send + Sync + Eq + 'static> std::ops::Index<u16> for ChildrenSlice<'
     }
 }
 
+impl<'b, T: Send + Sync + Eq + 'static> Iterator for ChildrenSlice<'b, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
+
+impl<'b, T: Send + Sync + Eq + Clone + 'static> Childrn< T> for ChildrenSlice<'b, T> {
+    fn len(&self) -> usize {
+        self.0 .0.deref().len()
+    }
+    fn is_empty(&self) -> bool {
+        unimplemented!("cannot be implemented on ChildrenSlice")
+    }
+}
 impl<'b, T: Send + Sync + Eq + Clone + 'static> Children<u16, T> for ChildrenSlice<'b, T> {
     fn child_count(&self) -> u16 {
         self.0 .0.deref().len().to_u16().unwrap()
@@ -195,32 +217,42 @@ impl<'b, T: Send + Sync + Eq + Clone + 'static> Children<u16, T> for ChildrenSli
         self.get(c)
     }
 
-    fn after(&self, _i: u16) -> &Self {
+    fn after(&self, _i: u16) -> Self {
         unimplemented!("cannot be implemented on ChildrenSlice")
         // (&self.0.0.deref()[i.into()..]).into()
     }
 
-    fn before(&self, _i: u16) -> &Self {
+    fn before(&self, _i: u16) -> Self {
         unimplemented!("cannot be implemented on ChildrenSlice")
         // (&self.0.0.deref()[..i.into()]).into()
     }
 
-    fn between(&self, _start: u16, _end: u16) -> &Self {
+    fn between(&self, _start: u16, _end: u16) -> Self {
         unimplemented!("cannot be implemented on ChildrenSlice")
         // (&self.0.0.deref()[start.into()..end.into()]).into()
     }
 
-    fn inclusive(&self, _start: u16, _end: u16) -> &Self {
+    fn inclusive(&self, _start: u16, _end: u16) -> Self {
         unimplemented!("cannot be implemented on ChildrenSlice")
         // (&self.0.0.deref()[start.into()..=end.into()]).into()
     }
+
+    fn iter_children(&self) -> Self {
+        unimplemented!("cannot be implemented on ChildrenSlice")
+    }
+}
+
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::CLending<'a, u16, NodeIdentifier>
+    for HashedNodeRef<'_, Id>
+{
+    type Children = crate::types::ChildrenSlice<'a, NodeIdentifier>;
 }
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
     for HashedNodeRef<'a, Id>
 {
     type ChildIdx = u16;
-    type Children<'b> = ChildrenSlice<'b,<Self::TreeId as NodeId>::IdN> where Self: 'b;
+    // type Children<'b> = ChildrenSlice<'b,<Self::TreeId as NodeId>::IdN> where Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.cs()
@@ -233,15 +265,16 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
     }
 
     fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
-        self.cs()
-            .unwrap_or_else(|| {
-                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!()
-            })
-            .0
-             .0
-            .get(idx.to_usize().unwrap())
-            .map(|x| *x)
+        todo!()
+        // self.cs()
+        //     .unwrap_or_else(|| {
+        //         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+        //         panic!()
+        //     })
+        //     .0
+        //      .0
+        //     .get(idx.to_usize().unwrap())
+        //     .map(|x| *x)
     }
 
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
@@ -251,7 +284,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
         v.get(c).cloned()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(&self) -> Option<LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         todo!() // perdu
     }
 }
@@ -270,13 +303,8 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder
-    for HashedNodeRef<'a, Id>
-{
-    fn unerase_ref<T: 'static + Send + Sync>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&T> {
+impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         todo!()
     }
 }
@@ -287,7 +315,7 @@ where
     Id::Ty: Copy + Hash + Eq,
 {
     fn has_children(&self) -> bool {
-        self.cs().map(|x| !x.is_empty()).unwrap_or(false)
+        self.cs().map(|x| !crate::types::Childrn::is_empty(&x)).unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {

@@ -110,7 +110,7 @@ impl Default for TStore {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + hyperast::types::AAAA> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {

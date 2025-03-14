@@ -22,6 +22,13 @@ pub struct Node<
     pub pos: P,
 }
 
+#[derive(Clone)]
+pub struct NodeR<P> {
+    /// the offset in acc
+    // offset: Idx,
+    pub pos: P,
+}
+
 impl<'hast, HAST: HyperAST> PartialEq for Node<'hast, HAST> {
     fn eq(&self, other: &Self) -> bool {
         self.pos == other.pos
@@ -86,14 +93,14 @@ impl<'hast, HAST: HyperAST> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    for<'t> HAST::T<'t>: WithRoles,
-    for<'t> HAST::T<'t>: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
 {
     type Node = self::Node<'hast, HAST>;
-    type NodeRef<'a>
-        = &'a self::Node<'hast, HAST>
-    where
-        Self: 'a;
+    // type NodeRef<'a>
+    //     = &'a self::Node<'hast, HAST>
+    // where
+    //     Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         use hyperast::types::NodeStore;
@@ -103,10 +110,7 @@ where
         let n = self.stores.node_store().resolve(p);
         use hyperast::types::Children;
         use hyperast::types::WithChildren;
-        let Some(node) = n
-            .children()
-            .and_then(|x| x.get(*self.pos.offset().unwrap()))
-        else {
+        let Some(node) = n.child(self.pos.offset().unwrap()) else {
             if self.stores.resolve_type(p).is_hidden() {
                 self.pos.pop();
                 return self.goto_next_sibling_internal();
@@ -114,7 +118,7 @@ where
                 return TreeCursorStep::TreeCursorStepNone;
             }
         };
-        self.pos.inc(*node);
+        self.pos.inc(node);
         if self.kind().is_spaces() {
             return self.goto_next_sibling_internal();
         }
@@ -130,7 +134,10 @@ where
         let n = self.stores.node_store().resolve(self.pos.node().unwrap());
         use hyperast::types::Children;
         use hyperast::types::WithChildren;
-        let Some(node) = n.children().and_then(|x| x.get(num::zero())) else {
+        let Some(cs) = n.children() else {
+            return TreeCursorStep::TreeCursorStepNone;
+        };
+        let Some(node) = cs.get(num::zero()) else {
             return TreeCursorStep::TreeCursorStepNone;
         };
         self.pos.goto(*node, num::zero());
@@ -158,8 +165,8 @@ where
         }
     }
 
-    fn current_node(&self) -> Self::NodeRef<'_> {
-        self
+    fn current_node(&self) -> Self::Node {
+        self.clone()
     }
 
     fn parent_is_error(&self) -> bool {
@@ -228,8 +235,8 @@ where
         }
     }
 
-    fn text_provider(&self) -> <Self::Node as super::Node>::TP<'_> {
-        ()
+    fn text_provider(&self) -> <Self::Node as super::TextLending<'_>>::TP {
+        &self.stores.label_store()
     }
 
     fn is_visible_at_root(&self) -> bool {
@@ -251,8 +258,8 @@ impl<'hast, HAST: HyperAST> self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    for<'t> HAST::T<'t>: WithRoles,
-    for<'t> HAST::T<'t>: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
 {
     fn role(&self) -> Option<<HAST::TS as RoleStore>::Role> {
         use hyperast::types::NodeStore;
@@ -311,12 +318,16 @@ where
     }
 }
 
+impl<'a, 'hast, HAST: HyperAST> super::TextLending<'a> for self::Node<'hast, HAST> {
+    type TP = &'hast <HAST as HyperAST>::LS;
+}
+
 impl<'hast, HAST: HyperAST> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    for<'t> HAST::T<'t>: WithRoles,
-    for<'t> HAST::T<'t>: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
@@ -376,20 +387,20 @@ where
         }
         Equal
     }
-    type TP<'a> = ();
-    fn text(&self, _tp: ()) -> std::borrow::Cow<str> {
+    fn text<'s, 'l>(&'s self, text_provider: <Self as super::TextLending<'l>>::TP) -> super::BB<'s, 'l, str> {
         let id = self.pos.node().unwrap();
         use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(id);
         if n.has_children() {
             let r = hyperast::nodes::TextSerializer::new(self.stores, *id).to_string();
-            return r.into();
+            return super::BB::O(r);
         }
         if let Some(l) = n.try_get_label() {
             let l = self.stores.label_store().resolve(l);
-            return l.into();
+            // todo!()
+            return super::BB::A(l);
         }
-        "".into()
+        super::BB::B("".into())
     }
 }
 
@@ -397,8 +408,8 @@ impl<'hast, HAST: HyperAST> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    for<'t> HAST::T<'t>: WithRoles,
-    for<'t> HAST::T<'t>: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
 {
     fn child_by_role(&mut self, role: <HAST::TS as RoleStore>::Role) -> Option<()> {
         // TODO what about multiple children with same role?
@@ -452,5 +463,19 @@ where
 {
     fn is_visible(&self) -> bool {
         !self.kind().is_hidden()
+    }
+
+    pub(crate) fn goto_parent(&mut self) -> bool {
+        loop {
+            if self.pos.pop().is_none() {
+                return false;
+            }
+            if self.pos.node().is_none() {
+                return false;
+            }
+            if self.is_visible() {
+                return true;
+            }
+        }
     }
 }

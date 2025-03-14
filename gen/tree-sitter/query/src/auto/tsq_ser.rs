@@ -1,13 +1,14 @@
 use hyperast::nodes::Space;
 use hyperast::types;
+use hyperast::types::AstLending;
+use hyperast::types::Childrn;
 use hyperast::types::HyperType;
-use hyperast::types::IterableChildren;
 use std::fmt::{Debug, Display, Write};
 
 pub struct TreeToQuery<
     'a,
     HAST: types::HyperAST,
-    F: Fn(&HAST::T<'_>) -> bool,
+    F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
     const TY: bool = true,
     const LABELS: bool = false,
     const IDS: bool = false,
@@ -21,14 +22,22 @@ pub struct TreeToQuery<
 pub fn to_query<'store, HAST: types::HyperAST>(
     stores: &'store HAST,
     root: HAST::IdN,
-) -> TreeToQuery<'store, HAST, impl for<'a> Fn(&'a HAST::T<'_>) -> bool, true, true, false, false> {
+) -> TreeToQuery<
+    'store,
+    HAST,
+    impl for<'a> Fn(&'a <HAST as AstLending<'_>>::RT) -> bool,
+    true,
+    true,
+    false,
+    false,
+> {
     TreeToQuery::with_pred(stores, root, |_| true)
 }
 
 impl<
         'store,
         HAST: types::HyperAST,
-        F: Fn(&HAST::T<'_>) -> bool,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -43,7 +52,7 @@ impl<
 impl<
         'store,
         HAST: types::HyperAST,
-        F: Fn(&HAST::T<'_>) -> bool,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -60,7 +69,7 @@ where
 impl<
         'store,
         HAST: types::HyperAST,
-        F: Fn(&HAST::T<'_>) -> bool,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -143,7 +152,7 @@ where
                     write!(out, "(")?;
                     w_kind(out)?;
                     for id in it {
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
                             write!(out, " ")?;
                         }
