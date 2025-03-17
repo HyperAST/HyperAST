@@ -140,23 +140,6 @@ pub fn number_of_common_descendants<
             }
         }
     }
-
-    // println!("{}", src.len());
-
-    // assert_eq!(common, {
-    //     let s: HashSet<_, RandomState> =
-    //         HashSet::from_iter(dst.iter().map(|x| x.to_usize().unwrap()));
-    //     let mut c = 0;
-    //     for t in src {
-    //         if mappings.is_src(t) {
-    //             let m = mappings.get_dst(t).to_usize().unwrap();
-    //             if s.contains(&m.to_usize().unwrap()) {
-    //                 c += 1;
-    //             }
-    //         }
-    //     }
-    //     c
-    // });
     return common;
 }
 

@@ -1,17 +1,14 @@
-// Zhang and Shasha edit distance algorithm for labeled trees, 1989
-//
-// implementation originally inspired by Gumtree
-
-use std::{fmt::Debug, marker::PhantomData};
-
-use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
-use str_distance::DistanceMetric;
+//! Zhang and Shasha edit distance algorithm for labeled trees, 1989
+//!
+//! implementation originally inspired by Gumtree
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
-use hyperast::types::{
-    DecompressedFrom, DecompressedSubtree, HyperAST, LabelStore, Labeled, NodeId, NodeStore, Stored, Tree
-};
+use hyperast::types::{DecompressedFrom, HyperAST, LabelStore, Labeled, NodeStore};
+use hyperast::PrimInt;
+use num_traits::{cast, one, zero, ToPrimitive};
+use str_distance::DistanceMetric;
+
 // TODO use the Mapping struct
 pub struct ZsMatcher<M, SD, DD = SD> {
     pub mappings: M,
@@ -20,14 +17,10 @@ pub struct ZsMatcher<M, SD, DD = SD> {
 }
 
 impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
-    pub fn matchh<HAST>(
-        stores: HAST,
-        src: HAST::IdN,
-        dst: HAST::IdN,
-    ) -> Self
+    pub fn matchh<HAST>(stores: HAST, src: HAST::IdN, dst: HAST::IdN) -> Self
     where
-        M::Src: PrimInt + std::ops::SubAssign + Debug,
-        M::Dst: PrimInt + std::ops::SubAssign + Debug,
+        M::Src: PrimInt,
+        M::Dst: PrimInt,
         SD: PostOrderKeyRoots<HAST, M::Src> + DecompressedFrom<HAST, Out = SD>,
         DD: PostOrderKeyRoots<HAST, M::Dst> + DecompressedFrom<HAST, Out = DD>,
         HAST: HyperAST + Copy,
@@ -46,7 +39,7 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
                 stores: stores,
                 src_arena: &src_arena,
                 dst_arena: &dst_arena,
-                phantom: PhantomData,
+                phantom: std::marker::PhantomData,
             };
             let mut dist = base.compute_dist();
             base.compute_mappings(&mut mappings, &mut dist);
@@ -59,14 +52,10 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
         }
     }
 
-    pub fn match_with<HAST>(
-        stores: HAST,
-        src_arena: SD,
-        dst_arena: DD,
-    ) -> M
+    pub fn match_with<HAST>(stores: HAST, src_arena: SD, dst_arena: DD) -> M
     where
-        M::Src: PrimInt + std::ops::SubAssign + Debug,
-        M::Dst: PrimInt + std::ops::SubAssign + Debug,
+        M::Src: PrimInt,
+        M::Dst: PrimInt,
         SD: PostOrderKeyRoots<HAST, M::Src>,
         DD: PostOrderKeyRoots<HAST, M::Dst>,
         HAST: HyperAST + Copy,
@@ -81,7 +70,7 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
             stores,
             src_arena: &src_arena,
             dst_arena: &dst_arena,
-            phantom: PhantomData,
+            phantom: std::marker::PhantomData,
         };
         let mut dist = base.compute_dist();
         base.compute_mappings(&mut mappings, &mut dist);
@@ -90,14 +79,18 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
 }
 
 // TODO use the Mapper struct
-pub struct MatcherImpl<'b, 'c, SD, DD, HAST, M>
-where
-{
+pub struct MatcherImpl<'b, 'c, SD, DD, HAST, M> {
     stores: HAST,
     pub src_arena: &'c SD,
     pub dst_arena: &'c DD,
-    pub(super) phantom: PhantomData<*const (M, &'b ())>,
+    pub(super) phantom: std::marker::PhantomData<*const (M, &'b ())>,
 }
+
+
+mod qgrams;
+
+#[cfg(test)]
+mod other_qgrams;
 
 impl<
         'b: 'c,
@@ -108,8 +101,8 @@ impl<
         M: MonoMappingStore,
     > MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
-    M::Src: PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
     HAST::Label: Eq,
 {
     fn get_deletion_cost(&self, _di: &HAST::IdN) -> f64 {
@@ -204,10 +197,8 @@ impl<
         M: MonoMappingStore,
     > MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
-    // T::TreeId: Clone,
-    // T::Type: Copy + Eq + Send + Sync,
-    M::Src: PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
     HAST::Label: Eq,
 {
     pub(crate) fn compute_dist(&self) -> ZsMatcherDist {
@@ -494,310 +485,6 @@ pub mod str_distance_patched {
     }
 }
 
-pub mod qgrams {
-    use std::collections::HashMap;
-
-    use hyperast::compat::DefaultHashBuilder;
-
-    const PAD: [u8; 10] = *b"##########";
-
-    pub(super) fn pad<const Q: usize>(s: &[u8]) -> Vec<u8> {
-        [&s[s.len() - Q..], &PAD[..Q], &s[..Q]].concat()
-    }
-
-    fn make_array<A, T>(slice: &[T]) -> A
-    where
-        A: Sized + Default + AsMut<[T]>,
-        T: Copy,
-    {
-        let mut a = Default::default();
-        // the type cannot be inferred!
-        // a.as_mut().copy_from_slice(slice);
-        <A as AsMut<[T]>>::as_mut(&mut a).copy_from_slice(slice);
-        a
-    }
-
-    pub fn qgram_distance_hash_opti(s: &[u8], t: &[u8]) -> f64 {
-        const Q: usize = 3;
-        const QM: usize = 2;
-        if std::cmp::min(s.len(), t.len()) < Q {
-            return if s.eq(t) { 0. } else { 1. };
-        }
-        // #[cfg(feature = "native")]
-        let hb = DefaultHashBuilder::default();
-        // #[cfg(not(feature = "native"))]
-        // let hb = std::collections::hash_map::RandomState::generate_with(42, 142, 542, 9342);
-        // Divide s into q-grams and store them in a hash map
-        let mut qgrams = HashMap::<[u8; Q], i32, DefaultHashBuilder>::with_hasher(hb);
-        let pad_s = pad::<QM>(s);
-        for i in 0..=pad_s.len() - Q {
-            // dbg!(i);
-            // dbg!(std::str::from_utf8(&pad_s[i..i + Q]).unwrap());
-            let qgram = make_array(&pad_s[i..i + Q]);
-            *qgrams.entry(qgram).or_insert(0) += 1;
-        }
-        for i in 0..=s.len() - Q {
-            // dbg!(i);
-            // dbg!(std::str::from_utf8(&s[i..i + Q]).unwrap());
-            let qgram = make_array(&s[i..i + Q]);
-            *qgrams.entry(qgram).or_insert(0) += 1;
-        }
-
-        // // Divide t into q-grams and store them in a hash map
-        let pad_t = pad::<QM>(t);
-        // dbg!(pad_t.len() - Q);
-        for i in 0..=pad_t.len() - Q {
-            // dbg!(i);
-            let qgram = make_array(&pad_t[i..i + Q]);
-            // dbg!(std::str::from_utf8(&pad_t[i..i + Q]).unwrap());
-            *qgrams.entry(qgram).or_insert(0) -= 1;
-        }
-        for i in 0..=t.len() - Q {
-            // dbg!(i);
-            let qgram = make_array(&t[i..i + Q]);
-            // dbg!(std::str::from_utf8(&t[i..i + Q]).unwrap());
-            *qgrams.entry(qgram).or_insert(0) -= 1;
-        }
-
-        let qgrams_dist: u32 = qgrams.into_iter().map(|(_, i)| i32::abs(i) as u32).sum();
-
-        // dbg!(&qgrams_dist);
-        // dbg!(s.len() + 2 * Q);
-        // dbg!(t.len() + 2 * Q);
-
-        // Compute the q-gram distance
-        // let distance = qgrams_dist as f64 / (s_qgrams.len() + t_qgrams.len()) as f64;
-        // distance
-        (qgrams_dist as f32 / ((s.len() + 2 * QM) + (t.len() + 2 * QM) - 2 * (QM + 1) + 2) as f32)
-            as f64
-    }
-}
-
-#[cfg(test)]
-pub(super) mod other_qgrams {
-    use crate::matchers::optimal::zs::qgrams::qgram_distance_hash_opti;
-    use std::collections::{HashMap, HashSet};
-
-    use super::qgrams::pad;
-
-    #[test]
-    fn aaa() {
-        dbg!(std::str::from_utf8(&pad::<2>(b"abcdefg")).unwrap());
-    }
-    #[test]
-    fn bbb() {
-        const Q: usize = 2;
-        let s = b"abcdefg";
-        let pad_s = pad::<{ Q }>(s);
-        pad_s.windows(Q + 1).for_each(|qgram| {
-            dbg!(std::str::from_utf8(qgram).unwrap());
-        });
-        for qgram in s.windows(Q + 1) {
-            dbg!(std::str::from_utf8(qgram).unwrap());
-        }
-    }
-
-    /// just check fo absence of presence of ngram, not distance
-    /// give Q - 1 as const parameter to avoid using const generic exprs
-    fn qgram_metric_hash<const Q: usize>(s: &[u8], t: &[u8]) -> f64 {
-        if std::cmp::min(s.len(), t.len()) < Q {
-            return if s.eq(t) { 0. } else { 1. };
-        }
-        // Divide s into q-grams and store them in a hash map
-        let mut s_qgrams = HashSet::new();
-        let pad_s = pad::<Q>(s);
-        pad_s.windows(Q + 1).for_each(|qgram| {
-            // dbg!(std::str::from_utf8(qgram).unwrap());
-            s_qgrams.insert(qgram);
-        });
-        for qgram in s.windows(Q + 1) {
-            // dbg!(std::str::from_utf8(qgram).unwrap());
-            s_qgrams.insert(qgram);
-        }
-
-        // Count the number of common q-grams
-        let mut qgrams_dist = 0;
-        let mut t_qgrams = HashSet::new();
-        let pad_t = pad::<Q>(t);
-        pad_t.windows(Q + 1).for_each(|qgram| {
-            if s_qgrams.contains(qgram) {
-                if !t_qgrams.contains(qgram) {
-                    qgrams_dist += 1;
-                    t_qgrams.insert(qgram);
-                }
-            } else if !t_qgrams.contains(qgram) {
-                qgrams_dist += 1;
-                t_qgrams.insert(qgram);
-            }
-        });
-        for qgram in t.windows(Q + 1) {
-            if s_qgrams.contains(qgram) && !t_qgrams.contains(qgram) {
-                t_qgrams.insert(qgram);
-            } else {
-                qgrams_dist += 1;
-            }
-        }
-
-        // dbg!(&qgrams_dist);
-        // dbg!(s.len() + 2 * Q);
-        // dbg!(t.len() + 2 * Q);
-
-        // Compute the q-gram distance
-        // let distance = qgrams_dist as f64 / (s_qgrams.len() + t_qgrams.len()) as f64;
-        // distance
-        (qgrams_dist as f32 / ((s.len() + 2 * Q) + (t.len() + 2 * Q) - 2 * (Q + 1) + 2) as f32)
-            as f64
-    }
-
-    /// give Q - 1 as const parameter to avoid using const generic exprs
-    fn qgram_distance_hash<const Q: usize>(s: &[u8], t: &[u8]) -> f64 {
-        if std::cmp::min(s.len(), t.len()) < Q {
-            return if s.eq(t) { 0. } else { 1. };
-        }
-        // Divide s into q-grams and store them in a hash map
-        let mut qgrams =
-            HashMap::<&[u8], i32, DefaultHashBuilder>::with_hasher(DefaultHashBuilder::default());
-        let pad_s = pad::<Q>(s);
-        pad_s.windows(Q + 1).for_each(|qgram| {
-            // dbg!(std::str::from_utf8(qgram).unwrap());
-            *qgrams.entry(qgram).or_insert(0) += 1;
-        });
-        for qgram in s.windows(Q + 1) {
-            // dbg!(std::str::from_utf8(qgram).unwrap());
-            *qgrams.entry(qgram).or_insert(0) += 1;
-        }
-
-        // Divide t into q-grams and store them in a hash map
-        let pad_t = pad::<Q>(t);
-        pad_t.windows(Q + 1).for_each(|qgram| {
-            // dbg!(std::str::from_utf8(qgram).unwrap());
-            *qgrams.entry(qgram).or_insert(0) -= 1;
-        });
-        for qgram in t.windows(Q + 1) {
-            // dbg!(std::str::from_utf8(qgram).unwrap());
-            *qgrams.entry(qgram).or_insert(0) -= 1;
-        }
-
-        // use specs::prelude::ParallelIterator;
-        // let qgrams_dist: u32 = qgrams
-        //     .into_par_iter()
-        //     .map(|(_, i)| i32::abs(i) as u32)
-        //     .sum();
-        let qgrams_dist: u32 = qgrams.into_iter().map(|(_, i)| i32::abs(i) as u32).sum();
-
-        // dbg!(&qgrams_dist);
-        // dbg!(s.len() + 2 * Q);
-        // dbg!(t.len() + 2 * Q);
-
-        // Compute the q-gram distance
-        // let distance = qgrams_dist as f64 / (s_qgrams.len() + t_qgrams.len()) as f64;
-        // distance
-        (qgrams_dist as f32 / ((s.len() + 2 * Q) + (t.len() + 2 * Q) - 2 * (Q + 1) + 2) as f32)
-            as f64
-    }
-
-    /// give Q - 1 as const parameter to avoid using const generic exprs
-    /// considering bench_hash and bench_single_hash, this is worst than qgram_distance_hash
-    fn qgram_distance_single_hash<const Q: usize>(s: &[u8], t: &[u8]) -> f64 {
-        // Divide s into q-grams and store them in a hash map
-        let mut s_qgrams = HashSet::new();
-        let pad_s = pad::<Q>(s);
-        pad_s.windows(Q + 1).for_each(|qgram| {
-            s_qgrams.insert(qgram);
-        });
-        for qgram in s.windows(Q + 1) {
-            s_qgrams.insert(qgram);
-        }
-
-        // Count the number of common q-grams
-        let mut common_qgrams = 0;
-        let pad_t = pad::<Q>(t);
-        pad_t.windows(Q + 1).for_each(|qgram| {
-            if s_qgrams.contains(qgram) {
-                s_qgrams.remove(qgram);
-                common_qgrams += 1;
-            }
-        });
-        for qgram in t.windows(Q + 1) {
-            if s_qgrams.contains(qgram) {
-                s_qgrams.remove(qgram);
-                common_qgrams += 1;
-            }
-        }
-
-        // Compute the q-gram distance
-        let distance = common_qgrams as f64 / (s_qgrams.len() + t.len() - Q + 1) as f64;
-        distance
-    }
-
-    #[test]
-    fn validity_qgram_distance_hash() {
-        dbg!(qgram_metric_hash::<2>(
-            "abaaacdef".as_bytes(),
-            "abcdefg".as_bytes()
-        ));
-        dbg!(qgram_distance_hash_opti(
-            "abaaacdef".as_bytes(),
-            "abcdefg".as_bytes()
-        ));
-        dbg!(qgram_distance_hash::<2>(
-            "abaaacdef".as_bytes(),
-            "abcdefg".as_bytes()
-        ));
-        use str_distance::DistanceMetric;
-        dbg!(super::str_distance_patched::QGram::new(3)
-            .normalized("##abaaacdef##".as_bytes(), "##abcdefg##".as_bytes()));
-    }
-
-    extern crate test;
-    use hyperast::compat::DefaultHashBuilder;
-    use test::Bencher;
-
-    const PAIR1: (&[u8], &[u8]) = ("abaaacdefg".as_bytes(), "abcdefg".as_bytes());
-    const PAIR2: (&[u8], &[u8]) = (
-        "abaaeqrogireiuvnlrpgacdefg".as_bytes(),
-        "qvvsdflflvjehrgipuerpq".as_bytes(),
-    );
-
-    #[allow(soft_unstable)]
-    #[bench]
-    fn bench_hash(b: &mut Bencher) {
-        b.iter(|| qgram_distance_hash::<2>(PAIR1.0, PAIR1.1))
-    }
-
-    #[allow(soft_unstable)]
-    #[bench]
-    fn bench_hash_opti(b: &mut Bencher) {
-        b.iter(|| qgram_distance_hash_opti(PAIR1.0, PAIR1.1))
-    }
-
-    #[allow(soft_unstable)]
-    #[bench]
-    fn bench_hash_opti2(b: &mut Bencher) {
-        b.iter(|| qgram_distance_hash_opti(PAIR2.0, PAIR2.1))
-    }
-
-    #[allow(soft_unstable)]
-    #[bench]
-    fn bench_single_hash(b: &mut Bencher) {
-        b.iter(|| qgram_distance_single_hash::<2>("abcdefg".as_bytes(), "abcdefg".as_bytes()))
-    }
-
-    #[allow(soft_unstable)]
-    #[bench]
-    fn bench_str_distance(b: &mut Bencher) {
-        use str_distance::DistanceMetric;
-        b.iter(|| super::str_distance_patched::QGram::new(3).normalized(PAIR1.0, PAIR1.1))
-    }
-
-    #[allow(soft_unstable)]
-    #[bench]
-    fn bench_str_distance2(b: &mut Bencher) {
-        use str_distance::DistanceMetric;
-        b.iter(|| super::str_distance_patched::QGram::new(3).normalized(PAIR2.0, PAIR2.1))
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -868,7 +555,7 @@ mod tests {
             stores: &stores,
             src_arena: &src_arena,
             dst_arena: &dst_arena,
-            phantom: PhantomData,
+            phantom: std::marker::PhantomData,
         };
 
         let tree_dist = vec![

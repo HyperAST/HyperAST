@@ -3,8 +3,6 @@ use std::fmt;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub(crate) struct Pair<T1, T2>(pub(crate) T1, pub(crate) T2);
 
-// impl<T1,T2> Pair<T1,T2> {}
-
 impl<T1, T2> From<(T1, T2)> for Pair<T1, T2> {
     fn from(pair: (T1, T2)) -> Self {
         Pair {
@@ -24,17 +22,3 @@ where
         write!(f, "({}, {})", first, second)
     }
 }
-
-// public JSitterJavaTreeGenerator() {
-//     super();
-//     NodeType nodetype = new NodeType("source_file");
-//     Language<NodeType> lang = Language.load(
-//             nodetype,
-//             "java",
-//             "tree_sitter_java",
-//             "libtsjava",
-//             Language.class.getClassLoader());
-//     lang.register(nodetype);
-
-//     this.parser = lang.parser();
-// }

@@ -1,6 +1,3 @@
-use std::fmt::Debug;
-use std::hash::Hash;
-
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
     LazyDecompressedTreeStore, Shallow,
@@ -11,11 +8,13 @@ use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyperast::compat::HashMap;
 use hyperast::types::{
-    Childrn, DecompressedSubtree, HashKind, HyperAST, Labeled, NodeId, NodeStore, Stored, Tree,
-    WithChildren, WithHashs, WithStats,
+    Childrn, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree, WithChildren, WithHashs,
+    WithStats,
 };
-
-use num_traits::{PrimInt, ToPrimitive};
+use hyperast::PrimInt;
+use num_traits::ToPrimitive;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 pub struct LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, const MIN_HEIGHT: usize = 1> {
     internal: Mapper<HAST, Dsrc, Ddst, M>,
@@ -29,14 +28,13 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: Tree + WithHashs + WithStats,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
     HAST::Label: Clone + Eq,
-    Dsrc::IdD: Debug + Hash + Eq + PrimInt,
-    Ddst::IdD: Debug + Hash + Eq + PrimInt,
-    M::Src: PrimInt + Debug + Hash,
-    M::Dst: PrimInt + Debug + Hash,
+    Dsrc::IdD: PrimInt + Hash,
+    Ddst::IdD: PrimInt + Hash,
+    M::Src: PrimInt + Hash,
+    M::Dst: PrimInt + Hash,
     Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
         + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
         + LazyDecompressedTreeStore<HAST, M::Src>,
@@ -99,13 +97,12 @@ impl<
     > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     HAST::IdN: Clone,
     HAST::Label: Clone + Eq,
-    Dsrc::IdD: Debug + Hash + Eq + PrimInt,
-    Ddst::IdD: Debug + Hash + Eq + PrimInt,
-    M::Src: PrimInt + Debug + Hash,
-    M::Dst: PrimInt + Debug + Hash,
+    Dsrc::IdD: PrimInt + Hash,
+    Ddst::IdD: PrimInt + Hash,
+    M::Src: PrimInt + Hash,
+    M::Dst: PrimInt + Hash,
     Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
         + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
         + LazyDecompressedTreeStore<HAST, M::Src>,
@@ -370,7 +367,6 @@ impl<
     > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     HAST::IdN: Clone + Eq,
     HAST::Label: Eq,
     Dsrc::IdD: Clone,
@@ -510,112 +506,5 @@ where
     }
 }
 
-pub(super) struct PriorityTreeList<'b, D, IdS, IdD, S, const MIN_HEIGHT: usize> {
-    pub trees: Vec<Option<Vec<IdD>>>,
-
-    pub store: S,
-    pub(super) arena: &'b mut D,
-
-    pub max_height: usize,
-
-    pub current_idx: isize,
-
-    pub phantom: std::marker::PhantomData<IdS>,
-}
-
-impl<'b, D, IdD, HAST, const MIN_HEIGHT: usize>
-    PriorityTreeList<'b, D, IdD, D::IdD, HAST, MIN_HEIGHT>
-where
-    D::IdD: Clone,
-    D: LazyDecompressedTreeStore<HAST, IdD>,
-    HAST: HyperAST + Copy,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
-{
-    pub(super) fn new(store: HAST, tree: D::IdD, arena: &'b mut D) -> Self {
-        let id = arena.original(&tree);
-        let h = store.resolve(&id).height() - 1;
-        let list_size = if h >= MIN_HEIGHT {
-            h + 1 - MIN_HEIGHT
-        } else {
-            0
-        };
-        let mut r = Self {
-            trees: vec![Default::default(); list_size],
-            store,
-            arena,
-            max_height: h,
-            current_idx: if list_size == 0 { -1 } else { 0 },
-            phantom: std::marker::PhantomData,
-        };
-        r.add_tree_aux(tree, h);
-        r
-    }
-
-    fn idx(&self, height: usize) -> usize {
-        self.max_height - height
-    }
-
-    fn height(&self, idx: usize) -> usize {
-        self.max_height - idx
-    }
-
-    fn add_tree(&mut self, tree: D::IdD) {
-        let id = self.arena.original(&tree);
-        let h = self.store.resolve(&id).height() - 1;
-        self.add_tree_aux(tree, h)
-    }
-
-    pub fn add_tree_aux(&mut self, tree: D::IdD, h: usize) {
-        if h >= MIN_HEIGHT {
-            let idx = self.idx(h);
-            if self.trees[idx].is_none() {
-                self.trees[idx] = Some(vec![]);
-            };
-            self.trees[idx].as_mut().unwrap().push(tree);
-        }
-    }
-
-    pub(super) fn open(&mut self) -> Option<Vec<D::IdD>> {
-        if let Some(pop) = self.pop() {
-            for tree in &pop {
-                self.open_tree(tree);
-            }
-            self.update_height();
-            Some(pop)
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn pop(&mut self) -> Option<Vec<D::IdD>> {
-        if self.current_idx < 0 {
-            None
-        } else {
-            self.trees[self.current_idx as usize].take()
-        }
-    }
-
-    pub(super) fn open_tree(&mut self, tree: &D::IdD) {
-        for c in self.arena.decompress_children(tree) {
-            self.add_tree(c);
-        }
-    }
-
-    pub(super) fn peek_height(&self) -> isize {
-        if self.current_idx == -1 {
-            -1
-        } else {
-            self.height(self.current_idx as usize) as isize
-        }
-    }
-
-    pub(super) fn update_height(&mut self) {
-        self.current_idx = -1;
-        for i in 0..self.trees.len() {
-            if self.trees[i].is_some() {
-                self.current_idx = i as isize;
-                break;
-            }
-        }
-    }
-}
+// can be inlined and modified if needed
+use super::lazy_greedy_subtree_matcher::PriorityTreeList;

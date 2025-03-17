@@ -1,9 +1,5 @@
-use std::{fmt::Debug, marker::PhantomData};
-
-use bitvec::store;
-use hyperast::PrimInt;
-use num_traits::{cast, one};
-
+use super::bottom_up_matcher::BottomUpMatcher;
+use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
     PostOrderIterable, PostOrderKeyRoots,
@@ -11,10 +7,11 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Decompressible;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyperast::types::{DecompressedFrom, DecompressedSubtree, HyperAST, NodeId, NodeStore, Stored, Tree, WithHashs};
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
+use hyperast::PrimInt;
+use num_traits::{cast, one};
+use std::fmt::Debug;
 
-use super::bottom_up_matcher::BottomUpMatcher;
-use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 /// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
 ///
 /// it will allow to make use complex types as const generics
@@ -76,25 +73,16 @@ impl<
             + ContiguousDescendants<HAST, M::Dst>
             + POBorrowSlice<HAST, M::Dst>,
         HAST: HyperAST + Copy,
-        // T: Stored, // Tree + WithHashs,
         M: MonoMappingStore + Default,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
         const SIM_THRESHOLD_DEN: u64,
     >
-    GreedyBottomUpMatcher<
-        Dsrc,
-        Ddst,
-        HAST,
-        M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    >
+    GreedyBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
-    M::Src: PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
     HAST::Label: Eq,
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -158,7 +146,6 @@ where
             cast::<_, M::Src>(self.internal.src_arena.len()).unwrap() - one()
         );
         assert!(self.internal.src_arena.len() > 0);
-        // println!("mappings={}", self.internal.mappings.len());
         // // WARN it is in postorder and it depends on decomp store
         // // -1 as root is handled after forloop
         for a in self.internal.src_arena.iter_df_post::<true>() {
@@ -198,8 +185,6 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-        // println!("nodes:{}", c);
-        // println!("nodes:{}", c2);
     }
 
     fn src_has_children(&mut self, src: M::Src) -> bool {
@@ -222,19 +207,12 @@ where
 
     pub(crate) fn last_chance_match_zs(&mut self, src: M::Src, dst: M::Dst) {
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
-        let src_s = self
-            .internal
-            .src_arena
-            .descendants_count(&src);
-        let dst_s = self
-            .internal
-            .dst_arena
-            .descendants_count(&dst);
+        let src_s = self.internal.src_arena.descendants_count(&src);
+        let dst_s = self.internal.dst_arena.descendants_count(&dst);
         if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
             return;
         }
         let stores = self.internal.stores;
-        let node_store = self.internal.stores.node_store();
         let src_offset;
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let mappings: M = if SLICE {
@@ -303,7 +281,6 @@ where
                 let tdst = self
                     .internal
                     .stores
-                    // .resolve(&matcher.src_arena.tree(&t))
                     .resolve_type(&self.internal.dst_arena.original(&dst));
                 if tsrc == tdst {
                     self.internal.mappings.link(src, dst);

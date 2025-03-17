@@ -43,14 +43,8 @@ pub use hyperast::types::DecompressedSubtree;
 ///
 /// the WithStats bound helps a lot with lazy decompressions
 pub trait InitializableWithStats<IdN>: DecompressedSubtree<IdN>
-where
-    // T: for<'t> types::NLending<'t, T::TreeId>,
-    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithStats,
 {
     fn considering_stats(&self, root: &IdN) -> Self
-    where
-        // S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
-        //     + NodeStore<T::TreeId>
             ;
 }
 
@@ -76,27 +70,9 @@ pub trait ShallowDecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD> {
     fn root(&self) -> IdS;
     fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdS;
     fn children(&self, x: &IdD) -> Vec<IdS>;
-    // fn child2(&self, x: &IdD, p: &[impl PrimInt]) -> IdS {
-    //     unimplemented!()
-    // }
-    // fn child4(&self, x: &IdD, p: &[impl PrimInt]) -> IdS {
-    //     unimplemented!()
-    // }
-    // fn children2(&self, x: &IdD) -> Vec<IdS> {
-    //     unimplemented!()
-    // }
-    // fn children4(&self, x: &IdD) -> Vec<IdS> {
-    //     unimplemented!()
-    // }
-    // fn children5(&self, x: &IdD) -> Vec<IdS> {
-    //     unimplemented!()
-    // }
 }
 pub trait Shallow<T> {
     fn shallow(&self) -> &T;
-    // fn direct(&self) -> T where T: Clone{
-    //     self.shallow().clone()
-    // }
 }
 
 impl Shallow<u64> for u64 {
@@ -132,19 +108,6 @@ pub trait LazyDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
     #[must_use]
     fn decompress_children(&mut self, x: &Self::IdD) -> Vec<Self::IdD>;
     fn decompress_to(&mut self, x: &IdS) -> Self::IdD;
-    // fn decompress_to2<S>(&mut self, store: &S, x: &IdS) -> Self::IdD
-    // where
-    //     S: for<'b> NodeStore<T::TreeId>,
-    // {
-    //     todo!()
-    // }
-    // #[must_use]
-    // fn decompress_children2<S>(&mut self, store: &S, x: &Self::IdD) -> Vec<Self::IdD>
-    // where
-    //     S: for<'b> NodeStore<T::TreeId>,
-    // {
-    //     todo!()
-    // }
 }
 
 pub trait DecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD>:
@@ -224,35 +187,11 @@ pub trait DecompressedWithParent<HAST: HyperAST + Copy, IdD>:
     }
     /// lowest common ancestor
     fn lca(&self, a: &IdD, b: &IdD) -> IdD;
-    // fn position_in_parent<'b, S>(
-    //     &self,
-    //     store: &'b S,
-    //     c: &IdD,
-    // ) -> <S::R<'b> as WithChildren>::ChildIdx
-    // where
-    //     S: NodeStore<T::TreeId, R<'b> = T>;
 }
-
-// pub trait PosInParent<HAST: HyperAST + Copy, IdD>
-// where
-//     T: for<'t> types::NLending<'t, T::TreeId>,
-//     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-// {
-//     fn position_in_parent_with_store<S>(&self, store: &S, c: &IdD) -> CIdx<'_, T, T::TreeId>
-//     where
-//         S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
-//             + NodeStore<T::TreeId>;
-// }
-
 pub trait DecompressedWithSiblings<HAST: HyperAST + Copy, IdD>:
     DecompressedWithParent<HAST, IdD>
 {
     fn lsib(&self, x: &IdD) -> Option<IdD>;
-    // fn siblings_count(&self, id: &IdD) -> Option<IdD>; // TODO improve the return type
-    // fn position_in_parent<Idx, S>(&self, store: &S, c: &IdD) -> Idx
-    // where
-    //     S: 'a + NodeStore<IdC>,
-    //     S::R<'a>: WithChildren<TreeId = IdC>;
 }
 
 pub trait BreadthFirstIt<HAST: HyperAST + Copy, IdD>: DecompressedTreeStore<HAST, IdD> {
@@ -326,33 +265,6 @@ impl<'a, IdD: PrimInt> Iterator for IterKr<'a, IdD> {
         num_traits::cast(self.0.next()?)
     }
 }
-
-// pub trait MapDecompressed<'a, HAST: HyperAST + Copy + 'a, IdD: PrimInt, D: DecompressedTreeStore<HAST, IdD>>:
-//     Sized
-// {
-//     /// Converts to this type from the input type.
-//     fn map_it<S>(_: &'a S, _: &'a D) -> Self
-//     where
-//         S: NodeStore<T::TreeId, N = T>;
-// }
-
-// pub trait WrapDecompressed<'a, HAST: HyperAST + Copy + 'a, IdD: PrimInt, D: DecompressedTreeStore<HAST, IdD>>:
-//     Sized
-// {
-//     /// Converts to this type from the input type.
-//     fn wrap_it<S>(_: &'a S, _: &'a D) -> Self
-//     where
-//         S: NodeStore<T::TreeId, N = T>;
-// }
-
-// /// Used as a workaround to cache stuff that uses phantom types ie. HashedNodeRef in HyperAST
-// /// TODO provide a cache wrapping this concern.
-// pub trait Persistable {
-//     type Persisted;
-//     fn persist(self) -> Self::Persisted;
-//     unsafe fn unpersist(this: Self::Persisted) -> Self;
-// }
-
 pub struct PersistedNode<I>(I);
 
 impl<I> hyperast::types::Node for PersistedNode<I> {}

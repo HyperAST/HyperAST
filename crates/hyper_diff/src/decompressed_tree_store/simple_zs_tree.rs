@@ -54,10 +54,7 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt>
     }
 }
 
-impl<IdN, IdD: PrimInt> From<CompletePostOrder<IdN, IdD>> for SimpleZsTree<IdN, IdD>
-// where
-// T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-{
+impl<IdN, IdD: PrimInt> From<CompletePostOrder<IdN, IdD>> for SimpleZsTree<IdN, IdD> {
     fn from(complete: CompletePostOrder<IdN, IdD>) -> Self {
         let basic = complete.simple.basic;
         Self {
@@ -67,20 +64,10 @@ impl<IdN, IdD: PrimInt> From<CompletePostOrder<IdN, IdD>> for SimpleZsTree<IdN, 
     }
 }
 
-// impl<'a, T: Stored, IdD: PrimInt> types::NLending<'a, T::TreeId> for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
-// where
-//     T: for<'t> types::NLending<'t, T::TreeId>,
-// {
-//     type N = <T as types::NLending<'a, T::TreeId>>::N;
-// }
-
 impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
     for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    //     T: for<'t> types::NLending<'t, T::TreeId>,
-    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     fn lld(&self, i: &IdD) -> IdD {
         self.as_basic().lld(i)
@@ -95,9 +82,6 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrderIterable<HAST, IdD>
     for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    //     T: for<'t> types::NLending<'t, T::TreeId>,
-    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     type It = Iter<IdD>;
     fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
@@ -109,9 +93,6 @@ impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> PostOrdKeyRoots<'a, HAST, IdD>
     for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    //     T: for<'t> types::NLending<'t, T::TreeId>,
-    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     type Iter = IterKr<'a, IdD>;
 }
@@ -120,9 +101,6 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrderKeyRoots<HAST, IdD>
     for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    //     T: for<'t> types::NLending<'t, T::TreeId>,
-    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdD>>::Iter {
         IterKr(self.kr.iter_ones(), PhantomData)
@@ -133,15 +111,9 @@ impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Debug> super::DecompressedSubtree
     for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    //     T: for<'t> types::NLending<'t, T::TreeId>,
-    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    //     // T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    //     // T::Type: Copy + Eq + Send + Sync,
 {
     type Out = Self;
 
-    // #[time("warn")]
     fn decompress(self, root: &HAST::IdN) -> Self {
         let hyperast = self.hyperast;
         let basic = self.decomp.basic;
@@ -155,16 +127,6 @@ where
         let decomp = SimpleZsTree { basic, kr };
         Decompressible { hyperast, decomp }
     }
-
-    // fn decompress2<HAST>(store: &HAST, root: &HAST::IdN) -> Self::Out
-    // where
-    //     T: for<'t> types::AstLending<'t>,
-    //     HAST: types::HyperAST<IdN = HAST::IdN, TM = T>,
-    // {
-    //     let basic = BasicPostOrder::<T, IdD>::decompress2(store, root);
-    //     let kr = basic.compute_kr_bitset();
-    //     Self { basic, kr }
-    // }
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Debug> types::DecompressedFrom<HAST>
@@ -174,7 +136,6 @@ where
 {
     type Out = Self;
 
-    // #[time("warn")]
     fn decompress(hyperast: HAST, root: &HAST::IdN) -> Self {
         let basic = BasicPostOrder::decompress(hyperast, root);
 
@@ -194,15 +155,8 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt + Debug> InitializableWithStats<HAST::I
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
     for<'t> <HAST as types::AstLending<'t>>::RT: WithStats,
-    //     T: for<'t> types::NLending<'t, T::TreeId>,
-    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren + WithStats,
-    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
-    fn considering_stats(&self, root: &HAST::IdN) -> Self
-where
-        // S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
-        //     + NodeStore<T::TreeId>,
-    {
+    fn considering_stats(&self, root: &HAST::IdN) -> Self {
         let pred_len = self.hyperast.resolve(root).size();
         struct R<IdC, Idx, IdD> {
             curr: IdC,
@@ -302,15 +256,8 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedTreeStore<HAST, IdD>
     for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    // T: for<'t> types::NLending<'t, T::TreeId>,
-    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    // T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
-    fn descendants(&self, x: &IdD) -> Vec<IdD>
-where
-        // S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
-        //     + NodeStore<T::TreeId>,
-    {
+    fn descendants(&self, x: &IdD) -> Vec<IdD> {
         self.as_basic().descendants(x)
     }
 
@@ -318,11 +265,7 @@ where
         self.as_basic().first_descendant(i)
     }
 
-    fn descendants_count(&self, x: &IdD) -> usize
-where
-        // S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
-        //     + NodeStore<T::TreeId>,
-    {
+    fn descendants_count(&self, x: &IdD) -> usize {
         let r = (self.lld(x) + one() - *x).to_usize().unwrap();
         assert!(r == self.as_basic().descendants_count(x));
         r

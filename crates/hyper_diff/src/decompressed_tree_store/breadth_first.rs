@@ -2,11 +2,11 @@ use std::marker::PhantomData;
 
 use num_traits::{cast, zero};
 
-use hyperast::types::{self, Childrn, HyperAST, NodeId};
-use hyperast::types::{NodeStore, Stored, WithChildren};
+use hyperast::types::WithChildren;
+use hyperast::types::{self, Childrn, HyperAST};
 use hyperast::PrimInt;
 
-use super::{BreadthFirstIt, CIdx, DecompressedTreeStore, Iter, ShallowDecompressedTreeStore};
+use super::{BreadthFirstIt, DecompressedTreeStore, Iter, ShallowDecompressedTreeStore};
 
 use super::{
     BreadthFirstContiguousSiblings, BreadthFirstIterable, DecompressedParentsLending,
@@ -21,13 +21,6 @@ pub struct BreadthFirst<IdN, IdD: PrimInt> {
     id_first_child: Vec<IdD>,
     phantom: PhantomData<*const IdN>,
 }
-
-// impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> types::NLending<'a, T::TreeId> for BreadthFirst<HAST::IdN, IdD>
-// where
-//     T: for<'t> types::NLending<'t, T::TreeId>,
-// {
-//     type N = <T as types::NLending<'a, T::TreeId>>::N;
-// }
 
 impl<'d, HAST: HyperAST + Copy, IdD: PrimInt> BreadthFirstContiguousSiblings<HAST, IdD>
     for Decompressible<HAST, BreadthFirst<HAST::IdN, IdD>>
@@ -136,8 +129,6 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> super::DecompressedSubtree<HAST::IdN>
     for Decompressible<HAST, BreadthFirst<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    // T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     type Out = Self;
 
@@ -189,10 +180,6 @@ where
         self.id_compressed.len()
     }
 
-    // fn leaf_count(&self) -> IdD {
-    //     self.leaf_count
-    // }
-
     fn root(&self) -> IdD {
         zero()
     }
@@ -215,7 +202,6 @@ where
         }
         r
     }
-
 
     fn children(&self, x: &IdD) -> Vec<IdD> {
         let store = self.hyperast;

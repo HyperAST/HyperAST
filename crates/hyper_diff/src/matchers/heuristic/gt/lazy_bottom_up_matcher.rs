@@ -1,16 +1,10 @@
-use std::{fmt::Debug, marker::PhantomData};
-
-use num_traits::{PrimInt, ToPrimitive};
-
-use crate::{
-    decompressed_tree_store::{
-        DecompressedTreeStore, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
-        Shallow,
-    },
-    matchers::mapping_store::MonoMappingStore,
+use crate::decompressed_tree_store::{
+    DecompressedTreeStore, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
+    Shallow,
 };
-use hyperast::types::{Tree, WithStats};
-
+use crate::matchers::mapping_store::MonoMappingStore;
+use hyperast::{types::WithStats, PrimInt};
+use num_traits::ToPrimitive;
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
@@ -25,15 +19,14 @@ impl<
         Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
             + DecompressedWithParent<HAST, Ddst::IdD>
             + LazyDecompressedTreeStore<HAST, M::Dst>,
-        // T: Tree + WithStats,
         HAST: HyperAST + Copy,
         M: MonoMappingStore,
     > BottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
-    M::Src: PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: PrimInt + std::ops::SubAssign + Debug,
-    Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
-    Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
+    Dsrc::IdD: PrimInt,
+    Ddst::IdD: PrimInt,
 {
     pub(super) fn get_dst_candidates(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         let mut seeds = vec![];
@@ -80,13 +73,11 @@ impl<
         M: MonoMappingStore,
     > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
-    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
-    // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
-    M::Src: PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: PrimInt + std::ops::SubAssign + Debug,
-    Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
-    Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
+    Dsrc::IdD: PrimInt,
+    Ddst::IdD: PrimInt,
     Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
         + DecompressedWithParent<HAST, Dsrc::IdD>
         + LazyDecompressedTreeStore<HAST, M::Src>,

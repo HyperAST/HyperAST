@@ -1,5 +1,5 @@
-use std::{fmt::Debug, time::Instant};
-
+use super::MappingDurations;
+use super::{DiffResult, PreparedMappingDurations};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
@@ -7,28 +7,23 @@ use crate::{
         heuristic::gt::{
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::GreedySubtreeMatcher,
-        }, mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore}, Decompressible, Mapper, Mapping
+        },
+        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
+        Decompressible, Mapper,
     },
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
+use std::{fmt::Debug, time::Instant};
 
-type CDS<HAST:HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
-
-use super::MappingDurations;
-
-use super::{DiffResult, PreparedMappingDurations};
+type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
 ) -> DiffResult<
-    SimpleAction<
-        HAST::Label,
-        CompressedTreePath<HAST::Idx>,
-        HAST::IdN,
-    >,
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >
@@ -56,8 +51,6 @@ where
     let bottomup_mappings_s = mapper.mappings().len();
     dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
     let now = Instant::now();
-
-    let node_store = hyperast.node_store();
 
     let mapper = mapper.map(
         |x| x,
