@@ -1,6 +1,6 @@
 use super::{Cursor, Status, Symbol, TextLending, TreeCursorStep};
 use hyperast::position::TreePath;
-use hyperast::types::{HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithRoles};
+use hyperast::types::{HyperASTShared, HyperType, LabelStore, Labeled, NodeId, RoleStore, Tree, WithRoles};
 use hyperast::{
     position::TreePathMut,
     types::{HyperAST, TypeStore},
@@ -75,6 +75,7 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
 impl<'hast, HAST: HyperAST> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
@@ -196,6 +197,7 @@ where
 impl<'hast, HAST: HyperAST> self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
@@ -263,6 +265,7 @@ impl<'a, 'hast, HAST: HyperAST> super::TextLending<'a> for self::Node<'hast, HAS
 impl<'hast, HAST: HyperAST> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
@@ -359,6 +362,7 @@ where
 impl<'hast, HAST: HyperAST> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {

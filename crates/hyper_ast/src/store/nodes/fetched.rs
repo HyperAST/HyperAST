@@ -8,7 +8,7 @@ use std::{
 use string_interner::DefaultHashBuilder;
 use string_interner::Symbol;
 
-use crate::types::{AnyType, Children, HyperType, NodeId, TypeTrait, TypedNodeId};
+use crate::types::{AnyType, Children, HyperType, NodeId, TypeTrait, TypedNodeId, AAAA};
 
 use strum_macros::*;
 #[cfg(feature = "native")]
@@ -98,6 +98,7 @@ impl From<LabelIdentifier> for u32 {
 #[repr(transparent)]
 pub struct NodeIdentifier(std::num::NonZeroU32);
 
+impl AAAA for NodeIdentifier {}
 impl NodeId for NodeIdentifier {
     type IdN = Self;
     fn as_id(&self) -> &Self::IdN {
@@ -273,7 +274,9 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
         // self.children().and_then(|x| x.rev(*idx)).copied()
     }
 
-    fn children(&self) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
+    fn children(
+        &self,
+    ) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         self._children().map(|x| x.into())
     }
 }
@@ -647,6 +650,7 @@ impl SimplePackedBuilder {
     where
         for<'t> <HAST as crate::types::AstLending<'t>>::RT: crate::types::WithStats,
         HAST::IdN: Into<NodeIdentifier> + Copy,
+        HAST::IdN: NodeId<IdN = HAST::IdN>,
         HAST::Label: Into<LabelIdentifier> + Clone,
     {
         use crate::types::NodeStore;
@@ -859,22 +863,22 @@ impl<IdN> Default for TMarker<IdN> {
     }
 }
 
-impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for TMarker<IdN> {
-    type N = HashedNodeRef<'a, IdN>;
-}
+// impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for TMarker<IdN> {
+//     type N = HashedNodeRef<'a, IdN>;
+// }
 
-impl<IdN> crate::types::Node for TMarker<IdN> {}
+// impl<IdN> crate::types::Node for TMarker<IdN> {}
 
-impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
-    type TreeId = IdN;
-}
+// impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
+//     type TreeId = IdN;
+// }
 
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_, AnyType> {
         self.try_resolve(*id).unwrap()
     }
 
-    type NMarker = TMarker<NodeIdentifier>;
+    // type NMarker = TMarker<NodeIdentifier>;
 }
 
 impl NodeStore {

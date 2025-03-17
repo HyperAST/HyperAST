@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
+    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
 };
 
 #[cfg(feature = "legion")]
@@ -62,7 +62,7 @@ impl Type {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -87,7 +87,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
-impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
     type TyErazed = TType;
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
@@ -95,7 +95,7 @@ impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(crate) struct TStore;
 
 impl Default for TStore {

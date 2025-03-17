@@ -323,8 +323,6 @@ impl crate::types::lending::NodeStore<NodeIdentifier> for NodeStore {
     ) -> <Self as crate::types::lending::NLending<'_, NodeIdentifier>>::N {
         crate::types::lending::NodeStore::resolve(&self.inner, id)
     }
-
-    type NMarker = TMarker<NodeIdentifier>;
 }
 
 impl crate::types::inner_ref::NodeStore<NodeIdentifier> for NodeStore {
@@ -398,7 +396,6 @@ impl crate::types::lending::NodeStore<NodeIdentifier> for NodeStoreInner {
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
-    type NMarker = TMarker<NodeIdentifier>;
 }
 
 impl<'a> crate::types::lending::NLending<'a, NodeIdentifier> for &NodeStoreInner {
@@ -415,7 +412,6 @@ impl crate::types::lending::NodeStore<NodeIdentifier> for &NodeStoreInner {
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
-    type NMarker = TMarker<NodeIdentifier>;
 }
 
 // impl crate::types::NodStore<NodeIdentifier> for NodeStoreInner {
@@ -608,6 +604,28 @@ impl Default for NodeStore {
     }
 }
 
+
+
+impl<'a, TS: Copy + crate::types::TypeStore> crate::types::StoreLending<'a>
+    for crate::store::SimpleStores<TS>
+{
+    type S = crate::store::SimpleStores<
+        TS,
+        &'a crate::store::nodes::legion::NodeStoreInner,
+        &'a crate::store::labels::LabelStore,
+    >;
+}
+
+impl<TS: Copy + crate::types::TypeStore> crate::types::StoreLending2
+    for crate::store::SimpleStores<TS>
+{
+    type S<'a> = crate::store::SimpleStores<
+        TS,
+        &'a crate::store::nodes::legion::NodeStoreInner,
+        &'a crate::store::labels::LabelStore,
+    >;
+}
+
 // // impl<'a> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'a>> for NodeStore {
 // //     fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'a> {
 // //         self.internal
@@ -694,58 +712,58 @@ impl Default for NodeStore {
 
 pub struct TMarker<IdN>(std::marker::PhantomData<IdN>);
 
-impl<IdN> Default for TMarker<IdN> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
+// impl<IdN> Default for TMarker<IdN> {
+//     fn default() -> Self {
+//         Self(Default::default())
+//     }
+// }
 
-impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for &TMarker<IdN> {
-    type N = HashedNodeRef<'a, IdN>;
-}
+// impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for &TMarker<IdN> {
+//     type N = HashedNodeRef<'a, IdN>;
+// }
 
-impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for TMarker<IdN> {
-    type N = HashedNodeRef<'a, IdN>;
-}
+// impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for TMarker<IdN> {
+//     type N = HashedNodeRef<'a, IdN>;
+// }
 
-impl<IdN: crate::types::NodeId> crate::types::HyperASTShared for &TMarker<IdN> {
-    type IdN = IdN;
-    type Idx = u16;
-    type Label = crate::store::defaults::LabelIdentifier;
-}
+// impl<IdN: crate::types::NodeId> crate::types::HyperASTShared for &TMarker<IdN> {
+//     type IdN = IdN;
+//     type Idx = u16;
+//     type Label = crate::store::defaults::LabelIdentifier;
+// }
 
-impl<IdN: crate::types::NodeId> crate::types::HyperASTShared for TMarker<IdN> {
-    type IdN = IdN;
-    type Idx = u16;
-    type Label = crate::store::defaults::LabelIdentifier;
-}
+// impl<IdN: crate::types::NodeId> crate::types::HyperASTShared for TMarker<IdN> {
+//     type IdN = IdN;
+//     type Idx = u16;
+//     type Label = crate::store::defaults::LabelIdentifier;
+// }
 
-impl<'a, IdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::AstLending<'a> for &TMarker<IdN> {
-    type RT = HashedNodeRef<'a, IdN>;
-}
+// impl<'a, IdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::AstLending<'a> for &TMarker<IdN> {
+//     type RT = HashedNodeRef<'a, IdN>;
+// }
 
-impl<'a, IdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::AstLending<'a> for TMarker<IdN> {
-    type RT = HashedNodeRef<'a, IdN>;
-}
+// impl<'a, IdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::AstLending<'a> for TMarker<IdN> {
+//     type RT = HashedNodeRef<'a, IdN>;
+// }
 
-impl<IdN> crate::types::Node for TMarker<IdN> {}
+// impl<IdN> crate::types::Node for TMarker<IdN> {}
 
-impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
-    type TreeId = IdN;
-}
-impl<IdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::MarkedT for TMarker<IdN>
-where
-    IdN::IdN: crate::types::NodeId<IdN = NodeIdentifier>,
-{
-    type Label = crate::store::defaults::LabelIdentifier;
+// impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
+//     type TreeId = IdN;
+// }
+// impl<IdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::MarkedT for TMarker<IdN>
+// where
+//     IdN::IdN: crate::types::NodeId<IdN = NodeIdentifier>,
+// {
+//     type Label = crate::store::defaults::LabelIdentifier;
 
-    type ChildIdx = u16;
-}
+//     type ChildIdx = u16;
+// }
 
 mod stores_impl {
     use crate::{
         store::{labels, nodes, SimpleStores},
-        types::{HyperAST, HyperASTShared, TypeStore, TypedHyperAST, TypedNodeId},
+        types::{HyperAST, HyperASTShared, TypeStore, TypeTrait, TypedHyperAST, TypedNodeId},
     };
 
     use super::{NodeIdentifier, NodeStoreInner};
@@ -758,12 +776,12 @@ mod stores_impl {
         <NS as crate::types::NStore>::IdN:
             crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
         // for<'t> <NS::NMarker as crate::types::NLending<'t, <NS as crate::types::NStore>::IdN>>::N:
-        for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
-            crate::types::Tree<
-                Label = <LS as crate::types::LStore>::I,
-                TreeId = <NS as crate::types::NStore>::IdN,
-                ChildIdx = <NS as crate::types::NStore>::Idx,
-            >,
+        // for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
+        //     crate::types::Tree<
+        //         Label = <LS as crate::types::LStore>::I,
+        //         TreeId = <NS as crate::types::NStore>::IdN,
+        //         ChildIdx = <NS as crate::types::NStore>::Idx,
+        //     >,
     {
         type IdN = NS::IdN;
 
@@ -796,12 +814,12 @@ mod stores_impl {
         LS: crate::types::LStore,
         <NS as crate::types::NStore>::IdN:
             crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
-        for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
-            crate::types::Tree<
-                Label = <LS as crate::types::LStore>::I,
-                TreeId = <NS as crate::types::NStore>::IdN,
-                ChildIdx = <NS as crate::types::NStore>::Idx,
-            >,
+        // for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
     {
         type RT = <NS as crate::types::NLending<'a, Self::IdN>>::N;
     }
@@ -814,12 +832,12 @@ mod stores_impl {
         LS: crate::types::LStore,
         <NS as crate::types::NStore>::IdN:
             crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
-        for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
-            crate::types::Tree<
-                Label = <LS as crate::types::LStore>::I,
-                TreeId = <NS as crate::types::NStore>::IdN,
-                ChildIdx = <NS as crate::types::NStore>::Idx,
-            >,
+        // for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
+        //     crate::types::Tree<
+        //         Label = <LS as crate::types::LStore>::I,
+        //         TreeId = <NS as crate::types::NStore>::IdN,
+        //         ChildIdx = <NS as crate::types::NStore>::Idx,
+        //     >,
     {
         type IdN = NS::IdN;
 
@@ -835,12 +853,11 @@ mod stores_impl {
         LS: crate::types::LStore,
         <NS as crate::types::NStore>::IdN:
             crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
-        for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
-            crate::types::Tree<
-                Label = <LS as crate::types::LStore>::I,
-                TreeId = <NS as crate::types::NStore>::IdN,
-                ChildIdx = <NS as crate::types::NStore>::Idx,
-            >,
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
     {
         type N = <NS as crate::types::NLending<'a, <NS as crate::types::NStore>::IdN>>::N;
     }
@@ -852,12 +869,12 @@ mod stores_impl {
         LS: crate::types::LStore,
         <NS as crate::types::NStore>::IdN:
             crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
-        for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
-            crate::types::Tree<
-                Label = <LS as crate::types::LStore>::I,
-                TreeId = <NS as crate::types::NStore>::IdN,
-                ChildIdx = <NS as crate::types::NStore>::Idx,
-            >,
+        // for<'t> crate::types::LendN<'t, NS::NMarker, <NS as crate::types::NStore>::IdN>:
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
     {
         type RT = <NS as crate::types::NLending<'a, <NS as crate::types::NStore>::IdN>>::N;
     }
@@ -970,16 +987,19 @@ mod stores_impl {
         NS: crate::types::NodeStore<NS::IdN>,
         LS: crate::types::LStore,
         LS: crate::types::LabelStore<str, I = <LS as crate::types::LStore>::I>,
-
-        for<'t> <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker:
-            crate::types::AstLending<
-                't,
-                IdN = <NS as crate::types::NStore>::IdN,
-                Idx = <NS as crate::types::NStore>::Idx,
-                Label = <LS as crate::types::LStore>::I,
-            >,
+        // for<'t> <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker:
+        //     crate::types::AstLending<
+        //         't,
+        //         IdN = <NS as crate::types::NStore>::IdN,
+        //         Idx = <NS as crate::types::NStore>::Idx,
+        //         Label = <LS as crate::types::LStore>::I,
+        //     >,
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
     {
-        type TM = <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker;
         type NS = NS;
 
         fn node_store(&self) -> &Self::NS {
@@ -994,29 +1014,82 @@ mod stores_impl {
 
         type TS = TS;
     }
-    // impl<'a, Ty, TS, NS, LS> crate::types::TypedLending<'a, Ty> for SimpleStores<TS, NS, LS>
-    // where
-    //     TS: TypeStore,
-    //     NS: crate::types::NStore,
-    //     <NS as crate::types::NStore>::IdN:
-    //         crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
-    //     NS: crate::types::NodeStore<NS::IdN>,
-    //     LS: crate::types::LStore,
-    //     LS: crate::types::LabelStore<str, I = <LS as crate::types::LStore>::I>,
+    impl<'a, Ty, TS, NS, LS> crate::types::TypedLending<'a, Ty> for SimpleStores<TS, NS, LS>
+    where
+        NS: crate::types::NStore,
+        NS: crate::types::NodeStore<<NS as crate::types::NStore>::IdN>,
+        LS: crate::types::LStore,
+        <NS as crate::types::NStore>::IdN:
+            crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
+        Ty: TypeTrait,
+        //     TS: TypeStore,
+        //     NS: crate::types::NStore,
+        //     <NS as crate::types::NStore>::IdN:
+        //         crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
+        //     NS: crate::types::NodeStore<NS::IdN>,
+        //     LS: crate::types::LStore,
+        //     LS: crate::types::LabelStore<str, I = <LS as crate::types::LStore>::I>,
 
-    //     for<'t> <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker:
-    //         crate::types::AstLending<
-    //             't,
-    //             IdN = <NS as crate::types::NStore>::IdN,
-    //             Idx = <NS as crate::types::NStore>::Idx,
-    //             Label = <LS as crate::types::LStore>::I,
-    //         >,
+        //     for<'t> <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker:
+        //         crate::types::AstLending<
+        //             't,
+        //             IdN = <NS as crate::types::NStore>::IdN,
+        //             Idx = <NS as crate::types::NStore>::Idx,
+        //             Label = <LS as crate::types::LStore>::I,
+        //         >,
 
-    //     TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
-    //     NS: crate::types::TypedNodeStore<TIdN>,
-    // {
-    //     type TT = <NS as crate::types::TyNodeStore<TIdN>>::RT;
+        //     TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
+        //     NS: crate::types::TypedNodeStore<TIdN>,
+    {
+        type TT = TypedHolder<<Self as crate::types::AstLending<'a>>::RT, Ty>;
+    }
+
+    pub struct TypedHolder<RT, Ty> {
+        pub rt: RT,
+        _p: std::marker::PhantomData<Ty>,
+    }
+    impl<RT, Ty> std::ops::Deref for TypedHolder<RT, Ty> {
+        type Target = RT;
+        fn deref(&self) -> &Self::Target {
+            &self.rt
+        }
+    }
+
+    impl<RT, Ty: TypeTrait> crate::types::Typed for TypedHolder<RT, Ty> {
+        type Type = Ty;
+        fn get_type(&self) -> Self::Type {
+            todo!()
+        }
+    }
+
+    // impl<RT: crate::types::Tree, Ty> crate::types::ErasedHolder for TypedHolder<RT, Ty> {
+    //     fn unerase_ref<TT: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&TT> {
+    //         todo!()
+    //     }
     // }
+
+    // impl<RT: crate::types::Tree, Ty> crate::types::WithChildren for TypedHolder<RT, Ty> {
+    // }
+
+    // impl<RT: crate::types::Tree, Ty> crate::types::Tree for TypedHolder<RT, Ty> {
+    //     fn has_children(&self) -> bool {
+    //         self.rt.has_children()
+    //     }
+
+    //     fn has_label(&self) -> bool {
+    //         self.rt.has_label()
+    //     }
+    // }
+    // impl<RT: crate::types::Stored, Ty> crate::types::Node for TypedHolder<RT, Ty> {}
+    // impl<RT: crate::types::Stored, Ty> crate::types::Stored for TypedHolder<RT, Ty> {
+    //     type TreeId = RT::TreeId;
+    // }
+
     // impl<'store, TIdN, TS, NS, LS> TypedHyperAST<TIdN> for SimpleStores<TS, NS, LS>
     // where
     //     NS: crate::types::NStore,
@@ -1060,7 +1133,7 @@ mod stores_impl {
     //             IdN = <NS as crate::types::NStore>::IdN,
     //             Idx = <NS as crate::types::NStore>::Idx,
     //             Label = <LS as crate::types::LStore>::I,
-    //         >, 
+    //         >,
     // {
     //     type TNS = NS;
 
@@ -1088,15 +1161,19 @@ mod stores_impl {
         // NS: crate::types::lending::NodeStore<NS::IdN, N = NS::R<'static>>,
         LS: crate::types::LStore,
         LS: crate::types::LabelStore<str, I = <LS as crate::types::LStore>::I>,
-        for<'t> <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker:
-            crate::types::AstLending<
-                't,
-                IdN = <NS as crate::types::NStore>::IdN,
-                Idx = <NS as crate::types::NStore>::Idx,
-                Label = <LS as crate::types::LStore>::I,
-            >,
+        // for<'t> <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker:
+        //     crate::types::AstLending<
+        //         't,
+        //         IdN = <NS as crate::types::NStore>::IdN,
+        //         Idx = <NS as crate::types::NStore>::Idx,
+        //         Label = <LS as crate::types::LStore>::I,
+        //     >,
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
     {
-        type TM = <NS as crate::types::NodeStore<<NS as crate::types::NStore>::IdN>>::NMarker;
         type NS = NS;
 
         fn node_store(&self) -> &Self::NS {
@@ -1154,18 +1231,54 @@ mod stores_impl {
     //     type TS = TS;
     // }
 
-    // impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, nodes::DefaultNodeStore>
-    // where
-    //     TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
-    //     TS: TypeStore,
-    // {
-    //     type TT = self::nodes::legion::HashedNodeRef<'store, TIdN>;
-    //     type TNS = nodes::legion::NodeStore;
+    impl<'store, TIdN: TypedNodeId<IdN = Self::IdN>, TS, NS, LS> TypedHyperAST<TIdN>
+        for SimpleStores<TS, NS, LS>
+    where
+        TIdN::Ty: TypeTrait,
+        TS: TypeStore,
+        NS: crate::types::NStore,
+        <NS as crate::types::NStore>::IdN:
+            crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
+        NS: crate::types::NodeStore<NS::IdN>,
+        LS: crate::types::LStore,
+        LS: crate::types::LabelStore<str, I = <LS as crate::types::LStore>::I>,
 
-    //     fn typed_node_store(&self) -> &Self::TNS {
-    //         &self.node_store
-    //     }
-    // }
+        for<'t> crate::types::LendN<'t, NS, <NS as crate::types::NStore>::IdN>: crate::types::Tree<
+            Label = <LS as crate::types::LStore>::I,
+            TreeId = <NS as crate::types::NStore>::IdN,
+            ChildIdx = <NS as crate::types::NStore>::Idx,
+        >,
+        //     TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
+        //     TS: TypeStore,
+    {
+        //     type TT = self::nodes::legion::HashedNodeRef<'store, TIdN>;
+        //     type TNS = nodes::legion::NodeStore;
+
+        //     fn typed_node_store(&self) -> &Self::TNS {
+        //         &self.node_store
+        //     }
+
+        fn try_resolve(
+            &self,
+            id: &Self::IdN,
+        ) -> Option<(
+            <Self as crate::types::TypedLending<'_, <TIdN as TypedNodeId>::Ty>>::TT,
+            TIdN,
+        )> {
+            todo!()
+        }
+
+        fn try_typed(&self, id: &Self::IdN) -> Option<TIdN> {
+            todo!()
+        }
+
+        fn resolve_typed(
+            &self,
+            id: &TIdN,
+        ) -> <Self as crate::types::TypedLending<'_, <TIdN as TypedNodeId>::Ty>>::TT {
+            todo!()
+        }
+    }
 
     // impl<'store, TS> HyperAST<'store> for SimpleStores<TS, &NodeStoreInner, &labels::LabelStore>
     // where

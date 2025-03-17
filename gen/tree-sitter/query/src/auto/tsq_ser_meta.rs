@@ -1,5 +1,5 @@
 use hyperast::store;
-use hyperast::types::{self, HyperType, Childrn};
+use hyperast::types::{self, Childrn, HyperASTShared, HyperType};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::LazyLock;
@@ -57,7 +57,14 @@ impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNo
     // type RT = store::nodes::legion::HashedNodeRef<'static, Self::IdN>;
 }
 
-impl<'a, 'b, TS> hyperast::types::AstLending<'a> for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
+impl<'a, 'b, TS> hyperast::types::NLending<'a, <Self as HyperASTShared>::IdN>
+    for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
+{
+    type N = <store::nodes::DefaultNodeStore as hyperast::types::NLending<'a, <Self as HyperASTShared>::IdN>>::N;
+}
+
+impl<'a, 'b, TS> hyperast::types::AstLending<'a>
+    for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
 where
     TS: types::TypeStore<Ty = types::AnyType>,
     // NS: crate::types::NStore,
@@ -79,7 +86,7 @@ impl<'a, TS> types::HyperAST for QStoreRef<'a, TS, store::nodes::DefaultNodeStor
 where
     TS: types::TypeStore<Ty = types::AnyType>,
 {
-    type TM = store::nodes::legion::TMarker<store::nodes::DefaultNodeIdentifier>;
+    // type TM = store::nodes::legion::TMarker<store::nodes::DefaultNodeIdentifier>;
     type NS = store::nodes::legion::NodeStore;
 
     fn node_store(&self) -> &Self::NS {
@@ -124,7 +131,7 @@ impl<
         'store,
         'a,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId,
     > TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
 where
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
@@ -142,7 +149,7 @@ impl<
         'store,
         'a,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId,
         C: Converter<Ty = TIdN::Ty>,
     > TreeToQuery<'store, HAST, TIdN, C>
 {
@@ -176,12 +183,13 @@ impl<
 impl<
         'store,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > Display for TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
+    TIdN::Ty: types::TypeTrait,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, &mut 0, 0, f).map(|_| ())
@@ -191,12 +199,13 @@ where
 impl<
         'store,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
+    TIdN::Ty: types::TypeTrait,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(

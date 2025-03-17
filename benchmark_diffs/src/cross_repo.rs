@@ -178,7 +178,7 @@ pub fn windowed_commits_compare(
             let dst_tr = PreProcessedRepositories::make(dst_acc, stores).0;
 
             let stores = &preprocessed.processor.main_stores;
-            let hyperast = as_nospaces(stores);
+            let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
             let mu = memusage_linux();
             let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr);

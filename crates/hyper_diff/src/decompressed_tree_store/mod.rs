@@ -42,15 +42,16 @@ pub use hyperast::types::DecompressedSubtree;
 /// NOTE compared to Initializable this trait only adds WithStats bound on T.
 ///
 /// the WithStats bound helps a lot with lazy decompressions
-pub trait InitializableWithStats<T: Stored>: DecompressedSubtree<T>
+pub trait InitializableWithStats<IdN>: DecompressedSubtree<IdN>
 where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithStats,
+    // T: for<'t> types::NLending<'t, T::TreeId>,
+    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithStats,
 {
-    fn considering_stats<S>(store: &S, root: &T::TreeId) -> Self
+    fn considering_stats(&self, root: &IdN) -> Self
     where
-        S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
-            + NodeStore<T::TreeId>;
+        // S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
+        //     + NodeStore<T::TreeId>
+            ;
 }
 
 /// create a lazy decompresed tree store
@@ -64,64 +65,32 @@ pub trait LazyInitializable<'a, T: Stored + WithStats> {
         S: NodeStore<T::TreeId, N = T>;
 }
 
-pub trait FullyDecompressedTreeStore<T: Stored, IdD>: ShallowDecompressedTreeStore<T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait FullyDecompressedTreeStore<HAST: HyperAST + Copy, IdD>:
+    ShallowDecompressedTreeStore<HAST, IdD>
 {
 }
 
-pub trait ShallowDecompressedTreeStore<T: Stored, IdD, IdS = IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
+pub trait ShallowDecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD> {
     fn len(&self) -> usize;
-    fn original(&self, id: &IdD) -> T::TreeId;
+    fn original(&self, id: &IdD) -> HAST::IdN;
     fn root(&self) -> IdS;
-    fn child<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdS
-    where
-        // S: for<'b> types::NLending<'b, T::TreeId, N = LendN<'b, T, T::TreeId>>,
-        S: types::NodeStore<T::TreeId, NMarker = T>;
-    fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdS>
-    where
-        S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>,
-        S: NodeStore<T::TreeId>;
-    fn child2<HAST>(&self, store: &HAST, x: &IdD, p: &[impl PrimInt]) -> IdS
-    where
-        // S: for<'t> types::AstLending<'t, RT = <T as types::NLending<'t, T::TreeId>>::N>
-        // T: for<'a> hyperast::types::AstLending<'a, IdN = T::TreeId, N = <T as types::NLending<'a, T::TreeId>>::N>,
-        T: for<'a> types::AstLending<'a>,
-        // T: for<'t> types::NLending<'t, T::TreeId>,
-        HAST: HyperAST<TM = T, IdN = T::TreeId>,
-    {
-        todo!()
-        // self.child(store.node_store(), x, p)
-    }
-    fn child4<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdS
-where;
-    fn children2<S>(&self, store: &S, x: &IdD) -> Vec<IdS>
-    where
-        // S: for<'t> types::AstLending<'t, RT = <T as types::NLending<'t, T::TreeId>>::N>
-        //     + HyperAST<IdN = T::TreeId>,
-        T: for<'a> hyperast::types::AstLending<'a>,
-        T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
-        S: HyperAST<IdN = T::TreeId, TM = T>,
-    {
-        todo!()
-        // self.children(store.node_store(), x)
-    }
-    fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdS>
-where;
-    fn children5<S>(&self, store: &S, x: &IdD) -> Vec<IdS>
-    where
-        // S: HyperAST<IdN = T::TreeId>
-        //     + for<'a> types::AstLending<'a, RT = <T as types::NLending<'a, T::TreeId>>::N>,
-        T: for<'a> hyperast::types::AstLending<'a>,
-        T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
-        S: HyperAST<IdN = T::TreeId, TM = T>,
-    {
-        self.children4(store.node_store(), x)
-    }
-    // fn change_t<T2: WithChildren>(&self) -> impl ShallowDecompressedTreeStore<T2, IdD, IdS>;
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdS;
+    fn children(&self, x: &IdD) -> Vec<IdS>;
+    // fn child2(&self, x: &IdD, p: &[impl PrimInt]) -> IdS {
+    //     unimplemented!()
+    // }
+    // fn child4(&self, x: &IdD, p: &[impl PrimInt]) -> IdS {
+    //     unimplemented!()
+    // }
+    // fn children2(&self, x: &IdD) -> Vec<IdS> {
+    //     unimplemented!()
+    // }
+    // fn children4(&self, x: &IdD) -> Vec<IdS> {
+    //     unimplemented!()
+    // }
+    // fn children5(&self, x: &IdD) -> Vec<IdS> {
+    //     unimplemented!()
+    // }
 }
 pub trait Shallow<T> {
     fn shallow(&self) -> &T;
@@ -155,22 +124,14 @@ pub trait LazyDecompressed<IdS> {
     type IdD: Shallow<IdS>;
 }
 
-pub trait LazyDecompressedTreeStore<T: Stored, IdS>:
-    DecompressedTreeStore<T, Self::IdD, IdS> + LazyDecompressed<IdS>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait LazyDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
+    DecompressedTreeStore<HAST, Self::IdD, IdS> + LazyDecompressed<IdS>
 {
     #[must_use]
     fn starter(&self) -> Self::IdD;
     #[must_use]
-    fn decompress_children<S>(&mut self, store: &S, x: &Self::IdD) -> Vec<Self::IdD>
-    where
-        S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
-            + NodeStore<T::TreeId>;
-    fn decompress_to<S>(&mut self, store: &S, x: &IdS) -> Self::IdD
-    where
-        S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
-            + NodeStore<T::TreeId>;
+    fn decompress_children(&mut self, x: &Self::IdD) -> Vec<Self::IdD>;
+    fn decompress_to(&mut self, x: &IdS) -> Self::IdD;
     // fn decompress_to2<S>(&mut self, store: &S, x: &IdS) -> Self::IdD
     // where
     //     S: for<'b> NodeStore<T::TreeId>,
@@ -186,52 +147,28 @@ where
     // }
 }
 
-pub trait DecompressedTreeStore<T: Stored, IdD, IdS = IdD>:
-    ShallowDecompressedTreeStore<T, IdD, IdS>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait DecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    ShallowDecompressedTreeStore<HAST, IdD, IdS>
 {
-    fn descendants<S>(&self, store: &S, x: &IdD) -> Vec<IdS>
-    where
-        S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
-            + NodeStore<T::TreeId>;
-    fn descendants_count<S>(&self, store: &S, x: &IdD) -> usize
-    where
-        S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
-            + NodeStore<T::TreeId>;
-    fn descendants2<S>(&self, store: &S, x: &IdD) -> Vec<IdS>
-    where
-        // S: for<'t> types::AstLending<'t, RT = <T as types::NLending<'t, T::TreeId>>::N>
-        //     + HyperAST<IdN = T::TreeId>,
-        T: for<'a> hyperast::types::AstLending<'a>,
-        T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
-        S: HyperAST<IdN = T::TreeId, TM = T>,
-    {
-        self.descendants(store.node_store(), x)
+    fn descendants(&self, x: &IdD) -> Vec<IdS>;
+    fn descendants_count(&self, x: &IdD) -> usize;
+    fn descendants2(&self, x: &IdD) -> Vec<IdS> {
+        self.descendants(x)
     }
-    fn descendants_count2<S>(&self, store: &S, x: &IdD) -> usize
-    where
-        // S: for<'t> types::AstLending<'t, RT = <T as types::NLending<'t, T::TreeId>>::N>
-        //     + HyperAST<IdN = T::TreeId>,
-        T: for<'a> hyperast::types::AstLending<'a>,
-        T: for<'t> types::NLending<'t, T::TreeId, N = <T as types::AstLending<'t>>::RT>,
-        S: HyperAST<IdN = T::TreeId, TM = T>,
-    {
-        self.descendants_count(store.node_store(), x)
+    fn descendants_count2(&self, x: &IdD) -> usize {
+        self.descendants_count(x)
     }
     fn first_descendant(&self, i: &IdD) -> IdS;
     fn is_descendant(&self, desc: &IdS, of: &IdD) -> bool;
 }
 
-pub(crate) trait DecendantsLending<'a, __ImplBound = &'a Self> {
+pub trait DecendantsLending<'a, __ImplBound = &'a Self> {
     type Slice: 'a;
 }
 
 /// If you want to add bounds on Self::Slice, make a specialized trait like POBorrowSlice
-pub trait ContiguousDescendants<T: Stored, IdD, IdS = IdD>:
-    DecompressedTreeStore<T, IdD, IdS> + for<'a> DecendantsLending<'a>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait ContiguousDescendants<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    DecompressedTreeStore<HAST, IdD, IdS> + for<'a> DecendantsLending<'a>
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdS>;
 
@@ -239,60 +176,40 @@ where
     fn slice(&self, x: &IdD) -> <Self as DecendantsLending<'_>>::Slice;
 }
 
-pub(crate) trait POSliceLending<'a, T: Stored, IdD, __ImplBound = &'a Self>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
-{
-    type SlicePo: 'a + PostOrderKeyRoots<T, IdD>;
+pub trait POSliceLending<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self> {
+    type SlicePo: 'a + PostOrderKeyRoots<HAST, IdD>;
 }
 
 /// Specialize ContiguousDescendants to specify in trait the bound of Self::Slice (here SlicePo)
 /// WIP see https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
-pub trait POBorrowSlice<T: Stored, IdD, IdS = IdD>:
-    ContiguousDescendants<T, IdD, IdS> + for<'a> POSliceLending<'a, T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-    for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
+pub trait POBorrowSlice<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    ContiguousDescendants<HAST, IdD, IdS> + for<'a> POSliceLending<'a, HAST, IdD>
 {
-    fn slice_po(&self, x: &IdD) -> <Self as POSliceLending<'_, T, IdD>>::SlicePo;
+    fn slice_po(&self, x: &IdD) -> <Self as POSliceLending<'_, HAST, IdD>>::SlicePo;
 }
 
-pub(crate) trait LazyPOSliceLending<'a, T: Stored, IdD, __ImplBound = &'a Self>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
-    type SlicePo: 'a + PostOrderKeyRoots<T, IdD>;
+pub trait LazyPOSliceLending<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self> {
+    type SlicePo: 'a + PostOrderKeyRoots<HAST, IdD>;
 }
 
-pub trait LazyPOBorrowSlice<T: Stored, IdD, IdS = IdD>:
-    ContiguousDescendants<T, IdD, IdS> + for<'a> LazyPOSliceLending<'a, T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait LazyPOBorrowSlice<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    ContiguousDescendants<HAST, IdD, IdS> + for<'a> LazyPOSliceLending<'a, HAST, IdD>
 {
-    fn slice_po<S>(
+    fn slice_po(
         &mut self,
-        store: &S,
         x: &IdD,
-    ) -> <Self as LazyPOSliceLending<'_, T, IdD>>::SlicePo
-    where
-        S: for<'b> types::NLending<'b, T::TreeId, N = types::LendN<'b, T, T::TreeId>>
-            + NodeStore<T::TreeId>;
+    ) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo;
 }
 
 pub(super) type CIdx<'a, S, IdN> = <<S as types::NLending<'a, IdN>>::N as WithChildren>::ChildIdx;
 
-pub(crate) trait DecompressedParentsLending<'a, IdD, __ImplBound = &'a Self> {
+pub trait DecompressedParentsLending<'a, IdD, __ImplBound = &'a Self> {
     type PIt: 'a + Iterator<Item = IdD>;
 }
 
-pub trait DecompressedWithParent<T:Stored, IdD>:
+pub trait DecompressedWithParent<HAST: HyperAST + Copy, IdD>:
     // for<'a> types::NLending<'a, IdN> + 
     for<'a> DecompressedParentsLending<'a, IdD>
-    where
-        T: for<'t> types::NLending<'t, T::TreeId>,
 {
     fn has_parent(&self, id: &IdD) -> bool;
     fn parent(&self, id: &IdD) -> Option<IdD>;
@@ -301,7 +218,7 @@ pub trait DecompressedWithParent<T:Stored, IdD>:
     fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> Vec<Idx>;
     fn path_rooted<Idx: PrimInt>(&self, descendant: &IdD) -> Vec<Idx>
     where
-        Self: ShallowDecompressedTreeStore<T, IdD>,
+        Self: ShallowDecompressedTreeStore<HAST, IdD>,
     {
         self.path(&self.root(), descendant)
     }
@@ -316,7 +233,7 @@ pub trait DecompressedWithParent<T:Stored, IdD>:
     //     S: NodeStore<T::TreeId, R<'b> = T>;
 }
 
-// pub trait PosInParent<T: Stored, IdD>
+// pub trait PosInParent<HAST: HyperAST + Copy, IdD>
 // where
 //     T: for<'t> types::NLending<'t, T::TreeId>,
 //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
@@ -327,9 +244,8 @@ pub trait DecompressedWithParent<T:Stored, IdD>:
 //             + NodeStore<T::TreeId>;
 // }
 
-pub trait DecompressedWithSiblings<T: Stored, IdD>: DecompressedWithParent<T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait DecompressedWithSiblings<HAST: HyperAST + Copy, IdD>:
+    DecompressedWithParent<HAST, IdD>
 {
     fn lsib(&self, x: &IdD) -> Option<IdD>;
     // fn siblings_count(&self, id: &IdD) -> Option<IdD>; // TODO improve the return type
@@ -339,57 +255,43 @@ where
     //     S::R<'a>: WithChildren<TreeId = IdC>;
 }
 
-pub trait BreadthFirstIt<T: Stored, IdD>: DecompressedTreeStore<T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
+pub trait BreadthFirstIt<HAST: HyperAST + Copy, IdD>: DecompressedTreeStore<HAST, IdD> {
     type It<'b>: Iterator<Item = IdD>;
 }
 
-pub trait BreadthFirstIterable<T: Stored, IdD>: BreadthFirstIt<T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
+pub trait BreadthFirstIterable<HAST: HyperAST + Copy, IdD>: BreadthFirstIt<HAST, IdD> {
     fn iter_bf(&self) -> Self::It<'_>;
 }
 
-pub trait PostOrderIterable<T: Stored, IdD, IdS = IdD>: DecompressedTreeStore<T, IdD, IdS>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait PostOrderIterable<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    DecompressedTreeStore<HAST, IdD, IdS>
 {
     type It: Iterator<Item = IdS>;
     fn iter_df_post<const ROOT: bool>(&self) -> Self::It;
 }
 
-pub trait BreadthFirstContiguousSiblings<T: Stored, IdD>: DecompressedTreeStore<T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait BreadthFirstContiguousSiblings<HAST: HyperAST + Copy, IdD>:
+    DecompressedTreeStore<HAST, IdD>
 {
     fn has_children(&self, id: &IdD) -> bool;
     fn first_child(&self, id: &IdD) -> Option<IdD>;
 }
 
-pub trait PostOrder<T: Stored, IdD, IdS = IdD>: DecompressedTreeStore<T, IdD, IdS>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait PostOrder<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    DecompressedTreeStore<HAST, IdD, IdS>
 {
     fn lld(&self, i: &IdD) -> IdS;
-    fn tree(&self, id: &IdD) -> T::TreeId;
+    fn tree(&self, id: &IdD) -> HAST::IdN;
 }
 
-pub trait PostOrdKeyRoots<'a, T: Stored, IdD, __ImplBound = &'a Self>: PostOrder<T, IdD>
-// TODO should be moved ?
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
+pub trait PostOrdKeyRoots<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self>: PostOrder<HAST, IdD> {
     type Iter: 'a + Iterator<Item = IdD>;
 }
 
-pub trait PostOrderKeyRoots<T: Stored, IdD>: for<'a> PostOrdKeyRoots<'a, T, IdD>
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
+pub trait PostOrderKeyRoots<HAST: HyperAST + Copy, IdD>:
+    for<'a> PostOrdKeyRoots<'a, HAST, IdD>
 {
-    fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, T, IdD>>::Iter;
+    fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdD>>::Iter;
 }
 
 pub struct Iter<IdD> {
@@ -425,27 +327,23 @@ impl<'a, IdD: PrimInt> Iterator for IterKr<'a, IdD> {
     }
 }
 
-pub trait MapDecompressed<'a, T: Stored + 'a, IdD: PrimInt, D: DecompressedTreeStore<T, IdD>>:
-    Sized
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
-    /// Converts to this type from the input type.
-    fn map_it<S>(_: &'a S, _: &'a D) -> Self
-    where
-        S: NodeStore<T::TreeId, N = T>;
-}
+// pub trait MapDecompressed<'a, HAST: HyperAST + Copy + 'a, IdD: PrimInt, D: DecompressedTreeStore<HAST, IdD>>:
+//     Sized
+// {
+//     /// Converts to this type from the input type.
+//     fn map_it<S>(_: &'a S, _: &'a D) -> Self
+//     where
+//         S: NodeStore<T::TreeId, N = T>;
+// }
 
-pub trait WrapDecompressed<'a, T: Stored + 'a, IdD: PrimInt, D: DecompressedTreeStore<T, IdD>>:
-    Sized
-where
-    T: for<'t> types::NLending<'t, T::TreeId>,
-{
-    /// Converts to this type from the input type.
-    fn wrap_it<S>(_: &'a S, _: &'a D) -> Self
-    where
-        S: NodeStore<T::TreeId, N = T>;
-}
+// pub trait WrapDecompressed<'a, HAST: HyperAST + Copy + 'a, IdD: PrimInt, D: DecompressedTreeStore<HAST, IdD>>:
+//     Sized
+// {
+//     /// Converts to this type from the input type.
+//     fn wrap_it<S>(_: &'a S, _: &'a D) -> Self
+//     where
+//         S: NodeStore<T::TreeId, N = T>;
+// }
 
 // /// Used as a workaround to cache stuff that uses phantom types ie. HashedNodeRef in HyperAST
 // /// TODO provide a cache wrapping this concern.

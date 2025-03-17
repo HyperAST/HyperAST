@@ -1,3 +1,5 @@
+use crate::CNLending;
+
 use super::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use hyperast::position::TreePath;
 use hyperast::types::{
@@ -89,12 +91,31 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
     }
 }
 
+impl<'hast, HAST: HyperAST> crate::WithField for self::TreeCursor<'hast, HAST>
+where
+    HAST::TS: RoleStore,
+{
+    type IdF = <HAST::TS as RoleStore>::IdF;
+}
+
+impl<'a, 'hast, HAST: HyperAST> CNLending<'a> for self::TreeCursor<'hast, HAST>
+where
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
+    type NR = self::Node<'hast, HAST>;
+}
+
 impl<'hast, HAST: HyperAST> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     type Node = self::Node<'hast, HAST>;
     // type NodeRef<'a>
@@ -165,7 +186,7 @@ where
         }
     }
 
-    fn current_node(&self) -> Self::Node {
+    fn current_node(&self) -> <Self as CNLending<'_>>::NR {
         self.clone()
     }
 
@@ -260,6 +281,7 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     fn role(&self) -> Option<<HAST::TS as RoleStore>::Role> {
         use hyperast::types::NodeStore;
@@ -328,6 +350,7 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
@@ -387,7 +410,10 @@ where
         }
         Equal
     }
-    fn text<'s, 'l>(&'s self, text_provider: <Self as super::TextLending<'l>>::TP) -> super::BB<'s, 'l, str> {
+    fn text<'s, 'l>(
+        &'s self,
+        text_provider: <Self as super::TextLending<'l>>::TP,
+    ) -> super::BB<'s, 'l, str> {
         let id = self.pos.node().unwrap();
         use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(id);
@@ -410,6 +436,7 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     fn child_by_role(&mut self, role: <HAST::TS as RoleStore>::Role) -> Option<()> {
         // TODO what about multiple children with same role?

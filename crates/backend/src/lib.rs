@@ -74,7 +74,7 @@ impl Default for AppState {
     }
 }
 
-pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<PersistedNode<NodeIdentifier>>>;
+pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<NodeIdentifier>>;
 pub(crate) type MappingAloneCache =
     DashMap<(NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
 pub(crate) type MappingAloneCacheRef<'a> =
@@ -88,7 +88,7 @@ pub(crate) enum MappingStage {
 
 type DS<T> = hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<T, u32>;
 pub type PersistableMappings<I> =
-    hyper_diff::matchers::Mapping<DS<PersistedNode<I>>, DS<PersistedNode<I>>, VecStore<u32>>;
+    hyper_diff::matchers::Mapping<DS<I>, DS<I>, VecStore<u32>>;
 pub(crate) type MappingCache =
     DashMap<(NodeIdentifier, NodeIdentifier), PersistableMappings<NodeIdentifier>>;
 type SharedState = Arc<AppState>;

@@ -17,12 +17,11 @@ type IdD = u16;
 
 // const SIM_THRESHOLD: f64 = 0.4;
 
-pub struct SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+pub struct SimpleBottomUpMatcher<Dsrc, Ddst, S, M>
 where
-    T: hyperast::types::Stored,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
+    internal: BottomUpMatcher<Dsrc, Ddst, S, M>,
 }
 
 // impl<
@@ -72,20 +71,16 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstContiguousSiblings<HAST::TM, IdD>,
-        Ddst: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstContiguousSiblings<HAST::TM, IdD>,
-        // T: hyperast::types::Stored,// + WithHashs,
-        HAST: HyperAST,
+        Dsrc: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstContiguousSiblings<HAST, IdD>,
+        Ddst: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstContiguousSiblings<HAST, IdD>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, HAST::TM, HAST, M>
+    > SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
-    // HAST::TS: hyperast::types::TypeStore<Ty = T::Type>,
-    // T: hyperast::types::Typed,
-    // T::Type: Hash + Copy + Eq + Send + Sync,
     <HAST::TS as hyperast::types::TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
 {
@@ -100,7 +95,7 @@ where
                 let t_size = self
                     .internal
                     .src_arena
-                    .descendants(self.internal.stores.node_store(), &(i as IdD))
+                    .descendants(&(i as IdD))
                     .len();
 
                 for cand in candidates {
@@ -109,7 +104,7 @@ where
                             + ((self
                                 .internal
                                 .src_arena
-                                .descendants(self.internal.stores.node_store(), &cand)
+                                .descendants(&cand)
                                 .len()
                                 + t_size)
                                 .to_f64()
@@ -119,11 +114,11 @@ where
                         &self
                             .internal
                             .src_arena
-                            .descendants(self.internal.stores.node_store(), &(i as IdD)),
+                            .descendants(&(i as IdD)),
                         &self
                             .internal
                             .dst_arena
-                            .descendants(self.internal.stores.node_store(), &cand),
+                            .descendants(&cand),
                         &self.internal.mappings,
                     );
                     if sim > max && sim >= threshold {

@@ -2,7 +2,7 @@ use core::panic;
 
 use hyperast::types::{AnyType, HyperType, LangRef, LangWrapper, TypeStore};
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct TStore;
 
 #[cfg(feature = "cpp")]

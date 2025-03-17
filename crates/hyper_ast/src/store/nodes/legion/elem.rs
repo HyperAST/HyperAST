@@ -598,19 +598,18 @@ impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> crate::types::WithChildr
     }
 
     fn child(&self, idx: &Self::ChildIdx) -> Option<NodeIdentifier> {
-        todo!()
-        // self.cs()
-        //     .unwrap_or_else(|x| {
-        //         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-        //         panic!("{}", x)
-        //     })
-        //     .0
-        //     .get(idx.to_usize().unwrap())
-        //     .map(|x| *x)
-        // // .unwrap_or_else(|| {
-        // //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-        // //     panic!()
-        // // })
+        self.cs().ok()?
+            // .unwrap_or_else(|x| {
+            //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            //     panic!("{}", x)
+            // })
+            .0
+            .get(idx.to_usize().unwrap())
+            .map(|x| *x)
+        // .unwrap_or_else(|| {
+        //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+        //     panic!()
+        // })
     }
 
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<NodeIdentifier> {

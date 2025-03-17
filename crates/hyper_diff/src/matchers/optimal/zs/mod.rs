@@ -10,7 +10,7 @@ use str_distance::DistanceMetric;
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
 use hyperast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, Labeled, NodeId, NodeStore, Stored, Tree,
+    DecompressedFrom, DecompressedSubtree, HyperAST, LabelStore, Labeled, NodeId, NodeStore, Stored, Tree
 };
 // TODO use the Mapping struct
 pub struct ZsMatcher<M, SD, DD = SD> {
@@ -20,23 +20,21 @@ pub struct ZsMatcher<M, SD, DD = SD> {
 }
 
 impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
-    pub fn matchh<'store: 'b, 'b: 'c, 'c, 's, HAST>(
-        stores: &'s HAST,
+    pub fn matchh<HAST>(
+        stores: HAST,
         src: HAST::IdN,
         dst: HAST::IdN,
     ) -> Self
     where
-        // T::Type: Copy + Eq + Send + Sync,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
         M::Dst: PrimInt + std::ops::SubAssign + Debug,
-        SD: PostOrderKeyRoots<HAST::TM, M::Src> + DecompressedSubtree<HAST::TM, Out = SD>,
-        DD: PostOrderKeyRoots<HAST::TM, M::Dst> + DecompressedSubtree<HAST::TM, Out = DD>,
-        // T: Tree,
-        HAST: HyperAST,
+        SD: PostOrderKeyRoots<HAST, M::Src> + DecompressedFrom<HAST, Out = SD>,
+        DD: PostOrderKeyRoots<HAST, M::Dst> + DecompressedFrom<HAST, Out = DD>,
+        HAST: HyperAST + Copy,
         HAST::Label: Eq,
     {
-        let src_arena = SD::decompress2(stores, &src);
-        let dst_arena = DD::decompress2(stores, &dst);
+        let src_arena = SD::decompress(stores, &src);
+        let dst_arena = DD::decompress(stores, &dst);
         // let mappings = ZsMatcher::<M, SD, DD>::match_with(stores.node_store(), label_store, &src_arena, &dst_arena);
         let mappings = {
             let mut mappings = M::default();
@@ -44,7 +42,7 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
                 (&src_arena).len().to_usize().unwrap(),
                 (&dst_arena).len().to_usize().unwrap(),
             );
-            let base = MatcherImpl::<'s, 'b, '_, SD, DD, HAST::TM, HAST, M> {
+            let base = MatcherImpl::<SD, DD, HAST, M> {
                 stores: stores,
                 src_arena: &src_arena,
                 dst_arena: &dst_arena,
@@ -61,18 +59,17 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
         }
     }
 
-    pub fn match_with<'store: 'b, 'b, 'c, HAST>(
-        stores: &'store HAST,
+    pub fn match_with<HAST>(
+        stores: HAST,
         src_arena: SD,
         dst_arena: DD,
     ) -> M
     where
-        // T::Type: Copy + Eq + Send + Sync,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
         M::Dst: PrimInt + std::ops::SubAssign + Debug,
-        SD: PostOrderKeyRoots<HAST::TM, M::Src>,
-        DD: PostOrderKeyRoots<HAST::TM, M::Dst>,
-        HAST: HyperAST,
+        SD: PostOrderKeyRoots<HAST, M::Src>,
+        DD: PostOrderKeyRoots<HAST, M::Dst>,
+        HAST: HyperAST + Copy,
         HAST::Label: Eq,
     {
         let mut mappings = M::default();
@@ -80,7 +77,7 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
             src_arena.len().to_usize().unwrap() + 1,
             dst_arena.len().to_usize().unwrap() + 1,
         );
-        let base = MatcherImpl::<'store, 'b, '_, _, _, HAST::TM, _, M> {
+        let base = MatcherImpl::<_, _, HAST, M> {
             stores,
             src_arena: &src_arena,
             dst_arena: &dst_arena,
@@ -93,31 +90,26 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
 }
 
 // TODO use the Mapper struct
-pub struct MatcherImpl<'store, 'b, 'c, SD, DD, T: Stored, HAST, M>
+pub struct MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
-    HAST:,
 {
-    stores: &'store HAST,
+    stores: HAST,
     pub src_arena: &'c SD,
     pub dst_arena: &'c DD,
-    pub(super) phantom: PhantomData<*const (T, M, &'b ())>,
+    pub(super) phantom: PhantomData<*const (M, &'b ())>,
 }
 
 impl<
-        'store: 'b,
         'b: 'c,
         'c,
-        SD: PostOrderKeyRoots<HAST::TM, M::Src>,
-        DD: PostOrderKeyRoots<HAST::TM, M::Dst>,
-        HAST: HyperAST,
+        SD: PostOrderKeyRoots<HAST, M::Src>,
+        DD: PostOrderKeyRoots<HAST, M::Dst>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore,
-    > MatcherImpl<'store, 'b, 'c, SD, DD, HAST::TM, HAST, M>
+    > MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
-    // T::TreeId: Clone,
-    // T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
-    <HAST::TS as hyperast::types::TypeStore>::Ty: Eq,
     HAST::Label: Eq,
 {
     fn get_deletion_cost(&self, _di: &HAST::IdN) -> f64 {
@@ -206,11 +198,11 @@ impl<
         'b,
         'c,
         's,
-        SD: DecompressedTreeStore<HAST::TM, M::Src> + PostOrderKeyRoots<HAST::TM, M::Src>,
-        DD: DecompressedTreeStore<HAST::TM, M::Dst> + PostOrderKeyRoots<HAST::TM, M::Dst>,
-        HAST: HyperAST,
+        SD: DecompressedTreeStore<HAST, M::Src> + PostOrderKeyRoots<HAST, M::Src>,
+        DD: DecompressedTreeStore<HAST, M::Dst> + PostOrderKeyRoots<HAST, M::Dst>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore,
-    > MatcherImpl<'store, 'b, 'c, SD, DD, HAST::TM, HAST, M>
+    > MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
     // T::TreeId: Clone,
     // T::Type: Copy + Eq + Send + Sync,
@@ -813,9 +805,11 @@ mod tests {
     use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
 
     use crate::matchers::mapping_store::DefaultMappingStore;
+    use crate::matchers::Decompressible;
     use crate::tests::examples::example_zs_paper;
     use crate::tree::simple_tree::TStore;
     use hyperast::test_utils::simple_tree::vpair_to_stores;
+    use hyperast::types::HyperASTShared;
 
     #[test]
     fn test_zs_paper_for_initial_layout() {
@@ -828,9 +822,13 @@ mod tests {
                     TStore,
                     hyperast::test_utils::simple_tree::NS<hyperast::test_utils::simple_tree::Tree>,
                     hyperast::test_utils::simple_tree::LS<u16>,
-                > as HyperAST>::TM,
+                > as HyperASTShared>::IdN,
                 _,
-            >::decompress2(&stores, &src);
+            >::decompress(&stores, &src);
+            let a = Decompressible {
+                hyperast: &stores,
+                decomp: a,
+            };
             // // assert_eq!(a.id_compressed, vec![0, 1, 2, 3, 4, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 1, 4]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 0, 5, 0]);
@@ -848,9 +846,13 @@ mod tests {
                     TStore,
                     hyperast::test_utils::simple_tree::NS<hyperast::test_utils::simple_tree::Tree>,
                     hyperast::test_utils::simple_tree::LS<u16>,
-                > as HyperAST>::TM,
+                > as HyperASTShared>::IdN,
                 u16,
-            >::decompress2(&stores, &dst);
+            >::decompress(&stores, &dst);
+            let a = Decompressible {
+                hyperast: &stores,
+                decomp: a,
+            };
             // // assert_eq!(a.id_compressed, vec![6, 7, 2, 8, 3, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 3, 3]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 4, 0, 0]);
@@ -862,7 +864,7 @@ mod tests {
             a
         };
 
-        let matcher = MatcherImpl::<_, _, _, _, DefaultMappingStore<u16>> {
+        let matcher = MatcherImpl::<_, _, _, DefaultMappingStore<u16>> {
             stores: &stores,
             src_arena: &src_arena,
             dst_arena: &dst_arena,

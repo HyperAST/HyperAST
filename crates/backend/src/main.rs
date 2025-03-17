@@ -74,6 +74,7 @@ async fn main() {
             RepoConfig::CppMake,
         );
         repos.register_config(Forge::Github.repo("torvalds", "linux"), RepoConfig::CppMake);
+        repos.register_config(Forge::Github.repo("systemd", "systemd"), RepoConfig::CppMake);
         opts.repository.iter().for_each(|x| {
             repos.register_config(x.repo.clone(), x.config);
         })

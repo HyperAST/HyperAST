@@ -333,7 +333,7 @@ impl MavenModuleAcc {
         if let Some(more) = prep_scripting {
             log::info!("prep_scripting");
             use hyperast::tree_gen::Prepro;
-            match more.preprocessing(Type::MavenDirectory) {
+            match more.preprocessing(hyperast_gen_ts_java::types::Type::Directory) {
                 Ok(acc) => self.scripting_acc = Some(acc),
                 Err(err) => {
                     log::error!("error when handling maven modules {}", err);

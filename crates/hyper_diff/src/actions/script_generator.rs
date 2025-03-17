@@ -131,17 +131,16 @@ struct MidNode<IdC, IdD> {
 }
 
 pub struct ScriptGenerator<
-    's,
     'a,
     'b,
     'c,
     IdD: PrimInt + Debug,
     SS,
     SD, //: BreadthFirstIterable<T, IdD> + DecompressedWithParent<T, IdD>,
-    HAST: HyperAST,
+    HAST: HyperAST + Copy,
     Idx = <HAST as HyperASTShared>::Idx,
 > {
-    store: &'s HAST,
+    store: HAST,
     src_arena_dont_use: &'a SS,
     mid_arena: Vec<MidNode<HAST::IdN, IdD>>, //SuperTreeStore<HAST::IdN>,
     mid_root: IdD,
@@ -166,15 +165,15 @@ impl<
         IdD: PrimInt + Debug,
         // T: Stored,
         //  + Typed + Labeled + WithChildren,
-        SS: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + PostOrderIterable<HAST::TM, IdD>
-            + PostOrder<HAST::TM, IdD>,
-        SD: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstIterable<HAST::TM, IdD>,
-        HAST: HyperAST, //:'a + NodeStore2<HAST::IdN, R<'a> = T>, //NodeStore<'a, HAST::IdN, T>,
-    > ScriptGenerator<'s, 'a, 'b, 'c, IdD, SS, SD, HAST>
+        SS: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + PostOrderIterable<HAST, IdD>
+            + PostOrder<HAST, IdD>,
+        SD: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstIterable<HAST, IdD>,
+        HAST: HyperAST+Copy, //:'a + NodeStore2<HAST::IdN, R<'a> = T>, //NodeStore<'a, HAST::IdN, T>,
+    > ScriptGenerator<'a, 'b, 'c, IdD, SS, SD, HAST>
 where
     // S: hyperast::types::NodeStore<HAST::IdN>,
     // S: 'a + NodeStore<HAST::IdN>,
@@ -191,27 +190,27 @@ where
     // for<'t> <SD as NLending<'t, HAST::IdN>>::N: hyperast::types::WithChildren,
 {
     pub fn compute_actions(
-        store: &'s HAST,
+        store: HAST,
         src_arena: &'a SS,
         dst_arena: &'b SD,
         ms: &'c DefaultMappingStore<IdD>,
     ) -> ActionsVec<SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, HAST::Idx>> {
-        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
+        ScriptGenerator::<'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
             .actions
     }
     pub fn precompute_actions(
-        store: &'s HAST,
+        store: HAST,
         src_arena: &'a SS,
         dst_arena: &'b SD,
         ms: &'c DefaultMappingStore<IdD>,
-    ) -> ScriptGenerator<'s, 'a, 'b, 'c, IdD, SS, SD, HAST> {
-        ScriptGenerator::<'s, 'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
+    ) -> ScriptGenerator<'a, 'b, 'c, IdD, SS, SD, HAST> {
+        ScriptGenerator::<'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
     }
 
-    fn new(store: &'s HAST, src_arena: &'a SS, dst_arena: &'b SD) -> Self {
+    fn new(store: HAST, src_arena: &'a SS, dst_arena: &'b SD) -> Self {
         Self {
             store,
             src_arena_dont_use: src_arena,
@@ -233,7 +232,7 @@ where
         self.cpy_mappings = ms.clone();
         self.moved.resize(self.src_arena_dont_use.len(), false);
         for x in self.src_arena_dont_use.iter_df_post::<true>() {
-            let children = self.src_arena_dont_use.children4(self.store, &x);
+            let children = self.src_arena_dont_use.children(&x);
             let children = if children.len() > 0 {
                 Some(children)
             } else {
@@ -433,7 +432,7 @@ where
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
         self.src_in_order.remove_all(&w_c);
-        let x_c: Vec<IdD> = self.dst_arena.children4(self.store, x);
+        let x_c: Vec<IdD> = self.dst_arena.children(x);
         self.dst_in_order.remove_all(&x_c);
 
         // todo use iter filter collect
@@ -482,7 +481,7 @@ where
     /// find position of x in parent on dst_arena
     pub(crate) fn find_pos(&self, x: &IdD, parent: &IdD) -> HAST::Idx {
         let y = parent;
-        let siblings = self.dst_arena.children4(self.store, y);
+        let siblings = self.dst_arena.children(y);
 
         for c in &siblings {
             if self.dst_in_order.contains(c) {

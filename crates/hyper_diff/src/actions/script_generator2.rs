@@ -181,7 +181,7 @@ impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
     }
 }
 
-pub struct ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+pub struct ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST: HyperAST,
     HAST::Label: Debug,
@@ -191,7 +191,7 @@ where
     // SS: DecompressedWithParent<T, IdD>,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
-    pub store: &'store HAST,
+    pub store: HAST,
     src_arena_dont_use: &'a1 SS,
     cpy2ori: Vec<IdD>,
     #[allow(unused)]
@@ -215,30 +215,29 @@ static MERGE_SIM_ACTIONS: bool = false;
 
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'store: 'a1 + 'a2 + 'm,
         'a1: 'm,
         'a2: 'm,
         'm,
         IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + PostOrder<HAST::TM, IdD>
-            + PostOrderIterable<HAST::TM, IdD>
+        SS: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + PostOrder<HAST, IdD>
+            + PostOrderIterable<HAST, IdD>
             + Debug,
-        SD: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstIterable<HAST::TM, IdD>,
-        HAST: HyperAST,
+        SD: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstIterable<HAST, IdD>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug + Clone,
     P: From<Vec<HAST::Idx>> + Debug,
 {
     pub fn compute_actions<'a: 'a1 + 'a2>(
-        hast: &'store HAST,
+        hast: HAST,
         mapping: &'a Mapping<SS, SD, M>,
     ) -> Result<ActionsVec<SimpleAction<HAST::Label, P, HAST::IdN>>, String> {
         Ok(
@@ -251,29 +250,28 @@ where
 }
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'store: 'a1 + 'a2 + 'm,
         'a1: 'm,
         'a2: 'm,
         'm,
         IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + PostOrder<HAST::TM, IdD>
-            + PostOrderIterable<HAST::TM, IdD>
+        SS: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + PostOrder<HAST, IdD>
+            + PostOrderIterable<HAST, IdD>
             + Debug,
-        SD: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstIterable<HAST::TM, IdD>,
-        HAST: HyperAST,
+        SD: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstIterable<HAST, IdD>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug,
     P: From<Vec<HAST::Idx>> + Debug,
 {
-    pub fn new(store: &'store HAST, src_arena: &'a1 SS, dst_arena: &'a2 SD) -> Self {
+    pub fn new(store: HAST, src_arena: &'a1 SS, dst_arena: &'a2 SD) -> Self {
         Self {
             store,
             src_arena_dont_use: src_arena,
@@ -294,23 +292,22 @@ where
 }
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'store: 'a1 + 'a2 + 'm,
         'a1: 'm,
         'a2: 'm,
         'm,
         IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + PostOrder<HAST::TM, IdD>
-            + PostOrderIterable<HAST::TM, IdD>
+        SS: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + PostOrder<HAST, IdD>
+            + PostOrderIterable<HAST, IdD>
             + Debug,
-        SD: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstIterable<HAST::TM, IdD>,
-        HAST: HyperAST,
+        SD: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstIterable<HAST, IdD>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug,
@@ -327,7 +324,7 @@ where
         let root = self.src_arena_dont_use.root();
         // self.moved.resize(len, false);
         for x in self.src_arena_dont_use.iter_df_post::<true>() {
-            let children = self.src_arena_dont_use.children4(self.store, &x);
+            let children = self.src_arena_dont_use.children(&x);
             let children = if children.len() > 0 {
                 Some(children)
             } else {
@@ -352,36 +349,35 @@ where
 }
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'store: 'a1 + 'a2 + 'm,
         'a1: 'm,
         'a2: 'm,
         'm,
         IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + PostOrder<HAST::TM, IdD>
-            + PostOrderIterable<HAST::TM, IdD>
+        SS: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + PostOrder<HAST, IdD>
+            + PostOrderIterable<HAST, IdD>
             + Debug,
-        SD: DecompressedTreeStore<HAST::TM, IdD>
-            + DecompressedWithParent<HAST::TM, IdD>
-            + BreadthFirstIterable<HAST::TM, IdD>,
-        HAST: HyperAST,
+        SD: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstIterable<HAST, IdD>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug,
     P: From<Vec<HAST::Idx>> + Debug,
 {
     pub fn _compute_actions(
-        store: &'store HAST,
+        store: HAST,
         src_arena: &'a1 SS,
         dst_arena: &'a2 SD,
         ms: &'m M,
     ) -> Result<ActionsVec<SimpleAction<HAST::Label, P, HAST::IdN>>, String> {
         Ok(
-            ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>::new(
+            ScriptGenerator::<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>::new(
                 store, src_arena, dst_arena,
             )
             .init_cpy(ms)
@@ -391,7 +387,7 @@ where
     }
 
     pub fn precompute_actions(
-        store: &'store HAST,
+        store: HAST,
         src_arena: &'a1 SS,
         dst_arena: &'a2 SD,
         ms: &'m M,
@@ -796,7 +792,7 @@ where
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
         self.src_in_order.remove_all(&w_c);
-        let x_c = self.dst_arena.children4(self.store, x);
+        let x_c = self.dst_arena.children(x);
         self.dst_in_order.remove_all(x_c.as_slice());
 
         // todo use iter filter collect
@@ -881,7 +877,7 @@ where
 
     /// find position of x in parent on dst_arena
     pub(crate) fn find_pos(&self, x: &IdD, y: &IdD) -> HAST::Idx {
-        let siblings = self.dst_arena.children4(self.store, y);
+        let siblings = self.dst_arena.children(y);
 
         for c in &siblings {
             if self.dst_in_order.contains(c) {

@@ -1161,7 +1161,7 @@ pub mod lending {
 
     pub type LendN<'n, S, IdN> = <S as NLending<'n, IdN>>::N;
 
-    pub trait NodeStore<IdN>: for<'a> NLending<'a, IdN, N = LendN<'a, Self::NMarker, IdN>> {
+    pub trait NodeStore<IdN>: for<'a> NLending<'a, IdN> {
         fn resolve(&self, id: &IdN) -> LendN<'_, Self, IdN>;
         fn scoped<R>(&self, id: &IdN, f: impl Fn(&LendN<'_, Self, IdN>) -> R) -> R {
             f(&self.resolve(id))
@@ -1169,7 +1169,6 @@ pub mod lending {
         fn scoped_mut<R>(&self, id: &IdN, mut f: impl FnMut(&LendN<'_, Self, IdN>) -> R) -> R {
             f(&self.resolve(id))
         }
-        type NMarker: crate::types::Stored<TreeId = IdN> + for<'a> NLending<'a, IdN>;
     }
 }
 
@@ -1249,45 +1248,36 @@ pub trait TypedNodeStoreLean<IdN: TypedNodeId> {
     fn resolve(&self, id: &IdN) -> Self::R;
 }
 
-pub trait DecompressedSubtree<T: Stored>
-where
-    T: for<'a> NLending<'a, T::TreeId>,
-{
-    type Out: DecompressedSubtree<T>;
-    fn decompress<S>(store: &S, id: &T::TreeId) -> Self::Out
-    where
-        S: lending::NodeStore<T::TreeId, NMarker = T>;
-    fn decompress2<HAST>(store: &HAST, id: &T::TreeId) -> Self::Out
-    where
-        T: for<'a> AstLending<'a>,
-        HAST: HyperAST<IdN = T::TreeId, TM = T>;
+pub trait DecompressedSubtree<IdN> {
+    type Out: DecompressedSubtree<IdN>;
+    fn decompress(self, id: &IdN) -> Self::Out;
 }
 
-pub trait DecompressibleNodeStore<IdN: NodeId>: NodeStore<IdN> {
-    fn decompress<D>(&self, id: &IdN) -> (&Self, D::Out)
-    where
-        Self: Sized,
-        D: DecompressedSubtree<Self::NMarker>
-            + for<'t> lending::NLending<'t, IdN, N = <Self as lending::NLending<'t, IdN>>::N>,
-    {
-        todo!()
-        // (self, D::decompress(self, id))
-    }
-
-    fn decompress_pair<D1, D2>(&self, id1: &IdN, id2: &IdN) -> (&Self, (D1::Out, D2::Out))
-    where
-        Self: Sized,
-        D1: DecompressedSubtree<Self::NMarker>
-            + for<'t> lending::NLending<'t, IdN, N = <Self as lending::NLending<'t, IdN>>::N>,
-        D2: DecompressedSubtree<Self::NMarker>
-            + for<'t> lending::NLending<'t, IdN, N = <Self as lending::NLending<'t, IdN>>::N>,
-    {
-        todo!()
-        // (self, (D1::decompress(self, id1), D2::decompress(self, id2)))
-    }
+pub trait DecompressedFrom<HAST: HyperASTShared> {
+    type Out: DecompressedFrom<HAST>;
+    fn decompress(store: HAST, id: &HAST::IdN) -> Self::Out;
 }
 
-impl<IdN: NodeId, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
+// pub trait DecompressibleNodeStore<IdN: NodeId>: NodeStore<IdN> {
+//     fn decompress<D>(&self, id: &IdN) -> (&Self, D::Out)
+//     where
+//         Self: Sized,
+//         D: DecompressedSubtree<IdN>,
+//     {
+//         (self, D::decompress(self, id))
+//     }
+
+//     fn decompress_pair<D1, D2>(&self, id1: &IdN, id2: &IdN) -> (&Self, (D1::Out, D2::Out))
+//     where
+//         Self: Sized,
+//         D1: DecompressedSubtree<IdN>,
+//         D2: DecompressedSubtree<IdN>,
+//     {
+//         (self, (D1::decompress(self, id1), D2::decompress(self, id2)))
+//     }
+// }
+
+// impl<IdN: NodeId, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
 
 pub trait NodeStoreMut<T: Stored> {
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
@@ -1366,7 +1356,7 @@ pub trait TTypeStore: TypeStore {
     fn decompress_ttype(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::TTy;
 }
 
-pub trait ETypeStore: TypeStore {
+pub trait ETypeStore: TypeStore + Copy {
     type Ty2;
     fn intern(ty: Self::Ty2) -> Self::Ty;
 }
@@ -1668,17 +1658,9 @@ pub trait RoleStore: TypeStore {
 //     type MT: MarkedT;
 // }
 
-pub trait HyperAST:
-    for<'a> AstLending<'a, IdN = <Self::TM as HyperAST>::IdN, RT = <Self::TM as AstLending<'a>>::RT>
-{
-    // type TM: Stored<TreeId = Self::IdN>
-    //     + for<'a> AstLending<'a>
-    //     + HyperASTShared<IdN = Self::IdN, Idx = Self::Idx, Label = Self::Label>
-    //     + for<'a> lending::NLending<'a, Self::IdN, N = <Self::TM as AstLending<'a>>::RT>;
-    type TM: Stored + for<'a> AstLending<'a> + HyperASTShared<Idx = Self::Idx, Label = Self::Label>;
-    type NS: lending::NodeStore<<Self::TM as HyperAST>::IdN, NMarker = Self::TM>;
-    // type NS: for<'a> lending::NLending<'a, Self::IdN, N = <Self::TM as AstLending<'a>>::RT>
-    //     + lending::NodeStore<Self::IdN>;
+pub trait HyperAST: for<'a> AstLending<'a> {
+    type NS: for<'a> NLending<'a, Self::IdN, N = <Self as AstLending<'a>>::RT>
+        + lending::NodeStore<Self::IdN>;
     fn node_store(&self) -> &Self::NS;
 
     type LS: LabelStore<str, I = Self::Label>;
@@ -1689,23 +1671,36 @@ pub trait HyperAST:
     fn decompress<D>(&self, id: &Self::IdN) -> (&Self, D)
     where
         Self: Sized,
-        D: DecompressedSubtree<Self::TM, Out = D>, // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>
+        D: for<'a> From<&'a Self>,
+        D: DecompressedSubtree<Self::IdN, Out = D>, // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>
     {
-        (self, D::decompress2(self, id))
+        (self, D::from(self).decompress(id))
     }
 
     fn decompress_pair<D1, D2>(&self, id1: &Self::IdN, id2: &Self::IdN) -> (&Self, (D1, D2))
     where
         Self: Sized,
-        D1: DecompressedSubtree<Self::TM, Out = D1>,
-        // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>,
-        D2: DecompressedSubtree<Self::TM, Out = D2>,
-        // + for<'t> lending::NLending<'t, Self::IdN, N = <Self as AstLending<'t>>::RT>,
+        D1: for<'a> From<&'a Self>,
+        D1: DecompressedSubtree<Self::IdN, Out = D1>,
+        D2: for<'a> From<&'a Self>,
+        D2: DecompressedSubtree<Self::IdN, Out = D2>,
     {
         (
             self,
-            (D1::decompress2(self, id1), D2::decompress2(self, id2)),
+            (
+                D1::from(self).decompress(id1),
+                D2::from(self).decompress(id2),
+            ),
         )
+    }
+
+    fn decompress_pair2<D1, D2>(self, id1: &Self::IdN, id2: &Self::IdN) -> (Self, (D1, D2))
+    where
+        Self: Sized + Copy,
+        D1: DecompressedFrom<Self, Out = D1>,
+        D2: DecompressedFrom<Self, Out = D2>,
+    {
+        (self, (D1::decompress(self, id1), D2::decompress(self, id2)))
     }
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
         let _ns = self.node_store();
@@ -1755,6 +1750,30 @@ pub trait HyperAST:
     }
 }
 
+pub trait StoreLending<'a, __ImplBound = &'a Self>: AstLending<'a, __ImplBound> + HyperAST {
+    type S: 'a
+        + Copy
+        + HyperAST<
+            TS = <Self as HyperAST>::TS,
+            IdN = <Self as HyperASTShared>::IdN,
+            Label = <Self as HyperASTShared>::Label,
+            Idx = <Self as HyperASTShared>::Idx,
+        >
+        + AstLending<'a, RT = <Self as AstLending<'a, __ImplBound>>::RT>;
+}
+
+pub trait StoreLending2: HyperAST {
+    type S<'a>: Copy
+        + HyperAST<
+            TS = <Self as HyperAST>::TS,
+            IdN = <Self as HyperASTShared>::IdN,
+            Label = <Self as HyperASTShared>::Label,
+            Idx = <Self as HyperASTShared>::Idx,
+        > + for<'t> AstLending<'t, RT = <Self as AstLending<'t>>::RT>;
+}
+
+// trait HyperASTLender: for<'a> StoreLending<'a> {}
+
 pub trait NodeStorage<IdN> {}
 
 pub trait HyperASTShared {
@@ -1772,9 +1791,9 @@ pub trait AstLending<'a, __ImplBound = &'a Self>:
 pub type LendT<'t, HAST> = <HAST as AstLending<'t>>::RT;
 
 pub trait TypedLending<'a, Ty: HyperType + Hash + Copy + Eq + Send + Sync, __ImplBound = &'a Self>:
-    AstLending<'a, __ImplBound, RT = Self::TT>
+    AstLending<'a, __ImplBound>
 {
-    type TT: TypedTree<Type = Ty, TreeId = Self::IdN, Label = Self::Label, ChildIdx = Self::Idx>;
+    type TT: Deref<Target = <Self as AstLending<'a, __ImplBound>>::RT> + Typed<Type = Ty>;
 }
 
 // impl<T> HyperASTShared for &T
@@ -1889,7 +1908,9 @@ pub trait TypedLending<'a, Ty: HyperType + Hash + Copy + Eq + Send + Sync, __Imp
 //     // fn typed_node_store(&self) -> Self::TNS<'_>;
 // }
 
-pub trait TypedHyperAST<TIdN: TypedNodeId>:
+pub trait TypedHyperAST<TIdN: TypedNodeId<
+// Ty = <<Self as HyperAST>::TS as TypeStore>::Ty
+>>:
     HyperAST + for<'a> TypedLending<'a, TIdN::Ty, IdN = TIdN::IdN>
 {
     // type TT<'t>: TypedTree<
@@ -1901,10 +1922,14 @@ pub trait TypedHyperAST<TIdN: TypedNodeId>:
     // type TNS: for<'t> TypedNodeStore<TIdN, R<'t> = Self::TT>;
     // fn typed_node_store(&self) -> &Self::TNS;
     fn try_typed(&self, id: &Self::IdN) -> Option<TIdN>;
-    fn try_resolve(&self, id: &Self::IdN) -> Option<(Self::TT, TIdN)> {
-        self.try_typed(id).map(|x| (self.resolve(&x), x))
+    fn try_resolve(
+        &self,
+        id: &Self::IdN,
+    ) -> Option<(<Self as TypedLending<'_, TIdN::Ty>>::TT, TIdN)> {
+        self.try_typed(id)
+            .map(|x| (TypedHyperAST::resolve_typed(self, &x), x))
     }
-    fn resolve(&self, id: &TIdN) -> Self::TT;
+    fn resolve_typed(&self, id: &TIdN) -> <Self as TypedLending<'_, TIdN::Ty>>::TT;
 }
 
 pub struct SimpleHyperAST<T, TS, NS, LS> {

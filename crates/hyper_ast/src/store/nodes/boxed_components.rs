@@ -70,7 +70,7 @@ impl crate::types::lending::NodeStore<NodeIdentifier> for NodeStore {
         HashedNodeRef(self.nodes.get(id).unwrap(), PhantomData)
     }
 
-    type NMarker = TMarker<NodeIdentifier>;
+    // type NMarker = TMarker<NodeIdentifier>;
 }
 
 impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TyNodeStore<TIdN>

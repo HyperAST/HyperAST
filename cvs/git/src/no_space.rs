@@ -5,7 +5,7 @@ use hyperast::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{HashedNodeRef, NodeStore},
     },
-    types::{self, AnyType, Children, NodeId, SimpleHyperAST, TypedNodeId},
+    types::{self, AnyType, Children, NodeId, SimpleHyperAST, TypedNodeId, AAAA},
 };
 
 use crate::SimpleStores;
@@ -324,7 +324,7 @@ impl<IdN> Deref for MIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + NodeId> NodeId for MIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> NodeId for MIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -565,37 +565,6 @@ impl<'store> types::NStore for NoSpaceNodeStoreWrapper<'store> {
     type Idx = u16;
 }
 
-pub struct TMarker<IdN>(std::marker::PhantomData<IdN>);
-
-impl<IdN> Default for TMarker<IdN> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl<'a, IdN: 'a + hyperast::types::NodeId> hyperast::types::NLending<'a, IdN::IdN>
-    for &TMarker<IdN>
-{
-    type N = NoSpaceWrapper<'a, IdN>;
-}
-
-impl<'a, IdN: 'a + hyperast::types::NodeId> hyperast::types::NLending<'a, IdN::IdN>
-    for TMarker<IdN>
-{
-    type N = NoSpaceWrapper<'a, IdN>;
-}
-
-impl<IdN> hyperast::types::Node for TMarker<IdN> {}
-
-impl<IdN: hyperast::types::NodeId> hyperast::types::Stored for TMarker<IdN> {
-    type TreeId = IdN;
-}
-impl<IdN: hyperast::types::NodeId<IdN = IdN>> hyperast::types::MarkedT for TMarker<IdN> {
-    type Label = hyperast::store::defaults::LabelIdentifier;
-
-    type ChildIdx = u16;
-}
-
 // impl<'store> types::NodStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
 //     type R<'a> = NoSpaceWrapper<'a, NodeIdentifier>;
 // }
@@ -605,7 +574,6 @@ impl<'a, 'store> types::lending::NLending<'a, NodeIdentifier> for NoSpaceNodeSto
 }
 
 impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
-    type NMarker = TMarker<NodeIdentifier>;
     fn resolve(&self, id: &NodeIdentifier) -> types::LendN<'_, Self, NodeIdentifier> {
         NoSpaceWrapper {
             inner: unsafe { self.s._resolve(id.as_id()) },
@@ -678,7 +646,7 @@ impl<'a, 'store> types::lending::NLending<'a, NodeIdentifier> for &NoSpaceNodeSt
 }
 
 impl<'store> types::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
-    type NMarker = TMarker<NodeIdentifier>;
+    // type NMarker = TMarker<NodeIdentifier>;
     fn resolve(&self, id: &NodeIdentifier) -> types::LendN<'_, Self, NodeIdentifier> {
         NoSpaceWrapper {
             inner: unsafe { self.s._resolve(id.as_id()) },

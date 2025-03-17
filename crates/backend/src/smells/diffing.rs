@@ -7,6 +7,9 @@ use hyper_diff::actions::action_vec::ActionsVec;
 use hyper_diff::actions::script_generator2::Act;
 use hyper_diff::actions::script_generator2::ScriptGenerator;
 use hyper_diff::actions::script_generator2::SimpleAction;
+use hyper_diff::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use hyper_diff::decompressed_tree_store::complete_post_order_ref;
+use hyper_diff::matchers::Decompressible;
 use hyper_diff::tree::tree_path::CompressedTreePath;
 use hyperast::store::defaults::LabelIdentifier;
 use hyperast::store::defaults::NodeIdentifier;
@@ -134,8 +137,8 @@ pub(crate) fn diff(
                 let mut mapper = hyper_diff::matchers::Mapper {
                     hyperast,
                     mapping: Mapping {
-                        src_arena,
-                        dst_arena,
+                        src_arena: Decompressible{hyperast, decomp: src_arena},
+                        dst_arena: Decompressible{hyperast, decomp: dst_arena},
                         mappings,
                     },
                 };
@@ -161,24 +164,28 @@ pub(crate) fn diff(
     };
     let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
     dbg!();
-    src_arena.complete_subtree(&stores.node_store, &src_arena.root());
+    let mut src_arena = Decompressible{hyperast: stores, decomp: src_arena};
+    let mut dst_arena = Decompressible{hyperast: stores, decomp: dst_arena};
+    src_arena.complete_subtree(&src_arena.root());
     let src_arena =
-        hyper_diff::decompressed_tree_store::complete_post_order_ref::CompletePostOrder::from(
-            &*src_arena,
+        complete_post_order_ref::CompletePostOrder::from(
+            &*src_arena.decomp,
         );
     dbg!();
-    dst_arena.complete_subtree(&stores.node_store, &dst_arena.root());
+    dst_arena.complete_subtree(&dst_arena.root());
     let dst_arena =
-        hyper_diff::decompressed_tree_store::complete_post_order_ref::CompletePostOrder::from(
-            &*dst_arena,
+        complete_post_order_ref::CompletePostOrder::from(
+            &*dst_arena.decomp,
         );
     dbg!();
-    let dst_arena = hyper_diff::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper::from(
-        &stores.node_store,
+    let dst_arena = Decompressible{hyperast: stores, decomp: dst_arena};
+    let dst_arena = SimpleBfsMapper::with_store(
+        stores,
         dst_arena,
     );
     dbg!();
     let ms = &mapped.1;
+    let src_arena = Decompressible{hyperast: stores, decomp: src_arena};
     let mapping = hyper_diff::matchers::Mapping {
         src_arena,
         dst_arena,
@@ -186,7 +193,7 @@ pub(crate) fn diff(
     };
     let actions = {
         let mapping = &mapping;
-        let store = &stores.node_store;
+        let store = stores;
 
         let mut this = ScriptGenerator::new(store, &mapping.src_arena, &mapping.dst_arena)
             .init_cpy(&mapping.mappings);

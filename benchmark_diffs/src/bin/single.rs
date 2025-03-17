@@ -68,7 +68,7 @@ fn single(repo_name: &str, before: &str, after: &str) {
     let dst_tr = commit_dst.1.ast_root;
     let dst_s = stores.node_store.resolve(dst_tr).size();
 
-    let hyperast = hyperast_vcs_git::no_space::as_nospaces(stores);
+    let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
     let mu = memusage_linux();
     let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);

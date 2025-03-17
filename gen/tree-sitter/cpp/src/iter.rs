@@ -61,7 +61,7 @@ where
 impl<
         'a,
         T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: TypedHyperAST<TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
+        HAST: TypedHyperAST<TIdN<NodeIdentifier>, Idx = u16>,
     > Iterator for IterAll<'a, T, HAST>
 where
 // HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
@@ -119,7 +119,7 @@ where
                         ));
                     }
                     self.stack.push((node, offset + 1, Some(children)));
-                    let child = if let Some(tid) = self.stores.typed_node_store().try_typed(&child)
+                    let child = if let Some(tid) = self.stores.try_typed(&child)
                     {
                         Id::Cpp(tid)
                     } else {
@@ -135,7 +135,7 @@ where
                 }
             } else {
                 let b = match &node {
-                    Id::Cpp(node) => self.stores.typed_node_store().resolve(node),
+                    Id::Cpp(node) => self.stores.resolve_typed(node),
                     Id::Other(node) => {
                         let b =
                             hyperast::types::NodeStore::resolve(self.stores.node_store(), node);

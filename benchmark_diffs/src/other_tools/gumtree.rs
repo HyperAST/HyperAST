@@ -5,12 +5,12 @@ use std::{
     time::Instant,
 };
 
-use hyperast::{nodes::JsonSerializer, types};
+use hyperast::{nodes::JsonSerializer2 as JsonSerializer, types};
 
 use crate::tempfile;
 
 pub fn subprocess<'a, HAST>(
-    stores: &'a HAST,
+    stores: HAST,
     src_root: HAST::IdN,
     dst_root: HAST::IdN,
     mapping_algo: &str,
@@ -19,9 +19,9 @@ pub fn subprocess<'a, HAST>(
     out_format: &str,
 ) -> Option<PathBuf>
 where
-    HAST: types::HyperAST<'a>,
+    HAST: types::HyperAST + Copy,
     // HAST: types::LabelStore<str>,
-    // IdN: types::NodeId<IdN = IdN>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
     // HAST: types::NodeStore<IdN>,
     // HAST: types::LabelStore<str>,
     // HAST: types::TypeStore<HAST::R<'a>>,
@@ -31,7 +31,7 @@ where
     dbg!(&src);
     src_f
         .write_all(
-            JsonSerializer::<_, _, true>::new(stores, src_root)
+            JsonSerializer::<_, HAST, true>::new(stores, src_root)
                 .to_string()
                 .as_bytes(),
         )

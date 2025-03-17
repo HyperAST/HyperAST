@@ -3,6 +3,7 @@ use hyperast::types;
 use hyperast::types::AstLending;
 use hyperast::types::Childrn;
 use hyperast::types::HyperType;
+use hyperast::types::NodeId;
 use std::fmt::{Debug, Display, Write};
 
 pub struct TreeToQuery<
@@ -59,6 +60,7 @@ impl<
         const SPC: bool,
     > Display for TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 where
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::IdN: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -77,6 +79,7 @@ impl<
     > TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 where
     HAST::IdN: Debug,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(

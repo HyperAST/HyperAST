@@ -6,7 +6,7 @@ use hyperast::{
     store::defaults::NodeIdentifier,
     types::{
         AnyType, Children, HyperAST, HyperType, NodeId, NodeStore, Tree, TypeTrait, Typed,
-        TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
+        TypedHyperAST, TypedNodeStore, TypedTree, WithChildren, AAAA,
     },
 };
 use num::ToPrimitive;
@@ -24,7 +24,7 @@ enum Id<IdN> {
     Other(IdN),
 }
 
-impl<IdN: Clone + Eq + NodeId> Id<IdN> {
+impl<IdN: Clone + Eq + AAAA> Id<IdN> {
     fn id(&self) -> &IdN {
         match self {
             Id::Java(node) => node.as_id(),

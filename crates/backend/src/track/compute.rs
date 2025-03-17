@@ -1,6 +1,6 @@
+use hyper_diff::{decompressed_tree_store::lazy_post_order, matchers::Decompressible};
 use hyperast::position::position_accessors::{self, SolvedPosition};
 use hyperast_vcs_git::no_space::NoSpaceWrapper;
-use hyper_diff::decompressed_tree_store::lazy_post_order;
 
 use crate::MappingAloneCacheRef;
 
@@ -8,8 +8,7 @@ use super::*;
 
 type IdD = u32;
 
-type DecompressedTree<'store> =
-    lazy_post_order::LazyPostOrder<NoSpaceWrapper<'store, super::IdN>, IdD>;
+type DecompressedTree = lazy_post_order::LazyPostOrder<super::IdN, IdD>;
 
 struct MappingTracker<'store, HAST> {
     stores: &'store HAST,
@@ -108,8 +107,14 @@ where
     let mut mapper = Mapper {
         hyperast,
         mapping: hyper_diff::matchers::Mapping {
-            src_arena: src_tree,
-            dst_arena: dst_tree,
+            src_arena: Decompressible {
+                hyperast,
+                decomp: src_tree,
+            },
+            dst_arena: Decompressible {
+                hyperast,
+                decomp: dst_tree,
+            },
             mappings: mapping_store::VecStore::default(),
         },
     };
@@ -143,11 +148,10 @@ where
     let fuller_mappings = &fuller_mappings.1;
 
     let root = mapper.mapping.src_arena.root();
-    let mapping_target = mapper.mapping.src_arena.child_decompressed(
-        &stores.node_store,
-        &root,
-        target.iter_offsets_nospaces().copied(),
-    );
+    let mapping_target = mapper
+        .mapping
+        .src_arena
+        .child_decompressed(&root, target.iter_offsets_nospaces().copied());
 
     if let Some(mapped) = fuller_mappings.get_dst(&mapping_target) {
         return track_with_mappings(
@@ -176,8 +180,8 @@ where
         if let Some(mapped_parent) = fuller_mappings.get_dst(&parent_target) {
             let fallback = {
                 let (path, path_ids) = {
-                    let dst_tree = dst_tree;
-                    let mapped_parent = dst_tree.decompress_to(&stores.node_store, &mapped_parent);
+                    let mut dst_tree = dst_tree;
+                    let mapped_parent = dst_tree.decompress_to(&mapped_parent);
                     assert_eq!(other_tr, dst_tree.original(&dst_tree.root()));
                     let path = dst_tree.path(&dst_tree.root(), &mapped_parent);
                     let mut path_ids = vec![dst_tree.original(&mapped_parent)];
@@ -239,8 +243,8 @@ where
 fn track_with_mappings<'store, 's, C, P>(
     with_spaces_stores: &SimpleStores<TStore>,
     stores: &'s NoSpaceStore<'_, 'store>,
-    src_tree: &mut DecompressedTree<'static>,
-    dst_tree: &mut DecompressedTree<'static>,
+    src_tree: &mut DecompressedTree,
+    dst_tree: &mut DecompressedTree,
     flags: &Flags,
     target: &P,
     mapping_target: IdD,
@@ -253,8 +257,16 @@ where
         + position_accessors::WithPreOrderOffsets<Idx = super::Idx>
         + position_accessors::OffsetPostionT<super::IdN, IdO = usize>,
 {
+    let src_tree = Decompressible {
+        hyperast: stores,
+        decomp: src_tree,
+    };
+    let mut dst_tree = Decompressible {
+        hyperast: stores,
+        decomp: dst_tree,
+    };
     let other_tr = dst_tree.original(&dst_tree.root());
-    let mapped = dst_tree.decompress_to(&stores.node_store, &mapped);
+    let mapped = dst_tree.decompress_to(&mapped);
     let path_no_spaces = dst_tree.path_rooted(&mapped);
     let path_ids = {
         let mut path_ids = vec![dst_tree.original(&mapped)];
@@ -374,14 +386,19 @@ type NoSpaceStore<'a, 'store> = hyperast::store::SimpleStores<
     &'a hyperast::store::labels::LabelStore,
 >;
 
-fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest, 's>(
+fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest, 's: 'trees>(
     _stores: &'s NoSpaceStore<'rest, 'store>,
     mappings_alone: &'alone MappingAloneCache,
     mapper: &'mapper mut Mapper<
-        's,
-        NoSpaceStore<'rest, 'store>,
-        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'static, super::IdN>, u32>,
-        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'static, super::IdN>, u32>,
+        &'s NoSpaceStore<'rest, 'store>,
+        Decompressible<
+            &'s NoSpaceStore<'rest, 'store>,
+            &'trees mut lazy_post_order::LazyPostOrder<super::IdN, u32>,
+        >,
+        Decompressible<
+            &'s NoSpaceStore<'rest, 'store>,
+            &'trees mut lazy_post_order::LazyPostOrder<super::IdN, u32>,
+        >,
         mapping_store::VecStore<u32>,
     >,
     partial: Option<mapping_store::MultiVecStore<u32>>,
@@ -437,8 +454,8 @@ const CONST_NODE_COUNTING: Option<usize> = Some(500_000);
 fn track_greedy<'store, 's, C, P>(
     with_spaces_stores: &'s SimpleStores<TStore>,
     stores: &'s NoSpaceStore<'_, 'store>,
-    src_tree: &mut DecompressedTree<'static>,
-    dst_tree: &mut DecompressedTree<'static>,
+    src_tree: &mut DecompressedTree,
+    dst_tree: &mut DecompressedTree,
     subtree_mappings: &mapping_store::MultiVecStore<IdD>,
     // no_spaces_path_to_target: &[u16],
     flags: &Flags,
@@ -452,6 +469,10 @@ where
         + position_accessors::OffsetPostionT<super::IdN, IdO = usize>
         + self::WithPreOrderOffsetsNoSpaces,
 {
+    let dst_tree = Decompressible {
+        hyperast: stores,
+        decomp: dst_tree,
+    };
     let current_tr = target.root();
     let other_tr = dst_tree.original(&dst_tree.root());
     assert_eq!(current_tr, src_tree.original(&src_tree.root()));
@@ -591,7 +612,11 @@ where
             break;
         };
         path = &path[1..];
-        let cs = src_tree.decompress_children(node_store, &curr);
+        let cs = Decompressible {
+            hyperast: stores,
+            decomp: &mut *src_tree,
+        }
+        .decompress_children(&curr);
         if cs.is_empty() {
             break;
         }

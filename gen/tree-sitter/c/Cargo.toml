@@ -1,0 +1,50 @@
+[package]
+name = "hyperast_gen_ts_c"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter = { workspace = true, optional = true }
+# tree-sitter = { path="../../../../tree-sitter/lib", version="0.20", optional = true}
+# tree-sitter-java = {path="tree-sitter-java", version="0.20.0"}
+tree-sitter-c = { version = "0.23.1", optional = true }
+# tree-sitter-cpp = { path="tree-sitter-cpp", version="0.20", optional = true}
+# tree-sitter-cpp = { path="../../../../tree-sitter-cpp", version="0.23.1", optional = true}
+# tree-sitter-cpp = { version = "0.23.0", optional = true }
+atomic-counter = "1.0.1"
+num = "0.4.0"
+bitvec = "1.0.1"
+controlled-option = "0.4.1"
+cfg-if = "1.0"
+hashbrown = { version = "0.14.5", default-features = false, optional = true }
+log = { version = "0.4.6" }
+
+hyperast = { path = "../../../crates/hyper_ast", default-features = false }
+# hyperast = { workspace = true, default-features = false } # issue with hyper_app + wasm
+
+libc = "0.2"
+
+legion = { version = "0.4.0", optional = true }
+tuples = "=1.4.1"
+
+enumset = "1.0.8"
+
+serde = { version = "1.0.130" }
+
+[dev-dependencies]
+pretty_assertions = "1.0.0"
+env_logger = "0.11.3"
+
+[features]
+default = ["impl"]
+legion = ["hyperast/legion", "dep:legion"]
+impl = [
+    "hyperast/jemalloc",
+    "legion",
+    "hyperast/native",
+    "dep:hashbrown",
+    "hashbrown?/ahash",
+    "dep:tree-sitter",
+    "dep:tree-sitter-c",
+    "hyperast/ts",
+]

@@ -7,7 +7,7 @@ edition = "2021"
 tree-sitter = { workspace = true }
 tree-sitter-cli = "0.23.0"
 hyperast = { workspace = true, default-features = false, features = [
-    "serialize",
+    "serialize", "fetched"
 ] }
 hyperast_gen_ts_cpp = { workspace = true }
 hyperast_gen_ts_java = { workspace = true }
@@ -125,7 +125,7 @@ reqwest = { version = "0.12.5", features = ["blocking"] }
 
 [features]
 # default = ["rerun", "tsg"]
-# default = ["tsg"]
+default = ["tsg"]
 tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",

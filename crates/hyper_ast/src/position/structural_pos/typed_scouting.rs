@@ -219,7 +219,9 @@ where
         _stores: &'store HAST,
     ) -> Position
     where
-        HAST: HyperAST<IdN = TIdN::IdN, Label = LabelIdentifier>,
+        HAST: HyperAST<
+        // IdN = TIdN::IdN, 
+        Label = LabelIdentifier>,
         HAST: crate::types::TypedHyperAST<TIdN>,
         // <HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT:
         //     Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,

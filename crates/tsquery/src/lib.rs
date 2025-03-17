@@ -30,6 +30,7 @@ pub mod tsg;
 pub mod cursor_on_unbuild;
 
 use hyperast::types::HyperAST;
+use hyperast::types::NLending;
 pub use tree_sitter::CaptureQuantifier;
 pub use tree_sitter::Language;
 pub use tree_sitter::Point;
@@ -103,10 +104,10 @@ impl<I> Slice<I> {
 }
 
 impl Query {
-    pub fn matches<'query, Cursor: self::Cursor>(
+    pub fn matches<'query, Cursor: self::Cursor, Node: crate::Node + Clone>(
         &'query self,
         cursor: Cursor,
-    ) -> QueryCursor<'query, Cursor, Cursor::Node> {
+    ) -> QueryCursor<'query, Cursor, Node> {
         QueryCursor::<Cursor, _> {
             halted: false,
             ascending: false,
@@ -124,10 +125,10 @@ impl Query {
     }
 
     /// Match all patterns that starts on cursor current node
-    pub fn matches_immediate<'query, Cursor: self::Cursor>(
+    pub fn matches_immediate<'query, Cursor: self::Cursor, N: crate::Node + Clone>(
         &'query self,
         cursor: Cursor,
-    ) -> QueryCursor<'query, Cursor, Cursor::Node> {
+    ) -> QueryCursor<'query, Cursor, N> {
         let mut qcursor = self.matches(cursor);
         // can only match patterns starting on provided node
         qcursor.set_max_start_depth(0);
@@ -157,24 +158,23 @@ impl Query {
 }
 
 pub struct QueryCursor<'query, Cursor, Node> {
-    halted: bool,
-    ascending: bool,
-    on_visible_node: bool,
-    cursor: Cursor,
-    query: &'query Query,
-    states: Vec<query_cursor::State>,
-    depth: Depth,
-    max_start_depth: Depth,
-    capture_list_pool: indexed::CaptureListPool<Node>,
-    finished_states: VecDeque<query_cursor::State>,
-    next_state_id: indexed::StateId,
+    pub halted: bool,
+    pub ascending: bool,
+    pub on_visible_node: bool,
+    pub cursor: Cursor,
+    pub query: &'query Query,
+    pub states: Vec<query_cursor::State>,
+    pub depth: Depth,
+    pub max_start_depth: Depth,
+    pub capture_list_pool: indexed::CaptureListPool<Node>,
+    pub finished_states: VecDeque<query_cursor::State>,
+    pub next_state_id: indexed::StateId,
     // only triggers when there is no more capture list available
     // not triggered by reaching max_start_depth
-    did_exceed_match_limit: bool,
+    pub did_exceed_match_limit: bool,
 }
 
-impl<'query, Cursor, N> QueryCursor<'query, Cursor, N>
-{
+impl<'query, Cursor, N> QueryCursor<'query, Cursor, N> {
     pub fn cursor(&self) -> &Cursor {
         &self.cursor
     }
@@ -210,15 +210,25 @@ pub enum TreeCursorStep {
 // pub trait CursorLending<'a> {
 //     type NodeRef: Node<IdF = <Self::Node as Node>::IdF, TP<'a> = <Self::Node as Node>::TP<'a>>;
 // }
-pub trait Cursor {
-    type Node: Node + Clone;
+
+pub trait WithField {
+    type IdF;
+}
+pub trait CNLending<'a, __ImplBound = &'a Self>: WithField {
+    type NR: Node<IdF = Self::IdF> + Clone;
+}
+
+pub trait Cursor: for<'a> CNLending<'a> {
+    type Node: Clone
+        + Node<IdF = <Self as WithField>::IdF>
+        + for<'a> TextLending<'a, TP = <<Self as CNLending<'a>>::NR as TextLending<'a>>::TP>;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep;
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep;
 
     fn goto_parent(&mut self) -> bool;
-    fn current_node(&self) -> Self::Node;
+    fn current_node(&self) -> <Self as CNLending<'_>>::NR;
 
     fn parent_is_error(&self) -> bool;
 
@@ -272,7 +282,8 @@ pub trait Node: for<'a> TextLending<'a> {
         text_provider: <Self as TextLending<'l>>::TP,
         other: impl Iterator<Item = u8>,
     ) -> bool {
-        self.text(text_provider).deref()
+        self.text(text_provider)
+            .deref()
             .as_bytes()
             .iter()
             .copied()
@@ -345,10 +356,7 @@ where
         (*self).compare(other)
     }
 
-    fn text<'s, 'l>(
-        &'s self,
-        text_provider: <Self as TextLending<'l>>::TP,
-    ) -> BB<'s, 'l, str> {
+    fn text<'s, 'l>(&'s self, text_provider: <Self as TextLending<'l>>::TP) -> BB<'s, 'l, str> {
         (*self).text(text_provider)
     }
 }

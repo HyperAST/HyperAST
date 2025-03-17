@@ -1012,6 +1012,233 @@ where
     }
 }
 
+
+
+
+pub type JsonSerializer2<'a, IdN, HAST, const SPC: bool> =
+    IndentedSerializer2<'a, IdN, HAST, Json, SPC>;
+pub type TextSerializer2<'a, IdN, HAST> = IndentedSerializer2<'a, IdN, HAST, Text, true>;
+
+pub struct IndentedSerializer2<'hast, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
+    stores: HAST,
+    root: IdN,
+    root_indent: &'static str,
+    phantom: PhantomData<(&'hast (), Fmt)>,
+}
+
+impl<'store, IdN, HAST, Fmt: Format, const SPC: bool>
+    IndentedSerializer2<'store, IdN, HAST, Fmt, SPC>
+{
+    pub fn new(stores: HAST, root: IdN) -> Self {
+        Self {
+            stores,
+            root,
+            root_indent: "\n",
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'store, IdN, HAST, const SPC: bool> Display
+    for IndentedSerializer2<'store, IdN, HAST, Text, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.serialize(&self.root, &self.root_indent, f) {
+            Err(IndentedAlt::FmtError) => Err(std::fmt::Error),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl<'store, IdN, HAST, const SPC: bool> Display
+    for IndentedSerializer2<'store, IdN, HAST, Json, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.serialize(&self.root, &self.root_indent, f) {
+            Err(IndentedAlt::FmtError) => Err(std::fmt::Error),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl<'store, IdN, HAST, const SPC: bool> IndentedSerializer2<'store, IdN, HAST, Text, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
+{
+    fn serialize(
+        &self,
+        id: &IdN,
+        parent_indent: &str,
+        out: &mut std::fmt::Formatter<'_>,
+    ) -> Result<String, IndentedAlt> {
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::WithChildren;
+        let b = self.stores.resolve(id);
+        // let kind = (self.stores.type_store(), b);
+        let kind = self.stores.resolve_type(id);
+        let label = b.try_get_label();
+        let children = b.children();
+
+        if kind.is_spaces() {
+            let indent = if let Some(label) = label {
+                let s = self.stores.label_store().resolve(label);
+                let b: String = Space::format_indentation(s.as_bytes())
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect();
+                out.write_str(&b)?;
+                if b.contains("\n") {
+                    b
+                } else {
+                    parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+                }
+            } else {
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            };
+            return Ok(indent);
+        }
+
+        let r = match (label, children) {
+            (None, None) => {
+                out.write_str(&kind.to_string())?;
+                Err(IndentedAlt::NoIndent)
+            }
+            (label, Some(children)) => {
+                if let Some(label) = label {
+                    let s = self.stores.label_store().resolve(label);
+                }
+                if !children.is_empty() {
+                    let mut it = children;
+                    let op = |alt| {
+                        if alt == IndentedAlt::NoIndent {
+                            Ok(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned())
+                        } else {
+                            Err(alt)
+                        }
+                    };
+                    let mut ind = self
+                        .serialize(&it.next().unwrap(), parent_indent, out)
+                        .or_else(op)?;
+                    for id in it {
+                        ind = self.serialize(&id, &ind, out).or_else(op)?;
+                    }
+                }
+                Err(IndentedAlt::NoIndent)
+            }
+            (Some(label), None) => {
+                let s = self.stores.label_store().resolve(label);
+                out.write_str(&s)?;
+                Err(IndentedAlt::NoIndent)
+            }
+        };
+        r
+    }
+}
+impl<'store, IdN, HAST, const SPC: bool> IndentedSerializer2<'store, IdN, HAST, Json, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: HyperAST<IdN = IdN>,
+{
+    fn serialize(
+        &self,
+        id: &IdN,
+        parent_indent: &str,
+        out: &mut std::fmt::Formatter<'_>,
+    ) -> Result<String, IndentedAlt> {
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::WithChildren;
+        let b = self.stores.resolve(id);
+        // let kind = (self.stores.type_store(), b);
+        let kind = self.stores.resolve_type(id);
+        let label = b.try_get_label();
+        let children = b.children();
+
+        if kind.is_spaces() {
+            let s = self.stores.label_store().resolve(&label.unwrap());
+            let b:String = //s; //String::new();
+        Space::format_indentation(s.as_bytes())
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
+            if SPC {
+                // let a = &*s;
+                // a.iter()
+                //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+                out.write_str("{\"kind\":\"")?;
+                // out.write_str(&kind.to_string())?;
+                out.write_str(&"spaces")?;
+                out.write_str("\",\"label\":\"")?;
+                out.write_str(&escape(&b))?;
+                out.write_str("\"}")?;
+            }
+            return Ok(if b.contains("\n") {
+                b
+            } else {
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            });
+        }
+
+        let r= match (label, children) {
+            (None, None) => {
+                out.write_str("\"")?;
+                out.write_str(&escape(&kind.to_string()))?;
+                out.write_str("\"")?;
+                Err(IndentedAlt::NoIndent)
+            }
+            (label, Some(children)) => {
+                out.write_str("{\"kind\":\"")?;
+                out.write_str(&escape(&kind.to_string()))?;
+                if let Some(label) = label {
+                    out.write_str("\",\"label\":\"")?;
+                    let s = self.stores.label_store().resolve(label);
+                    out.write_str(&escape(&s))?;
+                }
+                if !children.is_empty() {
+                    out.write_str("\",\"children\":[")?;
+                    let mut it = children.iter_children();
+                    let mut ind = self
+                        .serialize(&it.next().unwrap(), parent_indent, out)
+                        .unwrap_or(
+                            parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned(),
+                        );
+                    for id in it {
+                        out.write_str(",")?;
+                        ind = self.serialize(&id, &ind, out).unwrap_or(
+                            parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned(),
+                        );
+                    }
+                    out.write_str("]}")?;
+                } else {
+                    out.write_str("\"}")?;
+                }
+                Err(IndentedAlt::NoIndent)
+            }
+            (Some(label), None) => {
+                out.write_str("{\"kind\":\"")?;
+                out.write_str(&escape(&kind.to_string()))?;
+                out.write_str("\",\"label\":\"")?;
+                let s = self.stores.label_store().resolve(label);
+                out.write_str(&escape(&s))?;
+                out.write_str("\"}")?;
+                Err(IndentedAlt::NoIndent)
+            }
+        };
+        r
+    }
+}
+
+
 #[derive(PartialEq, Eq)]
 pub enum IndentedAlt {
     FmtError,

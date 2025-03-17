@@ -318,7 +318,7 @@ impl RepositoryProcessor {
                     .main_stores
                     .mut_with_ts::<hyperast_gen_ts_cpp::types::TStore>();
                 let more =
-                    hyperast_tsquery::PreparedQuerying::<_, SimpleStores, cpp_gen::Acc>::from(
+                    hyperast_tsquery::PreparedQuerying::<_, hyperast_gen_ts_cpp::types::TStore, cpp_gen::Acc>::from(
                         &cpp_proc.query.0,
                     );
                 let mut cpp_tree_gen = cpp_gen::CppTreeGen {

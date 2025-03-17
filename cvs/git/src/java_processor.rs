@@ -420,9 +420,9 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                 #[cfg(feature = "tsg")]
                 let tsg = if let Some(q) = &t.tsg {
                     let tsg = q.deref();
-                    type M<'hast, HAST, Acc> = hyperast_tsquery::QueryMatcher<'hast, HAST, Acc>;
-                    type ExtQ<'hast, HAST, Acc> = hyperast_tsquery::ExtendingStringQuery<
-                        M<'hast, HAST, Acc>,
+                    type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
+                    type ExtQ<'hast, TS, Acc> = hyperast_tsquery::ExtendingStringQuery<
+                        M<'hast, TS, Acc>,
                         tree_sitter::Language,
                     >;
 
@@ -448,35 +448,35 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
                     M::check(&mut file).unwrap();
 
-                    // let mut functions = tree_sitter_graph::functions::Functions::<
-                    //     tree_sitter_graph::graph::Graph<
-                    //         hyperast_tsquery::Node<
-                    //             hyperast::store::SimpleStores<
-                    //                 TStore,
-                    //                 &hyperast::store::nodes::legion::NodeStoreInner,
-                    //                 &hyperast::store::labels::LabelStore,
-                    //             >,
-                    //             &Acc,
-                    //         >,
-                    //     >,
-                    //     // tree_sitter_graph::graph::GraphErazing<
-                    //     //     hyperast_tsquery::MyNodeErazing<
-                    //     //         hyperast::store::SimpleStores<
-                    //     //             TStore,
-                    //     //             &hyperast::store::nodes::legion::NodeStoreInner,
-                    //     //             &hyperast::store::labels::LabelStore,
-                    //     //         >,
-                    //     //         &Acc,
-                    //     //     >,
-                    //     // >,
-                    // >::default();
-                    // todo!();
-                    // // TODO port those path functions to the generified variant in my fork
-                    // // hyperast_tsquery::add_path_functions(&mut functions);
-                    // let functions = functions.as_any();
-                    todo!()
+                    let mut functions = tree_sitter_graph::functions::Functions::<
+                        tree_sitter_graph::graph::Graph<
+                            // RNode<
+                            hyperast_tsquery::stepped_query_imm::Node<
+                                hyperast::store::SimpleStores<
+                                    TStore,
+                                    &hyperast::store::nodes::legion::NodeStoreInner,
+                                    &hyperast::store::labels::LabelStore,
+                                >,
+                                &Acc,
+                            >,
+                        >,
+                        // tree_sitter_graph::graph::GraphErazing<
+                        //     hyperast_tsquery::MyNodeErazing<
+                        //         hyperast::store::SimpleStores<
+                        //             TStore,
+                        //             &hyperast::store::nodes::legion::NodeStoreInner,
+                        //             &hyperast::store::labels::LabelStore,
+                        //         >,
+                        //         &Acc,
+                        //     >,
+                        // >,
+                    >::default();
+                    todo!();
+                    // TODO port those path functions to the generified variant in my fork
+                    // hyperast_tsquery::add_path_functions(&mut functions);
+                    let functions = functions.as_any();
 
-                    // Some((file.as_any(), functions))
+                    Some((file.as_any(), functions))
                 } else {
                     // unsafe { crate::java_processor::TSG }
                     None
@@ -740,7 +740,7 @@ impl RepositoryProcessor {
                     #[cfg(feature = "tsg")]
                     {
                         let spec: &tree_sitter_graph::ast::File<
-                            hyperast_tsquery::QueryMatcher<&SimpleStores, &Acc>,
+                            hyperast_tsquery::QueryMatcher<_, &Acc>,
                         > = tsg.0.downcast_ref().unwrap();
                         let query = java_proc.query.as_ref().map(|x| &x.0);
                         let functions = tsg.1.clone();
@@ -768,7 +768,7 @@ impl RepositoryProcessor {
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
-                    let more: hyperast_tsquery::PreparedQuerying<_, SimpleStores, _> = more.into();
+                    let more: hyperast_tsquery::PreparedQuerying<_, _, _> = more.into();
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
                             .with_line_break(line_break);

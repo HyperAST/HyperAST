@@ -27,7 +27,7 @@ impl<
         'store,
         'a,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        TIdN: hyperast::types::TypedNodeId,
     > TreeToQuery<'store, HAST, TIdN>
 {
     pub fn new(
@@ -47,7 +47,7 @@ impl<
 impl<
         'hast,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         const V: bool,
         const PP: bool,
     > Display for TreeToQuery<'hast, HAST, TIdN, V, PP>
@@ -66,7 +66,7 @@ where
 impl<
         'hast,
         HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         const V: bool,
         const PP: bool,
     > TreeToQuery<'hast, HAST, TIdN, V, PP>

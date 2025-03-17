@@ -110,12 +110,15 @@ pub(crate) mod store {
             std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
     }
 
-    impl<'b> hyperast::types::NodStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+    // impl<'b> hyperast::types::NodStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+    //     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+    // }
+    impl<'a, 'b> hyperast::types::NLending<'a, NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        type N = HashedNodeRef<'a, NodeIdentifier>;
     }
 
     impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        fn resolve(&self, id: &NodeIdentifier) -> <Self as hyperast::types::NLending<'_, NodeIdentifier>>::N {
             if let Some(r) = self.node_store.try_resolve(*id) {
                 r
             } else {
@@ -196,8 +199,8 @@ pub(crate) mod store {
         type Idx = u16;
 
         type Label = LabelIdentifier;
-        type T<'store> = HashedNodeRef<'store, NodeIdentifier>;
-        type RT = HashedNodeRef<'static, NodeIdentifier>;
+        // type T<'store> = HashedNodeRef<'store, NodeIdentifier>;
+        // type RT = HashedNodeRef<'static, NodeIdentifier>;
     }
 
     // impl<'a> hyperast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
@@ -249,6 +252,10 @@ pub(crate) mod store {
     //         }
     //     }
     // }
+
+    impl<'a, 'b> hyperast::types::AstLending<'a> for AcessibleFetchedHyperAST<'b> {
+        type RT = HashedNodeRef<'a, NodeIdentifier>;
+    }
 
     impl<'a> hyperast::types::HyperAST for AcessibleFetchedHyperAST<'a> {
         type NS = Self;
@@ -435,18 +442,20 @@ impl<'a> FetchedViewImpl<'a> {
             let cs = r.children();
             let size = r.size();
             self.global_pos = Some(size as u32);
-            if let (Some(label), Some(cs)) = (l, cs) {
-                let cs = cs.0.to_vec();
-                // NOTE: Why would it be an issue ?
-                // if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
-                //     assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
-                // }
-                drop(node_store);
-                self.ui_both_impl(ui, kind, size as u32, label, cs.as_ref())
-            } else if let Some(cs) = cs {
-                let cs = cs.0.to_vec();
-                drop(node_store);
-                self.ui_children_impl2(ui, kind, size as u32, *root, cs.as_ref())
+            if let Some(cs) = cs {
+                if let Some(label) = l {
+                    let cs = cs.0.to_vec();
+                    // NOTE: Why would it be an issue ?
+                    // if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
+                    //     assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
+                    // }
+                    drop(node_store);
+                    self.ui_both_impl(ui, kind, size as u32, label, cs.as_ref())
+                } else {
+                    let cs = cs.0.to_vec();
+                    drop(node_store);
+                    self.ui_children_impl2(ui, kind, size as u32, *root, cs.as_ref())
+                }
             } else if let Some(label) = l {
                 drop(node_store);
                 self.ui_labeled_impl2(ui, kind, size as u32, *root, label)
@@ -1670,10 +1679,12 @@ impl<'a> FetchedViewImpl<'a> {
             _size = Some(size as u32);
             imp.global_pos = *global_pos;
 
-            if let (Some(label), Some(cs)) = (l, cs) {
-                imp.ui_both_impl(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
-            } else if let Some(cs) = cs {
-                imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
+            if let Some(cs) = cs {
+                if let Some(label) = l {
+                    imp.ui_both_impl(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
+                } else {
+                    imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
+                }
             } else if let Some(label) = l {
                 imp.ui_labeled_impl2(ui, kind, size as u32, *c, label)
             } else {
@@ -1929,14 +1940,14 @@ mod hyperast_layouter {
     }
 
     use hyperast::types::{
-        self, HyperAST, HyperASTShared, HyperType, IterableChildren,
+        self, HyperAST, HyperASTShared, HyperType, Childrn,
     };
 
     impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
     where
         HAST: HyperAST<IdN = IdN>,
         IdN: NodeId<IdN = IdN>,
-        HAST: types::NodeStore<IdN>,
+        // HAST: types::NodeStore<IdN>,
         HAST: types::LabelStore<str>,
         HAST: types::TypeStore,
     {
@@ -1997,7 +2008,7 @@ mod hyperast_layouter {
                     let format = syntax_highlighter::TokenType::Keyword;
                     make_section(self.theme, out, format, *offset, end);
                     *offset = end;
-                    Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent)
                 }
                 (label, Some(children)) => {
                     if let Some(label) = label {
@@ -2021,7 +2032,7 @@ mod hyperast_layouter {
                             ind = self._compute(&id, &ind, out, offset).or_else(op)?;
                         }
                     }
-                    Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent)
                 }
                 (Some(label), None) => {
                     let s = self.stores.label_store().resolve(label);
@@ -2031,9 +2042,9 @@ mod hyperast_layouter {
                     let format = syntax_highlighter::TokenType::Punctuation;
                     make_section(self.theme, out, format, *offset, end);
                     *offset = end;
-                    Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent)
                 }
-            }
+            };
         }
     }
 }

@@ -162,6 +162,12 @@ mk_langs!(
         hi: HIGHLIGHT_QUERY,
         n_types: NODE_TYPES,
     },
+    C {
+        tree_sitter_c,
+        tags: TAGS_QUERY,
+        hi: HIGHLIGHT_QUERY,
+        n_types: NODE_TYPES,
+    },
     // Tsx { tree_sitter_tsx},
     // Ccomment { tree_sitter_ccomment},
     // Preproc { tree_sitter_preproc},

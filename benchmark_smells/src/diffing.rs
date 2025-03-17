@@ -3,25 +3,25 @@ use hyper_diff::{
     matchers::{
         heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-        Mapper, Mapping,
+        Decompressible, Mapper, Mapping,
     },
 };
-use hyperast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST, NodeId};
 use std::fmt::Debug;
 
-fn _top_down<'store, HAST: HyperAST>(
+fn _top_down<HAST: HyperAST + Copy>(
     mapper: &mut Mapper<
-        'store,
         HAST,
-        &mut LazyPostOrder<HAST::TM, u32>,
-        &mut LazyPostOrder<HAST::TM, u32>,
+        Decompressible<HAST, &mut LazyPostOrder<HAST::IdN, u32>>,
+        Decompressible<HAST, &mut LazyPostOrder<HAST::IdN, u32>>,
         VecStore<u32>,
     >,
 ) where
     HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::Label: Clone + Copy + Eq + Debug,
-    HAST::Idx:  Debug,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
     let mm = LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
         DefaultMultiMappingStore<_>,
@@ -29,24 +29,32 @@ fn _top_down<'store, HAST: HyperAST>(
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, &mm);
 }
 
-pub fn top_down<'store, 'a, HAST: HyperAST>(
-    hyperast: &'store HAST,
-    src_arena: &'a mut LazyPostOrder<HAST::TM, u32>,
-    dst_arena: &'a mut LazyPostOrder<HAST::TM, u32>,
+pub fn top_down<'a, HAST: HyperAST + Copy>(
+    hyperast: HAST,
+    src_arena: &'a mut LazyPostOrder<HAST::IdN, u32>,
+    dst_arena: &'a mut LazyPostOrder<HAST::IdN, u32>,
 ) -> Mapper<
-    'store,
     HAST,
-    &'a mut LazyPostOrder<HAST::TM, u32>,
-    &'a mut LazyPostOrder<HAST::TM, u32>,
+    Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, u32>>,
+    Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, u32>>,
     VecStore<u32>,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::Label: Clone + Copy + Eq + Debug,
-    HAST::Idx:  Debug,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: 'store + types::WithHashs + types::WithStats,
+    HAST::Idx: Debug,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
     let mappings = VecStore::<u32>::default();
+    let src_arena = Decompressible {
+        hyperast,
+        decomp: src_arena,
+    };
+    let dst_arena = Decompressible {
+        hyperast,
+        decomp: dst_arena,
+    };
     let mut mapper = Mapper {
         hyperast,
         mapping: Mapping {

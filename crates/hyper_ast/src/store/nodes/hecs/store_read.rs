@@ -43,7 +43,7 @@ impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
             .unwrap()
     }
 
-    type NMarker = TMarker<NodeIdentifier>;
+    // type NMarker = TMarker<NodeIdentifier>;
 }
 
 

@@ -7,7 +7,7 @@ use hyperast::{
             fetched::{self, NodeIdentifier},
         },
     },
-    types::{IterableChildren, WithChildren, WithSerialization, WithStats},
+    types::{Childrn, WithChildren, WithSerialization, WithStats},
 };
 use hyperast_vcs_git::TStore;
 use serde::{Deserialize, Serialize};
@@ -164,10 +164,10 @@ fn resolve_in_file(
                 let l = n.try_bytes_len().unwrap_or_default();
                 if start < b {
                     b += l;
-                    d = *i;
+                    d = i;
                     continue;
                 }
-                d = *i;
+                d = i;
                 return Err(d);
             }
         }
@@ -195,14 +195,14 @@ fn resolve_in_file(
         };
         // TODO debug all that garbage
         for i in n.iter_children() {
-            let n = stores.node_store.resolve(*i);
+            let n = stores.node_store.resolve(i);
             if n.line_count() == 0 && l == row {
-                d = *i;
+                d = i;
                 break 'l;
             }
             if l < row && row < l + n.line_count() {
                 l += n.line_count();
-                d = *i;
+                d = i;
             }
         }
         return Err(d);

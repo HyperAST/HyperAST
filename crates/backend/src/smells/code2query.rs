@@ -55,6 +55,7 @@ impl QueryLattice<NodeIdentifier> {
     where
         HAST: hyperast::types::HyperAST,
         HAST::IdN: std::fmt::Debug,
+        HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
     {
         use hyperast_gen_ts_tsquery::auto::tsq_ser::TreeToQuery;
         let query = TreeToQuery::<_, _, true>::with_pred(stores, from, |_| true);

@@ -601,7 +601,7 @@ where
     fn resolve(&self, id: &T::TreeId) -> TreeRef<'_, T> {
         TreeRef(&self.v[id.to_usize().unwrap()])
     }
-    type NMarker = TMarker<T>;
+    // type NMarker = TMarker<T>;
 }
 
 // impl<T: crate::types::Tree> NodeStore3<T::TreeId> for NS<T>
