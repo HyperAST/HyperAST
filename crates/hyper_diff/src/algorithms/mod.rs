@@ -64,24 +64,6 @@ impl<A, MD: Clone, HAST, DS, DD> DiffResult<A, Mapper<HAST, DS, DD, VecStore<u32
         }
     }
 }
-
-// impl<'a, A, MD: Clone, HAST, DS: Persistable, DD: Persistable>
-//     DiffResult<A, Mapper<'a, HAST, DS, DD, VecStore<u32>>, MD>
-// {
-//     pub fn persistable(
-//         self,
-//     ) -> DiffResult<A, crate::matchers::Mapping<DS::Persisted, DD::Persisted, VecStore<u32>>, MD>
-//     {
-//         DiffResult {
-//             mapping_durations: self.mapping_durations,
-//             mapper: self.mapper.mapping.persist(),
-//             actions: self.actions,
-//             prepare_gen_t: self.prepare_gen_t,
-//             gen_t: self.gen_t,
-//         }
-//     }
-// }
-
 pub trait ComputeTime {
     fn time(&self) -> f64;
 }

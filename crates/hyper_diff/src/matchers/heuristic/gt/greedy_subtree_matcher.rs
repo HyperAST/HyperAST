@@ -1,19 +1,17 @@
-use std::hash::Hash;
-use std::{fmt::Debug, marker::PhantomData};
-
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent,
 };
-use crate::matchers::heuristic::gt::height;
-use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
+use crate::matchers::mapping_store::{MonoMappingStore, MultiMappingStore};
+use crate::matchers::similarity_metrics;
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyperast::compat::HashMap;
 use hyperast::types::{
-    self, Children, Childrn, DecompressedFrom, DecompressedSubtree, HashKind, HyperAST,
-    Labeled as _, NodeId, NodeStore, Stored, Tree, TypeStore, WithChildren, WithHashs,
+    self, Childrn, DecompressedFrom, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree,
+    WithChildren, WithHashs,
 };
-use num_traits::{one, zero, PrimInt, ToPrimitive};
+use hyperast::PrimInt;
+use num_traits::{one, zero, ToPrimitive};
+use std::hash::Hash;
 
 pub struct GreedySubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize = 1> {
     internal: SubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>,
@@ -33,9 +31,9 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > GreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
-    M::Src: PrimInt + Debug + Hash,
-    M::Dst: PrimInt + Debug + Hash,
-    for<'t> <HAST as types::AstLending<'t>>::RT: types::WithChildren + WithHashs,
+    M::Src: PrimInt + Hash,
+    M::Dst: PrimInt + Hash,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithHashs,
     HAST::Label: Eq + Clone,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
@@ -134,11 +132,9 @@ where
 
         // Select the best ambiguous mappings
         for (src, dst) in mapping_list {
-            // println!("mapping={:?},{:?}", src, dst);
             let src_i = src.to_usize().unwrap();
             let dst_i = dst.to_usize().unwrap();
             if !(src_ignored[src_i] || dst_ignored[dst_i]) {
-                // println!("selected={:?},{:?}", src, dst);
                 self.internal.add_mapping_recursively(&src, &dst);
                 src_ignored.set(src_i, true);
                 self.internal
@@ -232,7 +228,6 @@ where
     fn coef_parent(&self, l: &(M::Src, M::Dst)) -> f64 {
         let s1: Vec<_> = Dsrc::parents(&self.internal.src_arena, l.0).collect();
         let s2: Vec<_> = Ddst::parents(&self.internal.dst_arena, l.1).collect();
-        // let s2: Vec<_> = self.internal.dst_arena.parents::<Ddst>(&l.1).collect();
         let common = longest_common_subsequence::<_, _, usize, _>(&s1, &s2, |a, b| {
             let (t, l) = {
                 let o = self.internal.src_arena.original(a);
@@ -250,17 +245,6 @@ where
     }
 
     fn coef_pos_in_parent(&self, l: &(M::Src, M::Dst)) -> f64 {
-        // let f = |d: _, s, x| {
-        //     vec![x].into_iter().chain(d.parents(&x)).filter_map(|x| {
-        //         d.parent(&x).map(|p| {
-        //             d.position_in_parent(s, &x).to_f64().unwrap()
-        //                 / d.children(s, &p).len().to_f64().unwrap()
-        //         })
-        //     })
-        // };
-        // let srcs = f(self.internal.src_arena, self.internal.node_store, l.0);
-        // let srcs = norm_path(&self.internal.src_arena, self.internal.node_store, l.0);
-        // let dsts = norm_path(&self.internal.dst_arena, self.internal.node_store, l.1);
         let srcs = vec![l.0]
             .into_iter()
             .chain(self.internal.src_arena.parents(l.0))
@@ -308,24 +292,6 @@ where
         )
     }
 
-    // fn compare_parent_pos(&self, alink: &(M::Src, M::Dst), blink: &(M::Src, M::Dst)) -> std::cmp::Ordering {
-    //     let al = self.internal.src_arena.parent(&alink.0);
-    //     let bl = self.internal.src_arena.parent(&blink.0);
-    //     if al != bl {
-    //         return al.cmp(&bl);
-    //     }
-    //     let al = self.internal.dst_arena.parent(&alink.1);
-    //     let bl = self.internal.dst_arena.parent(&blink.1);
-    //     al.cmp(&bl)
-    // }
-
-    // fn compare_pos(&self, alink: &(M::Src, M::Dst), blink: &(M::Src, M::Dst)) -> std::cmp::Ordering {
-    //     if alink.0 != blink.0 {
-    //         return alink.0.cmp(&blink.0);
-    //     }
-    //     return alink.1.cmp(&blink.1);
-    // }
-
     fn compare_delta_pos(
         &self,
         alink: &(M::Src, M::Dst),
@@ -344,51 +310,7 @@ where
                 .abs_diff(blink.1.to_usize().unwrap()),
         );
     }
-
-    // fn sim_sort(
-    //     &self,
-    //     ambiguous_mappings: Vec<Mapping<IdD>>,
-    // ) -> impl Iterator<Item = Mapping<IdD>> {
-    //     let mut similarities: Vec<_> = ambiguous_mappings
-    //         .into_iter()
-    //         .map(|p| (p, self.internal.similarity(&p.0, &p.1)))
-    //         .collect();
-    //     similarities.sort_by(|(alink, asim), (blink, bsim)| -> std::cmp::Ordering {
-    //         if asim != bsim {
-    //             // todo caution about exact comparing of floats
-    //             if let Some(r) = asim.partial_cmp(&bsim) {
-    //                 return r;
-    //             }
-    //         }
-    //         if alink.0 != blink.0 {
-    //             return alink.0.cmp(&blink.0);
-    //         }
-    //         return alink.1.cmp(&blink.1);
-    //     });
-    //     similarities.into_iter().map(|(x, _)| x)
-    // }
 }
-
-// TODO remove lifetime from Decompressed traits, anyway we could always add back a wrapper that materializes the relation to the node store
-// fn norm_path<'b, 'a: 'b, IdC: 'a + Clone, IdD: 'a + Clone, SS: 'a + NodeStore<IdC>, D>(
-//     d: &'b D,
-//     s: &'b SS,
-//     x: IdD,
-// ) -> impl Iterator<Item = f64> + 'b
-// where
-//     SS::R<'a>: WithChildren<TreeId = IdC>,
-//     D: DecompressedWithParent<'a, IdC, IdD> + ShallowDecompressedTreeStore<'a, IdC, IdD>,
-// {
-//     vec![x.clone()]
-//         .into_iter()
-//         .chain(D::parents(d, x))
-//         .filter_map(|x| {
-//             d.parent(&x).map(|p| {
-//                 d.position_in_parent(s, &x).to_f64().unwrap()
-//                     / d.children(s, &p).len().to_f64().unwrap()
-//             })
-//         })
-// }
 impl<'a, Dsrc, Ddst, S, M: MonoMappingStore, const MIN_HEIGHT: usize>
     Into<SubtreeMatcher<Dsrc, Ddst, S, M, MIN_HEIGHT>>
     for GreedySubtreeMatcher<Dsrc, Ddst, S, M, MIN_HEIGHT>
@@ -397,35 +319,6 @@ impl<'a, Dsrc, Ddst, S, M: MonoMappingStore, const MIN_HEIGHT: usize>
         self.internal
     }
 }
-
-// impl<'a, Dsrc, Ddst, T: 'a + Tree, HAST, M, const MIN_HEIGHT: usize>
-//     From<crate::matchers::Mapper<HAST, Dsrc, Ddst, M>>
-//     for SubtreeMatcher<Dsrc, Ddst, T, HAST, M, MIN_HEIGHT>
-// {
-//     fn from(value: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>) -> Self {
-//         Self {
-//             node_store: value.hyperast.,
-//             src_arena: value.mapping.src_arena,
-//             dst_arena: value.mapping.dst_arena,
-//             mappings: value.mapping.mappings,
-//             phantom: PhantomData,
-//         }
-//     }
-// }
-
-// impl<'a, Dsrc, Ddst, T: 'a + Tree, S, M: MonoMappingStore, const MIN_HEIGHT: usize>
-//     From<GreedySubtreeMatcher<Dsrc, Ddst, T, S, M, MIN_HEIGHT>>
-//     for crate::matchers::Mapper<S, Dsrc, Ddst, M>
-// {
-//     fn from(value: GreedySubtreeMatcher<Dsrc, Ddst, T, S, M, MIN_HEIGHT>) -> Self {
-//         Self { node_store: value.internal.node_store, mapping: Mapping {
-//             src_arena: value.internal.src_arena,
-//             dst_arena: value.internal.dst_arena,
-//             mappings: value.internal.mappings,
-//         } }
-//     }
-// }
-
 pub struct SubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
@@ -443,8 +336,8 @@ impl<
     > SubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
     HAST: HyperAST + Copy,
-    M::Src: PrimInt + Debug,
-    M::Dst: PrimInt + Debug,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
     for<'t> <HAST as types::AstLending<'t>>::RT: WithHashs,
     HAST::Label: Eq,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -634,7 +527,7 @@ where
         let _dst = self.stores.node_store().resolve(dst);
 
         if let Some(src_h) = src_h {
-            let dst_h = WithHashs::hash(&_dst,&HashKind::label());
+            let dst_h = WithHashs::hash(&_dst, &HashKind::label());
             if src_h != dst_h {
                 return false;
             }
@@ -671,6 +564,7 @@ where
     }
 }
 
+/// NOTE: use [`super::lazy_greedy_subtree_matcher::PriorityTreeList`] if WithStats is available
 struct PriorityTreeList<'b, D, IdD, HAST, const MIN_HEIGHT: usize> {
     trees: Vec<Option<Vec<IdD>>>,
 
@@ -690,9 +584,11 @@ impl<
         HAST: HyperAST + Copy,
         const MIN_HEIGHT: usize,
     > PriorityTreeList<'b, D, IdD, HAST, MIN_HEIGHT>
+where
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     pub(super) fn new(store: HAST, arena: &'b D, tree: IdD) -> Self {
-        let h = todo!(); //height(store, &arena.original(&tree)); // TODO subtree opti, use metadata
+        let h = super::height(store.node_store(), &arena.original(&tree)); // TODO subtree opti, use metadata
         let list_size = if h >= MIN_HEIGHT {
             h + 1 - MIN_HEIGHT
         } else {
@@ -718,7 +614,7 @@ impl<
     }
 
     fn add_tree(&mut self, tree: IdD) {
-        let h = todo!(); //height(self.store, &self.arena.original(&tree)) as usize;
+        let h = super::height(self.store.node_store(), &self.arena.original(&tree)) as usize;
         self.add_tree_aux(tree, h)
     }
 

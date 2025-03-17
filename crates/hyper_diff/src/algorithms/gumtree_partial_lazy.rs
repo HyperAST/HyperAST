@@ -1,5 +1,5 @@
-use std::{fmt::Debug, time::Instant};
-
+use super::{DiffResult, PreparedMappingDurations};
+use crate::algorithms::MappingDurations;
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{
@@ -9,30 +9,24 @@ use crate::{
         heuristic::gt::{
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-        }, mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore}, Decompressible, Mapper
+        },
+        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
+        Decompressible, Mapper,
     },
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
+use std::{fmt::Debug, time::Instant};
 
 type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
-// type CDS<T> = CompletePostOrder<T, u32>;
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
-
-use crate::algorithms::MappingDurations;
-
-use super::{DiffResult, PreparedMappingDurations};
 
 pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
 ) -> DiffResult<
-    SimpleAction<
-        HAST::Label,
-        CompressedTreePath<HAST::Idx>,
-        HAST::IdN,
-    >,
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >
@@ -60,21 +54,9 @@ where
     let now = Instant::now();
     let mapper =
         LazyGreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
-    // {
-    //     use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
-    //     let src_arena = &mut mapper.mapping.src_arena;
-    //     let dst_arena = &mut mapper.mapping.dst_arena;
-    //     let mut mm: DefaultMultiMappingStore<_> = Default::default();
-    //     mm.topit(src_arena.len(), dst_arena.len());
-    //     dbg!();
-    //     Mapper::<_, _, _, VecStore<u32>>::compute_multimapping::<_, 1>(
-    //         hyperast, src_arena, dst_arena, &mut mm,
-    //     );
-    // }
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     dbg!(&subtree_matcher_t, &subtree_mappings_s);
-    let node_store = hyperast.node_store();
     let now = Instant::now();
     let mapper = Mapper {
         hyperast,
@@ -111,9 +93,7 @@ where
 
     let mapper = mapper.map(
         |x| x,
-        |dst_arena| {
-            SimpleBfsMapper::with_store(hyperast, dst_arena)
-        },
+        |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
     );
     let prepare_gen_t = now.elapsed().as_secs_f64();
     let now = Instant::now();

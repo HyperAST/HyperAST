@@ -11,8 +11,6 @@ use hyperast::types::{HyperAST, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
-// use super::{decompressed_tree_store::DecompressedTreeStore, mapping_store::DefaultMappingStore, matcher::Matcher, similarity_metrics};
-
 type IdD = u16;
 
 // const SIM_THRESHOLD: f64 = 0.4;
@@ -23,51 +21,6 @@ where
 {
     internal: BottomUpMatcher<Dsrc, Ddst, S, M>,
 }
-
-// impl<
-//         'a,
-//         Dsrc: 'a
-//             + DecompressedTreeStore<T, IdD>
-//             + DecompressedWithParent<T, IdD>
-//             + DecompressedSubtree<T>
-//             + BreadthFirstContiguousSiblings<T, IdD>,
-//         Ddst: 'a
-//             + DecompressedTreeStore<T, IdD>
-//             + DecompressedWithParent<T, IdD>
-//             + DecompressedSubtree<T>
-//             + BreadthFirstContiguousSiblings<T, IdD>,
-//         T: 'a + Tree + WithHashs,
-//         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-//         M: MonoMappingStore<Src = IdD, Dst = IdD>,
-//     > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
-// {
-//     type Store = M;
-
-//     type Ele = IdD;
-
-//     fn matchh(
-//         compressed_node_store: &'a S,
-//         src: &T::TreeId,
-//         dst: &T::TreeId,
-//         mappings: Self::Store,
-//     ) -> Self::Store {
-//         let mut matcher = Self {
-//             internal: BottomUpMatcher::<'a, Dsrc, Ddst, T, S, M> {
-//                 node_store: compressed_node_store,
-//                 src_arena: Dsrc::decompress(compressed_node_store, src),
-//                 dst_arena: Ddst::decompress(compressed_node_store, dst),
-//                 mappings,
-//                 _phantom: PhantomData,
-//             },
-//         };
-//         matcher.internal.mappings.topit(
-//             matcher.internal.src_arena.len(),
-//             matcher.internal.dst_arena.len(),
-//         );
-//         Self::execute(&mut matcher);
-//         matcher.internal.mappings
-//     }
-// }
 
 impl<
         'a,
@@ -81,7 +34,6 @@ impl<
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
-    <HAST::TS as hyperast::types::TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
 {
     pub fn execute(&mut self) {
@@ -92,33 +44,18 @@ where
                 let mut found = false;
                 let mut best = 0;
                 let mut max: f64 = -1.;
-                let t_size = self
-                    .internal
-                    .src_arena
-                    .descendants(&(i as IdD))
-                    .len();
+                let t_size = self.internal.src_arena.descendants(&(i as IdD)).len();
 
                 for cand in candidates {
                     let threshold = (1.0 as f64)
                         / (1.0 as f64
-                            + ((self
-                                .internal
-                                .src_arena
-                                .descendants(&cand)
-                                .len()
-                                + t_size)
+                            + ((self.internal.src_arena.descendants(&cand).len() + t_size)
                                 .to_f64()
                                 .unwrap())
                             .log10());
                     let sim = similarity_metrics::chawathe_similarity(
-                        &self
-                            .internal
-                            .src_arena
-                            .descendants(&(i as IdD)),
-                        &self
-                            .internal
-                            .dst_arena
-                            .descendants(&cand),
+                        &self.internal.src_arena.descendants(&(i as IdD)),
+                        &self.internal.dst_arena.descendants(&cand),
                         &self.internal.mappings,
                     );
                     if sim > max && sim >= threshold {

@@ -14,10 +14,10 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Decompressible;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
+use hyperast::types::DecompressedFrom;
 use hyperast::types::{
     DecompressedSubtree, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats,
 };
-use hyperast::types::DecompressedFrom;
 
 use super::lazy_bottom_up_matcher::BottomUpMatcher;
 use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
@@ -47,7 +47,6 @@ impl<
         'a,
         Dsrc,
         Ddst,
-        // T: 'a + Tree + WithHashs,
         S,
         M: MonoMappingStore,
         MZs: MonoMappingStore<Src = M::Src, Dst = M::Dst>,
@@ -74,7 +73,6 @@ impl<
         'a,
         Dsrc,
         Ddst,
-        // T: 'a + Tree + WithHashs,
         HAST,
         M: MonoMappingStore,
         const SIZE_THRESHOLD: usize,  // = 1000,
@@ -125,7 +123,6 @@ impl<
             + LazyPOBorrowSlice<HAST, Ddst::IdD, M::Dst>
             + ShallowDecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
             + LazyDecompressedTreeStore<HAST, M::Dst>,
-        // T: Tree + WithHashs + WithStats,
         HAST: HyperAST + Copy,
         M: MonoMappingStore,
         MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
@@ -144,10 +141,10 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
-    Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
-    M::Src: PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    Dsrc::IdD: PrimInt,
+    Ddst::IdD: PrimInt,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::Label: Eq,
     HAST::IdN: Debug,
@@ -288,7 +285,6 @@ where
             return;
         }
         let stores = self.internal.stores;
-        let node_store = self.internal.stores.node_store();
         let src_offset;
         let dst_offset;
         let mappings: MZs = if SLICE {

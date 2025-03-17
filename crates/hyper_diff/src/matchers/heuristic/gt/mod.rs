@@ -1,4 +1,4 @@
-use hyperast::types::{NodeId, NodeStore, WithChildren, Children, Childrn};
+use hyperast::types::{NodeId, NodeStore, WithChildren, Childrn};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
@@ -28,17 +28,15 @@ where
     z + 1
 }
 
-/// todo specilize if T impl [WithStats]
-pub fn height<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
+/// TODO specilize with WithStats when specilization is stabilized
+pub fn height<IdC: Clone + NodeId<IdN = IdC>, S>(store: &S, x: &IdC) -> usize
 where
     S: NodeStore<IdC>,
     for<'t> <S as hyperast::types::NLending<'t, IdC>>::N: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);
     let cs = node.children();
-    let cs = if let Some(cs) = cs {
-        cs
-    } else {
+    let Some(cs) = cs else {
         return 0;
     };
     if cs.is_empty() {
