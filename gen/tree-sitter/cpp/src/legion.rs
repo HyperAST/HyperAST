@@ -249,10 +249,13 @@ where
         let node = cursor.node();
         let kind = TS::obtain_type(&node);
         if HIDDEN_NODES {
-            if kind.is_hidden() || kind.is_repeat() {
+            if kind.is_repeat() {
                 // dbg!(kind);
-                // return PreResult::Ignore;
-            }
+                return PreResult::Ignore;
+            } else if kind.is_hidden() {
+                // dbg!(kind);
+                return PreResult::Ignore;
+            } 
         }
         if node.0.is_missing() {
             // dbg!(kind);
@@ -275,6 +278,7 @@ where
         }
         PreResult::Ok(acc)
     }
+
     fn pre(
         &mut self,
         text: &[u8],

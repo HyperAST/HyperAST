@@ -4,7 +4,7 @@ use crate::{
     make::MakeModuleAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
     processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
-    Processor,
+    Processor, StackEle,
 };
 use git2::{Oid, Repository};
 use hyperast::{
@@ -30,7 +30,7 @@ pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_cpp::types
 pub struct CppProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
     prepro: &'prepro mut RepositoryProcessor,
-    stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
+    stack: Vec<StackEle<Acc>>,
     pub dir_path: &'d mut Peekable<Components<'c>>,
     parameters: &'d crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
 }
@@ -47,7 +47,7 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree);
         let name = name.try_into().unwrap();
-        let stack = vec![(oid, prepared, Acc::from(name))];
+        let stack = vec![StackEle::new(oid, prepared, Acc::from(name))];
         Self {
             stack,
             repository,
@@ -96,7 +96,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
                     self.prepro
                         .help_handle_cpp_file(
                             oid,
-                            &mut self.stack.last_mut().unwrap().2,
+                            &mut self.stack.last_mut().unwrap().acc,
                             &name,
                             self.repository,
                             *self.parameters,
@@ -123,7 +123,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
         if self.stack.is_empty() {
             Some((full_node, skiped_ana))
         } else {
-            let w = &mut self.stack.last_mut().unwrap().2;
+            let w = &mut self.stack.last_mut().unwrap().acc;
             assert!(
                 !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
@@ -135,7 +135,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
         }
     }
 
-    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, CppAcc)> {
+    fn stack(&mut self) -> &mut Vec<StackEle<CppAcc>> {
         &mut self.stack
     }
 }
@@ -156,7 +156,7 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
             // reinit already computed node for post order
             let full_node = already.clone();
             // let skiped_ana = *skiped_ana;
-            let w = &mut self.stack.last_mut().unwrap().2;
+            let w = &mut self.stack.last_mut().unwrap().acc;
             let name = self.prepro.intern_object_name(&name);
             assert!(!w.primary.children_names.contains(&name));
             hyperast::tree_gen::Accumulator::push(w, (name, full_node));
@@ -165,8 +165,11 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
             log::debug!("tree {:?}", name.try_str());
             let tree = self.repository.find_tree(oid).unwrap();
             let prepared: Vec<BasicGitObject> = prepare_dir_exploration(tree);
-            self.stack
-                .push((oid, prepared, CppAcc::new(name.try_into().unwrap())));
+            self.stack.push(StackEle::new(
+                oid,
+                prepared,
+                CppAcc::new(name.try_into().unwrap()),
+            ));
         }
     }
 }
@@ -317,10 +320,11 @@ impl RepositoryProcessor {
                 let stores = self
                     .main_stores
                     .mut_with_ts::<hyperast_gen_ts_cpp::types::TStore>();
-                let more =
-                    hyperast_tsquery::PreparedQuerying::<_, hyperast_gen_ts_cpp::types::TStore, cpp_gen::Acc>::from(
-                        &cpp_proc.query.0,
-                    );
+                let more = hyperast_tsquery::PreparedQuerying::<
+                    _,
+                    hyperast_gen_ts_cpp::types::TStore,
+                    cpp_gen::Acc,
+                >::from(&cpp_proc.query.0);
                 let mut cpp_tree_gen = cpp_gen::CppTreeGen {
                     line_break,
                     stores,
@@ -332,6 +336,13 @@ impl RepositoryProcessor {
                         let local = x.node.local.clone();
                         self.parsing_time += x.parsing_time;
                         self.processing_time += x.processing_time;
+                        log::debug!(
+                            "parsing, processing, n, f: {} {} {} {}",
+                            self.parsing_time.as_secs(),
+                            self.processing_time.as_secs(),
+                            cpp_proc.cache.md_cache.len(),
+                            cpp_proc.cache.object_map.len()
+                        );
                         (local, false)
                     })
                     .map_err(|_| crate::ParseErr::IllFormed)

@@ -2,6 +2,7 @@ use crate::processing::erased::{
     CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
 };
 use crate::processing::ParametrizedCommitProcessorHandle;
+use crate::StackEle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     maven::{MavenModuleAcc, MD},
@@ -31,7 +32,7 @@ pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_xml::types
 pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut RepositoryProcessor,
     repository: &'a Repository,
-    stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
+    stack: Vec<StackEle<Acc>>,
     dir_path: &'c mut Peekable<Components<'c>>,
     handle: ParametrizedCommitProcessorHandle,
 }
@@ -62,7 +63,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 })
                 .as_ref(),
         );
-        let stack = vec![(oid, prepared, acc)];
+        let stack = vec![StackEle::new(oid, prepared, acc)];
         Self {
             stack,
             repository,
@@ -86,7 +87,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     && !self.dir_path.peek().is_some()
                     && crate::processing::file_sys::Pom::matches(&name) =>
             {
-                let parent_acc = &mut self.stack.last_mut().unwrap().2;
+                let parent_acc = &mut self.stack.last_mut().unwrap().acc;
                 // TODO find a better conversion, ie. first safe conv to MavenProc handle then into()
                 let parameters = PCP2Handle(self.handle.1, PhantomData);
                 if let Err(err) =
@@ -113,7 +114,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
         if self.stack.is_empty() {
             Some(full_node)
         } else {
-            let w = &mut self.stack.last_mut().unwrap().2;
+            let w = &mut self.stack.last_mut().unwrap().acc;
             assert!(
                 !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
@@ -143,7 +144,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
         }
     }
 
-    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, MavenModuleAcc)> {
+    fn stack(&mut self) -> &mut Vec<StackEle<MavenModuleAcc>> {
         &mut self.stack
     }
 }
@@ -162,7 +163,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 .eq(std::ffi::OsStr::as_encoded_bytes(s.as_os_str()))
             {
                 self.dir_path.next();
-                self.stack.last_mut().expect("never empty").1.clear();
+                self.stack.last_mut().expect("never empty").cs.clear();
                 let tree = self.repository.find_tree(oid).unwrap();
                 let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
                 let acc = MavenModuleAcc::new(name.try_into().unwrap());
@@ -177,7 +178,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                         })
                         .as_ref(),
                 );
-                self.stack.push((oid, prepared, acc));
+                self.stack.push(StackEle::new(oid, prepared, acc));
                 return;
             } else {
                 return;
@@ -192,7 +193,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         if let Some(already) = maven_proc.get_caches_mut().object_map.get(&oid) {
             // reinit already computed node for post order
             let full_node = already.clone();
-            let w = &mut self.stack.last_mut().unwrap().2;
+            let w = &mut self.stack.last_mut().unwrap().acc;
             let name = self.prepro.intern_object_name(&name);
             assert!(!w.primary.children_names.contains(&name));
             let id = full_node.0;
@@ -219,7 +220,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         }
 
         log::debug!("maven tree {:?}", name.try_str());
-        let parent_acc = &mut self.stack.last_mut().unwrap().2;
+        let parent_acc = &mut self.stack.last_mut().unwrap().acc;
         if FFWD {
             let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
                 &self.repository,
@@ -254,7 +255,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 java_handle,
             );
             let id = full_node.compressed_node;
-            let parent_acc = &mut self.stack.last_mut().unwrap().2;
+            let parent_acc = &mut self.stack.last_mut().unwrap().acc;
             assert!(!parent_acc.primary.children_names.contains(&name));
             if helper.source_directories.0 {
                 parent_acc.push_source_directory(name, full_node);
@@ -294,7 +295,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                         .map(|x| hyperast::scripting::Prepro::from(x.clone()))
                         .as_ref(),
                 );
-                self.stack.push((oid, prepared, acc));
+                self.stack.push(StackEle::new(oid, prepared, acc));
             } else {
                 // search further inside
                 let acc = helper.into_acc().init_scripting(
@@ -302,7 +303,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                         .map(|x| hyperast::scripting::Prepro::from(x.clone()))
                         .as_ref(),
                 );
-                self.stack.push((oid, prepared, acc));
+                self.stack.push(StackEle::new(oid, prepared, acc));
             };
         } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0) {
             let tree = self.repository.find_tree(oid).unwrap();
@@ -315,7 +316,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                     .map(|x| hyperast::scripting::Prepro::from(x.clone()))
                     .as_ref(),
             );
-            self.stack.push((oid, prepared, acc));
+            self.stack.push(StackEle::new(oid, prepared, acc));
         }
     }
 }
