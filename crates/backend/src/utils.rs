@@ -12,16 +12,16 @@ type IdN = NodeIdentifier;
 
 /// CAUTION a cache should be used on a single HyperAST
 /// btw a given HyperAST can be used by multiple caches
-pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<'store, IdN = IdN>>(
+pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<IdN = IdN> + Copy>(
     partial_comp_cache: &'a crate::PartialDecompCache,
-    hyperast: &'store HAST,
+    hyperast: HAST,
     src: &IdN,
     dst: &IdN,
-) -> (&'a mut LPO<HAST::T>, &'a mut LPO<HAST::T>)
+) -> (&'a mut LPO<HAST::IdN>, &'a mut LPO<HAST::IdN>)
 where
-    <HAST as HyperAST<'store>>::T: WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
 {
-    use hyperast::types::DecompressedSubtree;
+    use hyperast::types::DecompressedFrom;
     use lazy_post_order::LazyPostOrder;
 
     let (shard1, shard2) = bi_sharding(partial_comp_cache, src, dst);
@@ -32,7 +32,7 @@ where
             shard1.insert(
                 src.clone(),
                 SharedValue::new({
-                    let src = LazyPostOrder::<_, u32>::decompress(hyperast.node_store(), src);
+                    let src = LazyPostOrder::<_, u32>::decompress(hyperast, src);
                     let src: LazyPostOrder<PersistedNode<IdN>, u32> =
                         unsafe { std::mem::transmute(src) };
                     src
@@ -43,7 +43,7 @@ where
             shard1.insert(
                 dst.clone(),
                 SharedValue::new({
-                    let dst = LazyPostOrder::<_, u32>::decompress(hyperast.node_store(), dst);
+                    let dst = LazyPostOrder::<_, u32>::decompress(hyperast, dst);
                     let dst: LazyPostOrder<PersistedNode<IdN>, u32> =
                         unsafe { std::mem::transmute(dst) };
                     dst
@@ -54,12 +54,12 @@ where
         (v1, v2)
     } else {
         let v1 = shard1.get_mut().entry(*src).or_insert_with(|| {
-            let src = LazyPostOrder::<_, u32>::decompress(hyperast.node_store(), src);
+            let src = LazyPostOrder::<_, u32>::decompress(hyperast, src);
             let src: LazyPostOrder<PersistedNode<IdN>, u32> = unsafe { std::mem::transmute(src) };
             SharedValue::new(src)
         });
         let v2 = shard2.unwrap().get_mut().entry(*dst).or_insert_with(|| {
-            let dst = LazyPostOrder::<_, u32>::decompress(hyperast.node_store(), dst);
+            let dst = LazyPostOrder::<_, u32>::decompress(hyperast, dst);
             let dst: LazyPostOrder<PersistedNode<IdN>, u32> = unsafe { std::mem::transmute(dst) };
             SharedValue::new(dst)
         });
@@ -68,8 +68,8 @@ where
 
     // SAFETY: should be the same hyperast TODO check if it is the case, store identifier along map ?
     let res: (
-        &mut SharedValue<LazyPostOrder<<HAST as HyperAST<'store>>::T, u32>>,
-        &mut SharedValue<LazyPostOrder<<HAST as HyperAST<'store>>::T, u32>>,
+        &mut SharedValue<LazyPostOrder<HAST::IdN, u32>>,
+        &mut SharedValue<LazyPostOrder<HAST::IdN, u32>>,
     ) = unsafe { std::mem::transmute((v1, v2)) };
     res
 }

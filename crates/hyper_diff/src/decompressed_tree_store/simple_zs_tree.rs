@@ -1,53 +1,64 @@
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
-use num_traits::{cast, one, zero, PrimInt};
+use num_traits::{cast, one, zero};
 
-use hyperast::types::{
-    Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren, WithStats,
-};
+use hyperast::types::{self, Children, Childrn, HyperAST, WithChildren, WithStats};
+use hyperast::PrimInt;
+
+use crate::matchers::Decompressible;
 
 use super::{
     basic_post_order::BasicPostOrder, simple_post_order::SimplePostOrder, CompletePostOrder,
-    DecompressedTreeStore, InitializableWithStats, Iter, IterKr, PostOrder, PostOrderIterable,
-    PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    DecompressedTreeStore, InitializableWithStats, Iter, IterKr, PostOrdKeyRoots, PostOrder,
+    PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
-
-use logging_timer::time;
 
 /// made for the zs diff algo
 /// - post order
 /// - key roots
 /// Compared to simple and complete post order it does not have parents
-pub struct SimpleZsTree<T: Stored, IdD> {
-    basic: BasicPostOrder<T, IdD>,
+pub struct SimpleZsTree<IdN, IdD> {
+    basic: BasicPostOrder<IdN, IdD>,
     /// LR_keyroots(T) = {k | there exists no k’> k such that l(k)=l(k’)}.
     pub(crate) kr: bitvec::boxed::BitBox,
 }
 
-impl<T: Stored, IdD> Deref for SimpleZsTree<T, IdD> {
-    type Target = BasicPostOrder<T, IdD>;
+impl<IdN, IdD> Deref for SimpleZsTree<IdN, IdD> {
+    type Target = BasicPostOrder<IdN, IdD>;
 
     fn deref(&self) -> &Self::Target {
         &self.basic
     }
 }
 
-impl<T: WithChildren, IdD: PrimInt> From<SimplePostOrder<T, IdD>> for SimpleZsTree<T, IdD>
-where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-{
-    fn from(simple: SimplePostOrder<T, IdD>) -> Self {
-        let kr = simple.compute_kr_bitset();
-        let basic = simple.basic;
-        Self { basic, kr }
+impl<HAST: HyperAST + Copy, IdD> Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>> {
+    pub(crate) fn as_basic(&self) -> Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>> {
+        let hyperast = self.hyperast;
+        let decomp = &self.basic;
+        Decompressible { hyperast, decomp }
     }
 }
 
-impl<T: WithChildren, IdD: PrimInt> From<CompletePostOrder<T, IdD>> for SimpleZsTree<T, IdD>
-where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+impl<HAST: HyperAST + Copy, IdD: PrimInt>
+    From<Decompressible<HAST, SimplePostOrder<HAST::IdN, IdD>>>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 {
-    fn from(complete: CompletePostOrder<T, IdD>) -> Self {
+    fn from(simple: Decompressible<HAST, SimplePostOrder<HAST::IdN, IdD>>) -> Self {
+        let decomp = simple.decomp.basic;
+        let hyperast = simple.hyperast;
+        let basic = Decompressible { hyperast, decomp };
+        let kr = basic.compute_kr_bitset();
+        let basic = basic.decomp;
+        let decomp = SimpleZsTree { basic, kr };
+        Decompressible { hyperast, decomp }
+    }
+}
+
+impl<IdN, IdD: PrimInt> From<CompletePostOrder<IdN, IdD>> for SimpleZsTree<IdN, IdD>
+// where
+// T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+{
+    fn from(complete: CompletePostOrder<IdN, IdD>) -> Self {
         let basic = complete.simple.basic;
         Self {
             basic,
@@ -56,75 +67,143 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> PostOrder<'d, T, IdD> for SimpleZsTree<T, IdD>
+// impl<'a, T: Stored, IdD: PrimInt> types::NLending<'a, T::TreeId> for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
+// where
+//     T: for<'t> types::NLending<'t, T::TreeId>,
+// {
+//     type N = <T as types::NLending<'a, T::TreeId>>::N;
+// }
+
+impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    //     T: for<'t> types::NLending<'t, T::TreeId>,
+    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.basic.lld(i)
+        self.as_basic().lld(i)
     }
 
-    fn tree(&self, id: &IdD) -> T::TreeId {
-        self.basic.tree(id)
+    fn tree(&self, id: &IdD) -> HAST::IdN {
+        self.as_basic().tree(id)
     }
 }
 
-impl<'d, T: WithChildren + 'd, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for SimpleZsTree<T, IdD>
+impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrderIterable<HAST, IdD>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    //     T: for<'t> types::NLending<'t, T::TreeId>,
+    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     type It = Iter<IdD>;
     fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
-        self.basic.iter_df_post::<ROOT>()
+        self.as_basic().iter_df_post::<ROOT>()
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> PostOrderKeyRoots<'d, T, IdD> for SimpleZsTree<T, IdD>
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> PostOrdKeyRoots<'a, HAST, IdD>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    //     T: for<'t> types::NLending<'t, T::TreeId>,
+    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
-    //     fn kr(&self, x: IdD) -> IdD {
-    //         self.kr[x.to_usize().unwrap()]
-    //     }
+    type Iter = IterKr<'a, IdD>;
+}
 
-    type Iter<'b> = IterKr<'b,IdD>
-    where
-        Self: 'b;
-
-    fn iter_kr(&self) -> Self::Iter<'_> {
+impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrderKeyRoots<HAST, IdD>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    //     T: for<'t> types::NLending<'t, T::TreeId>,
+    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+{
+    fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdD>>::Iter {
         IterKr(self.kr.iter_ones(), PhantomData)
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Debug> super::DecompressedSubtree<'a, T>
-    for SimpleZsTree<T, IdD>
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Debug> super::DecompressedSubtree<HAST::IdN>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
-    // T::Type: Copy + Eq + Send + Sync,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    //     T: for<'t> types::NLending<'t, T::TreeId>,
+    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    //     // T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    //     // T::Type: Copy + Eq + Send + Sync,
 {
     type Out = Self;
 
-    #[time("warn")]
-    fn decompress<S>(store: &'a S, root: &T::TreeId) -> SimpleZsTree<T, IdD>
-    where
-        S: NodeStore<T::TreeId, R<'a> = T>,
-    {
-        let basic = BasicPostOrder::<T, IdD>::decompress(store, root);
+    // #[time("warn")]
+    fn decompress(self, root: &HAST::IdN) -> Self {
+        let hyperast = self.hyperast;
+        let basic = self.decomp.basic;
+        let basic = Decompressible {
+            hyperast,
+            decomp: basic,
+        };
+        let basic = basic.decompress(root);
         let kr = basic.compute_kr_bitset();
-        Self { basic, kr }
+        let basic = basic.decomp;
+        let decomp = SimpleZsTree { basic, kr };
+        Decompressible { hyperast, decomp }
+    }
+
+    // fn decompress2<HAST>(store: &HAST, root: &HAST::IdN) -> Self::Out
+    // where
+    //     T: for<'t> types::AstLending<'t>,
+    //     HAST: types::HyperAST<IdN = HAST::IdN, TM = T>,
+    // {
+    //     let basic = BasicPostOrder::<T, IdD>::decompress2(store, root);
+    //     let kr = basic.compute_kr_bitset();
+    //     Self { basic, kr }
+    // }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Debug> types::DecompressedFrom<HAST>
+    for SimpleZsTree<HAST::IdN, IdD>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    type Out = Self;
+
+    // #[time("warn")]
+    fn decompress(hyperast: HAST, root: &HAST::IdN) -> Self {
+        let basic = BasicPostOrder::decompress(hyperast, root);
+
+        let basic = Decompressible {
+            hyperast,
+            decomp: basic,
+        };
+        let kr = basic.compute_kr_bitset();
+        let basic = basic.decomp;
+        let decomp = SimpleZsTree { basic, kr };
+        decomp
     }
 }
 
-impl<'a, T: WithChildren + WithStats, IdD: PrimInt + Debug> InitializableWithStats<'a, T>
-    for SimpleZsTree<T, IdD>
+impl<HAST: HyperAST + Copy, IdD: PrimInt + Debug> InitializableWithStats<HAST::IdN>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithStats,
+    //     T: for<'t> types::NLending<'t, T::TreeId>,
+    //     for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren + WithStats,
+    //     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
-    fn considering_stats<S>(store: &'a S, root: &<T as Stored>::TreeId) -> Self
-    where
-        S: NodeStore<<T as Stored>::TreeId, R<'a> = T>,
+    fn considering_stats(&self, root: &HAST::IdN) -> Self
+where
+        // S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
+        //     + NodeStore<T::TreeId>,
     {
-        let pred_len = store.resolve(root).size();
+        let pred_len = self.hyperast.resolve(root).size();
         struct R<IdC, Idx, IdD> {
             curr: IdC,
             idx: Idx,
@@ -137,12 +216,12 @@ where
             lld: zero(),
         }];
         let mut llds: Vec<IdD> = vec![];
-        let mut id_compressed: Vec<T::TreeId> = vec![];
+        let mut id_compressed: Vec<HAST::IdN> = vec![];
         while let Some(ele) = stack.pop() {
             let R { curr, idx, lld } = ele;
-            let x = store.resolve(&curr);
+            let x = self.hyperast.resolve(&curr);
             let l = x.children();
-            let l = l.filter(|x| !x.is_empty());
+            let l = l.as_ref().filter(|x| !x.is_empty());
             if let Some(child) = l.and_then(|l| l.get(idx)) {
                 stack.push(R {
                     curr,
@@ -180,67 +259,72 @@ where
         let basic = BasicPostOrder {
             id_compressed,
             llds,
-            _phantom: std::marker::PhantomData,
+        };
+        let hyperast = self.hyperast;
+        let basic = Decompressible {
+            hyperast,
+            decomp: basic,
         };
         let kr = basic.compute_kr_bitset();
-        Self { basic, kr }
+        let basic = basic.decomp;
+        let decomp = SimpleZsTree { basic, kr };
+        Decompressible { hyperast, decomp }
     }
 }
 
-impl<'d, T: WithChildren + 'd, IdD: PrimInt> ShallowDecompressedTreeStore<'d, T, IdD>
-    for SimpleZsTree<T, IdD>
+impl<HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn len(&self) -> usize {
-        self.basic.len()
+        self.as_basic().len()
     }
 
-    fn original(&self, id: &IdD) -> T::TreeId {
-        self.basic.original(id)
+    fn original(&self, id: &IdD) -> HAST::IdN {
+        self.as_basic().original(id)
     }
 
     fn root(&self) -> IdD {
-        self.basic.root()
+        self.as_basic().root()
     }
 
-    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
-    where
-        S: NodeStore<T::TreeId, R<'b> = T>,
-    {
-        self.basic.child(store, x, p)
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
+        self.as_basic().child(x, p)
     }
 
-    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
-    where
-        S: NodeStore<T::TreeId, R<'b> = T>,
-    {
-        self.basic.children(store, x)
+    fn children(&self, x: &IdD) -> Vec<IdD> {
+        self.as_basic().children(x)
     }
 }
 
-impl<'d, T: WithChildren + 'd, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
-    for SimpleZsTree<T, IdD>
+impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    // T: for<'t> types::NLending<'t, T::TreeId>,
+    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
+    // T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
-    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
-    where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+    fn descendants(&self, x: &IdD) -> Vec<IdD>
+where
+        // S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
+        //     + NodeStore<T::TreeId>,
     {
-        self.basic.descendants(store, x)
+        self.as_basic().descendants(x)
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
-        self.basic.first_descendant(i)
+        self.as_basic().first_descendant(i)
     }
 
-    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
-    where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+    fn descendants_count(&self, x: &IdD) -> usize
+where
+        // S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
+        //     + NodeStore<T::TreeId>,
     {
         let r = (self.lld(x) + one() - *x).to_usize().unwrap();
-        assert!(r == self.basic.descendants_count(store, x));
+        assert!(r == self.as_basic().descendants_count(x));
         r
     }
 
@@ -249,9 +333,10 @@ where
     }
 }
 
-impl<T: Stored, IdD: PrimInt + Debug> Debug for SimpleZsTree<T, IdD>
+impl<HAST: HyperAST + Copy, IdD: PrimInt + Debug> Debug
+    for Decompressible<HAST, SimpleZsTree<HAST::IdN, IdD>>
 where
-    T::TreeId: Debug,
+    HAST::IdN: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SimplePostOrder")

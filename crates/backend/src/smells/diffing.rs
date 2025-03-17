@@ -2,17 +2,20 @@ use super::Diff;
 use super::Idx;
 use super::Pos;
 use super::*;
-use hyperast::store::defaults::LabelIdentifier;
-use hyperast::store::defaults::NodeIdentifier;
-use hyperast::store::labels::LabelStore;
-use hyperast::types::HyperAST;
-use hyperast_vcs_git::no_space::NoSpaceWrapper;
 use hyper_diff::actions::action_tree::ActionsTree;
 use hyper_diff::actions::action_vec::ActionsVec;
 use hyper_diff::actions::script_generator2::Act;
 use hyper_diff::actions::script_generator2::ScriptGenerator;
 use hyper_diff::actions::script_generator2::SimpleAction;
+use hyper_diff::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use hyper_diff::decompressed_tree_store::complete_post_order_ref;
+use hyper_diff::matchers::Decompressible;
 use hyper_diff::tree::tree_path::CompressedTreePath;
+use hyperast::store::defaults::LabelIdentifier;
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast::store::labels::LabelStore;
+use hyperast::types::HyperAST;
+use hyperast_vcs_git::no_space::NoSpaceWrapper;
 
 pub(crate) struct T;
 
@@ -22,13 +25,17 @@ impl hyperast::types::Stored for T {
     type TreeId = NodeIdentifier;
 }
 
+impl<'a> hyperast::types::CLending<'a, u16, NodeIdentifier> for T {
+    type Children = hyperast::types::ChildrenSlice<'a, NodeIdentifier>;
+}
+
 impl hyperast::types::WithChildren for T {
     type ChildIdx = u16;
 
-    type Children<'a>
-        = hyperast::types::MySlice<NodeIdentifier>
-    where
-        Self: 'a;
+    // type Children<'a>
+    //     = hyperast::types::MySlice<NodeIdentifier>
+    // where
+    //     Self: 'a;
 
     fn child_count(&self) -> Self::ChildIdx {
         todo!()
@@ -48,7 +55,16 @@ impl hyperast::types::WithChildren for T {
         todo!()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<
+        hyperast::types::LendC<
+            '_,
+            Self,
+            Self::ChildIdx,
+            <Self::TreeId as hyperast::types::NodeId>::IdN,
+        >,
+    > {
         todo!()
     }
 }
@@ -83,7 +99,7 @@ pub(crate) fn diff(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let with_spaces_stores = &repositories.processor.main_stores;
-    let stores = &hyperast_vcs_git::no_space::as_nospaces(with_spaces_stores);
+    let stores = &hyperast_vcs_git::no_space::as_nospaces2(with_spaces_stores);
 
     if src_tr == dst_tr {
         return Ok(Diff {
@@ -95,8 +111,8 @@ pub(crate) fn diff(
     }
 
     let pair = crate::utils::get_pair_simp(&state.partial_decomps, stores, &src_tr, &dst_tr);
-    use hyperast::types::WithStats;
     use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
+    use hyperast::types::WithStats;
     let mapped = {
         let mappings_cache = &state.mappings_alone;
         use hyper_diff::matchers::mapping_store::MappingStore;
@@ -121,8 +137,8 @@ pub(crate) fn diff(
                 let mut mapper = hyper_diff::matchers::Mapper {
                     hyperast,
                     mapping: Mapping {
-                        src_arena,
-                        dst_arena,
+                        src_arena: Decompressible{hyperast, decomp: src_arena},
+                        dst_arena: Decompressible{hyperast, decomp: dst_arena},
                         mappings,
                     },
                 };
@@ -133,7 +149,7 @@ pub(crate) fn diff(
                     mapper.mapping.src_arena.len(),
                     mapper.mapping.dst_arena.len(),
                 );
-                crate::matching::full2(hyperast, &mut mapper);
+                crate::matching::full2(&mut mapper);
 
                 // TODO match decls by sig/path
 
@@ -148,24 +164,28 @@ pub(crate) fn diff(
     };
     let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
     dbg!();
-    src_arena.complete_subtree(&stores.node_store, &src_arena.root());
+    let mut src_arena = Decompressible{hyperast: stores, decomp: src_arena};
+    let mut dst_arena = Decompressible{hyperast: stores, decomp: dst_arena};
+    src_arena.complete_subtree(&src_arena.root());
     let src_arena =
-        hyper_diff::decompressed_tree_store::complete_post_order_ref::CompletePostOrder::from(
-            &*src_arena,
+        complete_post_order_ref::CompletePostOrder::from(
+            &*src_arena.decomp,
         );
     dbg!();
-    dst_arena.complete_subtree(&stores.node_store, &dst_arena.root());
+    dst_arena.complete_subtree(&dst_arena.root());
     let dst_arena =
-        hyper_diff::decompressed_tree_store::complete_post_order_ref::CompletePostOrder::from(
-            &*dst_arena,
+        complete_post_order_ref::CompletePostOrder::from(
+            &*dst_arena.decomp,
         );
     dbg!();
-    let dst_arena = hyper_diff::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper::from(
-        &stores.node_store,
+    let dst_arena = Decompressible{hyperast: stores, decomp: dst_arena};
+    let dst_arena = SimpleBfsMapper::with_store(
+        stores,
         dst_arena,
     );
     dbg!();
     let ms = &mapped.1;
+    let src_arena = Decompressible{hyperast: stores, decomp: src_arena};
     let mapping = hyper_diff::matchers::Mapping {
         src_arena,
         dst_arena,
@@ -173,7 +193,7 @@ pub(crate) fn diff(
     };
     let actions = {
         let mapping = &mapping;
-        let store = stores.node_store();
+        let store = stores;
 
         let mut this = ScriptGenerator::new(store, &mapping.src_arena, &mapping.dst_arena)
             .init_cpy(&mapping.mappings);
@@ -269,7 +289,7 @@ pub(crate) fn extract_moves<'a>(
         &a_tree.atomics,
         hyperast::position::StructuralPosition::new(dst_tr),
         &mut |p, nn, n, id| {
-            let t = stores.resolve_type(&id);
+            let t = hyperast::types::HyperAST::resolve_type(stores, &id);
             // dbg!(t.as_static_str(), p);
             // if t.is_hidden() {
             //     return false
@@ -610,8 +630,8 @@ pub(crate) fn extract_focuses<'a>(
 
 pub(crate) type _R = hyperast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>;
 
-pub(crate) type Stores<'a> = hyperast::types::SimpleHyperAST<
-    NoSpaceWrapper<'a, NodeIdentifier>,
+pub(crate) type Stores<'a> = hyperast::store::SimpleStores<
+    // NoSpaceWrapper<'static, NodeIdentifier>,
     hyperast_vcs_git::TStore,
     hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper<'a>,
     &'a LabelStore,

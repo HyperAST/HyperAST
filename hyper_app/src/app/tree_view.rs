@@ -110,13 +110,15 @@ pub(crate) mod store {
             std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
     }
 
-    impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        type R<'a>
-            = HashedNodeRef<'a, NodeIdentifier>
-        where
-            Self: 'a;
+    // impl<'b> hyperast::types::NodStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+    //     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+    // }
+    impl<'a, 'b> hyperast::types::NLending<'a, NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        type N = HashedNodeRef<'a, NodeIdentifier>;
+    }
 
-        fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+    impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        fn resolve(&self, id: &NodeIdentifier) -> <Self as hyperast::types::NLending<'_, NodeIdentifier>>::N {
             if let Some(r) = self.node_store.try_resolve(*id) {
                 r
             } else {
@@ -132,6 +134,29 @@ pub(crate) mod store {
                 // unimplemented!()
                 self.node_store.unavailable_node()
             }
+        }
+    }
+
+    impl<'b> hyperast::types::inner_ref::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        type Ref = HashedNodeRef<'static, NodeIdentifier>;
+        fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
+            let t = &hyperast::types::NodeStore::resolve(self, id);
+            // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+            let t = unsafe { std::mem::transmute(t) };
+            f(t)
+        }
+        fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+            let t = &hyperast::types::NodeStore::resolve(self, id);
+            // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+            let t = unsafe { std::mem::transmute(t) };
+            f(t)
+        }
+        fn multi<R, const N: usize>(
+            &self,
+            id: &[NodeIdentifier; N],
+            f: impl Fn(&[Self::Ref; N]) -> R,
+        ) -> R {
+            todo!()
         }
     }
 
@@ -174,69 +199,65 @@ pub(crate) mod store {
         type Idx = u16;
 
         type Label = LabelIdentifier;
+        // type T<'store> = HashedNodeRef<'store, NodeIdentifier>;
+        // type RT = HashedNodeRef<'static, NodeIdentifier>;
     }
 
-    impl<'a> hyperast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
-        type T<'store>
-            = HashedNodeRef<'store, NodeIdentifier>
-        where
-            Self: 'store;
+    // impl<'a> hyperast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
+    //     type NS<'store>
+    //         = Self
+    //     where
+    //         Self: 'store;
 
-        type NS<'store>
-            = Self
-        where
-            Self: 'store;
+    //     fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
+    //         self
+    //     }
 
-        fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
-            self
-        }
+    //     type LS = Self;
 
-        type LS = Self;
+    //     fn label_store(&self) -> &Self::LS {
+    //         self
+    //     }
 
-        fn label_store(&self) -> &Self::LS {
-            self
-        }
+    //     type TS<'store>
+    //         = Self
+    //     where
+    //         Self: 'store;
 
-        type TS<'store>
-            = Self
-        where
-            Self: 'store;
+    //     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as hyperast::types::TypeStore>::Ty {
+    //         let ns = &self.node_store;
+    //         let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
+    //             use hyperast::types::HyperType;
+    //             return hyperast_gen_ts_java::types::Type::Dot.as_static().into();
+    //         };
+    //         let lang = n.get_lang();
+    //         let raw = n.get_raw_type();
+    //         match lang {
+    //             "hyperast_gen_ts_java::types::Lang" => {
+    //                 let t: &'static dyn hyperast::types::HyperType =
+    //                     hyperast_gen_ts_java::types::Lang::make(raw);
+    //                 t.into()
+    //             }
+    //             "hyperast_gen_ts_cpp::types::Lang" => {
+    //                 let t: &'static dyn hyperast::types::HyperType =
+    //                     hyperast_gen_ts_cpp::types::Lang::make(raw);
+    //                 t.into()
+    //             }
+    //             "hyperast_gen_ts_xml::types::Lang" => {
+    //                 let t: &'static dyn hyperast::types::HyperType =
+    //                     hyperast_gen_ts_xml::types::Lang::make(raw);
+    //                 t.into()
+    //             }
+    //             l => unreachable!("{}", l),
+    //         }
+    //     }
+    // }
 
-        fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as hyperast::types::TypeStore>::Ty {
-            let ns = &self.node_store;
-            let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
-                use hyperast::types::HyperType;
-                return hyperast_gen_ts_java::types::Type::Dot.as_static().into();
-            };
-            let lang = n.get_lang();
-            let raw = n.get_raw_type();
-            match lang {
-                "hyperast_gen_ts_java::types::Lang" => {
-                    let t: &'static dyn hyperast::types::HyperType =
-                        hyperast_gen_ts_java::types::Lang::make(raw);
-                    t.into()
-                }
-                "hyperast_gen_ts_cpp::types::Lang" => {
-                    let t: &'static dyn hyperast::types::HyperType =
-                        hyperast_gen_ts_cpp::types::Lang::make(raw);
-                    t.into()
-                }
-                "hyperast_gen_ts_xml::types::Lang" => {
-                    let t: &'static dyn hyperast::types::HyperType =
-                        hyperast_gen_ts_xml::types::Lang::make(raw);
-                    t.into()
-                }
-                l => unreachable!("{}", l),
-            }
-        }
+    impl<'a, 'b> hyperast::types::AstLending<'a> for AcessibleFetchedHyperAST<'b> {
+        type RT = HashedNodeRef<'a, NodeIdentifier>;
     }
 
-    impl<'a, 'b: 'a> hyperast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
-    where
-        Self: 'b,
-    {
-        type T = HashedNodeRef<'b, NodeIdentifier>;
-
+    impl<'a> hyperast::types::HyperAST for AcessibleFetchedHyperAST<'a> {
         type NS = Self;
 
         fn node_store(&self) -> &Self::NS {
@@ -421,18 +442,20 @@ impl<'a> FetchedViewImpl<'a> {
             let cs = r.children();
             let size = r.size();
             self.global_pos = Some(size as u32);
-            if let (Some(label), Some(cs)) = (l, cs) {
-                let cs = cs.0.to_vec();
-                // NOTE: Why would it be an issue ?
-                // if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
-                //     assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
-                // }
-                drop(node_store);
-                self.ui_both_impl(ui, kind, size as u32, label, cs.as_ref())
-            } else if let Some(cs) = cs {
-                let cs = cs.0.to_vec();
-                drop(node_store);
-                self.ui_children_impl2(ui, kind, size as u32, *root, cs.as_ref())
+            if let Some(cs) = cs {
+                if let Some(label) = l {
+                    let cs = cs.0.to_vec();
+                    // NOTE: Why would it be an issue ?
+                    // if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
+                    //     assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
+                    // }
+                    drop(node_store);
+                    self.ui_both_impl(ui, kind, size as u32, label, cs.as_ref())
+                } else {
+                    let cs = cs.0.to_vec();
+                    drop(node_store);
+                    self.ui_children_impl2(ui, kind, size as u32, *root, cs.as_ref())
+                }
             } else if let Some(label) = l {
                 drop(node_store);
                 self.ui_labeled_impl2(ui, kind, size as u32, *root, label)
@@ -1656,10 +1679,12 @@ impl<'a> FetchedViewImpl<'a> {
             _size = Some(size as u32);
             imp.global_pos = *global_pos;
 
-            if let (Some(label), Some(cs)) = (l, cs) {
-                imp.ui_both_impl(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
-            } else if let Some(cs) = cs {
-                imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
+            if let Some(cs) = cs {
+                if let Some(label) = l {
+                    imp.ui_both_impl(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
+                } else {
+                    imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
+                }
             } else if let Some(label) = l {
                 imp.ui_labeled_impl2(ui, kind, size as u32, *c, label)
             } else {
@@ -1915,13 +1940,14 @@ mod hyperast_layouter {
     }
 
     use hyperast::types::{
-        self, HyperAST, HyperASTAsso, HyperASTShared, HyperType, IterableChildren,
+        self, HyperAST, HyperASTShared, HyperType, Childrn,
     };
+
     impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
     where
-        HAST: HyperASTAsso<IdN = IdN>,
+        HAST: HyperAST<IdN = IdN>,
         IdN: NodeId<IdN = IdN>,
-        HAST: types::NodeStore<IdN>,
+        // HAST: types::NodeStore<IdN>,
         HAST: types::LabelStore<str>,
         HAST: types::TypeStore,
     {
@@ -1982,7 +2008,7 @@ mod hyperast_layouter {
                     let format = syntax_highlighter::TokenType::Keyword;
                     make_section(self.theme, out, format, *offset, end);
                     *offset = end;
-                    Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent)
                 }
                 (label, Some(children)) => {
                     if let Some(label) = label {
@@ -2006,7 +2032,7 @@ mod hyperast_layouter {
                             ind = self._compute(&id, &ind, out, offset).or_else(op)?;
                         }
                     }
-                    Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent)
                 }
                 (Some(label), None) => {
                     let s = self.stores.label_store().resolve(label);
@@ -2016,9 +2042,9 @@ mod hyperast_layouter {
                     let format = syntax_highlighter::TokenType::Punctuation;
                     make_section(self.theme, out, format, *offset, end);
                     *offset = end;
-                    Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent)
                 }
-            }
+            };
         }
     }
 }

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use hyperast::{
     position::{self, compute_position_with_no_spaces, position_accessors::WithPreOrderOffsets},
     types::{
-        Children, DecompressedSubtree as _, HyperAST as _, HyperType, IterableChildren, LabelStore,
+        Children, Childrn as _, DecompressedFrom as _, HyperAST as _, HyperType, LabelStore,
         Labeled, NodeStore, TypedNodeStore, WithChildren,
     },
     utils::memusage_linux,
@@ -20,7 +20,7 @@ use hyper_diff::{
     decompressed_tree_store::{
         lazy_post_order::LazyPostOrder, DecompressedWithParent, ShallowDecompressedTreeStore,
     },
-    matchers::mapping_store::MonoMappingStore,
+    matchers::{mapping_store::MonoMappingStore, Decompressible},
 };
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -60,7 +60,8 @@ fn main() {
         name: (identifier) (#EQ? "Test")
     )"#,
         "(constructor_declaration)",
-    ].as_slice();
+    ]
+    .as_slice();
 
     removed_tracking(repo_name, commit, limit, query, subs);
 }
@@ -101,7 +102,7 @@ fn removed_tracking(
     eprintln!("computing matches of {oids:?}");
 
     let stores = &preprocessed.processor.main_stores;
-    let nospace = &hyperast_vcs_git::no_space::as_nospaces(stores);
+    let nospace = &hyperast_vcs_git::no_space::as_nospaces2(stores);
 
     if CSV_FORMATING {
         println!("commit_sha, ast_size, memory_used, processing_time, matches_count");
@@ -171,13 +172,17 @@ fn removed_tracking(
             // let stores: &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore> =
             //     unsafe { std::mem::transmute(stores) };
 
-            let mut src_arena =
-                LazyPostOrder::<_, u32>::decompress(&nospace.node_store, &curr_comm.ast_root);
+            let mut src_arena = Decompressible::<_, LazyPostOrder<_, u32>>::decompress(
+                nospace,
+                &curr_comm.ast_root,
+            );
 
             if let Some(prev_oid) = prev_oid {
                 let prev_comm = preprocessed.commits.get(&prev_oid).unwrap();
-                let mut dst_arena =
-                    LazyPostOrder::<_, u32>::decompress(&nospace.node_store, &prev_comm.ast_root);
+                let mut dst_arena = Decompressible::<_, LazyPostOrder<_, u32>>::decompress(
+                    nospace,
+                    &prev_comm.ast_root,
+                );
 
                 let mut mapper = diffing::top_down(nospace, &mut src_arena, &mut dst_arena);
                 let root = mapper.mapping.src_arena.root();
@@ -187,11 +192,9 @@ fn removed_tracking(
                         let mut p = p_ctx.pos.iter_offsets();
                         let (_, _, no_spaces_path_to_target) =
                             compute_position_with_no_spaces(curr_comm.ast_root, &mut p, stores);
-                        let src = mapper.src_arena.child_decompressed(
-                            nospace,
-                            &root,
-                            no_spaces_path_to_target.into_iter(),
-                        );
+                        let src = mapper
+                            .src_arena
+                            .child_decompressed(&root, no_spaces_path_to_target.into_iter());
                         if let Some(dst) = mapper.mapping.mappings.get_dst(&src) {
                             // what if they are mapped but not the same, showing ?
                         } else {
@@ -242,10 +245,11 @@ fn removed_tracking(
                                                         if curr_off > o {
                                                             break;
                                                         }
-                                                        let n = &stores.node_store.resolve(*child);
+                                                        let n = &stores.node_store.resolve(child);
                                                         line_offset += n.line_count();
                                                         use hyperast::types::TypeStore;
-                                                        if !stores.resolve_type(child).is_spaces() {
+                                                        if !stores.resolve_type(&child).is_spaces()
+                                                        {
                                                             curr_off += 1;
                                                         }
                                                     }
@@ -357,7 +361,8 @@ fn assertion_roulette_dubbo() {
         r#"(marker_annotation 
         name: (identifier) (#EQ? "Test")
     )"#,
-    ].as_slice();
+    ]
+    .as_slice();
     removed_tracking(repo_name, commit, limit, &query, subs);
 }
 

@@ -1,6 +1,9 @@
 use crate::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
 use crate::store::SimpleStores;
-use crate::types::{AnyType, HyperType, NodeStore, Shared, Typed};
+use crate::tree_gen::WithChildren;
+use crate::types::{
+    AnyType, AstLending, HyperAST, HyperASTShared, HyperType, NodeStore, Shared, Typed,
+};
 use mlua::prelude::*;
 use mlua::{Lua, MetaMethod, Result, UserData, Value};
 use rhai::Dynamic;
@@ -292,7 +295,7 @@ impl<T: HyperType + Send + Sync + 'static> mlua::UserData for SubtreeHandle<T> {
                 .unwrap()
                 .borrow::<SimpleStores<()>>()
                 .unwrap();
-            let n = store.resolve(id);
+            let n = crate::types::NodeStore::resolve(&store.node_store, id);
             if s == "is_comment" {
                 // let ty = n.try_get_type().unwrap();
                 // TODO make a subtree handle on the consumer side to enable polyglote
@@ -578,41 +581,44 @@ fn d_to_lua<'a>(lua: &'a Lua, d: &Dynamic) -> Result<Value<'a>> {
     }
 }
 
-impl<T: HyperType + 'static, HAST, Acc> crate::tree_gen::Prepro<T> for Prepro<HAST, &Acc> {
+impl<HAST: HyperAST, Acc> crate::tree_gen::Prepro<HAST> for Prepro<HAST, &Acc>
+where
+    HAST::TS: crate::types::ETypeStore,
+    <HAST::TS as crate::types::ETypeStore>::Ty2: HyperType + 'static,
+{
     const USING: bool = true;
-    fn preprocessing(&self, ty: T) -> std::result::Result<self::Acc, String> {
+    fn preprocessing(
+        &self,
+        ty: <HAST::TS as crate::types::ETypeStore>::Ty2,
+    ) -> std::result::Result<self::Acc, String> {
         self.clone().init(ty).map_err(|x| x.to_string())
     }
 }
 
-impl<T: HyperType + 'static, HAST, Acc> crate::tree_gen::Prepro<T> for &Prepro<HAST, &Acc> {
+impl<HAST: HyperAST, Acc> crate::tree_gen::Prepro<HAST> for &Prepro<HAST, &Acc>
+where
+    HAST::TS: crate::types::ETypeStore,
+    <HAST::TS as crate::types::ETypeStore>::Ty2: HyperType + 'static,
+{
     const USING: bool = true;
-    fn preprocessing(&self, ty: T) -> std::result::Result<self::Acc, String> {
+    fn preprocessing(
+        &self,
+        ty: <HAST::TS as crate::types::ETypeStore>::Ty2,
+    ) -> std::result::Result<self::Acc, String> {
         (*self).preprocessing(ty)
     }
 }
 
-impl<
-        TS,
-        T: crate::types::Tree,
-        Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
-    > crate::tree_gen::More for Prepro<(TS, T), &Acc>
+impl<HAST, Acc> crate::tree_gen::More<HAST> for Prepro<HAST, &Acc>
+where
+    HAST: HyperAST + for<'a> crate::types::StoreLending2,
+    Acc: WithChildren<HAST::IdN>,
 {
-    type TS = TS;
-    type T = T;
     type Acc = Acc;
     const ENABLED: bool = false;
-    fn match_precomp_queries<
-        'a,
-        HAST: crate::types::HyperAST<
-                'a,
-                IdN = <Self::T as crate::types::Stored>::TreeId,
-                TS = Self::TS,
-                T = Self::T,
-            > + std::clone::Clone,
-    >(
+    fn match_precomp_queries(
         &self,
-        _stores: HAST,
+        _stores: <HAST as crate::types::StoreLending2>::S<'_>,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> crate::tree_gen::PrecompQueries {
@@ -620,24 +626,15 @@ impl<
     }
 }
 
-impl<
-        'a,
-        TS,
-        T: crate::types::Tree,
-        Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
-    > crate::tree_gen::PreproTSG<'a> for Prepro<(TS, T), &Acc>
+impl<HAST, Acc> crate::tree_gen::PreproTSG<HAST> for Prepro<HAST, &Acc>
+where
+    HAST: HyperAST + for<'a> crate::types::StoreLending2,
+    Acc: WithChildren<HAST::IdN>,
 {
     const GRAPHING: bool = false;
-    fn compute_tsg<
-        HAST: crate::types::HyperAST<
-                'a,
-                IdN = <Self::T as crate::types::Stored>::TreeId,
-                TS = Self::TS,
-                T = Self::T,
-            > + std::clone::Clone,
-    >(
+    fn compute_tsg(
         &self,
-        _stores: HAST,
+        _stores: <HAST as crate::types::StoreLending2>::S<'_>,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> std::result::Result<usize, std::string::String>

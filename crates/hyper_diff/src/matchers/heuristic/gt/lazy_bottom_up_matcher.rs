@@ -4,36 +4,32 @@ use num_traits::{PrimInt, ToPrimitive};
 
 use crate::{
     decompressed_tree_store::{
-        DecompressedTreeStore, DecompressedWithParent, LazyDecompressedTreeStore, Shallow,
+        DecompressedTreeStore, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
+        Shallow,
     },
     matchers::mapping_store::MonoMappingStore,
 };
 use hyperast::types::{Tree, WithStats};
 
-pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
-    pub(super) stores: &'a HAST,
+pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
+    pub(super) stores: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
-    pub(super) _phantom: PhantomData<*const T>,
 }
 
 impl<
-        'a,
-        Dsrc: 'a
-            + DecompressedTreeStore<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, T, Dsrc::IdD>
-            + LazyDecompressedTreeStore<'a, T, M::Src>,
-        Ddst: 'a
-            + DecompressedTreeStore<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, T, Ddst::IdD>
-            + LazyDecompressedTreeStore<'a, T, M::Dst>,
-        T: 'a + Tree + WithStats,
-        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
+        Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
+            + DecompressedWithParent<HAST, Dsrc::IdD>
+            + LazyDecompressedTreeStore<HAST, M::Src>,
+        Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
+            + DecompressedWithParent<HAST, Ddst::IdD>
+            + LazyDecompressedTreeStore<HAST, M::Dst>,
+        // T: Tree + WithStats,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
+    > BottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
-    // T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
@@ -42,10 +38,10 @@ where
     pub(super) fn get_dst_candidates(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
-        for c in self.src_arena.descendants(self.stores.node_store(), src) {
+        for c in self.src_arena.descendants(src) {
             if self.mappings.is_src(&c) {
                 let m = self.mappings.get_dst_unchecked(&c);
-                let m = self.dst_arena.decompress_to(self.stores.node_store(), &m);
+                let m = self.dst_arena.decompress_to(&m);
                 seeds.push(m);
             }
         }
@@ -78,35 +74,36 @@ where
 use hyperast::types::HyperAST;
 
 impl<
-        'a,
-        HAST: HyperAST<'a>,
-        Dsrc: DecompressedTreeStore<'a, HAST::T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, HAST::T, Dsrc::IdD>
-            + LazyDecompressedTreeStore<'a, HAST::T, M::Src>,
-        Ddst: DecompressedTreeStore<'a, HAST::T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, HAST::T, Ddst::IdD>
-            + LazyDecompressedTreeStore<'a, HAST::T, M::Dst>,
+        HAST: HyperAST + Copy,
+        Dsrc: LazyDecompressed<M::Src>,
+        Ddst: LazyDecompressed<M::Dst>,
         M: MonoMappingStore,
-    > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
+    > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
-    HAST::T: 'a + Tree + WithStats,
+    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
+    Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
+        + DecompressedWithParent<HAST, Dsrc::IdD>
+        + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
+        + DecompressedWithParent<HAST, Ddst::IdD>
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
 {
     pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
-        let node_store = self.hyperast.node_store();
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &mut self.mapping.dst_arena;
         let mappings = &self.mapping.mappings;
         let mut seeds = vec![];
         let s = &src_arena.original(src);
-        for c in src_arena.descendants(node_store, src) {
+        for c in src_arena.descendants(src) {
             if mappings.is_src(&c) {
                 let m = mappings.get_dst_unchecked(&c);
-                let m = dst_arena.decompress_to(node_store, &m);
+                let m = dst_arena.decompress_to(&m);
                 seeds.push(m);
             }
         }

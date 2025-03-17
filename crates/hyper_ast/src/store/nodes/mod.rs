@@ -1,4 +1,5 @@
 pub mod boxed_components;
+#[cfg(feature = "fetched")]
 pub mod fetched;
 #[cfg(feature = "hecs")]
 pub mod hecs;

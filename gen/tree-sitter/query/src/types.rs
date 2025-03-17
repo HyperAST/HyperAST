@@ -4,7 +4,7 @@ use hyperast::{
     store::defaults::NodeIdentifier,
     tree_gen::utils_ts::TsEnableTS,
     types::{
-        AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId,
+        AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
     },
 };
 
@@ -125,7 +125,7 @@ impl Type {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -141,7 +141,7 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
     type TyErazed = TType;
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
@@ -149,7 +149,7 @@ impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct TStore;
 
 pub struct _TStore;

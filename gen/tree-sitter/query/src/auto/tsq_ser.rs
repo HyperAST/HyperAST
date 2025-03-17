@@ -1,13 +1,15 @@
 use hyperast::nodes::Space;
 use hyperast::types;
+use hyperast::types::AstLending;
+use hyperast::types::Childrn;
 use hyperast::types::HyperType;
-use hyperast::types::IterableChildren;
+use hyperast::types::NodeId;
 use std::fmt::{Debug, Display, Write};
 
 pub struct TreeToQuery<
     'a,
-    HAST: types::HyperAST<'a>,
-    F: Fn(&HAST::T) -> bool,
+    HAST: types::HyperAST,
+    F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
     const TY: bool = true,
     const LABELS: bool = false,
     const IDS: bool = false,
@@ -18,17 +20,25 @@ pub struct TreeToQuery<
     pred: F, // TODO use a TS query, the list. Could even validate at compile time with proc macro
 }
 
-pub fn to_query<'store, HAST: types::HyperAST<'store>>(
+pub fn to_query<'store, HAST: types::HyperAST>(
     stores: &'store HAST,
     root: HAST::IdN,
-) -> TreeToQuery<'store, HAST, impl for<'a> Fn(&'a HAST::T) -> bool, true, true, false, false> {
+) -> TreeToQuery<
+    'store,
+    HAST,
+    impl for<'a> Fn(&'a <HAST as AstLending<'_>>::RT) -> bool,
+    true,
+    true,
+    false,
+    false,
+> {
     TreeToQuery::with_pred(stores, root, |_| true)
 }
 
 impl<
         'store,
-        HAST: types::HyperAST<'store>,
-        F: Fn(&HAST::T) -> bool,
+        HAST: types::HyperAST,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -42,14 +52,15 @@ impl<
 
 impl<
         'store,
-        HAST: types::HyperAST<'store>,
-        F: Fn(&HAST::T) -> bool,
+        HAST: types::HyperAST,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
         const SPC: bool,
     > Display for TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 where
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::IdN: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -59,8 +70,8 @@ where
 
 impl<
         'store,
-        HAST: types::HyperAST<'store>,
-        F: Fn(&HAST::T) -> bool,
+        HAST: types::HyperAST,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
         const TY: bool,
         const LABELS: bool,
         const IDS: bool,
@@ -68,6 +79,7 @@ impl<
     > TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 where
     HAST::IdN: Debug,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(
@@ -143,7 +155,7 @@ where
                     write!(out, "(")?;
                     w_kind(out)?;
                     for id in it {
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
                             write!(out, " ")?;
                         }

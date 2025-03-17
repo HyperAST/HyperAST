@@ -102,6 +102,7 @@ impl = [
     "dep:tree-sitter",
     "dep:tree-sitter-java",
     "hyperast/ts",
+    "scripting"
 ]
 tsg = [
     # "dep:tree-sitter-graph",
@@ -109,4 +110,5 @@ tsg = [
     # "dep:tree-sitter-stack-graphs",
 ]
 subtree-stats=["hyperast/subtree-stats"]
+scripting = ["hyperast/scripting"]
 all_examples=[]

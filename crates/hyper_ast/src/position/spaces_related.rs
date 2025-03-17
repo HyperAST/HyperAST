@@ -7,8 +7,8 @@ use super::Position;
 use super::WithHyperAstPositionConverter;
 use crate::position::building;
 use crate::types::{
-    self, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
-    TypeStore, WithChildren, WithSerialization,
+    self, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeStore, TypeStore,
+    WithChildren, WithSerialization,
 };
 use crate::PrimInt;
 
@@ -20,8 +20,10 @@ pub fn path_with_spaces<'store, HAST, It: Iterator>(
 where
     It::Item: Clone + PrimInt,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    HAST: HyperAST,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut x = root;
     let mut path_ids = vec![];
@@ -43,8 +45,8 @@ where
         if let Some(cs) = b.children() {
             if !t.is_directory() {
                 for y in cs.iter_children() {
-                    let b = stores.node_store().resolve(y);
-                    if !stores.resolve_type(y).is_spaces() {
+                    let b = stores.node_store().resolve(&y);
+                    if !stores.resolve_type(&y).is_spaces() {
                         if o == zero() {
                             break;
                         }
@@ -73,7 +75,7 @@ where
         } else {
             dbg!();
             break;
-        }
+        };
     }
     if let Some(x) = no_spaces.next() {
         // assert!(no_spaces.next().is_none());
@@ -106,8 +108,10 @@ impl<'store, 'src, 'a, Idx: PrimInt, HAST>
     where
         It::Item: Clone + PrimInt,
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+        HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+        HAST: HyperAST,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+            WithSerialization + WithChildren<ChildIdx = It::Item>,
     {
         todo!()
     }
@@ -122,7 +126,7 @@ pub fn global_pos_with_spaces<'store, T, NS, It: Iterator>(
 where
     It::Item: Clone + PrimInt,
     T::TreeId: Clone,
-    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
+    // NS: types::NodeStore<T::TreeId, N = T>,
     T: types::Tree<ChildIdx = It::Item> + types::WithStats,
 {
     todo!()
@@ -158,8 +162,10 @@ pub fn compute_position_with_no_spaces<'store, HAST, It: Iterator>(
 where
     It::Item: Clone + PrimInt,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    HAST: HyperAST,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let (pos, mut path_ids, no_spaces) =
         compute_position_and_nodes_with_no_spaces(root, offsets, stores);
@@ -173,8 +179,10 @@ pub fn compute_position_and_nodes_with_no_spaces<'store, HAST, It>(
 ) -> (Position, Vec<HAST::IdN>, Vec<It::Item>)
 where
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    HAST: HyperAST,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
     It: Iterator,
     It::Item: Clone + PrimInt,
 {
@@ -198,8 +206,8 @@ where
         if let Some(cs) = b.children() {
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
-                    if !stores.resolve_type(y).is_spaces() {
+                    let b = stores.node_store().resolve(&y);
+                    if !stores.resolve_type(&y).is_spaces() {
                         no_s_idx = no_s_idx + one();
                     }
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -225,7 +233,7 @@ where
         } else {
             dbg!();
             break;
-        }
+        };
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
@@ -280,7 +288,7 @@ type FileAndOffsetFull =
 impl<'store, 'src, 'a, HAST, S> WithHyperAstPositionConverter<'store, 'src, S, HAST>
 // WithHyperAstPositionConverter<'store, 'src, PathNoSpace<HAST::IdN, HAST::Idx>, HAST>
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     S: super::position_accessors::WithPreOrderOffsets<Idx = HAST::Idx>,
     S: super::position_accessors::RootedPosition<HAST::IdN>,
     S: super::node_filter_traits::Full,
@@ -291,8 +299,9 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
+        HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+        HAST: HyperAST,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
     {
         let stores = self.stores;
         // get root
@@ -323,8 +332,8 @@ where
             let mut no_s_idx = zero();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
-                    if !stores.resolve_type(y).is_spaces() {
+                    let b = stores.node_store().resolve(&y);
+                    if !stores.resolve_type(&y).is_spaces() {
                         no_s_idx = no_s_idx + one();
                     }
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -363,9 +372,10 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
-        for<'b> <HAST::T as WithChildren>::Children<'b>: Clone,
+        HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+        HAST: HyperAST,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
+        // for<'b, 't> <<HAST as crate::types::AstLending<'t>>::RT as WithChildren>::Children: Clone,
     {
         let stores = self.stores;
         let mut x = self.src.root();
@@ -391,7 +401,7 @@ where
                 }
 
                 let (cs, o) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(o)) => (cs.clone(), o),
+                    (Some(cs), Some(o)) => (cs.iter_children(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return todo!(),
                 };
@@ -416,16 +426,16 @@ where
             assert!(!t.is_directory());
 
             let (cs, o) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(o)) => (cs.clone(), o),
+                (Some(cs), Some(o)) => (cs.iter_children(), o),
                 (None, Some(_)) => panic!("there is no children remaining"),
-                _ => break (b, t),
+                _ => break (stores.node_store().resolve(&x), t),
             };
 
             let mut no_s_idx = zero();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
-                    if !stores.resolve_type(y).is_spaces() {
+                    let b = stores.node_store().resolve(&y);
+                    if !stores.resolve_type(&y).is_spaces() {
                         no_s_idx = no_s_idx + one();
                     }
                     let len = b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -458,9 +468,10 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
-        for<'b> <HAST::T as WithChildren>::Children<'b>: Clone,
+        HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+        HAST: HyperAST,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
+        // for<'t, 'b> <<HAST as crate::types::AstLending<'t>>::RT as WithChildren>::Children: Clone,
         B: TopDownPosBuilder<HAST::IdN, HAST::Idx, usize, NoSpacePrepareParams<HAST::Idx>>
             + Default,
     {
@@ -493,7 +504,7 @@ where
                 };
 
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(o)) => (cs.clone(), o),
+                    (Some(cs), Some(o)) => (cs.iter_children(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return builder.finish(x),
                 };
@@ -510,16 +521,16 @@ where
             assert!(!t.is_directory());
 
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(idx)) => (cs.clone(), idx),
+                (Some(cs), Some(idx)) => (cs, idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
-                _ => break (b, t),
+                _ => break (stores.node_store().resolve(&x), t),
             };
 
             let mut no_s_idx = zero();
             let mut byte_offset = 0;
             for y in cs.before(idx.clone()).iter_children() {
-                let b = stores.node_store().resolve(y);
-                if !stores.resolve_type(y).is_spaces() {
+                let b = stores.node_store().resolve(&y);
+                if !stores.resolve_type(&y).is_spaces() {
                     no_s_idx = no_s_idx + one();
                 }
                 let len = b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -551,8 +562,9 @@ where
     // ) -> (Position, Vec<HAST::IdN>, Vec<HAST::Idx>)
     where
         HAST::IdN: Clone,
-        HAST: HyperAST<'store>,
-        HAST::T: WithSerialization + WithChildren,
+        HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+        HAST: HyperAST,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
         // B: receivers_traits::top_down::ReceiveDir2<HAST::IdN, HAST::Idx, usize, O>
         B: building::top_down::ReceiveDir<HAST::IdN, HAST::Idx, O>
             + building::top_down::CreateBuilder,
@@ -608,14 +620,14 @@ where
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
                 (Some(cs), Some(idx)) => (cs, idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
-                _ => break (b, t),
+                _ => break (stores.node_store().resolve(&x), t),
             };
 
             let mut no_s_idx = zero();
             let mut byte_offset = 0;
             for y in cs.before(idx.clone()).iter_children() {
-                let b = stores.node_store().resolve(y);
-                if !stores.resolve_type(y).is_spaces() {
+                let b = stores.node_store().resolve(&y);
+                if !stores.resolve_type(&y).is_spaces() {
                     no_s_idx = no_s_idx + one();
                 }
                 let len = b.try_bytes_len().unwrap().to_usize().unwrap();

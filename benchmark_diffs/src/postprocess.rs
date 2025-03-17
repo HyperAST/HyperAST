@@ -5,13 +5,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use hyperast::{
-    position::Position,
-    types::{
-        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, WithChildren,
-        WithSerialization,
-    },
-};
 use hyper_diff::{
     decompressed_tree_store::{
         complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
@@ -23,7 +16,15 @@ use hyper_diff::{
     tree::tree_path::CompressedTreePath,
 };
 use hyper_diff::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
-use num_traits::{PrimInt, ToPrimitive};
+use hyperast::{
+    position::Position,
+    types::{
+        self, HyperAST, HyperASTShared, HyperType, LabelStore, NodeStore, Stored, Tree,
+        WithChildren, WithSerialization,
+    },
+    PrimInt,
+};
+use num_traits::ToPrimitive;
 use rayon::prelude::ParallelIterator;
 
 use crate::diff_output;
@@ -64,8 +65,8 @@ impl CompressedBfPostProcess {
 }
 
 pub mod compressed_bf_post_process {
-    use hyperast::types::{self, HyperAST};
     use hyper_diff::matchers::Mapper;
+    use hyperast::types::{self, HyperAST};
 
     use super::*;
     pub struct PP0 {
@@ -133,18 +134,18 @@ pub mod compressed_bf_post_process {
     impl PP2 {
         pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
             self,
-            mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
+            mapper: &'a Mapper<HAST, DD, SD, VecStore<u32>>,
         ) -> ValidityRes<usize>
         where
-            HAST: HyperAST<'store>,
+            HAST: HyperAST + Copy,
             HAST::IdN: Clone + Debug + Eq,
-            HAST::T: types::Tree,
-            SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
-            DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
+            // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree,
+            SD: ShallowDecompressedTreeStore<HAST, u32>
+                + PostOrder<HAST, u32>
+                + DecompressedWithSiblings<HAST, u32>,
+            DD: ShallowDecompressedTreeStore<HAST, u32>
+                + PostOrder<HAST, u32>
+                + DecompressedWithSiblings<HAST, u32>,
         {
             let hyperast = mapper.hyperast;
             let mapping = &mapper.mapping;
@@ -163,7 +164,7 @@ pub mod compressed_bf_post_process {
         }
         pub(crate) fn _validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
             mut self,
-            stores: &'store HAST,
+            stores: HAST,
             src_arena: &'a SD,
             src_tr: HAST::IdN,
             dst_arena: &'a DD,
@@ -171,15 +172,15 @@ pub mod compressed_bf_post_process {
             mappings: &VecStore<u32>,
         ) -> ValidityRes<usize>
         where
-            HAST: HyperAST<'store>,
+            HAST: HyperAST + Copy,
             HAST::IdN: Clone + Debug + Eq,
-            HAST::T: types::Tree,
-            SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
-            DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-                + PostOrder<'a, HAST::T, u32>
-                + DecompressedWithSiblings<'a, HAST::T, u32>,
+            for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree,
+            SD: ShallowDecompressedTreeStore<HAST, u32>
+                + PostOrder<HAST, u32>
+                + DecompressedWithSiblings<HAST, u32>,
+            DD: ShallowDecompressedTreeStore<HAST, u32>
+                + PostOrder<HAST, u32>
+                + DecompressedWithSiblings<HAST, u32>,
         {
             use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
             let bf_f = self.file.read_u32::<BigEndian>().unwrap() as usize;
@@ -202,14 +203,9 @@ pub mod compressed_bf_post_process {
 
             let mut hast_bf = bitvec::bitvec![u64,bitvec::order::Lsb0; 0;bf_l];
 
-            type V<'store, NS, IdN> = Option<(
-                md5::Digest,
-                <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
-            )>;
+            type V<Idx> = Option<(md5::Digest, Idx)>;
 
-            let with_p = |pos: V<'store, HAST::NS, HAST::IdN>,
-                          _ori: HAST::IdN|
-             -> V<'store, HAST::NS, HAST::IdN> {
+            let with_p = |pos: V<HAST::Idx>, _ori: HAST::IdN| -> V<HAST::Idx> {
                 Some((
                     if let Some((x, i)) = pos {
                         let mut c = md5::Context::new();
@@ -222,9 +218,7 @@ pub mod compressed_bf_post_process {
                     num_traits::zero(),
                 ))
             };
-            let with_lsib = |pos: V<'store, HAST::NS, HAST::IdN>,
-                             _lsib: HAST::IdN|
-             -> V<'store, HAST::NS, HAST::IdN> {
+            let with_lsib = |pos: V<HAST::Idx>, _lsib: HAST::IdN| -> V<HAST::Idx> {
                 let mut pos = pos.unwrap();
                 pos.1 = pos.1 + num_traits::one();
                 Some(pos)
@@ -348,7 +342,7 @@ pub mod compressed_bf_post_process {
             let mut matched_m = 0;
             let mut unmatched_m = 0;
             for (src, dst) in mappings.iter() {
-                let f = |src: V<'store, HAST::NS, HAST::IdN>| {
+                let f = |src: V<HAST::Idx>| {
                     if let Some(src) = src {
                         let mut c = md5::Context::new();
                         c.consume(src.0 .0);
@@ -469,19 +463,20 @@ impl SimpleJsonPostProcess {
     }
     pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         self,
-        mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
+        mapper: &'a Mapper<HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        HAST: HyperAST<'store>
-            + NodeStore<HAST::IdN, R<'store> = HAST::T>,
+        HAST: HyperAST + Copy,
+        HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+        //  + NodeStore<HAST::IdN, R<'store> = HAST::T>,
         HAST::IdN: Clone + Debug + Eq,
-        HAST::T: types::Tree + WithSerialization,
-        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
-        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree + WithSerialization,
+        SD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
+        DD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
     {
         let hyperast = mapper.hyperast;
         let mapping = &mapper.mapping;
@@ -500,7 +495,7 @@ impl SimpleJsonPostProcess {
     }
     pub fn _validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         self,
-        stores: &'store HAST,
+        stores: HAST,
         src_arena: &'a SD,
         src_tr: HAST::IdN,
         dst_arena: &'a DD,
@@ -508,16 +503,17 @@ impl SimpleJsonPostProcess {
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        HAST: HyperAST<'store>
-            + NodeStore<HAST::IdN, R<'store> = HAST::T>,
+        HAST: HyperAST + Copy,
+        HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+        //  + NodeStore<HAST::IdN, R<'store> = HAST::T>,
         HAST::IdN: Clone + Debug,
-        HAST::T: WithSerialization,
-        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
-        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization,
+        SD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
+        DD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
     {
         use hyperast::types::Labeled;
         let with_p = |mut pos: Position, ori| {
@@ -538,8 +534,8 @@ impl SimpleJsonPostProcess {
         let mut formator_src = FormatCached::from((stores, src_arena, src_tr, with_p, with_lsib));
         let mut formator_dst = FormatCached::from((stores, dst_arena, dst_tr, with_p, with_lsib));
         let mut formator = |a, b| diff_output::Match {
-            src: (stores, formator_src.format(a)).into(),
-            dest: (stores, formator_dst.format(b)).into(),
+            src: diff_output::Tree::from_pos(stores, formator_src.format(a)),
+            dest: diff_output::Tree::from_pos(stores, formator_dst.format(b)),
         };
         use hashbrown::HashSet;
         let now = Instant::now();
@@ -604,18 +600,18 @@ impl PathJsonPostProcess {
     }
     pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         self,
-        mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
+        mapper: &'a Mapper<HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
     where
-        HAST: HyperAST<'store>,
+        HAST: HyperAST + Copy,
         HAST::IdN: Clone + Debug + Eq,
-        HAST::T: types::Tree,
-        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
-        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
-            + PostOrder<'a, HAST::T, u32>
-            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree,
+        SD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
+        DD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
     {
         let hyperast = mapper.hyperast;
         let mapping = &mapper.mapping;
@@ -623,46 +619,29 @@ impl PathJsonPostProcess {
         let dst_arena = &mapping.dst_arena;
         let src_tr = src_arena.original(&src_arena.root());
         let dst_tr = dst_arena.original(&dst_arena.root());
-        self._validity_mappings(
-            hyperast.node_store(),
-            hyperast.label_store(),
-            src_arena,
-            src_tr,
-            dst_arena,
-            dst_tr,
-            &mapping.mappings,
-        )
+        self._validity_mappings(src_arena, src_tr, dst_arena, dst_tr, &mapping.mappings)
     }
 
-    pub(crate) fn _validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
+    pub(crate) fn _validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         self,
-        _node_store: &'store NS,
-        _label_store: &'store LS,
         src_arena: &'a SD,
-        src_tr: IdN,
+        src_tr: HAST::IdN,
         dst_arena: &'a DD,
-        dst_tr: IdN,
+        dst_tr: HAST::IdN,
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
     where
-        IdN: Clone + Debug,
-        NS: 'store + types::NodeStore<IdN>,
-        <NS as types::NodeStore<IdN>>::R<'store>: types::Tree<TreeId = IdN, Label = LS::I>,
-        LS: types::LabelStore<str>,
-        SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
-            + PostOrder<'a, NS::R<'store>, u32>
-            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
-        DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
-            + PostOrder<'a, NS::R<'store>, u32>
-            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
+        HAST: HyperAST + Copy,
+        HAST::IdN: Clone + Debug,
+        SD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
+        DD: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
     {
-        type CP<'store, NS, IdN> = Option<(
-            CompressedTreePath<
-                <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
-            >,
-            <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
-        )>;
-        let with_p = |pos: CP<'store, NS, IdN>, _ori: IdN| -> CP<'store, NS, IdN> {
+        type CP<Idx> = Option<(CompressedTreePath<Idx>, Idx)>;
+        let with_p = |pos: CP<HAST::Idx>, _ori: HAST::IdN| -> CP<HAST::Idx> {
             Some((
                 if let Some((ctp, i)) = pos {
                     ctp.extend(&[i])
@@ -672,7 +651,7 @@ impl PathJsonPostProcess {
                 num_traits::zero(),
             ))
         };
-        let with_lsib = |pos: CP<'store, NS, IdN>, _lsib: IdN| -> CP<'store, NS, IdN> {
+        let with_lsib = |pos: CP<HAST::Idx>, _lsib: HAST::IdN| -> CP<HAST::Idx> {
             let mut pos = pos.unwrap();
             pos.1 = pos.1 + num_traits::one();
             Some(pos)
@@ -728,16 +707,16 @@ impl PathJsonPostProcess {
     }
 }
 
-struct FormatCached<'store: 'a, 'a, S, T: Stored, D, U, F, G> {
-    store: &'store S,
+struct FormatCached<'a, HAST: HyperASTShared, D, U, F, G> {
+    store: HAST,
     arena: &'a D,
-    cache: RecCachedProcessor<'a, T, D, u32, U, F, G>,
+    cache: RecCachedProcessor<'a, HAST::IdN, D, u32, U, F, G>,
 }
 
-impl<'store, 'a, S, T: WithChildren, D, U, F: Clone, G: Clone>
-    From<(&'store S, &'a D, T::TreeId, F, G)> for FormatCached<'store, 'a, S, T, D, U, F, G>
+impl<'a, S: HyperASTShared, D, U, F: Clone, G: Clone> From<(S, &'a D, S::IdN, F, G)>
+    for FormatCached<'a, S, D, U, F, G>
 {
-    fn from((store, arena, tr, with_p, with_lsib): (&'store S, &'a D, T::TreeId, F, G)) -> Self {
+    fn from((store, arena, tr, with_p, with_lsib): (S, &'a D, S::IdN, F, G)) -> Self {
         Self {
             store,
             arena,
@@ -745,33 +724,32 @@ impl<'store, 'a, S, T: WithChildren, D, U, F: Clone, G: Clone>
         }
     }
 }
-impl<'store: 'a, 'a, S, T: Tree + WithSerialization, D, U: Clone + Default, F, G>
-    FormatCached<'store, 'a, S, T, D, U, F, G>
+impl<'a, HAST, D, U: Clone + Default, F, G> FormatCached<'a, HAST, D, U, F, G>
 where
-    S: HyperAST<'store, T = T, IdN = T::TreeId>,
-    T::TreeId: Clone + Debug,
-    D: ShallowDecompressedTreeStore<'a, T, u32>
-        + PostOrder<'a, T, u32>
-        + DecompressedWithSiblings<'a, T, u32>,
-    F: Fn(U, T::TreeId) -> U,
-    G: Fn(U, T::TreeId) -> U,
+    HAST: HyperAST + Copy,
+    HAST::IdN: Debug,
+    D: ShallowDecompressedTreeStore<HAST, u32>
+        + PostOrder<HAST, u32>
+        + DecompressedWithSiblings<HAST, u32>,
+    F: Fn(U, HAST::IdN) -> U,
+    G: Fn(U, HAST::IdN) -> U,
 {
-    fn format(&mut self, x: u32) -> (U, T::TreeId) {
+    fn format(&mut self, x: u32) -> (U, HAST::IdN) {
         (
             self.cache.position(self.store, &x).clone(),
             self.arena.original(&x),
         )
     }
 }
-struct PathCached<'a, T: Stored, D, U, F, G> {
+struct PathCached<'a, IdN, D, U, F, G> {
     arena: &'a D,
-    cache: RecCachedProcessor<'a, T, D, u32, U, F, G>,
+    cache: RecCachedProcessor<'a, IdN, D, u32, U, F, G>,
 }
 
-impl<'a, T: WithChildren, D, U, F: Clone, G: Clone> From<(&'a D, T::TreeId, F, G)>
-    for PathCached<'a, T, D, U, F, G>
+impl<'a, IdN, D, U, F: Clone, G: Clone> From<(&'a D, IdN, F, G)>
+    for PathCached<'a, IdN, D, U, F, G>
 {
-    fn from((arena, tr, with_p, with_lsib): (&'a D, T::TreeId, F, G)) -> Self {
+    fn from((arena, tr, with_p, with_lsib): (&'a D, IdN, F, G)) -> Self {
         Self {
             arena,
             cache: RecCachedProcessor::from((arena, tr, with_p, with_lsib)),
@@ -779,26 +757,26 @@ impl<'a, T: WithChildren, D, U, F: Clone, G: Clone> From<(&'a D, T::TreeId, F, G
     }
 }
 
-impl<'a, T: Tree, D, U: Clone + Default, F, G> PathCached<'a, T, D, U, F, G>
+impl<'a, IdN, D, U: Clone + Default, F, G> PathCached<'a, IdN, D, U, F, G>
 where
-    T::TreeId: Clone + Debug,
-    D: ShallowDecompressedTreeStore<'a, T, u32>
-        + PostOrder<'a, T, u32>
-        + DecompressedWithSiblings<'a, T, u32>,
-    F: Fn(U, T::TreeId) -> U,
-    G: Fn(U, T::TreeId) -> U,
+    F: Fn(U, IdN) -> U,
+    G: Fn(U, IdN) -> U,
 {
-    fn format(&mut self, x: u32) -> (U, T::TreeId) {
+    fn format<HAST: HyperAST<IdN = IdN> + Copy>(&mut self, x: u32) -> (U, IdN)
+    where
+        D: ShallowDecompressedTreeStore<HAST, u32>
+            + PostOrder<HAST, u32>
+            + DecompressedWithSiblings<HAST, u32>,
+    {
         (self.cache.position2(&x).clone(), self.arena.original(&x))
     }
 }
 
 pub fn print_mappings<
-    'store: 'a,
     'a,
     IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Src = IdD, Dst = IdD> + Debug,
-    HAST: HyperAST<'store>,
+    HAST: HyperAST + Copy,
     // IdN: Clone + Eq + Debug,
     // NS: NodeStore<IdN>,
     // LS: LabelStore<str>,
@@ -807,19 +785,19 @@ pub fn print_mappings<
 >(
     dst_arena: &'a DD, //CompletePostOrder<NS::R<'store>, IdD>,
     src_arena: &'a SD, //CompletePostOrder<NS::R<'store>, IdD>,
-    stores: &'store HAST,
+    stores: HAST,
     mappings: &M,
 ) where
-    HAST::T: WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization,
     // <NS as types::NodeStore<IdN>>::R<'store>:
     //     'store + Tree<TreeId = IdN, Label = LS::I> + types::WithSerialization,
     // <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
-    SD: FullyDecompressedTreeStore<'a, HAST::T, IdD> + PostOrder<'a, HAST::T, IdD>, // + DecompressedWithParent<'a, HAST::T, IdD>,
-    DD: FullyDecompressedTreeStore<'a, HAST::T, IdD> + PostOrder<'a, HAST::T, IdD>, //+ DecompressedWithParent<'a, HAST::T, IdD>,
+    SD: FullyDecompressedTreeStore<HAST, IdD> + PostOrder<HAST, IdD>, // + DecompressedWithParent<HAST, IdD>,
+    DD: FullyDecompressedTreeStore<HAST, IdD> + PostOrder<HAST, IdD>, //+ DecompressedWithParent<HAST, IdD>,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let disp = DisplayCompletePostOrder::new(stores, dst_arena);
+    let disp = DisplayCompletePostOrder::<IdD, _, _>::new(stores, dst_arena);
     let dst_arena = disp.to_string();
     let mappings = src_arena
         .map
@@ -845,7 +823,7 @@ pub fn print_mappings<
         });
     let src_arena = DisplaySimplePreOrderMapper {
         inner: &src_arena,
-        stores,
+        stores: &stores,
     }
     .to_string();
     let cols = vec![src_arena, mappings, dst_arena];
@@ -873,18 +851,17 @@ pub fn print_mappings<
 }
 
 pub fn print_mappings_no_ranges<
-    'store: 'a,
     'a,
     IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    HAST: HyperAST<'store>,
+    HAST: HyperAST + Copy,
     // IdN: Clone + Eq + Debug,
-    DD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
-    SD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
+    DD: PostOrder<HAST, IdD> + FullyDecompressedTreeStore<HAST, IdD>,
+    SD: PostOrder<HAST, IdD> + FullyDecompressedTreeStore<HAST, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,
-    stores: &'store HAST,
+    stores: HAST,
     mappings: &M,
 )
 where
@@ -893,7 +870,7 @@ where
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let disp = DisplayCompletePostOrder::new(stores, dst_arena);
+    let disp = DisplayCompletePostOrder::<IdD, _, _>::new(stores, dst_arena);
     let dst_arena = format!("{:?}", disp);
     let mappings = src_arena
         .map
@@ -921,7 +898,7 @@ where
         "{:?}",
         DisplaySimplePreOrderMapper {
             inner: &src_arena,
-            stores
+            stores: &stores
         }
     );
     let cols = vec![src_arena, mappings, dst_arena];
@@ -957,8 +934,8 @@ mod tests {
     };
     use hyperast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
     // use hyperast_gen_ts_java::types::TStore;
-    use hyperast_vcs_git::TStore;
     use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
+    use hyperast_vcs_git::TStore;
 
     #[test]
     fn test() {

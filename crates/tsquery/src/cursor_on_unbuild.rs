@@ -3,9 +3,12 @@
 use crate::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use hyperast::position::TreePath;
 use hyperast::tree_gen;
+use hyperast::types::inner_ref::NodeStore as _;
 use hyperast::types::{
-    self, HyperAST, HyperASTShared, HyperType as _, LabelStore as _, Labeled, Role, Tree, WithRoles,
+    self, HyperAST, HyperASTShared, HyperType as _, LabelStore as _, Labeled, NodeStore, Role,
+    Tree, WithRoles,
 };
+
 use hyperast::types::{RoleStore as _, Stored};
 use hyperast::{position::TreePathMut, types::TypeStore};
 use num::ToPrimitive;
@@ -22,9 +25,9 @@ pub struct Node<
     L = <Acc as hyperast::tree_gen::WithLabel>::L,
 > {
     pub stores: HAST,
-    acc: Acc,
+    pub acc: Acc,
     pub(super) label: Option<L>,
-    offset: Idx,
+    pub offset: Idx,
     pub pos: P,
 }
 
@@ -102,23 +105,46 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
     }
 }
 
-impl<'hast, 'acc, 'l, HAST, Acc> crate::Cursor for self::TreeCursor<HAST, &'acc Acc>
+// impl<'a, 'acc, HAST: HyperAST, Acc> super::TextLending<'a> for self::TreeCursor<HAST, &'acc Acc> {
+//     type TP = ();
+// }
+
+impl<'acc, HAST: HyperASTShared, Acc> crate::WithField for Node<HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
-    HAST::TS:
-        EnabledTypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
-    HAST::T: hyperast::types::WithRoles,
-    HAST::IdN: Copy,
-    Acc: tree_gen::WithChildren<<HAST::T as Stored>::TreeId>
-        + tree_gen::WithRole<Role>
-        + types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
 {
+    type IdF = IdF;
+}
+
+impl<'a, 'acc, HAST, Acc> crate::CNLending<'a> for self::TreeCursor<HAST, &'acc Acc>
+where
+    HAST: HyperAST + Clone,
+    HAST::TS:
+        EnabledTypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithRoles,
+    HAST::IdN: Copy,
+    Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
+    &'acc Acc: hyperast::tree_gen::WithLabel,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    type NR = self::Node<HAST, &'acc Acc>;
+}
+impl<'acc, HAST, Acc> crate::Cursor for self::TreeCursor<HAST, &'acc Acc>
+where
+    HAST: HyperAST + Clone,
+    HAST::TS:
+        EnabledTypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithRoles,
+    HAST::IdN: Copy,
+    Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
+    &'acc Acc: hyperast::tree_gen::WithLabel,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
     type Node = self::Node<HAST, &'acc Acc>;
-    type NodeRef<'a>
-        = &'a self::Node<HAST, &'acc Acc>
-    where
-        Self: 'a;
+    // type NodeRef<'a>
+    //     = &'a self::Node<HAST, &'acc Acc>
+    // where
+    //     Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         // log::trace!(
@@ -134,10 +160,8 @@ where
             let n = self.stores.resolve(p);
             use hyperast::types::Children;
             use hyperast::types::WithChildren;
-            let Some(node) = n
-                .children()
-                .and_then(|x| x.get(*self.pos.offset().unwrap()))
-            else {
+            let and_then = n.child(self.pos.offset().unwrap());
+            let Some(node) = and_then else {
                 if self.resolve_type(p).is_hidden() {
                     let Some((_, o)) = &self.pos.pop() else {
                         panic!()
@@ -155,13 +179,14 @@ where
                             return TreeCursorStep::TreeCursorStepNone;
                         }
                     }
+                    drop(n);
                     // dbg!();
                     return self.goto_next_sibling_internal();
                 } else {
                     return TreeCursorStep::TreeCursorStepNone;
                 }
             };
-            self.pos.inc(*node);
+            self.pos.inc(node);
         } else if let Some(o) = self.pos.offset() {
             //dbg!();
             let Some(node) = self.acc.child((*o).to_usize().unwrap()) else {
@@ -195,10 +220,10 @@ where
             let n = self.stores.resolve(n);
             use hyperast::types::Children;
             use hyperast::types::WithChildren;
-            let Some(node) = n.children().and_then(|x| x.get(num::zero())) else {
+            let Some(node) = n.child(&num::zero()) else {
                 return TreeCursorStep::TreeCursorStepNone;
             };
-            self.pos.goto(*node, num::zero());
+            self.pos.goto(node, num::zero());
         } else if let Some(o) = self.pos.offset() {
             // dbg!();
             let Some(node) = self.acc.child((*o).to_usize().unwrap()) else {
@@ -245,8 +270,8 @@ where
         }
     }
 
-    fn current_node(&self) -> Self::NodeRef<'_> {
-        self
+    fn current_node(&self) -> <Self as crate::CNLending<'_>>::NR {
+        self.clone()
     }
 
     fn parent_is_error(&self) -> bool {
@@ -312,7 +337,8 @@ where
         }
     }
 
-    fn text_provider(&self) -> <Self::Node as crate::Node>::TP<'_> {
+    fn text_provider(&self) -> <Self::Node as crate::TextLending<'_>>::TP {
+        // &self.stores.label_store()
         ()
     }
 
@@ -322,19 +348,20 @@ where
     }
 }
 
-impl<'hast, 'acc, 'l, HAST, Acc> self::TreeCursor<HAST, &'acc Acc>
+impl<'acc, 'l, HAST, Acc> self::TreeCursor<HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS:
         EnabledTypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
-    HAST::T: hyperast::types::WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithRoles,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn role(&self) -> Option<Role> {
         if let Some(p) = self.pos.parent() {
-            let n = self.stores.resolve(p);
+            let n = self.stores.node_store().resolve(p);
             n.role_at::<Role>(self.pos.o().unwrap())
         } else {
             let idx = self.pos.o().unwrap();
@@ -392,12 +419,12 @@ where
                 let Some(n) = p.pos.node() else {
                     return (None, Default::default());
                 };
-                let n = self.stores.resolve(n);
                 // dbg!(p.kind());
                 if p.kind().is_supertype() {
                     continue;
                 }
                 lang = p.kind().get_lang();
+                let n = self.stores.node_store().resolve(n);
                 break n.role_at::<Role>(o - num::one());
             }
         };
@@ -412,15 +439,24 @@ where
 
 type IdF = u16;
 
-impl<'hast, 'acc, 'l, HAST, Acc> crate::Node for self::Node<HAST, &'acc Acc>
+impl<'a, 'acc, HAST, Acc> super::TextLending<'a> for self::Node<HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
+    &'acc Acc: hyperast::tree_gen::WithLabel,
+{
+    type TP = ();
+}
+
+impl<'acc, HAST, Acc> crate::Node for self::Node<HAST, &'acc Acc>
+where
+    HAST: HyperAST + Clone,
     HAST::TS:
         EnabledTypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
-    HAST::T: hyperast::types::WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithRoles,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn symbol(&self) -> Symbol {
         let id = HAST::TS::ts_symbol(self.kind());
@@ -495,41 +531,43 @@ where
         }
         Equal
     }
-    type TP<'a> = ();
-    fn text(&self, _tp: ()) -> std::borrow::Cow<str> {
+
+    fn text<'s, 'l>(&'s self, _tp: <Self as super::TextLending<'l>>::TP) -> super::BB<'s, 'l, str> {
         if let Some(id) = self.pos.node() {
             let n = self.stores.resolve(id);
             if n.has_children() {
                 // dbg!();
-                return "".into();
+                return super::BB::B("".into());
                 // let r = hyperast::nodes::TextSerializer::new(self.stores, *id).to_string();
                 // return r.into();
             }
             if let Some(l) = n.try_get_label() {
                 let ls = self.stores.label_store();
                 let l = ls.resolve(l);
-                return l.to_string().into();
+                return super::BB::A(l);
             }
-            "".into()
+            super::BB::B("".into())
         } else if !self.acc.child_count() == 0 {
             todo!()
         } else if let Some(label) = &self.label {
-            label.as_ref().into()
+            todo!()
+            // label.as_ref().into()
         } else {
-            "".into()
+            super::BB::B("".into())
         }
     }
 }
 
-impl<'hast, 'acc, 'l, HAST, Acc> Node<HAST, &'acc Acc>
+impl<'acc, 'l, HAST, Acc> Node<HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS:
         EnabledTypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
-    HAST::T: hyperast::types::WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithRoles,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
     &'acc Acc: hyperast::tree_gen::WithLabel,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn child_by_role(&mut self, role: Role) -> Option<()> {
         // TODO what about multiple children with same role?
@@ -568,9 +606,9 @@ where
     }
 }
 
-impl<'hast, 'acc, 'l, HAST, Acc> Node<HAST, &'acc Acc>
+impl<'acc, 'l, HAST, Acc> Node<HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS: EnabledTypeStore<Ty2 = Acc::Type>,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,
@@ -593,9 +631,9 @@ where
     }
 }
 
-impl<'hast, 'acc, 'l, HAST, Acc> Node<HAST, &'acc Acc>
+impl<'acc, 'l, HAST, Acc> Node<HAST, &'acc Acc>
 where
-    HAST: HyperAST<'hast> + Clone,
+    HAST: HyperAST + Clone,
     HAST::TS: EnabledTypeStore<Ty2 = Acc::Type>,
     HAST::IdN: Copy,
     Acc: tree_gen::WithChildren<HAST::IdN> + tree_gen::WithRole<Role> + types::Typed,

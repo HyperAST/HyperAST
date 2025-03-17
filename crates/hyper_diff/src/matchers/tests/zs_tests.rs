@@ -1,16 +1,14 @@
-use std::marker::PhantomData;
-
 use crate::{
     decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree},
     matchers::{
         mapping_store::{DefaultMappingStore, MappingStore},
-        optimal::zs::ZsMatcher,
+        optimal::zs::ZsMatcher, Decompressible,
     },
     tests::examples::{example_gt_java_code, example_gt_slides, example_zs_paper},
 };
 
-use hyperast::test_utils::simple_tree::{vpair_to_stores, DisplayTree, TStore};
-use hyperast::types::{LabelStore, SimpleHyperAST};
+use hyperast::test_utils::simple_tree::{vpair_to_stores, DisplayTree};
+use hyperast::types::LabelStore;
 
 #[test]
 fn test_zs_paper_for_initial_layout() {
@@ -21,31 +19,27 @@ fn test_zs_paper_for_initial_layout() {
 
 #[test]
 fn test_with_custom_example() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
+    let (stores, src, dst) = vpair_to_stores(example_gt_java_code());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
+    let label_store = &stores.label_store;
+    let node_store = &stores.node_store;
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, src)
+        DisplayTree::new(label_store, node_store, src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, dst)
+        DisplayTree::new(label_store, node_store, dst)
     );
 
-    let stores = SimpleHyperAST::<_,TStore,_,_> {
-        node_store,
-        label_store,
-        _phantom: PhantomData,
-    };
     let mapper =
-        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
+        ZsMatcher::<DefaultMappingStore<u16>, Decompressible<_, SimpleZsTree<_, u16>>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
         mappings,
         ..
     } = mapper;
-    let node_store = &stores.node_store;
     let src = &src_arena.root();
     let dst = &dst_arena.root();
     assert_eq!(6, mappings.src_to_dst.iter().filter(|x| **x != 0).count());
@@ -63,151 +57,133 @@ fn test_with_custom_example() {
     );
     println!(
         "[0]:{} [0]:{}",
-        src_arena.original(&src_arena.child(node_store, src, &[0])),
-        dst_arena.original(&dst_arena.child(node_store, dst, &[0])),
+        src_arena.original(&src_arena.child(src, &[0])),
+        dst_arena.original(&dst_arena.child(dst, &[0])),
     );
     assert!(mappings.has(
-        &(src_arena.child(node_store, src, &[0])),
-        &(dst_arena.child(node_store, dst, &[0, 0]))
+        &(src_arena.child(src, &[0])),
+        &(dst_arena.child(dst, &[0, 0]))
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1]),
-        &dst_arena.child(node_store, dst, &[0, 1])
+        &src_arena.child(src, &[1]),
+        &dst_arena.child(dst, &[0, 1])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1, 0]),
-        &dst_arena.child(node_store, dst, &[0, 1, 0])
+        &src_arena.child(src, &[1, 0]),
+        &dst_arena.child(dst, &[0, 1, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1, 2]),
-        &dst_arena.child(node_store, dst, &[0, 1, 2])
+        &src_arena.child(src, &[1, 2]),
+        &dst_arena.child(dst, &[0, 1, 2])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1, 3]),
-        &dst_arena.child(node_store, dst, &[0, 1, 3])
+        &src_arena.child(src, &[1, 3]),
+        &dst_arena.child(dst, &[0, 1, 3])
     ));
 }
 #[test]
 fn test_with_custom_example2() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
+    let (stores, src, dst) = vpair_to_stores(example_gt_java_code());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-    let stores = SimpleHyperAST::<_,TStore,_,_> {
-        node_store,
-        label_store,
-        _phantom: PhantomData,
-    };
     let mapper =
-        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
+    ZsMatcher::<DefaultMappingStore<u16>, Decompressible<_, SimpleZsTree<_, u16>>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
         mappings,
     } = mapper;
-    let node_store = &stores.node_store;
     let src = &src_arena.root();
     let dst = &dst_arena.root();
     assert_eq!(6, mappings.src_to_dst.iter().filter(|x| **x != 0).count());
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0]),
-        &dst_arena.child(node_store, dst, &[0, 0])
+        &src_arena.child(src, &[0]),
+        &dst_arena.child(dst, &[0, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1]),
-        &dst_arena.child(node_store, dst, &[0, 1])
+        &src_arena.child(src, &[1]),
+        &dst_arena.child(dst, &[0, 1])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1, 0]),
-        &dst_arena.child(node_store, dst, &[0, 1, 0])
+        &src_arena.child(src, &[1, 0]),
+        &dst_arena.child(dst, &[0, 1, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1, 2]),
-        &dst_arena.child(node_store, dst, &[0, 1, 2])
+        &src_arena.child(src, &[1, 2]),
+        &dst_arena.child(dst, &[0, 1, 2])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[1, 3]),
-        &dst_arena.child(node_store, dst, &[0, 1, 3])
+        &src_arena.child(src, &[1, 3]),
+        &dst_arena.child(dst, &[0, 1, 3])
     ));
 }
 
 #[test]
 fn test_with_slide_example() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
+    let (stores, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-    let stores = SimpleHyperAST::<_,TStore,_,_> {
-        node_store,
-        label_store,
-        _phantom: PhantomData,
-    };
     let mapper =
-        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
+        ZsMatcher::<DefaultMappingStore<u16>, Decompressible<_, SimpleZsTree<_, u16>>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
         mappings,
         ..
     } = mapper;
-    let node_store = &stores.node_store;
     let src = &src_arena.root();
     let dst = &dst_arena.root();
     assert_eq!(5, mappings.src_to_dst.iter().filter(|x| **x != 0).count());
     assert!(mappings.has(src, dst));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 0]),
-        &dst_arena.child(node_store, dst, &[0])
+        &src_arena.child(src, &[0, 0]),
+        &dst_arena.child(dst, &[0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 0, 0]),
-        &dst_arena.child(node_store, dst, &[0, 0])
+        &src_arena.child(src, &[0, 0, 0]),
+        &dst_arena.child(dst, &[0, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 1]),
-        &dst_arena.child(node_store, dst, &[1, 0])
+        &src_arena.child(src, &[0, 1]),
+        &dst_arena.child(dst, &[1, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 2]),
-        &dst_arena.child(node_store, dst, &[2])
+        &src_arena.child(src, &[0, 2]),
+        &dst_arena.child(dst, &[2])
     ));
 }
 
 #[test]
 fn test_with_slide_example2() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
+    let (stores, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-    let stores = SimpleHyperAST::<_,TStore,_,_> {
-        node_store,
-        label_store,
-        _phantom: PhantomData,
-    };
     let mapper =
-        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
+        ZsMatcher::<DefaultMappingStore<u16>, Decompressible<_, SimpleZsTree<_, u16>>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
         mappings,
         ..
     } = mapper;
-    let node_store = &stores.node_store;
     let src = &src_arena.root();
     let dst = &dst_arena.root();
     assert_eq!(5, mappings.src_to_dst.iter().filter(|x| **x != 0).count());
     assert!(mappings.has(src, dst));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 0]),
-        &dst_arena.child(node_store, dst, &[0])
+        &src_arena.child(src, &[0, 0]),
+        &dst_arena.child(dst, &[0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 0, 0]),
-        &dst_arena.child(node_store, dst, &[0, 0])
+        &src_arena.child(src, &[0, 0, 0]),
+        &dst_arena.child(dst, &[0, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 1]),
-        &dst_arena.child(node_store, dst, &[1, 0])
+        &src_arena.child(src, &[0, 1]),
+        &dst_arena.child(dst, &[1, 0])
     ));
     assert!(mappings.has(
-        &src_arena.child(node_store, src, &[0, 2]),
-        &dst_arena.child(node_store, dst, &[2])
+        &src_arena.child(src, &[0, 2]),
+        &dst_arena.child(dst, &[2])
     ));
 }

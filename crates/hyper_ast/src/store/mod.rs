@@ -88,21 +88,48 @@ where
     }
 }
 
-impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
-where
-    for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
-    IdN: crate::types::NodeId<IdN = IdN>,
-    NS: crate::types::NodeStore<IdN>,
-{
-    type R<'a>
-        = NS::R<'a>
-    where
-        Self: 'a;
+// impl<'a, IdN, TS, NS, LS> crate::types::NLending<'a, IdN> for SimpleStores<TS, NS, LS>
+// where
+//     <NS as crate::types::NLending<'a, IdN>>::N: crate::types::Tree<TreeId = IdN>,
+//     IdN: crate::types::NodeId<IdN = IdN>,
+//     NS: crate::types::NodeStore<IdN>,
+// {
+//     type N = <NS as crate::types::NLending<'a, IdN>>::N;
+// }
 
-    fn resolve(&self, id: &IdN) -> Self::R<'_> {
-        self.node_store.resolve(id)
-    }
-}
+// impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
+// where
+//     for<'a> <NS as crate::types::NLending<'a, IdN>>::N: crate::types::Tree<TreeId = IdN>,
+//     IdN: crate::types::NodeId<IdN = IdN>,
+//     NS: crate::types::NodeStore<IdN>,
+//     NS: crate::types::NStore<IdN = IdN>,
+//     LS: crate::types::LStore,
+// {
+//     fn resolve(&self, id: &IdN) -> <Self as crate::types::NLending<'_, IdN>>::N {
+//         self.node_store.resolve(id)
+//     }
+//     type NMarker = NS::NMarker;
+// }
+
+// impl<IdN, TS, NS, LS> crate::types::NodStore<IdN> for SimpleStores<TS, NS, LS>
+// where
+//     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
+//     IdN: crate::types::NodeId<IdN = IdN>,
+//     NS: crate::types::NodeStore<IdN>,
+// {
+//     type R<'a> = NS::R<'a>;
+// }
+
+// impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
+// where
+//     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
+//     IdN: crate::types::NodeId<IdN = IdN>,
+//     NS: crate::types::NodeStore<IdN>,
+// {
+//     fn resolve(&self, id: &IdN) -> Self::R<'_> {
+//         self.node_store.resolve(id)
+//     }
+// }
 
 impl<IdN, TS, NS, LS> crate::types::NodeStoreLean<IdN> for SimpleStores<TS, NS, LS>
 where

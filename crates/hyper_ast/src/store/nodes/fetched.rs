@@ -8,9 +8,7 @@ use std::{
 use string_interner::DefaultHashBuilder;
 use string_interner::Symbol;
 
-use crate::types::{
-        AnyType, Children, HyperType, MySlice, NodeId, TypeTrait, TypedNodeId
-    };
+use crate::types::{AnyType, Children, HyperType, NodeId, TypeTrait, TypedNodeId, AAAA};
 
 use strum_macros::*;
 #[cfg(feature = "native")]
@@ -100,6 +98,7 @@ impl From<LabelIdentifier> for u32 {
 #[repr(transparent)]
 pub struct NodeIdentifier(std::num::NonZeroU32);
 
+impl AAAA for NodeIdentifier {}
 impl NodeId for NodeIdentifier {
     type IdN = Self;
     fn as_id(&self) -> &Self::IdN {
@@ -117,7 +116,7 @@ impl NodeId for NodeIdentifier {
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
     type TyErazed = crate::types::AnyType;
-    
+
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
         ty
     }
@@ -251,37 +250,39 @@ impl<'a, T> HashedNodeRef<'a, T> {
     }
 }
 
+impl<'a, T> crate::types::CLending<'a, u16, NodeIdentifier> for HashedNodeRef<'_, T> {
+    type Children = crate::types::ChildrenSlice<'a, NodeIdentifier>;
+}
+
 impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
-    type Children<'b>
-        = MySlice<<Self::TreeId as NodeId>::IdN>
-    where
-        Self: 'b;
+    // type Children<'b>
+    //     = MySlice<<Self::TreeId as NodeId>::IdN>
+    // where
+    //     Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.children().map_or(0, |x| x.child_count())
     }
 
     fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
-        self.children().and_then(|x| x.get(*idx)).copied()
+        self.children().and_then(|x| x.get(*idx).copied())
     }
 
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
-        self.children().and_then(|x| x.rev(*idx)).copied()
+        todo!()
+        // self.children().and_then(|x| x.rev(*idx)).copied()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         self._children().map(|x| x.into())
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder
-    for HashedNodeRef<'a, Id>
-{
-    fn unerase_ref<T: 'static + Send + Sync>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&T> {
+impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if std::any::TypeId::of::<T>() == tid {
             todo!("{:?}", std::any::type_name::<T>())
             // if std::any::TypeId::of::<T>() == std::any::TypeId::of::<AnyType>() {
@@ -645,12 +646,11 @@ impl Default for SimplePackedBuilder {
 }
 
 impl SimplePackedBuilder {
-    pub fn add<'store, HAST: crate::types::HyperAST<'store>>(&mut self, 
-        store: &'store HAST,
-        id: &HAST::IdN)
+    pub fn add<'store, HAST: crate::types::HyperAST>(&mut self, store: &'store HAST, id: &HAST::IdN)
     where
-        HAST::T: crate::types::WithStats,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: crate::types::WithStats,
         HAST::IdN: Into<NodeIdentifier> + Copy,
+        HAST::IdN: NodeId<IdN = HAST::IdN>,
         HAST::Label: Into<LabelIdentifier> + Clone,
     {
         use crate::types::NodeStore;
@@ -661,13 +661,12 @@ impl SimplePackedBuilder {
         use crate::types::LangRef;
         let lang_name = lang.name();
         let type_id = lang.to_u16(ty);
-        use crate::types::WithChildren;
-        use crate::types::IterableChildren;
-        use crate::types::Tree;
         use crate::types::Labeled;
+        use crate::types::Tree;
+        use crate::types::WithChildren;
         use crate::types::WithStats;
         if let Some(children) = node.children() {
-            let children = children.iter_children().map(|x| (*x).into()).collect();
+            let children = children.map(|x| x.into()).collect();
             if node.has_label() {
                 match self
                     .stockages
@@ -852,11 +851,34 @@ pub struct SimplePacked<S> {
     storages_variants: Vec<RawVariant>,
 }
 
+impl<'a> crate::types::NLending<'a, NodeIdentifier> for NodeStore {
+    type N = HashedNodeRef<'a, AnyType>;
+}
+
+pub struct TMarker<IdN>(std::marker::PhantomData<IdN>);
+
+impl<IdN> Default for TMarker<IdN> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+// impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for TMarker<IdN> {
+//     type N = HashedNodeRef<'a, IdN>;
+// }
+
+// impl<IdN> crate::types::Node for TMarker<IdN> {}
+
+// impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
+//     type TreeId = IdN;
+// }
+
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
-    type R<'a> = HashedNodeRef<'a, AnyType>;
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+    fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_, AnyType> {
         self.try_resolve(*id).unwrap()
     }
+
+    // type NMarker = TMarker<NodeIdentifier>;
 }
 
 impl NodeStore {

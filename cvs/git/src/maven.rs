@@ -7,7 +7,7 @@ use hyperast::{
     position::{StructuralPosition, TreePath, TreePathMut},
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
-    types::{IterableChildren, LabelStore as _, Labeled, Tree, Typed, WithChildren},
+    types::{Childrn, LabelStore as _, Labeled, Tree, Typed, WithChildren},
 };
 use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
 use hyperast_gen_ts_xml::{
@@ -149,7 +149,7 @@ impl<'a> IterMavenModules2<'a> {
                     .unwrap()
                     .iter_children()
                     .rev()
-                    .map(|x| Some(*x)),
+                    .map(|x| Some(x)),
             );
         }
 
@@ -435,7 +435,7 @@ impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterM
                     self.stack.push((
                         node,
                         0,
-                        Some(children.unwrap().iter_children().cloned().collect()),
+                        Some(children.unwrap().iter_children().collect()),
                     ));
                 }
 

@@ -1,4 +1,4 @@
-use hyperast::types::{IterableChildren, NodeId, NodeStore, WithChildren};
+use hyperast::types::{NodeId, NodeStore, WithChildren, Children, Childrn};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
@@ -16,14 +16,14 @@ pub mod lazy_greedy_subtree_matcher;
 
 pub fn size<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where
-    S: 'a + NodeStore<IdC>,
-    S::R<'a>: WithChildren<TreeId = IdC>,
+    S: NodeStore<IdC>,
+    for<'t> <S as hyperast::types::NLending<'t, IdC>>::N: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);
     let cs = node.children().unwrap();
     let mut z = 0;
     for x in cs.iter_children() {
-        z = z + size(store, x);
+        z = z + size(store, &x);
     }
     z + 1
 }
@@ -31,8 +31,8 @@ where
 /// todo specilize if T impl [WithStats]
 pub fn height<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where
-    S: 'a + NodeStore<IdC>,
-    S::R<'a>: WithChildren<TreeId = IdC>,
+    S: NodeStore<IdC>,
+    for<'t> <S as hyperast::types::NLending<'t, IdC>>::N: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);
     let cs = node.children();
@@ -46,7 +46,7 @@ where
     }
     let mut z = 0;
     for c in cs.iter_children() {
-        z = z.max(height(store, c));
+        z = z.max(height(store, &c));
     }
     z + 1
 }

@@ -1,12 +1,12 @@
 use hyperast::store;
-use hyperast::types::{self, HyperType, IterableChildren};
+use hyperast::types::{self, Childrn, HyperASTShared, HyperType};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::LazyLock;
 
 pub struct TreeToQuery<
     'a,
-    HAST: types::HyperAST<'a>,
+    HAST: types::HyperAST,
     TIdN: hyperast::types::TypedNodeId,
     C: Converter,
     const PP: bool = true,
@@ -52,14 +52,41 @@ impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNo
 
     type Idx = u16;
     type Label = store::labels::DefaultLabelIdentifier;
+
+    // type T<'t> = store::nodes::legion::HashedNodeRef<'t, Self::IdN>;
+    // type RT = store::nodes::legion::HashedNodeRef<'static, Self::IdN>;
 }
 
-impl<'store, 'a, TS> types::HyperAST<'store> for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
+impl<'a, 'b, TS> hyperast::types::NLending<'a, <Self as HyperASTShared>::IdN>
+    for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
+{
+    type N = <store::nodes::DefaultNodeStore as hyperast::types::NLending<'a, <Self as HyperASTShared>::IdN>>::N;
+}
+
+impl<'a, 'b, TS> hyperast::types::AstLending<'a>
+    for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
+where
+    TS: types::TypeStore<Ty = types::AnyType>,
+    // NS: crate::types::NStore,
+    // NS: crate::types::NodeStore<<NS as crate::types::NStore>::IdN>,
+    // LS: crate::types::LStore,
+    // <NS as crate::types::NStore>::IdN:
+    //     crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
+    // for<'t> <NS as crate::types::NLending<'t, <NS as crate::types::NStore>::IdN>>::N:
+    //     crate::types::Tree<
+    //         Label = <LS as crate::types::LStore>::I,
+    //         TreeId = <NS as crate::types::NStore>::IdN,
+    //         ChildIdx = <NS as crate::types::NStore>::Idx,
+    //     >,
+{
+    type RT = <store::nodes::DefaultNodeStore as hyperast::types::NLending<'a, Self::IdN>>::N;
+}
+
+impl<'a, TS> types::HyperAST for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
 where
     TS: types::TypeStore<Ty = types::AnyType>,
 {
-    type T = store::nodes::legion::HashedNodeRef<'store, Self::IdN>;
-
+    // type TM = store::nodes::legion::TMarker<store::nodes::DefaultNodeIdentifier>;
     type NS = store::nodes::legion::NodeStore;
 
     fn node_store(&self) -> &Self::NS {
@@ -103,8 +130,8 @@ where
 impl<
         'store,
         'a,
-        HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId,
     > TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
 where
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
@@ -121,8 +148,8 @@ where
 impl<
         'store,
         'a,
-        HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId,
         C: Converter<Ty = TIdN::Ty>,
     > TreeToQuery<'store, HAST, TIdN, C>
 {
@@ -155,13 +182,14 @@ impl<
 
 impl<
         'store,
-        HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > Display for TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
+    TIdN::Ty: types::TypeTrait,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, &mut 0, 0, f).map(|_| ())
@@ -170,13 +198,14 @@ where
 
 impl<
         'store,
-        HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
+    TIdN::Ty: types::TypeTrait,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(
@@ -207,7 +236,7 @@ where
                     write!(out, "(")?;
                     write!(out, "{}", kind.to_string())?;
                     for id in it {
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
                             if PP {
                                 write!(out, "\n{}", "  ".repeat(ind + 1))?;

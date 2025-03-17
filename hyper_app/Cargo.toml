@@ -20,7 +20,7 @@ re_ui = "0.20.2"
 egui_tiles = "0.10.0"
 egui_commonmark = "0.18.0"
 egui_plot = "0.29.0"
-egui_double_slider = "0.3.1"
+egui_double_slider = "0.2.0"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -48,6 +48,7 @@ crossbeam-queue = "0.3.8"
 hyperast = { path = "../crates/hyper_ast", default-features = false, features = [
     "serialize",
     "web",
+    "fetched",
 ] }
 hyperast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
 hyperast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }

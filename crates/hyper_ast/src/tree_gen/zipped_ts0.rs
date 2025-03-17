@@ -160,7 +160,7 @@ impl<'store, 'cache, 's, TS: TsEnableTS>
         tree_gen::NoOpMore<
             (
                 TS,
-                crate::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+                crate::store::nodes::legion::TMarker<NodeIdentifier>,
             ),
             Acc<TS::Ty2>,
         >,
@@ -195,7 +195,7 @@ impl<'store, 'cache, TS, More> TsTreeGen<'store, 'cache, TS, More>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: tree_gen::More<Acc=Acc<TS::Ty2>>,
+    More: for<'t> tree_gen::More<SimpleStores<TS>,Acc=Acc<TS::Ty2>>,
 {
 }
 
@@ -204,7 +204,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: tree_gen::More<Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -345,7 +345,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: tree_gen::More<Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local<TS::Ty2> {
         let kind = TS::Ty2::spaces();
@@ -461,7 +461,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: tree_gen::More<Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
 {
     type Acc = Acc<TS::Ty2>;
     type Global = SpacedGlobalData<'store>;

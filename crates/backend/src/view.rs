@@ -5,7 +5,7 @@ use hyperast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{
-        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, TypeStore,
+        self, Children, HyperAST, Childrn, LabelStore, Labeled, NodeStore, TypeStore,
         WithChildren,
     },
 };
@@ -169,8 +169,9 @@ fn make_view<'a, HAST>(
 where
     HAST::IdN: Hash,
     <HAST::TS as types::TypeStore>::Ty: Into<u16>,
-    HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
-    HAST: 'a + HyperAST<'a, Label = LabelIdentifier>,
+    // HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
+    HAST: HyperAST<Label = LabelIdentifier>,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     use num::cast::ToPrimitive;
     let mut label_list = vec![];
@@ -268,7 +269,7 @@ where
     dbg!(&only_typed.ids.len());
     let label_list = label_list
         .into_iter()
-        .map(|l| hyperast::types::LabelStore::resolve(stores, &l).to_string())
+        .map(|l| stores.label_store().resolve( &l).to_string())
         .collect();
     let view = View {
         label_list,

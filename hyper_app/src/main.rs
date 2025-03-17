@@ -6,14 +6,17 @@ const ADDR: &str = "127.0.0.1:8888";
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
+    use std::ops::Not;
     // Log to stdout (if you run with `RUST_LOG=debug`).
-    let api_addr = std::env::args()
-        .collect::<Vec<_>>()
-        .get(0)
-        .and_then(|x| x.is_empty().then(|| x))
+    tracing_subscriber::fmt::init();
+    let args = std::env::args()
+        .collect::<Vec<_>>();
+    log::trace!("{:?}",args);
+    let api_addr = args
+        .get(1)
+        .and_then(|x| x.is_empty().not().then(|| x))
         .map_or(ADDR, |x| x)
         .to_string();
-    tracing_subscriber::fmt::init();
 
     let languages = hyper_app::Languages::default();
     static ICON: &[u8] = include_bytes!("coevolution.png");
@@ -51,10 +54,11 @@ fn main() -> eframe::Result<()> {
 fn main() {
     use egui_addon::Lang;
     use wasm_bindgen::prelude::*;
-    let api_addr = std::env::args()
-        .collect::<Vec<_>>()
-        .get(0)
-        .and_then(|x| x.is_empty().then(|| x.to_string()));
+    let api_addr = None;
+    // let api_addr = std::env::args()
+    //     .collect::<Vec<_>>()
+    //     .get(0)
+    //     .and_then(|x| x.is_empty().then(|| x.to_string()));
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());

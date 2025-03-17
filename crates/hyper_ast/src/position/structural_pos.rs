@@ -6,9 +6,8 @@ use num::one;
 use crate::{
     store::defaults::NodeIdentifier,
     types::{
-        self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
-        NodeId, NodeStore, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
-        WithStats,
+        self, AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeId,
+        NodeStore, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization, WithStats,
     },
     PrimInt,
 };
@@ -208,7 +207,7 @@ impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
 //     // where
 //     //     'a: 'store,
 //     //     HAST: HyperAST<'store, IdN = IdN::IdN>,
-//     //     HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     //     for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren,
 //     //     <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
 //     //     IdN: Debug + NodeId,
 //     //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
@@ -219,7 +218,7 @@ impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
 //     // where
 //     //     'a: 'store,
 //     //     HAST: HyperAST<'store, IdN = IdN::IdN>,
-//     //     HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     //     for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren,
 //     //     <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
 //     //     IdN: Debug + NodeId,
 //     //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
@@ -256,7 +255,7 @@ impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
 //     // where
 //     //     'a: 'store,
 //     //     HAST: HyperAST<'store, IdN = IdN::IdN>,
-//     //     HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     //     for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren,
 //     //     IdN: Copy + Debug + NodeId,
 //     //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
 //     // {
@@ -301,18 +300,19 @@ impl<'store, 'src, 'a, HAST, S> WithHyperAstPositionConverter<'store, 'src, S, H
 where
     S: super::node_filter_traits::Full,
 {
-    pub fn compute_pos_post_order<O, B, IdN>(&self) -> O
+    pub fn compute_pos_post_order<O, B>(&self) -> O
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN>,
-        S: super::position_accessors::WithFullPostOrderPath<IdN, Idx = HAST::Idx>
-            + super::position_accessors::SolvedPosition<IdN>,
-        IdN: Debug + NodeId + Clone,
-        IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
-        HAST::T: WithSerialization + WithChildren + WithStats,
-        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
-        B: building::bottom_up::ReceiveInFile<IdN, HAST::Idx, usize, O>
+        HAST: HyperAST,
+        S: super::position_accessors::WithFullPostOrderPath<HAST::IdN, Idx = HAST::Idx>
+            + super::position_accessors::SolvedPosition<HAST::IdN>,
+        // IdN: Debug + NodeId + Clone,
+        HAST::IdN: NodeId<IdN = HAST::IdN> + Eq + Debug,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+            WithSerialization + WithChildren + WithStats,
+        HAST::Idx: Debug,
+        B: building::bottom_up::ReceiveInFile<HAST::IdN, HAST::Idx, usize, O>
             + building::bottom_up::CreateBuilder,
-        B::SB1<O>: building::bottom_up::ReceiveDir<IdN, HAST::Idx, O>,
+        B::SB1<O>: building::bottom_up::ReceiveDir<HAST::IdN, HAST::Idx, O>,
     {
         use building::bottom_up;
         let builder: B = building::bottom_up::CreateBuilder::create();
@@ -354,16 +354,18 @@ where
                 //     .collect::<Vec<_>>());
 
                 // dbg!(aaa.0);
-                assert_eq!(Some(prev_x.as_id()), v.get(o));
+                assert_eq!(Some(&prev_x), v.get(o));
                 let v = v.before(o);
                 let v: Vec<_> = v.iter_children().collect();
-                fn compute<'store, HAST: HyperAST<'store>>(
+                fn compute<'store, HAST: HyperAST>(
                     stores: &'store HAST,
                     x: &HAST::IdN,
                     col: &mut usize,
                 ) -> usize
                 where
-                    HAST::T: WithStats + WithSerialization + WithChildren,
+                    HAST::IdN: NodeId<IdN = HAST::IdN> + Eq + Debug,
+                    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+                        WithStats + WithSerialization + WithChildren,
                 {
                     let b = stores.node_store().resolve(&x);
                     let l = b.line_count();
@@ -371,7 +373,7 @@ where
                         *col += b.try_bytes_len().unwrap_or_default() as usize;
                     } else if let Some(cs) = b.children() {
                         for x in cs.iter_children() {
-                            if compute(stores, x.as_id(), col) > 0 {
+                            if compute(stores, &x, col) > 0 {
                                 break;
                             }
                         }
@@ -393,7 +395,7 @@ where
                 let c = v
                     .into_iter()
                     .map(|x| {
-                        let b = stores.node_store().resolve(x);
+                        let b = stores.node_store().resolve(&x);
                         // println!("{:?}", b.get_type());
                         // println!("T1:{:?}", b.get_type());
                         b.try_bytes_len().unwrap_or_default() as usize
@@ -448,7 +450,7 @@ where
 // where
 //     'a: 'store,
 //     HAST: HyperAST<'store, IdN = IdN::IdN>,
-//     HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren,
 //     <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
 //     IdN: Debug + NodeId,
 //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
@@ -472,9 +474,10 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
     pub fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
     where
         'a: 'store,
-        HAST: HyperAST<'store, IdN = IdN::IdN>,
-        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
-        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        HAST: HyperAST<IdN = IdN::IdN>,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+            Typed<Type = AnyType> + WithSerialization + WithChildren,
+        HAST::Idx: Debug,
         IdN: Debug + NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
     {
@@ -513,8 +516,9 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
         mut path: Vec<&'a str>,
     ) -> Position
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN>,
-        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+        HAST: HyperAST<IdN = IdN::IdN>,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+            Typed<Type = AnyType> + WithSerialization + WithChildren,
         IdN: Copy + Debug + NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
     {
@@ -542,7 +546,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
                 //     it.sps.offsets[it.sps.parents[it.i - 1]]
                 // );
                 let o = self.peek_offset().unwrap();
-                let o: <HAST::T as WithChildren>::ChildIdx =
+                let o: HAST::Idx =
                     num::cast(o).expect("failed to cast, cannot put value of Idx in ChildIdx");
                 if self.peek_node().unwrap().as_id() != &b.children().unwrap()[o] {
                     if self.peek_node().unwrap().as_id() != &b.children().unwrap()[o] {
@@ -602,7 +606,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
 //     where
 //         'a: 'store,
 //         HAST: HyperAST<'store, IdN = IdN::IdN>,
-//         HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//         for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren,
 //         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
 //         IdN: Debug + NodeId,
 //         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
@@ -638,7 +642,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
 //     ) -> Position
 //     where
 //         HAST: HyperAST<'store, IdN = IdN::IdN>,
-//         HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//         for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren,
 //         IdN: Copy + Debug + NodeId,
 //         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
 //     {

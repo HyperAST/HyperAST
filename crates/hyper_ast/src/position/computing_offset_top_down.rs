@@ -12,8 +12,8 @@ use crate::{
         nodes::HashedNodeRef,
     },
     types::{
-        AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
-        TypeStore, WithChildren, WithSerialization,
+        AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeStore, TypeStore,
+        WithChildren, WithSerialization,
     },
 };
 /// precondition: root node do not contain a File node
@@ -24,9 +24,10 @@ pub fn compute_range<'store, It, HAST>(
     stores: &'store HAST,
 ) -> (usize, usize, HAST::IdN)
 where
-    HAST: HyperAST<'store>,
+    HAST: HyperAST,
     HAST::IdN: Copy,
-    HAST::T: WithSerialization,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator,
     It::Item: PrimInt,
 {
@@ -34,7 +35,8 @@ where
     let mut x = root;
     for o in offsets {
         let b = stores.node_store().resolve(&x);
-        if let Some(cs) = b.children() {
+        let cs = b.children();
+        if let Some(cs) = cs {
             for y in 0..o.to_usize().unwrap() {
                 let id = &cs[num::cast(y).unwrap()];
                 let b = stores.node_store().resolve(id);
@@ -64,8 +66,9 @@ pub fn compute_position<'store, HAST, It>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    HAST: HyperAST,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
     It: Iterator<Item = HAST::Idx>,
 {
     let mut offset = 0;
@@ -87,7 +90,7 @@ where
         if let Some(cs) = b.children() {
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
+                    let b = stores.node_store().resolve(&y);
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
@@ -106,7 +109,7 @@ where
             }
         } else {
             break;
-        }
+        };
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
@@ -133,8 +136,10 @@ pub fn compute_position_and_nodes<'store, HAST, It: Iterator>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    HAST: HyperAST,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
@@ -156,7 +161,7 @@ where
         if let Some(cs) = b.children() {
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(y);
+                    let b = stores.node_store().resolve(&y);
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
@@ -176,7 +181,7 @@ where
             }
         } else {
             break;
-        }
+        };
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
@@ -196,47 +201,44 @@ where
     (Position::new(file, offset, len), path_ids)
 }
 
-pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
-    _root: HAST::IdN,
-    _offsets: &mut It,
-    _stores: &HAST,
-) -> (Position, Vec<HAST::IdN>)
-where
-    It::Item: Clone,
-    HAST: 'store + crate::types::HyperASTShared,
-    HAST::IdN: Clone,
-    &'store HAST: crate::types::HyperASTLean,
-    // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>:
-    //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
-    <&'store HAST as crate::types::HyperASTLean>::T:
-        WithSerialization + WithChildren<ChildIdx = It::Item>,
-{
-    todo!()
-}
+// pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
+//     _root: HAST::IdN,
+//     _offsets: &mut It,
+//     _stores: &HAST,
+// ) -> (Position, Vec<HAST::IdN>)
+// where
+//     It::Item: Clone,
+//     HAST: 'store + crate::types::HyperASTShared,
+//     HAST::IdN: Clone,
+//     &'store HAST: crate::types::HyperASTLean,
+//     // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>:
+//     //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
+//     <&'store HAST as crate::types::HyperASTLean>::T:
+//         WithSerialization + WithChildren<ChildIdx = It::Item>,
+// {
+//     todo!()
+// }
 
-pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
-    _root: HAST::IdN,
-    _offsets: &mut It,
-    _stores: &HAST,
-) -> (Position, Vec<HAST::IdN>)
-where
-    It::Item: Clone,
-    HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
-    HAST::IdN: Clone,
-    HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
-{
-    todo!()
-}
+// pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
+//     _root: HAST::IdN,
+//     _offsets: &mut It,
+//     _stores: &HAST,
+// ) -> (Position, Vec<HAST::IdN>)
+// where
+//     It::Item: Clone,
+//     HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
+//     HAST::IdN: Clone,
+//     HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
+// {
+//     todo!()
+// }
 
 impl StructuralPosition<NodeIdentifier, u16> {
     pub fn make_position<'store, HAST>(&self, stores: &'store HAST) -> Position
     where
-        HAST: HyperAST<
-            'store,
-            T = HashedNodeRef<'store>,
-            IdN = NodeIdentifier,
-            Label = LabelIdentifier,
-        >,
+        HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t> HAST::NS:
+            crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
         HAST::TS: TypeStore<Ty = AnyType>,
         // HAST::Types: 'static + TypeTrait + Debug,
     {
@@ -335,12 +337,9 @@ impl StructuralPosition<NodeIdentifier, u16> {
 
     pub fn make_file_line_range<'store, HAST>(&self, stores: &'store HAST) -> (String, usize, usize)
     where
-        HAST: HyperAST<
-            'store,
-            T = HashedNodeRef<'store>,
-            IdN = NodeIdentifier,
-            Label = LabelIdentifier,
-        >,
+        HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+        for<'t> HAST::NS:
+            crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
         HAST::TS: TypeStore<Ty = AnyType>,
         // HAST::Types: 'static + TypeTrait + Debug,
     {

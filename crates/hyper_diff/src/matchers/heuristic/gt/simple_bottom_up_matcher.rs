@@ -3,7 +3,7 @@ use std::hash::Hash;
 use num_traits::ToPrimitive;
 
 use crate::decompressed_tree_store::{
-    BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
+    BreadthFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
@@ -17,26 +17,25 @@ type IdD = u16;
 
 // const SIM_THRESHOLD: f64 = 0.4;
 
-pub struct SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+pub struct SimpleBottomUpMatcher<Dsrc, Ddst, S, M>
 where
-    T: hyperast::types::Tree + hyperast::types::WithHashs,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
+    internal: BottomUpMatcher<Dsrc, Ddst, S, M>,
 }
 
 // impl<
 //         'a,
 //         Dsrc: 'a
-//             + DecompressedTreeStore<'a, T, IdD>
-//             + DecompressedWithParent<'a, T, IdD>
-//             + DecompressedSubtree<'a, T>
-//             + BreathFirstContiguousSiblings<'a, T, IdD>,
+//             + DecompressedTreeStore<T, IdD>
+//             + DecompressedWithParent<T, IdD>
+//             + DecompressedSubtree<T>
+//             + BreadthFirstContiguousSiblings<T, IdD>,
 //         Ddst: 'a
-//             + DecompressedTreeStore<'a, T, IdD>
-//             + DecompressedWithParent<'a, T, IdD>
-//             + DecompressedSubtree<'a, T>
-//             + BreathFirstContiguousSiblings<'a, T, IdD>,
+//             + DecompressedTreeStore<T, IdD>
+//             + DecompressedWithParent<T, IdD>
+//             + DecompressedSubtree<T>
+//             + BreadthFirstContiguousSiblings<T, IdD>,
 //         T: 'a + Tree + WithHashs,
 //         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
 //         M: MonoMappingStore<Src = IdD, Dst = IdD>,
@@ -72,20 +71,18 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + BreathFirstContiguousSiblings<'a, T, IdD>,
-        Ddst: DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + BreathFirstContiguousSiblings<'a, T, IdD>,
-        T: 'a + Tree + WithHashs,
-        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
+        Dsrc: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstContiguousSiblings<HAST, IdD>,
+        Ddst: DecompressedTreeStore<HAST, IdD>
+            + DecompressedWithParent<HAST, IdD>
+            + BreadthFirstContiguousSiblings<HAST, IdD>,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
+    > SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
-    HAST::TS: hyperast::types::TypeStore<Ty = T::Type>,
-    T: hyperast::types::Typed,
-    T::Type: Hash + Copy + Eq + Send + Sync,
+    <HAST::TS as hyperast::types::TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
+    for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
 {
     pub fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {
@@ -98,7 +95,7 @@ where
                 let t_size = self
                     .internal
                     .src_arena
-                    .descendants(self.internal.stores.node_store(), &(i as IdD))
+                    .descendants(&(i as IdD))
                     .len();
 
                 for cand in candidates {
@@ -107,7 +104,7 @@ where
                             + ((self
                                 .internal
                                 .src_arena
-                                .descendants(self.internal.stores.node_store(), &cand)
+                                .descendants(&cand)
                                 .len()
                                 + t_size)
                                 .to_f64()
@@ -117,11 +114,11 @@ where
                         &self
                             .internal
                             .src_arena
-                            .descendants(self.internal.stores.node_store(), &(i as IdD)),
+                            .descendants(&(i as IdD)),
                         &self
                             .internal
                             .dst_arena
-                            .descendants(self.internal.stores.node_store(), &cand),
+                            .descendants(&cand),
                         &self.internal.mappings,
                     );
                     if sim > max && sim >= threshold {

@@ -2,25 +2,27 @@ use crate::auto::tsq_ser_meta::Converter;
 
 use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatcher};
 
+use hyperast::types::TypeStore;
+use hyperast::types::TypeTrait;
 use tree_sitter::CaptureQuantifier as Quant;
 
 use hyperast::types::HyperType;
 use hyperast::types::TypedHyperAST;
-use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
+use hyperast::types::{Childrn, Typed, TypedNodeStore, WithChildren};
 
-impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
+impl<'a, Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
-            + hyperast::types::TypedNodeId<Ty = Ty>
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
         Ty: std::fmt::Debug + Eq + Copy,
     {
-        let Some((n, _)) = code_store.typed_node_store().try_resolve(&id) else {
+        let Some((n, t)) = code_store.try_resolve(&id) else {
             return false;
         };
         let t = n.get_type();
+        // let t = code_store.resolve_type(&id);
         for i in 0..self.quick_trigger.root_types.len() {
             let tt = self.quick_trigger.root_types[i];
             let pat = &self.patterns[i];
@@ -42,16 +44,17 @@ impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         id: HAST::IdN,
     ) -> Option<Captured<HAST::IdN, HAST::Idx>>
     where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
-            + hyperast::types::TypedNodeId<Ty = Ty>
+        HAST: TypedHyperAST<TIdN>,
+        HAST::TS: TypeStore,
+        TIdN: hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
         Ty: std::fmt::Debug + Eq + Copy,
     {
-        let Some((n, _)) = code_store.typed_node_store().try_resolve(&id) else {
+        let Some((n, _)) = code_store.try_resolve(&id) else {
             return None;
         };
         let t = n.get_type();
+        // let t = code_store.resolve_type(&id);
         let mut i = 0;
         let mut j = 0;
         // 0..self.quick_trigger.root_types.len()
@@ -135,13 +138,12 @@ impl<Ty> Pattern<Ty> {
         id: HAST::IdN,
     ) -> MatchingRes<HAST::IdN, HAST::Idx>
     where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
-            + hyperast::types::TypedNodeId<Ty = Ty>
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId<Ty = Ty>
             + 'static,
-        Ty: std::fmt::Debug + Eq + Copy + HyperType,
+        Ty: std::fmt::Debug + TypeTrait,
     {
-        let Some((n, _)) = code_store.typed_node_store().try_resolve(&id) else {
+        let Some((n, _)) = code_store.try_resolve(&id) else {
             dbg!();
             return MatchingRes::zero();
         };
@@ -231,7 +233,7 @@ impl<Ty> Pattern<Ty> {
                         let matched = Quant::One;
                         return MatchingRes { matched, captures };
                     };
-                    let Some((n, _)) = code_store.typed_node_store().try_resolve(&child) else {
+                    let Some((n, _)) = code_store.try_resolve(&child) else {
                         dbg!();
                         return MatchingRes::zero();
                     };
@@ -259,7 +261,7 @@ impl<Ty> Pattern<Ty> {
                                 v.path.push(i);
                             }
                             captures.extend(capt);
-                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child)
+                            let Some((n, _)) = code_store.try_resolve(&child)
                             else {
                                 dbg!();
                                 return MatchingRes::zero();
@@ -274,7 +276,7 @@ impl<Ty> Pattern<Ty> {
                             if immediate {
                                 return MatchingRes::zero();
                             }
-                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child)
+                            let Some((n, _)) = code_store.try_resolve(&child)
                             else {
                                 dbg!();
                                 return MatchingRes::zero();
@@ -288,7 +290,7 @@ impl<Ty> Pattern<Ty> {
                         } => {
                             immediate = false;
                             matched = Quant::ZeroOrOne;
-                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child)
+                            let Some((n, _)) = code_store.try_resolve(&child)
                             else {
                                 dbg!();
                                 return MatchingRes::zero();
@@ -312,7 +314,7 @@ impl<Ty> Pattern<Ty> {
                     mut captures,
                 } => {
                     let name = name.clone();
-                    let n = code_store.typed_node_store().try_resolve(&id).unwrap().0;
+                    let n = code_store.try_resolve(&id).unwrap().0;
                     use hyperast::types::Tree;
                     // let v = if !n.has_children() {
                     //     let l = n.try_get_label().unwrap();

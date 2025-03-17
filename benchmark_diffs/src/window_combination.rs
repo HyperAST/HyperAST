@@ -4,11 +4,12 @@ use crate::{
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
+use hyper_diff::algorithms::{self, ComputeTime};
 use hyperast::{types::WithStats, utils::memusage_linux};
 use hyperast_vcs_git::{
-    git::fetch_github_repository, no_space::as_nospaces, preprocessed::PreProcessedRepository,
+    git::fetch_github_repository, no_space::as_nospaces2 as as_nospaces,
+    preprocessed::PreProcessedRepository,
 };
-use hyper_diff::algorithms::{self, ComputeTime};
 use num_traits::ToPrimitive;
 
 pub fn windowed_commits_compare(
@@ -331,13 +332,17 @@ mod test {
 
     use super::*;
 
-    use hyperast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
     use hyper_diff::{
         decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
         matchers::{
             heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::{DefaultMultiMappingStore, VecStore},
+            Decompressible,
         },
+    };
+    use hyperast::{
+        store::nodes::legion::HashedNodeRef,
+        types::{HyperASTShared, WithChildren},
     };
 
     use crate::postprocess::{print_mappings, SimpleJsonPostProcess};
@@ -378,20 +383,21 @@ mod test {
         let dst_tr = commit_dst.1.ast_root;
         // let dst_tr = preprocessed.child_by_name(dst_tr, "hadoop-common-project").unwrap();
         let stores = &preprocessed.processor.main_stores;
-        let src = &src_tr;
-        let dst = &dst_tr;
+        let src = src_tr;
+        let dst = dst_tr;
         let mappings = VecStore::default();
-        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
-            stores, &src, &dst, mappings,
-        );
+        type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+        // type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(stores, src, dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        print_mappings(&dst_arena, &src_arena, &stores, &mappings);
     }
 
     #[test]
@@ -439,20 +445,20 @@ mod test {
         let dst_tr = preprocessed.child_by_name(dst_tr, "pom.xml").unwrap();
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
 
-        let src = &src_tr;
-        let dst = &dst_tr;
+        let src = src_tr;
+        let dst = dst_tr;
         let mappings = VecStore::default();
-        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
-            stores, &src, &dst, mappings,
-        );
+        type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(stores, src, dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        print_mappings(&dst_arena, &src_arena, &stores, &mappings);
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
@@ -605,10 +611,12 @@ mod test {
         let src = &src_tr;
         let dst = &dst_tr;
         let mappings = VecStore::default();
-        use hyper_diff::decompressed_tree_store::DecompressedSubtree;
-        let src_arena = LazyPostOrder::<_, u32>::decompress(&stores.node_store, src);
-        let dst_arena = LazyPostOrder::<_, u32>::decompress(&stores.node_store, dst);
+        use hyperast::types::DecompressedFrom;
+        let mut _src_arena = Decompressible::<_, LazyPostOrder<_, u32>>::decompress(stores, src);
+        let mut _dst_arena = Decompressible::<_, LazyPostOrder<_, u32>>::decompress(stores, dst);
 
+        let src_arena = _src_arena.as_mut();
+        let dst_arena = _dst_arena.as_mut();
         let mut mapper = hyper_diff::matchers::Mapper {
             hyperast: stores,
             mapping: hyper_diff::matchers::Mapping {
@@ -636,17 +644,13 @@ mod test {
         // the store it alongside other mappings
         dbg!();
         use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 2>::execute(
-            &mut mapper,
-            &stores.label_store,
-        );
+        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 2>::execute(&mut mapper);
         // This one matches everingthing as it should but it is much slower
         // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 10_000, 1, 2>::execute(
         //     &mut mapper,
         //     &stores.label_store,
         // );
         dbg!();
-
         // type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         // let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
         //     &stores.node_store,
@@ -654,9 +658,18 @@ mod test {
         //     &dst,
         //     mappings,
         // );
-        let dst_arena = mapper.mapping.dst_arena.complete(&stores.node_store);
-        let src_arena = mapper.mapping.src_arena.complete(&stores.node_store);
-        print_mappings(&dst_arena, &src_arena, stores, &mapper.mapping.mappings);
+        let mappings = mapper.mapping.mappings;
+        let dst_arena = _dst_arena.decomp.complete(stores);
+        let src_arena = _src_arena.decomp.complete(stores);
+        let src_arena = Decompressible {
+            hyperast: stores,
+            decomp: &src_arena,
+        };
+        let dst_arena = Decompressible {
+            hyperast: stores,
+            decomp: &dst_arena,
+        };
+        print_mappings(&dst_arena, &src_arena, &stores, &mappings);
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
@@ -680,7 +693,7 @@ mod test {
             src_tr,
             &dst_arena,
             dst_tr,
-            &mapper.mapping.mappings,
+            &mappings,
         );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
@@ -778,7 +791,7 @@ mod test {
 //             .and_then(|x| x.rev(*idx).copied())
 //     }
 
-//     fn children(&self) -> Option<&Self::Children<'_>> {
+//     fn children(&self) -> Option<LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
 //         self.inner.no_spaces().ok()
 //     }
 // }

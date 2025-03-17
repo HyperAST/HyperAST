@@ -1,3 +1,4 @@
+use crate::java_processor::SimpleStores;
 use crate::BasicDirAcc;
 use crate::{
     preprocessed::IsSkippedAna, processing::ObjectName, Accumulator,
@@ -5,6 +6,9 @@ use crate::{
 };
 
 use hyperast::store::defaults::NodeIdentifier;
+use hyperast::store::labels::LabelStore;
+use hyperast::store::nodes::legion::NodeStoreInner;
+use hyperast::test_utils::simple_tree::H;
 use hyperast::tree_gen;
 use hyperast::{
     hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
@@ -26,12 +30,8 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()>
 where
-    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
-        + tree_gen::More<
-            TS = TStore,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
-            Acc = java_tree_gen::Acc,
-        >,
+    More: tree_gen::Prepro<SimpleStores>
+        + for<'a> tree_gen::PreproTSG<SimpleStores, Acc = java_tree_gen::Acc>,
 {
     let tree = match java_tree_gen::tree_sitter_parse(text) {
         Ok(tree) => tree,

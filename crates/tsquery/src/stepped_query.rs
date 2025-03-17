@@ -5,31 +5,51 @@ use hyperast::types::{
     HyperAST, HyperASTShared, RoleStore, WithPrecompQueries, WithRoles, WithSerialization,
     WithStats,
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, hash::Hash};
+#[cfg(feature = "tsg")]
+use tree_sitter_graph::{
+    graph::{NodeLender, NodeLending, NodesLending, NNN},
+    MatchLender, MatchLending, QueryWithLang,
+};
 
-use crate::{ArrayStr, CaptureId};
+use crate::{hyperast_cursor::NodeR, ArrayStr, CaptureId};
+
+impl<HAST: HyperASTShared, P: Clone> From<Node<'_, HAST, P>> for NodeR<P> {
+    fn from(value: Node<'_, HAST, P>) -> Self {
+        let pos = value.0.pos.clone();
+        Self { pos }
+    }
+}
 
 #[repr(transparent)]
-pub struct Node<'tree, HAST: HyperASTShared>(crate::hyperast_cursor::Node<'tree, HAST>);
+pub struct Node<'tree, HAST: HyperASTShared, P = Pos<HAST>>(
+    crate::hyperast_cursor::Node<'tree, HAST, P>,
+);
 
-impl<'tree, HAST: HyperAST<'tree>> Clone for Node<'tree, HAST> {
+impl<'tree, HAST: HyperAST> Clone for Node<'tree, HAST> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<'tree, HAST: HyperAST<'tree>> PartialEq for Node<'tree, HAST> {
+impl<'tree, HAST: HyperAST> PartialEq for Node<'tree, HAST> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<'tree, HAST: HyperAST<'tree>> crate::Node for Node<'tree, HAST>
+impl<'a, 'hast, HAST: HyperAST> super::TextLending<'a> for Node<'hast, HAST> {
+    type TP = &'hast <HAST as HyperAST>::LS;
+}
+
+impl<'tree, HAST: HyperAST> crate::Node for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     fn symbol(&self) -> crate::Symbol {
         self.0.symbol()
@@ -65,24 +85,45 @@ where
         self.0.compare(&other.0)
     }
 
-    type TP<'a> = ();
-    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
+    fn text<'s, 'l>(
+        &'s self,
+        text_provider: <Self as super::TextLending<'l>>::TP,
+    ) -> super::BB<'s, 'l, str> {
         self.0.text(text_provider)
     }
 }
 
-impl<'tree, HAST: HyperAST<'tree>> crate::Cursor for Node<'tree, HAST>
+impl<'tree, HAST: HyperAST> crate::WithField for Node<'tree, HAST>
 where
+    HAST::TS: RoleStore,
+{
+    type IdF = <HAST::TS as RoleStore>::IdF;
+}
+
+impl<'a, 'tree, HAST: HyperAST> crate::CNLending<'a> for Node<'tree, HAST>
+where
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
+    type NR = Self;
+}
+
+impl<'tree, HAST: HyperAST> crate::Cursor for Node<'tree, HAST>
+where
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     type Node = Self;
-    type NodeRef<'a>
-        = &'a Self
-    where
-        Self: 'a;
+    // type NodeRef<'a>
+    //     = &'a Self
+    // where
+    //     Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> crate::TreeCursorStep {
         self.0.goto_next_sibling_internal()
@@ -96,8 +137,8 @@ where
         self.0.goto_parent()
     }
 
-    fn current_node(&self) -> &Self {
-        self
+    fn current_node(&self) -> Self {
+        self.clone()
     }
 
     fn parent_is_error(&self) -> bool {
@@ -125,7 +166,7 @@ where
         self.0.current_status()
     }
 
-    fn text_provider(&self) -> <Self::Node as crate::Node>::TP<'_> {
+    fn text_provider(&self) -> <Self::Node as crate::TextLending<'_>>::TP {
         self.0.text_provider()
     }
 
@@ -134,7 +175,7 @@ where
     }
 }
 
-impl<'tree, HAST: HyperAST<'tree>> Node<'tree, HAST> {
+impl<'tree, HAST: HyperAST> Node<'tree, HAST> {
     pub fn new(
         stores: &'tree HAST,
         pos: hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
@@ -150,19 +191,19 @@ impl<'hast, HAST> Default for MyNodeErazing<'hast, HAST> {
     }
 }
 
-#[cfg(feature = "tsg")]
-impl<'hast, HAST: 'static + hyperast::types::HyperAST<'hast>> tree_sitter_graph::graph::Erzd
-    for MyNodeErazing<'hast, HAST>
-{
-    type Original<'tree> = Node<'tree, HAST>;
-}
+// #[cfg(feature = "tsg")]
+// impl<'hast, HAST: hyperast::types::HyperAST> tree_sitter_graph::graph::Erzd
+//     for MyNodeErazing<'hast, HAST>
+// {
+//     type Original<'tree> = Node<'tree, HAST>;
+// }
 
-#[cfg(feature = "tsg")]
-impl<'tree, HAST: 'static + HyperAST<'tree>> tree_sitter_graph::graph::LErazng
-    for Node<'tree, HAST>
-{
-    type LErazing = MyNodeErazing<'tree, HAST>;
-}
+// #[cfg(feature = "tsg")]
+// impl<'tree, HAST: HyperAST> tree_sitter_graph::graph::LErazng
+//     for Node<'tree, HAST>
+// {
+//     type LErazing = MyNodeErazing<'tree, HAST>;
+// }
 
 pub struct QueryMatcher<HAST> {
     pub query: crate::Query,
@@ -202,19 +243,63 @@ impl<HAST> Debug for QueryMatcher<HAST> {
 }
 
 #[cfg(feature = "tsg")]
+impl<HAST> tree_sitter_graph::QueryWithLang for QueryMatcher<HAST> {
+    type Lang = tree_sitter::Language;
+    type I = u32;
+}
+
+#[cfg(feature = "tsg")]
+impl<'a, HAST> tree_sitter_graph::graph::NodeLending<'a> for QueryMatcher<HAST>
+where
+    HAST: hyperast::types::HyperAST,
+    <HAST as HyperAST>::TS: hyperast::types::RoleStore,
+    <<HAST as HyperAST>::TS as hyperast::types::RoleStore>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT:
+        WithSerialization + WithStats + WithRoles,
+    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + Hash,
+    <HAST as HyperASTShared>::Idx: Copy + Hash,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
+    type Node = Node<'a, HAST>;
+}
+
+#[cfg(feature = "tsg")]
+impl<'a, HAST> tree_sitter_graph::MatchesLending<'a> for QueryMatcher<HAST>
+where
+    HAST: hyperast::types::HyperAST,
+    <HAST as HyperAST>::TS: hyperast::types::RoleStore,
+    <<HAST as HyperAST>::TS as hyperast::types::RoleStore>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT:
+        WithSerialization + WithStats + WithRoles,
+    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + Hash,
+    <HAST as HyperASTShared>::Idx: Copy + Hash,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
+    type Matches = self::MyQMatches<
+        'a,
+        'a,
+        'a,
+        crate::QueryCursor<'a, <Self as NodeLending<'a>>::Node, <Self as NodeLending<'a>>::Node>,
+        HAST,
+    >;
+}
+
+#[cfg(feature = "tsg")]
 impl<HAST> tree_sitter_graph::GenQuery for QueryMatcher<HAST>
 where
-    HAST: 'static + hyperast::types::HyperASTShared + for<'tree> hyperast::types::HyperAST<'tree>,
-    for<'tree> <HAST as HyperAST<'tree>>::TS: hyperast::types::RoleStore,
-    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyperast::types::RoleStore>::IdF:
-        From<u16> + Into<u16>,
-    for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats + WithRoles,
-    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + std::hash::Hash,
-    <HAST as HyperASTShared>::Idx: Copy + std::hash::Hash,
-    for<'tree> <HAST as HyperAST<'tree>>::T: WithPrecompQueries,
+    HAST: hyperast::types::HyperAST,
+    <HAST as HyperAST>::TS: hyperast::types::RoleStore,
+    <<HAST as HyperAST>::TS as hyperast::types::RoleStore>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT:
+        WithSerialization + WithStats + WithRoles,
+    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + Hash,
+    <HAST as HyperASTShared>::Idx: Copy + Hash,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
-    type Lang = tree_sitter::Language;
-
+    // type Lang = tree_sitter::Language;
     type Ext = ExtendingStringQuery<Self, Self::Lang>;
 
     fn pattern_count(&self) -> usize {
@@ -234,7 +319,12 @@ where
     ) -> impl std::ops::Index<usize, Output = tree_sitter::CaptureQuantifier> {
         // let index = self.query.enabled_pattern_map[index] as usize;
         // assert_ne!(index, u16::MAX as usize);
-        let index = self.query.enabled_pattern_map.iter().position(|x|*x as usize==index).unwrap();
+        let index = self
+            .query
+            .enabled_pattern_map
+            .iter()
+            .position(|x| *x as usize == index)
+            .unwrap();
         self.query.capture_quantifiers(index)
     }
 
@@ -251,45 +341,66 @@ where
         file.check2()
     }
 
-    type Node<'tree> = Node<'tree, HAST>;
+    // type Node<'tree> = Node<'tree, HAST>;
 
     type Cursor = Vec<u16>;
 
-    type Match<'cursor, 'tree: 'cursor>
-        = self::MyQMatch<'cursor, 'tree, HAST>
-    where
-        Self: 'cursor;
+    // type Match<'cursor, 'tree: 'cursor>
+    //     = self::MyQMatch<'cursor, 'tree, HAST>
+    // where
+    //     Self: 'cursor;
 
-    type Matches<'query, 'cursor: 'query, 'tree: 'cursor>
-        = self::MyQMatches<
-        'query,
-        'cursor,
-        'tree,
-        crate::QueryCursor<'query, Self::Node<'tree>, Self::Node<'tree>>,
-        HAST,
-    >
-    where
-        Self: 'tree,
-        Self: 'query,
-        Self: 'cursor;
+    // type Matches<'query, 'cursor: 'query, 'tree: 'cursor>
+    //     = self::MyQMatches<
+    //     'query,
+    //     'cursor,
+    //     'tree,
+    //     crate::QueryCursor<'query, Self::Node<'tree>, Self::Node<'tree>>,
+    //     HAST,
+    // >
+    // where
+    //     Self: 'tree,
+    //     Self: 'query,
+    //     Self: 'cursor;
 
-    type I = u32;
-
-    fn matches<'query, 'cursor: 'query, 'tree: 'cursor>(
-        &'query self,
-        cursor: &'cursor mut Self::Cursor,
-        node: &Self::Node<'tree>,
-    ) -> Self::Matches<'query, 'cursor, 'tree> {
-        let matchs = self.query.matches(node.clone());
+    fn matches<'a>(
+        &self,
+        cursor: &mut Self::Cursor,
+        node: &<Self as NodeLending<'a>>::Node,
+        // tree: Self::Node<'tree>,
+        // source: &'tree str,
+    ) -> <Self as tree_sitter_graph::MatchesLending<'a>>::Matches {
+        let matchs = self
+            .query
+            .matches::<_, <Self as NodeLending<'_>>::Node>(node.clone());
         // let matchs = self.query.matches_immediate(node.clone());
         let node = node.clone();
-        self::MyQMatches {
-            q: self,
+        let node = unsafe { std::mem::transmute(node) };
+        let matchs = unsafe { std::mem::transmute(matchs) };
+        let q = unsafe { std::mem::transmute(self) };
+        let cursor = unsafe { std::mem::transmute(cursor) };
+        MyQMatches {
+            q,
             cursor,
             matchs,
             node,
         }
     }
+    // fn matches<'query, 'cursor: 'query, 'tree: 'cursor>(
+    //     &'query self,
+    //     cursor: &'cursor mut Self::Cursor,
+    //     node: &Self::Node<'tree>,
+    // ) -> Self::Matches<'query, 'cursor, 'tree> {
+    //     let matchs = self.query.matches(node.clone());
+    //     // let matchs = self.query.matches_immediate(node.clone());
+    //     let node = node.clone();
+    //     self::MyQMatches {
+    //         q: self,
+    //         cursor,
+    //         matchs,
+    //         node,
+    //     }
+    // }
 }
 
 pub struct ExtendingStringQuery<Q = tree_sitter::Query, L = tree_sitter::Language> {
@@ -322,14 +433,15 @@ impl<Q, L> ExtendingStringQuery<Q, L> {
 impl<HAST> tree_sitter_graph::ExtendedableQuery
     for ExtendingStringQuery<QueryMatcher<HAST>, tree_sitter::Language>
 where
-    HAST: 'static + hyperast::types::HyperASTShared + for<'tree> hyperast::types::HyperAST<'tree>,
-    for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats + WithRoles,
-    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + std::hash::Hash,
-    <HAST as HyperASTShared>::Idx: Copy + std::hash::Hash,
-    for<'tree> <HAST as HyperAST<'tree>>::TS: hyperast::types::RoleStore,
-    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyperast::types::RoleStore>::IdF:
-        From<u16> + Into<u16>,
-    for<'tree> <HAST as HyperAST<'tree>>::T: WithPrecompQueries,
+    HAST: hyperast::types::HyperAST,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT:
+        WithSerialization + WithStats + WithRoles,
+    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + Hash,
+    <HAST as HyperASTShared>::Idx: Copy + Hash,
+    <HAST as HyperAST>::TS: hyperast::types::RoleStore,
+    <<HAST as HyperAST>::TS as hyperast::types::RoleStore>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as hyperast::types::AstLending<'tree>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     type Query = QueryMatcher<HAST>;
     type Lang = tree_sitter::Language;
@@ -382,12 +494,13 @@ where
 }
 
 #[cfg(feature = "tsg")]
-impl<'tree, HAST: hyperast::types::HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNode
+impl<'tree, HAST: hyperast::types::HyperAST> tree_sitter_graph::graph::SyntaxNode
     for Node<'tree, HAST>
 where
-    HAST::IdN: Copy + std::hash::Hash + Debug,
-    HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats,
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     fn id(&self) -> usize {
         use std::hash::Hash;
@@ -409,7 +522,7 @@ where
         let conv =
             hyperast::position::PositionConverter::new(&self.0.pos).with_stores(self.0.stores);
         let pos: hyperast::position::row_col::RowCol<usize> =
-            conv.compute_pos_post_order::<_, hyperast::position::row_col::RowCol<usize>, _>();
+            conv.compute_pos_post_order::<_, hyperast::position::row_col::RowCol<usize>>();
         // use hyperast::position::computing_offset_bottom_up::extract_position_it;
         // let p = extract_position_it(self.stores, self.pos.iter());
         tree_sitter::Point {
@@ -454,15 +567,15 @@ where
 }
 
 #[cfg(feature = "tsg")]
-impl<'tree, HAST: HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST>
+impl<'tree, HAST: HyperAST> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST>
 where
-    <HAST as HyperASTShared>::IdN: Copy + std::hash::Hash + Debug,
-    HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats,
+    <HAST as HyperASTShared>::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     type Cursor = Vec<Self>;
 
@@ -473,7 +586,7 @@ where
     fn named_children<'cursor>(
         &self,
         _cursor: &'cursor mut Self::Cursor,
-    ) -> impl ExactSizeIterator<Item = Self> + 'cursor
+    ) -> impl ExactSizeIterator<Item = Self>
     where
         'tree: 'cursor,
     {
@@ -481,41 +594,160 @@ where
         vec![].iter().cloned()
     }
 
-    type QM<'cursor>
-        = MyQMatch<'cursor, 'tree, HAST>
-    where
-        Self: 'cursor;
+    // type QM<'cursor>
+    //     = MyQMatch<'cursor, 'tree, HAST>
+    // where
+    //     Self: 'cursor;
 }
 
-pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST<'tree>> {
+pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST, P = Pos<HAST>> {
     stores: &'tree HAST,
     b: &'cursor (),
-    qm: crate::QueryMatch<Node<'tree, HAST>>,
-    i: u16
+    qm: crate::QueryMatch<Node<'tree, HAST, P>>,
+    i: u16,
 }
 
 #[cfg(feature = "tsg")]
-impl<'cursor, 'tree, HAST: hyperast::types::HyperAST<'tree>> tree_sitter_graph::graph::QMatch
+impl<'cursor, 'tree, HAST: hyperast::types::HyperAST> QueryWithLang
     for MyQMatch<'cursor, 'tree, HAST>
+{
+    type Lang = tree_sitter::Language;
+    type I = u32;
+}
+
+type Pos<HAST: HyperASTShared> = hyperast::position::StructuralPosition<
+    <HAST as HyperASTShared>::IdN,
+    <HAST as HyperASTShared>::Idx,
+>;
+pub struct CapturedNodesIter<'b, 'cursor, 'tree, HAST: HyperASTShared, P = Pos<HAST>> {
+    stores: &'b HAST,
+    index: u32,
+    inner: &'cursor [crate::Capture<Node<'tree, HAST, P>>],
+}
+
+#[cfg(feature = "tsg")]
+impl<'a, 'b, 'cursor, 'tree, HAST: HyperAST> NodeLending<'a>
+    for CapturedNodesIter<'b, 'cursor, 'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
 {
-    type I = u32;
+    type Node = Node<'tree, HAST>;
+}
 
-    type Item = Node<'tree, HAST>;
+#[cfg(feature = "tsg")]
+impl<'b, 'cursor, 'tree, HAST: HyperAST> NodeLender for CapturedNodesIter<'b, 'cursor, 'tree, HAST>
+where
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 
-    fn nodes_for_capture_index(&self, index: Self::I) -> impl Iterator<Item = Self::Item> + '_ {
-        self.qm
-            .nodes_for_capture_index(CaptureId::new(index))
-            .cloned()
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+{
+    fn next(&mut self) -> Option<<Self as NodeLending<'_>>::Node> {
+        loop {
+            if self.inner.is_empty() {
+                return None;
+            }
+            let capture = &self.inner[0];
+            self.inner = &self.inner[1..];
+            if capture.index.to_usize() != self.index as usize {
+                continue;
+            }
+            let node = capture.node.clone();
+            return Some(node);
+        }
+    }
+}
+
+#[cfg(feature = "tsg")]
+impl<'a, 'cursor, 'tree, HAST: hyperast::types::HyperAST> NodesLending<'a>
+    for MyQMatch<'cursor, 'tree, HAST>
+where
+    // HAST:'cursor + 'tree,
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+{
+    type Nodes = CapturedNodesIter<'a, 'a, 'a, HAST>;
+}
+
+#[cfg(feature = "tsg")]
+impl<'cursor, 'tree, HAST: hyperast::types::HyperAST> tree_sitter_graph::graph::QMatch
+    for MyQMatch<'cursor, 'tree, HAST>
+where
+    // HAST:'cursor + 'tree,
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+{
+    // type I = u32;
+
+    // type Item = Node<'tree, HAST>;
+
+    type Simple = NodeR<Pos<HAST>>;
+
+    fn nodes_for_capture_index(&self, index: Self::I) -> <Self as NodesLending<'_>>::Nodes {
+        dbg!();
+        // self.qm
+        //     .nodes_for_capture_index(CaptureId::new(index))
+        //     .cloned()
+        CapturedNodesIter {
+            stores: self.stores,
+            index,
+            inner: self.qm.captures.captures(),
+        }
+    }
+
+    fn nodes_for_capture_indexi(&self, index: Self::I) -> Option<NNN<'_, '_, Self>> {
+        CapturedNodesIter {
+            stores: self.stores,
+            index,
+            inner: self.qm.captures.captures(),
+        }
+        .next()
+    }
+
+    fn nodes_for_capture_indexii(
+        &self,
+        index: Self::I,
+    ) -> impl NodeLender + NodeLending<'_, Node = NNN<'_, '_, Self>> {
+        CapturedNodesIter::<HAST> {
+            stores: self.stores,
+            index,
+            inner: self.qm.captures.captures(),
+        }
     }
 
     fn pattern_index(&self) -> usize {
         // self.qm.pattern_index.to_usize()
         self.i as usize
+    }
+
+    fn syn_node_ref(&self, node: &NNN<'_, '_, Self>) -> tree_sitter_graph::graph::SyntaxNodeRef {
+        tree_sitter_graph::graph::SyntaxNodeRef::new(node)
+    }
+    fn node(&self, s: Self::Simple) -> NNN<'_, '_, Self> {
+        todo!()
     }
 }
 
@@ -526,7 +758,63 @@ pub struct MyQMatches<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAS
     node: Node<'tree, HAST>,
 }
 
-impl<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST<'tree>> Iterator
+#[cfg(feature = "tsg")]
+impl<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST> QueryWithLang
+    for MyQMatches<'query, 'cursor, 'tree, It, HAST>
+{
+    type Lang = tree_sitter::Language;
+    type I = u32;
+}
+
+#[cfg(feature = "tsg")]
+impl<'a, 'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST> MatchLending<'a>
+    for MyQMatches<'query, 'cursor, 'tree, It, HAST>
+where
+    It: Iterator<Item = crate::QueryMatch<Node<'tree, HAST>>>,
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+{
+    type Match = self::MyQMatch<'cursor, 'tree, HAST>;
+}
+
+#[cfg(feature = "tsg")]
+impl<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST> MatchLender
+    for MyQMatches<'query, 'cursor, 'tree, It, HAST>
+where
+    It: Iterator<Item = crate::QueryMatch<Node<'tree, HAST>>>,
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+{
+    fn next(&mut self) -> Option<<Self as MatchLending<'_>>::Match> {
+        let qm = self.matchs.next()?;
+        let stores = self.node.0.stores;
+        let i = self
+            .q
+            .query
+            .enabled_pattern_index(qm.pattern_index)
+            .unwrap();
+        Some(self::MyQMatch {
+            stores,
+            b: &&(),
+            qm,
+            i,
+        })
+    }
+}
+
+impl<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST> Iterator
     for MyQMatches<'query, 'cursor, 'tree, It, HAST>
 where
     It: Iterator<Item = crate::QueryMatch<Node<'tree, HAST>>>,
@@ -534,9 +822,14 @@ where
     type Item = self::MyQMatch<'cursor, 'tree, HAST>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        dbg!();
         let qm = self.matchs.next()?;
         let stores = self.node.0.stores;
-        let i = self.q.query.enabled_pattern_index(qm.pattern_index).unwrap();
+        let i = self
+            .q
+            .query
+            .enabled_pattern_index(qm.pattern_index)
+            .unwrap();
         Some(self::MyQMatch {
             stores,
             b: &&(),

@@ -7,8 +7,8 @@ use std::{
 use num::{cast, NumCast, PrimInt, ToPrimitive};
 
 use crate::types::{
-    HashKind, HyperType, LabelStore, Labeled, MySlice, NodeId, NodeStore, NodeStoreMut, Stored,
-    Typed, WithChildren, WithStats,
+    HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
+    WithChildren, WithStats,
 };
 
 pub struct SimpleTree<K> {
@@ -59,13 +59,19 @@ fn store<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 
     ns.get_or_insert(t)
 }
 
+use crate::store::SimpleStores;
 pub fn vpair_to_stores<'a>(
     (src, dst): (SimpleTree<u8>, SimpleTree<u8>),
-) -> (LS<u16>, NS<Tree>, u16, u16) {
+) -> (SimpleStores<TStore, NS<Tree>, LS<u16>>, u16, u16) {
     let (mut label_store, mut compressed_node_store) = make_stores();
     let src = store(&mut label_store, &mut compressed_node_store, &src);
     let dst = store(&mut label_store, &mut compressed_node_store, &dst);
-    (label_store, compressed_node_store, src, dst)
+    let stores = SimpleStores {
+        type_store: std::marker::PhantomData::<TStore>,
+        node_store: compressed_node_store,
+        label_store,
+    };
+    (stores, src, dst)
 }
 
 impl AsRef<Tree> for &Tree {
@@ -324,10 +330,16 @@ impl<T: crate::types::Stored> crate::types::Stored for TreeRef<'_, T> {
     type TreeId = T::TreeId;
 }
 
+impl<'a> crate::types::CLending<'a, u8, u16> for Tree {
+    type Children = crate::types::ChildrenSlice<'a, u16>;
+}
+
+impl<'a> crate::types::CLending<'a, u16, u16> for Tree {
+    type Children = crate::types::ChildrenSlice<'a, u16>;
+}
+
 impl WithChildren for Tree {
     type ChildIdx = u8;
-
-    type Children<'a> = MySlice<Self::TreeId>;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.children.len() as u8
@@ -342,9 +354,16 @@ impl WithChildren for Tree {
         self.children.get(idx.to_usize().unwrap()).copied()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(&self) -> Option<crate::types::LendC<'_, Self, u8, u16>> {
         Some(self.children.as_slice().into())
     }
+}
+
+impl<'a, T: WithChildren> crate::types::CLending<'a, T::ChildIdx, T::TreeId> for TreeRef<'_, T>
+where
+    T: crate::types::CLending<'a, T::ChildIdx, T::TreeId>,
+{
+    type Children = <T as crate::types::CLending<'a, T::ChildIdx, T::TreeId>>::Children;
 }
 
 impl<T: WithChildren> WithChildren for TreeRef<'_, T>
@@ -353,10 +372,10 @@ where
 {
     type ChildIdx = T::ChildIdx;
 
-    type Children<'a>
-        = T::Children<'a>
-    where
-        Self: 'a;
+    // type Children<'a>
+    //     = T::Children<'a>
+    // where
+    //     Self: 'a;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.0.child_count()
@@ -370,7 +389,9 @@ where
         self.0.child_rev(idx)
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         self.0.children()
     }
 }
@@ -406,6 +427,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum H {
     S,
     L,
@@ -421,10 +443,17 @@ impl HashKind for H {
     }
 }
 
+impl std::ops::Deref for H {
+    type Target = Self;
+    fn deref(&self) -> &Self::Target {
+        self
+    }
+}
+
 impl crate::types::WithHashs for Tree {
     type HK = H;
     type HP = u8;
-    fn hash(&self, _kind: &H) -> u8 {
+    fn hash(&self, _kind: impl std::ops::Deref<Target = Self::HK>) -> u8 {
         0
     }
 }
@@ -432,7 +461,7 @@ impl crate::types::WithHashs for Tree {
 impl<T: crate::types::WithHashs> crate::types::WithHashs for TreeRef<'_, T> {
     type HK = T::HK;
     type HP = T::HP;
-    fn hash(&self, kind: &Self::HK) -> Self::HP {
+    fn hash(&self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
         self.0.hash(kind)
     }
 }
@@ -498,18 +527,81 @@ pub struct NS<T> {
 //     }
 // }
 
+impl<T: 'static + crate::types::Tree> crate::types::NStore for NS<T> {
+    type IdN = <T as crate::types::Stored>::TreeId;
+    type Idx = T::ChildIdx;
+}
+
+impl<T: 'static + crate::types::Tree> crate::types::inner_ref::NodeStore<T::TreeId> for NS<T>
+where
+    T::TreeId: ToPrimitive,
+{
+    type Ref = TreeRef<'static, T>;
+    fn scoped<R>(&self, id: &T::TreeId, f: impl Fn(&Self::Ref) -> R) -> R {
+        let t = &TreeRef(&self.v[id.to_usize().unwrap()]);
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe { std::mem::transmute(t) };
+        f(t)
+    }
+    fn scoped_mut<R>(&self, id: &T::TreeId, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+        let t = &TreeRef(&self.v[id.to_usize().unwrap()]);
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe { std::mem::transmute(t) };
+        f(t)
+    }
+    fn multi<R, const N: usize>(&self, id: &[T::TreeId; N], f: impl Fn(&[Self::Ref; N]) -> R) -> R {
+        todo!()
+    }
+}
+impl<'a, T: crate::types::Tree> crate::types::NLending<'a, T::TreeId> for NS<T>
+where
+    T::TreeId: ToPrimitive,
+{
+    type N = TreeRef<'a, T>;
+}
+
+pub struct TMarker<IdN>(std::marker::PhantomData<IdN>);
+
+impl<IdN> Default for TMarker<IdN> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<'a, T: crate::types::Tree> crate::types::NLending<'a, T::TreeId> for TMarker<T> {
+    type N = TreeRef<'a, T>;
+}
+
+impl<T: crate::types::Tree + WithChildren> crate::types::HyperASTShared for TMarker<T>
+where
+    T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
+{
+    type IdN = T::TreeId;
+    type Idx = T::ChildIdx;
+    type Label = T::Label;
+}
+
+impl<'a, T: crate::types::Tree + WithChildren> crate::types::AstLending<'a> for TMarker<T>
+where
+    T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
+{
+    type RT = TreeRef<'a, T>;
+}
+
+impl<T: crate::types::Tree> crate::types::Node for TMarker<T> {}
+
+impl<T: crate::types::Tree> crate::types::Stored for TMarker<T> {
+    type TreeId = T::TreeId;
+}
+
 impl<T: crate::types::Tree> NodeStore<T::TreeId> for NS<T>
 where
     T::TreeId: ToPrimitive,
 {
-    type R<'a>
-        = TreeRef<'a, T>
-    where
-        T: 'a;
-
     fn resolve(&self, id: &T::TreeId) -> TreeRef<'_, T> {
         TreeRef(&self.v[id.to_usize().unwrap()])
     }
+    // type NMarker = TMarker<T>;
 }
 
 // impl<T: crate::types::Tree> NodeStore3<T::TreeId> for NS<T>
@@ -635,10 +727,14 @@ where
 //     }
 // }
 
-pub struct LS<I: PrimInt> {
+pub struct LS<I> {
     // v: RefCell<Vec<crate::types::OwnedLabel>>,
     v: Vec<crate::types::OwnedLabel>,
     phantom: PhantomData<*const I>,
+}
+
+impl<'a, I> crate::types::LStore for LS<I> {
+    type I = I;
 }
 
 impl<'a, I: PrimInt> LabelStore<crate::types::SlicedLabel> for LS<I> {

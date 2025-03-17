@@ -1,6 +1,6 @@
 use hyperast::{
     store::{defaults::NodeIdentifier, SimpleStores},
-    types::{IterableChildren, Labeled},
+    types::{Childrn, Labeled},
     PrimInt,
 };
 
@@ -156,7 +156,7 @@ pub fn regen_query(
         let mut cs: Vec<NodeIdentifier> = vec![];
         use hyperast::types::WithChildren;
 
-        let cs_nodes = n.children()?.iter_children().copied().collect::<Vec<_>>();
+        let cs_nodes = n.children()?.iter_children().collect::<Vec<_>>();
         let mut cs_nodes = cs_nodes.iter();
         drop(n);
 

@@ -1,5 +1,10 @@
 use super::*;
 
+use hyper_diff::{
+    decompressed_tree_store::lazy_post_order::LazyPostOrder,
+    matchers::{Decompressible, Mapping},
+};
+
 // fn diff<'a>(
 //     repositories: &'a multi_preprocessed::PreProcessedRepositories,
 //     mappings: &'a mut crate::MappingCache,
@@ -39,18 +44,11 @@ fn lazy_mapping<'a>(
     'a,
     (NodeIdentifier, NodeIdentifier),
     hyper_diff::matchers::Mapping<
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
+        LazyPostOrder<NodeIdentifier, u32>,
+        LazyPostOrder<NodeIdentifier, u32>,
         hyper_diff::matchers::mapping_store::VecStore<u32>,
     >,
 > {
-    use hyperast::types::HyperAST;
     use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
     use hyper_diff::matchers::heuristic::gt::{
         lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
@@ -59,13 +57,27 @@ fn lazy_mapping<'a>(
     use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
     use hyper_diff::matchers::mapping_store::MappingStore;
     use hyper_diff::matchers::mapping_store::VecStore;
-    let mapped = mappings.entry((src_tr, dst_tr)).or_insert_with(|| {
+    use hyperast::types::HyperAST;
+    mappings.entry((src_tr, dst_tr)).or_insert_with(|| {
         let hyperast = &repositories.processor.main_stores;
         let src = &src_tr;
         let dst = &dst_tr;
         let now = Instant::now();
-        let mapper: Mapper<_, LazyPostOrder<_, u32>, LazyPostOrder<_, u32>, VecStore<_>> =
-            hyperast.decompress_pair(src, dst).into();
+        let mut _mapper: Mapper<
+            _,
+            Decompressible<_, LazyPostOrder<_, u32>>,
+            Decompressible<_, LazyPostOrder<_, u32>>,
+            VecStore<_>,
+        > = hyperast.decompress_pair2(src, dst).into();
+        // TODO factor
+        let mapper = Mapper {
+            hyperast,
+            mapping: Mapping {
+                src_arena: _mapper.mapping.src_arena.as_mut(),
+                dst_arena: _mapper.mapping.dst_arena.as_mut(),
+                mappings: _mapper.mapping.mappings,
+            },
+        };
         let subtree_prepare_t = now.elapsed().as_secs_f64();
         let now = Instant::now();
         let mapper =
@@ -99,37 +111,13 @@ fn lazy_mapping<'a>(
         // let gen_t = now.elapsed().as_secs_f64();
         // dbg!(gen_t);
         // let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
-        Mapper::<_, LazyPostOrder<_, _>, LazyPostOrder<_, _>, _>::persist(mapper)
-    });
-    pub unsafe fn unpersist<'a>(
-        _hyperast: &'a SimpleStores<TStore>,
-        p: dashmap::mapref::one::RefMut<
-            'a,
-            (NodeIdentifier, NodeIdentifier),
-            hyper_diff::matchers::Mapping<
-                LazyPostOrder<
-                    hyper_diff::decompressed_tree_store::PersistedNode<NodeIdentifier>,
-                    u32,
-                >,
-                LazyPostOrder<
-                    hyper_diff::decompressed_tree_store::PersistedNode<NodeIdentifier>,
-                    u32,
-                >,
-                VecStore<u32>,
-            >,
-        >,
-    ) -> dashmap::mapref::one::RefMut<
-        'a,
-        (NodeIdentifier, NodeIdentifier),
-        hyper_diff::matchers::Mapping<
-            LazyPostOrder<HashedNodeRef<'a, NodeIdentifier>, u32>,
-            LazyPostOrder<HashedNodeRef<'a, NodeIdentifier>, u32>,
-            VecStore<u32>,
-        >,
-    > {
-        unsafe { std::mem::transmute(p) }
-    }
-    unsafe { unpersist(&repositories.processor.main_stores, mapped) }
+        // Mapper::<_, LazyPostOrder<_, _>, LazyPostOrder<_, _>, _>::persist(mapper)
+        Mapping {
+            mappings: mapper.mapping.mappings,
+            src_arena: _mapper.mapping.src_arena.decomp,
+            dst_arena: _mapper.mapping.dst_arena.decomp,
+        }
+    })
 }
 
 struct RRR<'a>(
@@ -150,22 +138,8 @@ fn lazy_subtree_mapping<'a, 'b>(
     src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
 ) -> hyper_diff::matchers::Mapping<
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyperast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
+    dashmap::mapref::one::RefMut<'a, NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
+    dashmap::mapref::one::RefMut<'a, NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
     mapping_store::MultiVecStore<u32>,
 > {
     use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
@@ -181,17 +155,14 @@ fn lazy_subtree_mapping<'a, 'b>(
     let now = Instant::now();
     assert_ne!(src, dst);
     let (mut decompress_src, mut decompress_dst) = {
-        use hyperast::types::DecompressedSubtree;
+        use hyperast::types::DecompressedFrom;
         let mut cached_decomp = |id: &NodeIdentifier| -> Option<
-            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<HashedNodeRef<'a>, u32>>,
+            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
         > {
             let decompress = partial_comp_cache
                 .try_entry(*id)?
                 .or_insert_with(|| unsafe {
-                    std::mem::transmute(LazyPostOrder::<_, u32>::decompress(
-                        hyperast.node_store(),
-                        id,
-                    ))
+                    std::mem::transmute(LazyPostOrder::<_, u32>::decompress(hyperast, id))
                 });
             Some(unsafe { std::mem::transmute(decompress) })
         };
@@ -228,8 +199,14 @@ fn lazy_subtree_mapping<'a, 'b>(
     let mut mapper = Mapper {
         hyperast,
         mapping: Mapping {
-            src_arena: decompress_src.value_mut(),
-            dst_arena: decompress_dst.value_mut(),
+            src_arena: Decompressible {
+                hyperast,
+                decomp: decompress_src.value_mut(),
+            },
+            dst_arena: Decompressible {
+                hyperast,
+                decomp: decompress_dst.value_mut(),
+            },
             mappings,
         },
     };
@@ -238,11 +215,14 @@ fn lazy_subtree_mapping<'a, 'b>(
         mapper.mapping.dst_arena.len(),
     );
     dbg!();
+
     let mm = LazyGreedySubtreeMatcher::<
-        'a,
-        SimpleStores<TStore>,
-        &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-        &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
+        // &SimpleStores<TStore>,
+        _,
+        // &mut LazyPostOrder<_, u32>,
+        // &mut LazyPostOrder<_, u32>,
+        _,
+        _,
         VecStore<_>,
     >::compute_multi_mapping::<DefaultMultiMappingStore<_>>(&mut mapper);
     dbg!();
@@ -254,7 +234,7 @@ fn lazy_subtree_mapping<'a, 'b>(
     }
 }
 
-pub fn child_by_type<'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
+pub fn child_by_type<'store, HAST: HyperAST<IdN = NodeIdentifier>>(
     stores: &'store HAST,
     d: NodeIdentifier,
     t: &<HAST::TS as types::TypeStore>::Ty,
@@ -265,7 +245,7 @@ pub fn child_by_type<'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
         .unwrap()
         .iter_children()
         .enumerate()
-        .find(|(_, x)| stores.resolve_type(*x).eq(t))
-        .map(|(i, x)| (*x, i));
+        .find(|(_, x)| stores.resolve_type(x).eq(t))
+        .map(|(i, x)| (x, i));
     s
 }

@@ -39,6 +39,14 @@ pub fn label_id_from_usize(x: usize) -> Option<DefaultLabelIdentifier> {
     DefaultLabelIdentifier::try_from_usize(x)
 }
 
+impl crate::types::LStore for LabelStore {
+    type I = DefaultLabelIdentifier;
+}
+
+impl crate::types::LStore for &LabelStore {
+    type I = DefaultLabelIdentifier;
+}
+
 impl crate::types::LabelStore<DefaultLabelValue> for LabelStore {
     type I = DefaultLabelIdentifier;
     fn get_or_insert<T: Borrow<DefaultLabelValue>>(&mut self, node: T) -> Self::I {

@@ -1,12 +1,12 @@
 use crate::SharedState;
 use axum::Json;
+use hyperast_tsquery::stepped_query::{MyQMatch, Node, QueryMatcher};
 use hyperast_vcs_git::SimpleStores;
-use hyperast_tsquery::stepped_query::{Node, QueryMatcher};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
-pub type Functions<Node> =
-    tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::GraphErazing<Node>>;
+// pub type Functions<Node> =
+//     tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::GraphErazing<Node>>;
 
 #[derive(Deserialize, Clone)]
 pub struct Param {
@@ -93,8 +93,7 @@ pub fn simple(
     let path = &path.unwrap_or_default();
     let tsg = {
         type M = QueryMatcher<SimpleStores>;
-        type ExtQ =
-            hyperast_tsquery::stepped_query::ExtendingStringQuery<M, tree_sitter::Language>;
+        type ExtQ = hyperast_tsquery::stepped_query::ExtendingStringQuery<M, tree_sitter::Language>;
 
         let source: &str = &query;
 
@@ -140,15 +139,35 @@ fn simple_aux(
     commit_oid: &hyperast_vcs_git::git::Oid,
     query: &str,
     tsg: &tree_sitter_graph::ast::File<QueryMatcher<SimpleStores>>,
+    // QueryMatcher<hyperast::store::SimpleStores<TStore, &NodeStoreInner, &LabelStore>>,
     path: &str,
 ) -> Result<ComputeResult, QueryingError> {
     let now = Instant::now();
-    type Graph<'a, HAST> = tree_sitter_graph::graph::Graph<Node<'a, HAST>>;
+    // type Graph<'a, HAST> = tree_sitter_graph::graph::Graph<Node<'a, HAST>>;
     // SimpleStores<hyperast_gen_ts_java::types::TStore>
     let mut globals = tree_sitter_graph::Variables::new();
-    let mut graph = Graph::default();
+    let mut graph: tree_sitter_graph::graph::Graph<
+        // hyperast_tsquery::stepped_query::Node<
+        //     hyperast::store::SimpleStores<
+        //         hyperast_gen_ts_java::types::TStore,
+        //         &hyperast::store::nodes::legion::NodeStoreInner,
+        //         &hyperast::store::labels::LabelStore,
+        //     >,
+        // >,
+        hyperast_tsquery::hyperast_cursor::NodeR<
+            hyperast::position::StructuralPosition<hyperast::store::defaults::NodeIdentifier, u16>,
+        >,
+        // Node<
+        //     '_,
+        //     hyperast_tsquery::hyperast_cursor::NodeR<_>,
+        //     hyperast::position::structural_pos::StructuralPosition<_, _>,
+        // >,
+    > = tree_sitter_graph::graph::Graph::default();
     init_globals(&mut globals, &mut graph);
-    let mut functions = Functions::stdlib();
+    let mut functions = tree_sitter_graph::functions::Functions::essentials();
+
+    // TODO add it back
+    // let mut functions = tree_sitter_graph::functions::Functions::stdlib();
     // tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
     let mut config = configure(&globals, &functions);
     let cancellation_flag = tree_sitter_graph::NoCancellation;
@@ -160,16 +179,25 @@ fn simple_aux(
 
     let code =
         hyperast_vcs_git::preprocessed::child_at_path(stores, code, path.split('/')).unwrap();
-
-    let tree = Node::new(stores, hyperast::position::StructuralPosition::new(code));
+    dbg!();
+    let tree: Node<_> = Node::new(stores, hyperast::position::StructuralPosition::new(code));
+    // let tree: Node<_> = hyperast_tsquery::hyperast_cursor::NodeR {
+    //     pos: hyperast::position::StructuralPosition::new(code),
+    // };
     // SAFETY: just circumventing a limitation in the borrow checker, ie. all associated lifetimes considered as being 'static
     let tree = unsafe { std::mem::transmute(tree) };
-    if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {
+    if let Err(err) = tsg.execute_lazy_into2::<_, MyQMatch<SimpleStores>>(
+        &mut graph,
+        tree,
+        &mut config,
+        &cancellation_flag,
+    ) {
         println!("{}", graph.pretty_print());
         let source_path = std::path::Path::new(&"");
         let tsg_path = std::path::Path::new(&"");
         eprintln!("{}", err.display_pretty(&source_path, "", &tsg_path, query));
     }
+    dbg!();
     let result = serde_json::to_value(graph).unwrap();
     let compute_time = now.elapsed().as_secs_f64();
     Ok(ComputeResult {
@@ -185,10 +213,10 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_NAME: &str = "a/b/AAA.java";
 
-fn configure<'a, 'g, Node>(
-    globals: &'a tree_sitter_graph::Variables<'g>,
-    functions: &'a Functions<Node>,
-) -> tree_sitter_graph::ExecutionConfig<'a, 'g, tree_sitter_graph::graph::GraphErazing<Node>> {
+fn configure<'a, 'b, 'g, Node>(
+    globals: &'b tree_sitter_graph::Variables<'g>,
+    functions: &'a tree_sitter_graph::functions::Functions<tree_sitter_graph::graph::Graph<Node>>,
+) -> tree_sitter_graph::ExecutionConfig<'a, 'g, 'b, tree_sitter_graph::graph::Graph<Node>> {
     let config = tree_sitter_graph::ExecutionConfig::new(functions, globals)
         .lazy(true)
         .debug_attributes(
@@ -202,7 +230,7 @@ fn configure<'a, 'g, Node>(
     config
 }
 
-fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
+fn init_globals<Node>(
     globals: &mut tree_sitter_graph::Variables,
     graph: &mut tree_sitter_graph::graph::Graph<Node>,
 ) {

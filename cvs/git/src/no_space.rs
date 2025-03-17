@@ -5,8 +5,10 @@ use hyperast::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{HashedNodeRef, NodeStore},
     },
-    types::{self, AnyType, Children, MySlice, NodeId, SimpleHyperAST, TypedNodeId},
+    types::{self, AnyType, Children, NodeId, SimpleHyperAST, TypedNodeId, AAAA},
 };
+
+use crate::SimpleStores;
 
 // pub trait NoSpaceNodeStoreContainer: types::HyperASTAsso {
 //     type NST<'store>: types::Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx> where Self: 'store;
@@ -221,7 +223,7 @@ where
 pub fn as_nospaces<'a, TS>(
     stores: &'a hyperast::store::SimpleStores<TS>,
 ) -> SimpleHyperAST<
-    NoSpaceWrapper<'a, NodeIdentifier>,
+    NoSpaceWrapper<'static, NodeIdentifier>,
     TS,
     NoSpaceNodeStoreWrapper<'a>,
     &'a hyperast::store::labels::LabelStore,
@@ -233,6 +235,23 @@ pub fn as_nospaces<'a, TS>(
         node_store,
         label_store,
         _phantom: std::marker::PhantomData,
+    }
+}
+
+pub fn as_nospaces2<'a, TS>(
+    stores: &'a hyperast::store::SimpleStores<TS>,
+) -> hyperast::store::SimpleStores<
+    TS,
+    NoSpaceNodeStoreWrapper<'a>,
+    &'a hyperast::store::labels::LabelStore,
+> {
+    let label_store = &stores.label_store;
+    let node_store = &stores.node_store;
+    let node_store = node_store.into();
+    hyperast::store::SimpleStores {
+        node_store,
+        label_store,
+        type_store: std::marker::PhantomData,
     }
 }
 
@@ -305,7 +324,7 @@ impl<IdN> Deref for MIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + NodeId> NodeId for MIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> NodeId for MIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -364,8 +383,8 @@ impl<'a, T> types::Labeled for NoSpaceWrapper<'a, T> {
 
 impl<'a, T> types::Node for NoSpaceWrapper<'a, T> {}
 
-impl<'a, T> types::Stored for NoSpaceWrapper<'a, T> {
-    type TreeId = NodeIdentifier;
+impl<'a, T: types::NodeId> types::Stored for NoSpaceWrapper<'a, T> {
+    type TreeId = T::IdN;
 }
 
 // // NOTE: use of the deref polymorphism trick
@@ -422,7 +441,7 @@ impl<'a, T> types::Stored for NoSpaceWrapper<'a, T> {
 //             .and_then(|x| x.rev(*idx).copied())
 //     }
 
-//     fn children(&self) -> Option<&Self::Children<'_>> {
+//     fn children(&self) -> Option<LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
 //         self.inner.no_spaces().ok()
 //     }
 // }
@@ -437,12 +456,16 @@ impl<'a, T> types::Stored for NoSpaceWrapper<'a, T> {
 //     }
 // }
 
-impl<'a, T> types::WithChildren for NoSpaceWrapper<'a, T> {
+impl<'a, T: types::NodeId> types::CLending<'a, u16, T::IdN> for NoSpaceWrapper<'_, T> {
+    type Children = types::ChildrenSlice<'a, T::IdN>;
+}
+
+impl<'a, T: types::NodeId<IdN = NodeIdentifier>> types::WithChildren for NoSpaceWrapper<'a, T> {
     type ChildIdx = u16;
-    type Children<'b>
-        = MySlice<Self::TreeId>
-    where
-        Self: 'b;
+    // type Children<'b>
+    //     = MySlice<Self::TreeId>
+    // where
+    //     Self: 'b;
 
     fn child_count(&self) -> u16 {
         self.inner.no_spaces().map_or(0, |x| x.child_count())
@@ -456,13 +479,16 @@ impl<'a, T> types::WithChildren for NoSpaceWrapper<'a, T> {
     }
 
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        self.inner
-            .no_spaces()
-            .ok()
-            .and_then(|x| x.rev(*idx).copied())
+        let v = self.inner.no_spaces().ok()?;
+        let c: Self::ChildIdx = v.child_count();
+        let c = c.checked_sub(idx.checked_add(1)?)?;
+        v.get(c).cloned()
     }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<hyperast::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>>
+    {
         self.inner.no_spaces().ok()
     }
 }
@@ -471,7 +497,7 @@ impl<'a, T> types::WithHashs for NoSpaceWrapper<'a, T> {
     type HK = hyperast::hashed::SyntaxNodeHashsKinds;
     type HP = hyperast::nodes::HashSize;
 
-    fn hash(&self, kind: &Self::HK) -> Self::HP {
+    fn hash<'b>(&'b self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
         self.inner.hash(kind)
     }
 }
@@ -533,24 +559,95 @@ impl<'a> types::Tree for NoSpaceWrapper<'a, NodeIdentifier> {
 //     }
 // }
 
+impl<'store> types::NStore for NoSpaceNodeStoreWrapper<'store> {
+    type IdN = NodeIdentifier;
+
+    type Idx = u16;
+}
+
+// impl<'store> types::NodStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+//     type R<'a> = NoSpaceWrapper<'a, NodeIdentifier>;
+// }
+
+impl<'a, 'store> types::lending::NLending<'a, NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+    type N = NoSpaceWrapper<'a, NodeIdentifier>;
+}
+
 impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
-    type R<'a>
-        = NoSpaceWrapper<'a, NodeIdentifier>
-    where
-        Self: 'a;
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+    fn resolve(&self, id: &NodeIdentifier) -> types::LendN<'_, Self, NodeIdentifier> {
         NoSpaceWrapper {
             inner: unsafe { self.s._resolve(id.as_id()) },
         }
     }
 }
 
+impl<'store> types::inner_ref::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+    type Ref = NoSpaceWrapper<'static, NodeIdentifier>;
+
+    fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
+        let t = &NoSpaceWrapper {
+            inner: unsafe { self.s._resolve::<NodeIdentifier>(id.as_id()) },
+        };
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe { std::mem::transmute(t) };
+        f(t)
+    }
+
+    fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+        let t = &NoSpaceWrapper {
+            inner: unsafe { self.s._resolve::<NodeIdentifier>(id.as_id()) },
+        };
+        // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
+        let t = unsafe { std::mem::transmute(t) };
+        f(t)
+    }
+
+    fn multi<R, const N: usize>(
+        &self,
+        id: &[NodeIdentifier; N],
+        f: impl Fn(&[Self::Ref; N]) -> R,
+    ) -> R {
+        todo!()
+    }
+}
+
+impl<'store> types::inner_ref::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
+    type Ref = NoSpaceWrapper<'static, NodeIdentifier>;
+
+    fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
+        (*self).scoped(id, f)
+    }
+
+    fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
+        (*self).scoped_mut(id, f)
+    }
+
+    fn multi<R, const N: usize>(
+        &self,
+        id: &[NodeIdentifier; N],
+        f: impl Fn(&[Self::Ref; N]) -> R,
+    ) -> R {
+        (*self).multi(id, f)
+    }
+}
+
+impl<'store> types::NStore for &NoSpaceNodeStoreWrapper<'store> {
+    type IdN = NodeIdentifier;
+
+    type Idx = u16;
+}
+
+// impl<'store> types::NodStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
+//     type R<'a> = NoSpaceWrapper<'a, NodeIdentifier>;
+// }
+
+impl<'a, 'store> types::lending::NLending<'a, NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
+    type N = NoSpaceWrapper<'a, NodeIdentifier>;
+}
+
 impl<'store> types::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
-    type R<'a>
-        = NoSpaceWrapper<'a, NodeIdentifier>
-    where
-        Self: 'a;
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+    // type NMarker = TMarker<NodeIdentifier>;
+    fn resolve(&self, id: &NodeIdentifier) -> types::LendN<'_, Self, NodeIdentifier> {
         NoSpaceWrapper {
             inner: unsafe { self.s._resolve(id.as_id()) },
         }

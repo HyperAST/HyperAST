@@ -12,44 +12,51 @@ use crate::{
             lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-        Mapper,
+        Decompressible, Mapper,
     },
     tree::tree_path::CompressedTreePath,
 };
-use hyperast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 
-type DS<T> = LazyPostOrder<T, u32>;
-type CDS<T> = CompletePostOrder<T, u32>;
+type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
+// type CDS<T> = CompletePostOrder<T, u32>;
+type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 use crate::algorithms::MappingDurations;
 
 use super::{DiffResult, PreparedMappingDurations};
 
-pub type PersistableMappings<I> =
-    crate::matchers::Mapping<CDS<PersistedNode<I>>, CDS<PersistedNode<I>>, VecStore<u32>>;
+// pub type PersistableMappings<I> =
+//     crate::matchers::Mapping<CDS<PersistedNode<I>>, CDS<PersistedNode<I>>, VecStore<u32>>;
 
-pub fn diff<'store, HAST: HyperAST<'store>>(
-    hyperast: &'store HAST,
+pub fn diff<HAST: HyperAST + Copy>(
+    hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
 ) -> DiffResult<
-    SimpleAction<
-        HAST::Label,
-        CompressedTreePath<<HAST::T as types::WithChildren>::ChildIdx>,
-        HAST::IdN,
-    >,
-    Mapper<'store, HAST, CDS<HAST::T>, CDS<HAST::T>, VecStore<u32>>,
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
+    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::Label: Clone + Copy + Eq + Debug,
     HAST::Idx: hyperast::PrimInt,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
     let now = Instant::now();
-    let mapper: Mapper<_, DS<HAST::T>, DS<HAST::T>, VecStore<_>> =
-        hyperast.decompress_pair(src, dst).into();
+    let mapper: (HAST, (DS<HAST>, DS<HAST>)) = hyperast.decompress_pair2(src, dst);
+    let mut mapper_owned: Mapper<_, DS<HAST>, DS<HAST>, VecStore<_>> = mapper.into();
+    // TODO find better way, at least make a shorthand
+    let mapper = Mapper {
+        hyperast,
+        mapping: crate::matchers::Mapping {
+            src_arena: mapper_owned.mapping.src_arena.as_mut(),
+            dst_arena: mapper_owned.mapping.dst_arena.as_mut(),
+            mappings: mapper_owned.mapping.mappings,
+        },
+    };
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
     let mapper =
@@ -66,12 +73,26 @@ where
     dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
     let now = Instant::now();
 
-    let node_store = hyperast.node_store();
+    // TODO find better way, at least make a shorthand
+    let mapper = Mapper {
+        hyperast,
+        mapping: crate::matchers::Mapping {
+            mappings: mapper.mapping.mappings,
+            src_arena: mapper_owned.mapping.src_arena,
+            dst_arena: mapper_owned.mapping.dst_arena,
+        },
+    };
     let mapper = mapper.map(
-        |src_arena| CompletePostOrder::from(src_arena.complete(node_store)),
+        |src_arena| {
+            Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
+                src_arena.map(|x| x.complete(hyperast)),
+            )
+        },
         |dst_arena| {
-            let complete = CompletePostOrder::from(dst_arena.complete(node_store));
-            SimpleBfsMapper::from(node_store, complete)
+            let complete = Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
+                dst_arena.map(|x| x.complete(hyperast)),
+            );
+            SimpleBfsMapper::with_store(hyperast, complete)
         },
     );
 

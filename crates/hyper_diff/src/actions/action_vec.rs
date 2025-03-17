@@ -9,8 +9,8 @@ use hyperast::{
         nodes::HashedNodeRef,
     },
     types::{
-        AnyType, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, NodeStore,
-        NodeStoreExt, TypeStore, Typed, WithChildren,
+        AnyType, Children, HyperAST, LabelStore, Labeled, NodeId, NodeStore, NodeStoreExt,
+        TypeStore, Typed, WithChildren,
     },
 };
 
@@ -34,26 +34,26 @@ impl<A> Default for ActionsVec<A> {
     }
 }
 
-pub fn actions_vec_f<'store, P: TreePath<Item = u16>, HAST>(
+pub fn actions_vec_f<'store, P: TreePath<Item = HAST::Idx>, HAST>(
     v: &ActionsVec<SimpleAction<LabelIdentifier, P, NodeIdentifier>>,
     stores: &'store HAST,
     ori: NodeIdentifier,
 ) where
-    HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
     HAST::TS: TypeStore<Ty = AnyType>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
 {
     v.iter().for_each(|a| print_action(ori, stores, a));
 }
 
-fn format_action_pos<'store, P: TreePath<Item = u16>, HAST>(
+fn format_action_pos<'store, P: TreePath<Item = HAST::Idx>, HAST>(
     ori: NodeIdentifier,
     stores: &'store HAST,
     a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
 ) -> String
 where
-    HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    HAST: for<'t> HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
 {
     // TODO make whole thing more specific to a path in a tree
     let mut end = None;
@@ -109,13 +109,13 @@ where
     )
 }
 
-fn print_action<'store, P: TreePath<Item = u16>, HAST>(
+fn print_action<'store, P: TreePath<Item = HAST::Idx>, HAST>(
     ori: NodeIdentifier,
     stores: &'store HAST,
     a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
 ) where
-    HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
     // <HAST::TS as TypeStore<AnyType>>::Ty: Eq,
     HAST::TS: TypeStore<Ty = AnyType>,
 {
@@ -224,12 +224,12 @@ pub fn apply_actions<T, S, P>(
     T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
-    for<'d> S::R<'d>: hyperast::types::TypedTree<
-        TreeId = T::TreeId,
-        Type = T::Type,
-        Label = T::Label,
-        ChildIdx = T::ChildIdx,
-    >,
+                                               // for<'d> S::R<'d>: hyperast::types::TypedTree<
+                                               //     TreeId = T::TreeId,
+                                               //     Type = T::Type,
+                                               //     Label = T::Label,
+                                               //     ChildIdx = T::ChildIdx,
+                                               // >,
 {
     for a in actions.iter() {
         // *log::debug!(
@@ -245,253 +245,248 @@ pub fn apply_action<T, S, P>(
     root: &'_ mut Vec<T::TreeId>,
     s: &'_ mut S,
 ) where
-    P: TreePath<Item = T::ChildIdx> + Debug,
+    S: NodeStoreExt<T> + NodeStore<T::TreeId>,
     T: hyperast::types::TypedTree,
     T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
-    S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
-    for<'d> S::R<'d>: hyperast::types::TypedTree<
-        TreeId = T::TreeId,
-        Type = T::Type,
-        Label = T::Label,
-        ChildIdx = T::ChildIdx,
-    >,
+    P: TreePath<Item = T::ChildIdx> + Debug,
 {
-    let fun_name = |s: &mut S, x: &T::TreeId| -> (T::Type, Option<T::Label>) {
-        let node = s.resolve(x);
-        let t = node.get_type().to_owned();
-        let l = node.try_get_label().cloned();
-        (t, l)
-    };
-    let roots: &mut Vec<_> = root;
-    log::trace!("{:?}", a);
-    let SimpleAction { path, action } = a;
+    todo!()
+    // let fun_name = |s: &mut S, x: &T::TreeId| -> (T::Type, Option<T::Label>) {
+    //     let node = s.resolve(x);
+    //     let t = node.get_type().to_owned();
+    //     let l = node.try_get_label().cloned();
+    //     (t, l)
+    // };
+    // let roots: &mut Vec<_> = root;
+    // log::trace!("{:?}", a);
+    // let SimpleAction { path, action } = a;
 
-    let from = match action {
-        Act::Move { from } => Some(from),
-        Act::MovUpd { from, .. } => Some(from),
-        _ => None,
-    };
+    // let from = match action {
+    //     Act::Move { from } => Some(from),
+    //     Act::MovUpd { from, .. } => Some(from),
+    //     _ => None,
+    // };
 
-    let sub = if let Some(from) = from {
-        // apply remove
-        log::trace!("sub path {:?}", from.mid.iter().collect::<Vec<_>>());
-        let mut path = from.mid.iter();
-        let fp = path.next().unwrap().to_usize().unwrap();
-        // dbg!(&fp);
-        let r = &mut roots[fp];
-        let mut x = *r;
-        let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
-        while let Some(p) = path.next() {
-            // dbg!(&p);
-            let node = s.resolve(&x);
-            let cs = node.children().unwrap();
-            parents.push((x, p, cs.iter_children().cloned().collect()));
-            let i = p;
-            // dbg!(cs.len());
-            if i < cs.child_count() {
-                x = cs[i].clone();
-            } else {
-                assert!(path.next().is_none());
-                break;
-            }
-        }
-        log::trace!("parents {:?}", parents);
-        let (node, sub) = if let Some((x, i, cs)) = parents.pop() {
-            let mut children = Vec::with_capacity(cs.len() - 1);
-            children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-            children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
-            let (t, l) = fun_name(s, &x);
-            let node = s.build_then_insert(x, t, l, children);
-            (node, cs[i.to_usize().unwrap()].clone())
-        } else {
-            // let mut children = Vec::with_capacity(cs.len() - 1);
-            // children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-            // children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
-            // let node = s.resolve(&x);
-            // let node = Self::build(node.get_type(), node.get_label().clone(), children);
-            // s.get_or_insert(node)
-            (r.clone(), r.clone())
-        };
-        let mut node: T::TreeId = node;
-        for (x, i, cs) in parents.into_iter().rev() {
-            let mut children = Vec::with_capacity(cs.len() - 1);
-            children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-            children.push(node.clone());
-            children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
-            let (t, l) = fun_name(s, &x);
-            node = s.build_then_insert(x, t, l, children);
-            // let n: T = BuildableTree::build(n.get_type().to_owned(), n.get_label().clone(), children);
-            // node = s.get_or_insert(n);
-        }
-        *r = node;
-        Some(sub)
-    } else {
-        None
-    };
+    // let sub = if let Some(from) = from {
+    //     // apply remove
+    //     log::trace!("sub path {:?}", from.mid.iter().collect::<Vec<_>>());
+    //     let mut path = from.mid.iter();
+    //     let fp = path.next().unwrap().to_usize().unwrap();
+    //     // dbg!(&fp);
+    //     let r = &mut roots[fp];
+    //     let mut x = *r;
+    //     let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
+    //     while let Some(p) = path.next() {
+    //         // dbg!(&p);
+    //         let node = s.resolve(&x);
+    //         let cs = node.children().unwrap();
+    //         parents.push((x, p, cs.iter_children().cloned().collect()));
+    //         let i = p;
+    //         // dbg!(cs.len());
+    //         if i < cs.child_count() {
+    //             x = cs[i].clone();
+    //         } else {
+    //             assert!(path.next().is_none());
+    //             break;
+    //         }
+    //     }
+    //     log::trace!("parents {:?}", parents);
+    //     let (node, sub) = if let Some((x, i, cs)) = parents.pop() {
+    //         let mut children = Vec::with_capacity(cs.len() - 1);
+    //         children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //         children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+    //         let (t, l) = fun_name(s, &x);
+    //         let node = s.build_then_insert(x, t, l, children);
+    //         (node, cs[i.to_usize().unwrap()].clone())
+    //     } else {
+    //         // let mut children = Vec::with_capacity(cs.len() - 1);
+    //         // children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //         // children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+    //         // let node = s.resolve(&x);
+    //         // let node = Self::build(node.get_type(), node.get_label().clone(), children);
+    //         // s.get_or_insert(node)
+    //         (r.clone(), r.clone())
+    //     };
+    //     let mut node: T::TreeId = node;
+    //     for (x, i, cs) in parents.into_iter().rev() {
+    //         let mut children = Vec::with_capacity(cs.len() - 1);
+    //         children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //         children.push(node.clone());
+    //         children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+    //         let (t, l) = fun_name(s, &x);
+    //         node = s.build_then_insert(x, t, l, children);
+    //         // let n: T = BuildableTree::build(n.get_type().to_owned(), n.get_label().clone(), children);
+    //         // node = s.get_or_insert(n);
+    //     }
+    //     *r = node;
+    //     Some(sub)
+    // } else {
+    //     None
+    // };
 
-    let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
-    log::trace!("{:?}", path.mid.iter().collect::<Vec<_>>());
-    // dbg!(path.mid.iter().collect::<Vec<_>>());
-    let mut path = path.mid.iter();
-    let fp = path.next().unwrap().to_usize().unwrap();
-    // dbg!(&fp);
-    let r = if roots.len() > fp {
-        &mut roots[fp]
-    } else if roots.len() == fp {
-        roots.push(roots[fp - 1].clone());
-        &mut roots[fp]
-    } else {
-        panic!()
-    };
-    let mut x: T::TreeId = *r;
-    while let Some(p) = path.next() {
-        // dbg!(&p);
-        let node = s.resolve(&x);
-        let cs = node.children();
-        let i = p;
-        // TODO use pattern match
-        if cs.is_some() && i < cs.unwrap().child_count() {
-            let tmp = cs.unwrap()[i].clone();
-            parents.push((x, p, cs.unwrap().iter_children().cloned().collect()));
-            x = tmp;
-        } else {
-            if cs.is_some() && !cs.unwrap().is_empty() {
-                parents.push((x, p, cs.unwrap().iter_children().cloned().collect()));
-                log::error!("{:?} > {:?}", i, cs.unwrap().child_count());
-            } else {
-                parents.push((x, p, Default::default()));
-                log::error!("{:?} > {:?}", i, 0);
-            }
-            assert_eq!(path.next(), None);
-            break;
-        }
-    }
+    // let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
+    // log::trace!("{:?}", path.mid.iter().collect::<Vec<_>>());
+    // // dbg!(path.mid.iter().collect::<Vec<_>>());
+    // let mut path = path.mid.iter();
+    // let fp = path.next().unwrap().to_usize().unwrap();
+    // // dbg!(&fp);
+    // let r = if roots.len() > fp {
+    //     &mut roots[fp]
+    // } else if roots.len() == fp {
+    //     roots.push(roots[fp - 1].clone());
+    //     &mut roots[fp]
+    // } else {
+    //     panic!()
+    // };
+    // let mut x: T::TreeId = *r;
+    // while let Some(p) = path.next() {
+    //     // dbg!(&p);
+    //     let node = s.resolve(&x);
+    //     let cs = node.children();
+    //     let i = p;
+    //     // TODO use pattern match
+    //     if cs.is_some() && i < cs.unwrap().child_count() {
+    //         let tmp = cs.unwrap()[i].clone();
+    //         parents.push((x, p, cs.unwrap().iter_children().cloned().collect()));
+    //         x = tmp;
+    //     } else {
+    //         if cs.is_some() && !cs.unwrap().is_empty() {
+    //             parents.push((x, p, cs.unwrap().iter_children().cloned().collect()));
+    //             log::error!("{:?} > {:?}", i, cs.unwrap().child_count());
+    //         } else {
+    //             parents.push((x, p, Default::default()));
+    //             log::error!("{:?} > {:?}", i, 0);
+    //         }
+    //         assert_eq!(path.next(), None);
+    //         break;
+    //     }
+    // }
 
-    let node = match action {
-        Act::Delete {} => {
-            let (x, i, cs) = parents.pop().unwrap();
-            let mut children = Vec::with_capacity(cs.len() - 1);
-            children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-            children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
-            let (t, l) = fun_name(s, &x);
-            s.build_then_insert(x, t, l, children)
-        }
-        Act::Insert { sub } => {
-            if let Some((x, i, cs)) = parents.pop() {
-                let mut children = Vec::with_capacity(cs.len());
-                children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-                let sub = {
-                    let (t, l) = fun_name(s, sub);
-                    s.build_then_insert(*sub, t, l, vec![])
-                };
-                children.push(sub);
-                if i.to_usize().unwrap() < cs.len() {
-                    children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
-                }
-                let (t, l) = fun_name(s, &x);
-                s.build_then_insert(x, t, l, children)
-            } else {
-                let sub = {
-                    let (t, l) = fun_name(s, sub);
-                    s.build_then_insert(*sub, t, l, vec![])
-                };
-                // *r = sub.clone();
-                sub
-            }
-        }
-        Act::Update { new } => {
-            if let Some((x, i, cs)) = parents.pop() {
-                let mut children = Vec::with_capacity(cs.len());
-                children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-                let sub = {
-                    let x = cs[i.to_usize().unwrap()].clone();
-                    // let node = s.resolve(&x);
-                    // s.build_then_insert(
-                    //     node.get_type(),
-                    //     new.clone(),
-                    //     node.get_children().to_vec(),
-                    // )
+    // let node = match action {
+    //     Act::Delete {} => {
+    //         let (x, i, cs) = parents.pop().unwrap();
+    //         let mut children = Vec::with_capacity(cs.len() - 1);
+    //         children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //         children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+    //         let (t, l) = fun_name(s, &x);
+    //         s.build_then_insert(x, t, l, children)
+    //     }
+    //     Act::Insert { sub } => {
+    //         if let Some((x, i, cs)) = parents.pop() {
+    //             let mut children = Vec::with_capacity(cs.len());
+    //             children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //             let sub = {
+    //                 let (t, l) = fun_name(s, sub);
+    //                 s.build_then_insert(*sub, t, l, vec![])
+    //             };
+    //             children.push(sub);
+    //             if i.to_usize().unwrap() < cs.len() {
+    //                 children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
+    //             }
+    //             let (t, l) = fun_name(s, &x);
+    //             s.build_then_insert(x, t, l, children)
+    //         } else {
+    //             let sub = {
+    //                 let (t, l) = fun_name(s, sub);
+    //                 s.build_then_insert(*sub, t, l, vec![])
+    //             };
+    //             // *r = sub.clone();
+    //             sub
+    //         }
+    //     }
+    //     Act::Update { new } => {
+    //         if let Some((x, i, cs)) = parents.pop() {
+    //             let mut children = Vec::with_capacity(cs.len());
+    //             children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //             let sub = {
+    //                 let x = cs[i.to_usize().unwrap()].clone();
+    //                 // let node = s.resolve(&x);
+    //                 // s.build_then_insert(
+    //                 //     node.get_type(),
+    //                 //     new.clone(),
+    //                 //     node.get_children().to_vec(),
+    //                 // )
 
-                    let (t, cs) = {
-                        let node = s.resolve(&x);
-                        let t = node.get_type().to_owned();
-                        let cs = node.children();
-                        let cs = cs.map(|cs| cs.iter_children().cloned().collect());
-                        (t, cs)
-                    };
-                    s.build_then_insert(x, t, Some(new.clone()), cs.unwrap_or_default())
-                };
-                children.push(sub);
-                children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
-                let (t, l) = fun_name(s, &x);
-                s.build_then_insert(x, t, l, children)
-            } else {
-                let (t, cs) = {
-                    let node = s.resolve(&x);
-                    let t = node.get_type().to_owned();
-                    let cs = node.children();
-                    let cs = cs.map(|cs| cs.iter_children().cloned().collect());
-                    (t, cs)
-                };
-                s.build_then_insert(x, t, Some(new.clone()), cs.unwrap_or_default())
-            }
-        }
+    //                 let (t, cs) = {
+    //                     let node = s.resolve(&x);
+    //                     let t = node.get_type().to_owned();
+    //                     let cs = node.children();
+    //                     let cs = cs.map(|cs| cs.iter_children().cloned().collect());
+    //                     (t, cs)
+    //                 };
+    //                 s.build_then_insert(x, t, Some(new.clone()), cs.unwrap_or_default())
+    //             };
+    //             children.push(sub);
+    //             children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+    //             let (t, l) = fun_name(s, &x);
+    //             s.build_then_insert(x, t, l, children)
+    //         } else {
+    //             let (t, cs) = {
+    //                 let node = s.resolve(&x);
+    //                 let t = node.get_type().to_owned();
+    //                 let cs = node.children();
+    //                 let cs = cs.map(|cs| cs.iter_children().cloned().collect());
+    //                 (t, cs)
+    //             };
+    //             s.build_then_insert(x, t, Some(new.clone()), cs.unwrap_or_default())
+    //         }
+    //     }
 
-        Act::Move { .. } => {
-            // apply insert
-            let (x, i, cs) = parents.pop().unwrap();
-            let mut children = Vec::with_capacity(cs.len());
-            children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-            let sub = {
-                // let node = s.resolve(&sub.unwrap());
-                // let node = BuildableTree::build(node.get_type(), node.get_label().clone(), vec![]);
-                // s.get_or_insert(node)
-                sub.unwrap()
-            };
-            children.push(sub);
-            if i.to_usize().unwrap() < cs.len() {
-                children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
-            }
-            // dbg!(children.len());
-            let (t, l) = fun_name(s, &x);
-            s.build_then_insert(x, t, l, children)
-        }
-        Act::MovUpd { new, .. } => {
-            // apply insert
-            let (x, i, cs) = parents.pop().unwrap();
-            let mut children = Vec::with_capacity(cs.len());
-            children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-            let sub = {
-                // let node = s.resolve(&sub.unwrap());
-                // let node = BuildableTree::build(node.get_type(), node.get_label().clone(), vec![]);
-                // s.get_or_insert(node)
-                sub.unwrap()
-            };
-            children.push(sub);
-            if i.to_usize().unwrap() < cs.len() {
-                children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
-            }
-            let t = {
-                let node = s.resolve(&x);
-                let t = node.get_type().to_owned();
-                t
-            };
-            s.build_then_insert(x, t, Some(new.clone()), children)
-        }
-    };
-    let mut node = node;
-    for (x, i, cs) in parents.into_iter().rev() {
-        let mut children = Vec::with_capacity(cs.len() - 1);
-        children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
-        children.push(node.clone());
-        children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
-        let (t, l) = fun_name(s, &x);
-        node = s.build_then_insert(x, t, l, children);
-    }
-    *r = node;
+    //     Act::Move { .. } => {
+    //         // apply insert
+    //         let (x, i, cs) = parents.pop().unwrap();
+    //         let mut children = Vec::with_capacity(cs.len());
+    //         children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //         let sub = {
+    //             // let node = s.resolve(&sub.unwrap());
+    //             // let node = BuildableTree::build(node.get_type(), node.get_label().clone(), vec![]);
+    //             // s.get_or_insert(node)
+    //             sub.unwrap()
+    //         };
+    //         children.push(sub);
+    //         if i.to_usize().unwrap() < cs.len() {
+    //             children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
+    //         }
+    //         // dbg!(children.len());
+    //         let (t, l) = fun_name(s, &x);
+    //         s.build_then_insert(x, t, l, children)
+    //     }
+    //     Act::MovUpd { new, .. } => {
+    //         // apply insert
+    //         let (x, i, cs) = parents.pop().unwrap();
+    //         let mut children = Vec::with_capacity(cs.len());
+    //         children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //         let sub = {
+    //             // let node = s.resolve(&sub.unwrap());
+    //             // let node = BuildableTree::build(node.get_type(), node.get_label().clone(), vec![]);
+    //             // s.get_or_insert(node)
+    //             sub.unwrap()
+    //         };
+    //         children.push(sub);
+    //         if i.to_usize().unwrap() < cs.len() {
+    //             children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
+    //         }
+    //         let t = {
+    //             let node = s.resolve(&x);
+    //             let t = node.get_type().to_owned();
+    //             t
+    //         };
+    //         s.build_then_insert(x, t, Some(new.clone()), children)
+    //     }
+    // };
+    // let mut node = node;
+    // for (x, i, cs) in parents.into_iter().rev() {
+    //     let mut children = Vec::with_capacity(cs.len() - 1);
+    //     children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+    //     children.push(node.clone());
+    //     children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+    //     let (t, l) = fun_name(s, &x);
+    //     node = s.build_then_insert(x, t, l, children);
+    // }
+    // *r = node;
 }
 
 // pub trait ActionApplier<T>

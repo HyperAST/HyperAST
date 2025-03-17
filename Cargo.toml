@@ -1,34 +1,37 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/hyper_diff",
     "crates/hyper_ast",
-    "gen/tree-sitter/*",
-    "cvs/git",
-    "crates/backend",
-    "benchmark",
-    "crates/ref-mining-evaluation",
-    "benchmark_diffs",
-    "hyper_app",
-    "hyperast_wasm",
-    "lib/egui_addon",
+    "crates/hyper_diff",
     "lib/polyglote",
     "crates/tsquery",
+    "gen/tree-sitter/*",
+    "lib/egui_addon",
+    "cvs/git",
+    "crates/backend",
+    "hyper_app",
+    "benchmark_diffs",
     "benchmark_smells",
+    "benchmark",
 ]
-exclude = []
+exclude = [
+    "crates/ref-mining-evaluation",
+    "hyperast_wasm",
+]
 default-members = [
     "crates/hyper_ast",
     "crates/hyper_diff",
     "gen/tree-sitter/java",
     "gen/tree-sitter/cpp",
+    # "gen/tree-sitter/c",
     "gen/tree-sitter/xml",
-    "gen/tree-sitter/ts",
+    # "gen/tree-sitter/ts",
     "gen/tree-sitter/query",
     "cvs/git",
-    "benchmark",
-    "hyperast_wasm",
-    "crates/ref-mining-evaluation",
+    "crates/backend",
+    # "benchmark",
+    # "hyperast_wasm",
+    # "crates/ref-mining-evaluation",
     "benchmark_diffs",
     "lib/egui_addon",
     "lib/polyglote",
@@ -52,6 +55,6 @@ hyperast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
 hyperast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
 
 [patch.crates-io] 
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12" }
-# tree-sitter-graph = { path = "../tree-sitter-graph", optional = true }
+# tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "edf0bb15b4003858846f98af12e53bdae9c79534", version = "0.12" }
+tree-sitter-graph = { path = "../tree-sitter-graph", optional = true }
 

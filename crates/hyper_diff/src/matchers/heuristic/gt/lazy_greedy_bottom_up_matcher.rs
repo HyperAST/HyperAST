@@ -3,7 +3,8 @@
 //!
 use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, one, PrimInt};
+use hyperast::PrimInt;
+use num_traits::{cast, one};
 
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent,
@@ -11,10 +12,12 @@ use crate::decompressed_tree_store::{
     Shallow, ShallowDecompressedTreeStore,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
+use crate::matchers::Decompressible;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::types::{
     DecompressedSubtree, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats,
 };
+use hyperast::types::DecompressedFrom;
 
 use super::lazy_bottom_up_matcher::BottomUpMatcher;
 use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
@@ -24,10 +27,8 @@ use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 /// it will allow to make use complex types as const generics
 /// ie. make the different threshold neater
 pub struct GreedyBottomUpMatcher<
-    'a,
     Dsrc,
     Ddst,
-    T: 'a + Tree + WithHashs,
     HAST,
     M: MonoMappingStore,
     MZs: MonoMappingStore = M,
@@ -35,7 +36,7 @@ pub struct GreedyBottomUpMatcher<
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>,
+    internal: BottomUpMatcher<Dsrc, Ddst, HAST, M>,
     _phantom: PhantomData<*const MZs>,
 }
 
@@ -46,19 +47,17 @@ impl<
         'a,
         Dsrc,
         Ddst,
-        T: 'a + Tree + WithHashs,
+        // T: 'a + Tree + WithHashs,
         S,
         M: MonoMappingStore,
         MZs: MonoMappingStore<Src = M::Src, Dst = M::Dst>,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
         const SIM_THRESHOLD_DEN: u64,
-    > Into<BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>>
+    > Into<BottomUpMatcher<Dsrc, Ddst, S, M>>
     for GreedyBottomUpMatcher<
-        'a,
         Dsrc,
         Ddst,
-        T,
         S,
         M,
         MZs,
@@ -67,7 +66,7 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 {
-    fn into(self) -> BottomUpMatcher<'a, Dsrc, Ddst, T, S, M> {
+    fn into(self) -> BottomUpMatcher<Dsrc, Ddst, S, M> {
         self.internal
     }
 }
@@ -75,7 +74,7 @@ impl<
         'a,
         Dsrc,
         Ddst,
-        T: 'a + Tree + WithHashs,
+        // T: 'a + Tree + WithHashs,
         HAST,
         M: MonoMappingStore,
         const SIZE_THRESHOLD: usize,  // = 1000,
@@ -83,10 +82,8 @@ impl<
         const SIM_THRESHOLD_DEN: u64, // = 2,
     >
     GreedyBottomUpMatcher<
-        'a,
         Dsrc,
         Ddst,
-        T,
         HAST,
         M,
         M,
@@ -95,14 +92,13 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 {
-    pub fn new(stores: &'a HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
+    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
         Self {
             internal: BottomUpMatcher {
                 stores,
                 src_arena,
                 dst_arena,
                 mappings,
-                _phantom: PhantomData,
             },
             _phantom: PhantomData,
         }
@@ -111,29 +107,26 @@ impl<
 
 /// TODO PostOrder might not be necessary
 impl<
-        'a,
-        Dsrc: 'a
-            + DecompressedTreeStore<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<'a, T, Dsrc::IdD>
-            + PostOrder<'a, T, Dsrc::IdD, M::Src>
-            + PostOrderIterable<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedSubtree<'a, T>
-            + ContiguousDescendants<'a, T, Dsrc::IdD, M::Src>
-            + LazyPOBorrowSlice<'a, T, Dsrc::IdD, M::Src>
-            + ShallowDecompressedTreeStore<'a, T, Dsrc::IdD, M::Src>
-            + LazyDecompressedTreeStore<'a, T, M::Src>,
-        Ddst: 'a
-            + DecompressedTreeStore<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<'a, T, Ddst::IdD>
-            + PostOrder<'a, T, Ddst::IdD, M::Dst>
-            + PostOrderIterable<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedSubtree<'a, T>
-            + ContiguousDescendants<'a, T, Ddst::IdD, M::Dst>
-            + LazyPOBorrowSlice<'a, T, Ddst::IdD, M::Dst>
-            + ShallowDecompressedTreeStore<'a, T, Ddst::IdD, M::Dst>
-            + LazyDecompressedTreeStore<'a, T, M::Dst>,
-        T: 'a + Tree + WithHashs + WithStats,
-        HAST: HyperAST<'a, IdN = T::TreeId, T = T, Label = T::Label>,
+        Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
+            + DecompressedWithParent<HAST, Dsrc::IdD>
+            + PostOrder<HAST, Dsrc::IdD, M::Src>
+            + PostOrderIterable<HAST, Dsrc::IdD, M::Src>
+            + DecompressedSubtree<HAST>
+            + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
+            + LazyPOBorrowSlice<HAST, Dsrc::IdD, M::Src>
+            + ShallowDecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
+            + LazyDecompressedTreeStore<HAST, M::Src>,
+        Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
+            + DecompressedWithParent<HAST, Ddst::IdD>
+            + PostOrder<HAST, Ddst::IdD, M::Dst>
+            + PostOrderIterable<HAST, Ddst::IdD, M::Dst>
+            + DecompressedSubtree<HAST>
+            + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
+            + LazyPOBorrowSlice<HAST, Ddst::IdD, M::Dst>
+            + ShallowDecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
+            + LazyDecompressedTreeStore<HAST, M::Dst>,
+        // T: Tree + WithHashs + WithStats,
+        HAST: HyperAST + Copy,
         M: MonoMappingStore,
         MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
         const SIZE_THRESHOLD: usize,
@@ -141,10 +134,8 @@ impl<
         const SIM_THRESHOLD_DEN: u64,
     >
     GreedyBottomUpMatcher<
-        'a,
         Dsrc,
         Ddst,
-        T,
         HAST,
         M,
         MZs,
@@ -153,12 +144,14 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    T::TreeId: 'a + Clone + Debug + NodeId<IdN = T::TreeId>,
-    // T::Type: Debug + Eq + Copy + Send + Sync,
-    Dsrc::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
-    Ddst::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
-    M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
-    M::Dst: 'a + PrimInt + std::ops::SubAssign + Debug,
+    Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
+    Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
+    HAST::Label: Eq,
+    HAST::IdN: Debug,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     // pub fn matchh<'b>(
     //     compressed_node_store: &'a S,
@@ -169,8 +162,8 @@ where
     // ) -> Self {
     //     let src_arena = Dsrc::new(compressed_node_store, src);
     //     let dst_arena = Ddst::new(compressed_node_store, dst);
-    //     let src_len = ShallowDecompressedTreeStore::<'a, T, Dsrc::IdD, M::Src>::len(&src_arena);
-    //     let dst_len = ShallowDecompressedTreeStore::<'a, T, Ddst::IdD, M::Dst>::len(&dst_arena);
+    //     let src_len = ShallowDecompressedTreeStore::<T, Dsrc::IdD, M::Src>::len(&src_arena);
+    //     let dst_len = ShallowDecompressedTreeStore::<T, Ddst::IdD, M::Dst>::len(&dst_arena);
     //     mappings.topit(src_len + 1, src_len + 1);
     //     let mut matcher = Self::new(
     //         compressed_node_store,
@@ -184,8 +177,8 @@ where
     // }
 
     pub fn match_it(
-        mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
-    ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
     where
         M: Default,
     {
@@ -195,7 +188,6 @@ where
                 src_arena: mapping.mapping.src_arena,
                 dst_arena: mapping.mapping.dst_arena,
                 mappings: mapping.mapping.mappings,
-                _phantom: PhantomData,
             },
             _phantom: PhantomData,
         };
@@ -234,10 +226,7 @@ where
             if self.internal.mappings.is_src(&a) {
                 continue;
             }
-            let a = self
-                .internal
-                .src_arena
-                .decompress_to(self.internal.stores.node_store(), &a);
+            let a = self.internal.src_arena.decompress_to(&a);
             if self.src_has_children(a) {
                 let candidates = self.internal.get_dst_candidates(&a);
                 let mut best = None;
@@ -293,33 +282,32 @@ where
         M: Default,
     {
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
-        let src_s = self
-            .internal
-            .src_arena
-            .descendants_count(self.internal.stores.node_store(), &src);
-        let dst_s = self
-            .internal
-            .dst_arena
-            .descendants_count(self.internal.stores.node_store(), &dst);
+        let src_s = self.internal.src_arena.descendants_count(&src);
+        let dst_s = self.internal.dst_arena.descendants_count(&dst);
         if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
             return;
         }
+        let stores = self.internal.stores;
         let node_store = self.internal.stores.node_store();
         let src_offset;
         let dst_offset;
         let mappings: MZs = if SLICE {
-            let src_arena = self.internal.src_arena.slice_po(node_store, &src);
+            let src_arena = self.internal.src_arena.slice_po(&src);
             src_offset = src - src_arena.root();
-            let dst_arena = self.internal.dst_arena.slice_po(node_store, &dst);
+            let dst_arena = self.internal.dst_arena.slice_po(&dst);
             dst_offset = dst - dst_arena.root();
             ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
         } else {
             let o_src = self.internal.src_arena.original(&src);
             let o_dst = self.internal.dst_arena.original(&dst);
-            let src_arena = ZsTree::<T, Dsrc::IdD>::decompress(node_store, &o_src);
+            let src_arena = ZsTree::<HAST::IdN, Dsrc::IdD>::decompress(stores, &o_src);
+            let src_arena = Decompressible {
+                hyperast: stores,
+                decomp: src_arena,
+            };
             src_offset = src - src_arena.root();
             if cfg!(debug_assertions) {
-                let src_arena_z = self.internal.src_arena.slice_po(node_store, &src);
+                let src_arena_z = self.internal.src_arena.slice_po(&src);
                 for i in src_arena.iter_df_post::<true>() {
                     assert_eq!(src_arena.tree(&i), src_arena_z.tree(&i));
                     assert_eq!(src_arena.lld(&i), src_arena_z.lld(&i));
@@ -332,10 +320,14 @@ where
                 assert!(src_arena.kr[src_arena.kr.len() - 1]);
                 dbg!(last == src_arena_z.root());
             }
-            let dst_arena = ZsTree::<T, Ddst::IdD>::decompress(node_store, &o_dst);
+            let dst_arena = ZsTree::<HAST::IdN, Ddst::IdD>::decompress(stores, &o_dst);
+            let dst_arena = Decompressible {
+                hyperast: stores,
+                decomp: dst_arena,
+            };
             dst_offset = dst - dst_arena.root();
             if cfg!(debug_assertions) {
-                let dst_arena_z = self.internal.dst_arena.slice_po(node_store, &dst);
+                let dst_arena_z = self.internal.dst_arena.slice_po(&dst);
                 for i in dst_arena.iter_df_post::<true>() {
                     assert_eq!(dst_arena.tree(&i), dst_arena_z.tree(&i));
                     assert_eq!(dst_arena.lld(&i), dst_arena_z.lld(&i));

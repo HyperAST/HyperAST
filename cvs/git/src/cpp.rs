@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, BasicDirAcc,
-    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    cpp_processor::SimpleStores, preprocessed::IsSkippedAna, processing::ObjectName, Accumulator,
+    BasicDirAcc, PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
 use hyperast::{
@@ -58,12 +58,8 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> FileProcessingResult<cpp_tree_gen::FNode>
 where
-    More: tree_gen::Prepro<Type>
-        + tree_gen::More<
-            TS = TStore,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
-            Acc = cpp_tree_gen::Acc,
-        >,
+    More: tree_gen::Prepro<SimpleStores>
+        + for<'a> tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
 {
     // handling the parsing explicitly in this function is a good idea
     // to control complex stuff like timeout, instead of the call on next line

@@ -1,10 +1,10 @@
 use std::ops::Range;
 
+use hyper_diff::tree::tree_path::CompressedTreePath;
 use hyperast::{
     position::{compute_position, Position},
     types::{self, LabelStore, Labeled, NodeStore, WithSerialization},
 };
-use hyper_diff::tree::tree_path::CompressedTreePath;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -53,10 +53,34 @@ pub enum Kind {
     Del,
 }
 
+impl Tree {
+    pub fn from_pos<HAST>(stores: HAST, (pos, x): (Position, HAST::IdN)) -> Self
+    where
+        HAST: types::HyperAST,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree,
+    {
+        let Range { start, end } = pos.range();
+        let file = pos.file().to_string_lossy().to_string();
+        let r = stores.node_store().resolve(&x);
+        let t = stores.resolve_type(&x);
+        Tree {
+            r#type: t.to_string(),
+            label: r
+                .try_get_label()
+                .map(|x| stores.label_store().resolve(&x).to_string())
+                .filter(|x| !x.is_empty()),
+            file,
+            start,
+            end,
+        }
+    }
+}
+
 impl<'a, HAST> From<(&'a HAST, HAST::IdN, &CompressedTreePath<HAST::Idx>)> for Tree
 where
-    HAST: types::HyperAST<'a>,
-    HAST::T: types::Tree + WithSerialization,
+    HAST: types::HyperAST,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree + WithSerialization,
 {
     fn from((stores, ori, p): (&'a HAST, HAST::IdN, &CompressedTreePath<HAST::Idx>)) -> Self {
         (stores, compute_position(ori, &mut p.iter(), stores)).into()
@@ -65,8 +89,8 @@ where
 
 impl<'a, HAST> From<(&'a HAST, (Position, HAST::IdN))> for Tree
 where
-    HAST: types::HyperAST<'a>,
-    HAST::T: types::Tree,
+    HAST: types::HyperAST,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::Tree,
 {
     fn from((stores, (pos, x)): (&'a HAST, (Position, HAST::IdN))) -> Self {
         let Range { start, end } = pos.range();

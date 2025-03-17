@@ -9,7 +9,7 @@ use std::{
 use git2::{Oid, Repository};
 use hyperast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
-    types::{AnyType, IterableChildren, LabelStore as _, WithChildren},
+    types::{AnyType, Childrn, LabelStore as _, WithChildren},
     utils::memusage,
 };
 use hyperast_gen_ts_java::legion_with_refs::PartialAnalysis;
@@ -844,11 +844,11 @@ pub fn child_by_type(
         .iter_children()
         .enumerate()
         .find(|(_, x)| {
-            let n = stores.node_store.resolve(**x);
+            let n = stores.node_store.resolve(*x);
             use hyperast::types::HyperAST;
             stores.resolve_type(x).eq(t)
         })
-        .map(|(i, x)| (*x, i as u16));
+        .map(|(i, x)| (x, i as u16));
     s
 }
 

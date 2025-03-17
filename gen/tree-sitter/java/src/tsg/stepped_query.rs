@@ -27,7 +27,7 @@ impl<'tree, HAST: HyperAST<'tree>> steped::Node for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
     fn symbol(&self) -> steped::Symbol {
         self.0.symbol()
@@ -73,7 +73,7 @@ impl<'tree, HAST: HyperAST<'tree>> steped::Cursor for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    HAST::T: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
     type Node = Self;
 
@@ -128,7 +128,7 @@ impl<'hast, HAST> Default for MyNodeErazing<'hast, HAST> {
     }
 }
 
-impl<'hast, HAST: 'static + hyperast::types::HyperAST<'hast>> tree_sitter_graph::graph::Erzd
+impl<'hast, HAST: 'static + hyperast::types::HyperAST> tree_sitter_graph::graph::Erzd
     for MyNodeErazing<'hast, HAST>
 {
     type Original<'tree> = Node<'tree, HAST>;
@@ -311,7 +311,7 @@ impl<'tree, HAST: hyperast::types::HyperAST<'tree>> tree_sitter_graph::graph::Sy
 where
     HAST::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
 {
     fn id(&self) -> usize {
         use std::hash::Hash;
@@ -381,7 +381,7 @@ impl<'tree, HAST: HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNodeExt for N
 where
     <HAST as HyperASTShared>::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    HAST::T: WithSerialization + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
 {
     type Cursor = Vec<Self>;
 

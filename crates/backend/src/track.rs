@@ -10,7 +10,7 @@ use hyperast::{
         resolve_range,
     },
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
-    types::{self, HyperAST, IterableChildren, NodeStore, WithChildren, WithHashs, WithStats},
+    types::{self, HyperAST, Childrn, NodeStore, WithChildren, WithHashs, WithStats},
     PrimInt,
 };
 use hyperast_vcs_git::{

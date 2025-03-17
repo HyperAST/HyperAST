@@ -218,8 +218,8 @@ impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx
 
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN>,
-        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST: HyperAST<IdN = IdN::IdN>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>,

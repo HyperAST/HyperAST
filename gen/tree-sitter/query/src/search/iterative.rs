@@ -2,15 +2,14 @@ use crate::auto::tsq_ser_meta::Converter;
 
 use super::*;
 use hyperast::types::{
-    HyperType, IterableChildren, NodeStore, TypeStore, Typed, TypedHyperAST, TypedNodeStore,
-    WithChildren,
+    Childrn, HyperType, NodeStore, TypeStore, Typed, TypedHyperAST, WithChildren,
 };
 
 pub(crate) struct MatchingIter<
     'a,
     'store,
-    HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId,
     C: Converter,
 > {
     slf: &'a PreparedMatcher<TIdN::Ty, C>,
@@ -38,8 +37,8 @@ struct S<IdN, Idx, Ty> {
 impl<
         'a,
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId,
         C: Converter,
     > Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -82,17 +81,19 @@ impl<
 impl<
         'a,
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
+where
+// HAST::TS::Ty: TIdN::Ty,
 {
     fn is_matching_anonymous_node(
         &mut self,
         s: S<HAST::IdN, HAST::Idx, TIdN::Ty>,
         ty: &TIdN::Ty,
     ) -> MatchingRes<HAST::IdN, HAST::Idx> {
-        let t = self.code_store.resolve_type(&s.id);
+        let t = self.code_store.try_resolve(&s.id).unwrap().0.get_type();
         MatchingRes {
             matched: quant_from_bool(*ty == t),
             captures: Default::default(),
@@ -105,7 +106,7 @@ impl<
         children: &Arc<[Pattern<TIdN::Ty>]>,
     ) -> MatchingRes<HAST::IdN, HAST::Idx> {
         let n = self.code_store.node_store().resolve(&s.id);
-        let t = self.code_store.resolve_type(&s.id);
+        let t = self.code_store.try_resolve(&s.id).unwrap().0.get_type();
         if t.is_hidden() && *ty != t {
             dbg!(ty);
             return self.handle_hidden(n, *ty, t);
@@ -168,25 +169,26 @@ impl<
                 let matched = Quant::One;
                 return MatchingRes { matched, captures };
             };
-            let Some((n, _)) = self.code_store.typed_node_store().try_resolve(&child) else {
-                dbg!();
-                return MatchingRes::zero();
-            };
-            let t = n.get_type();
-            if t.is_spaces() {
-                continue;
-            }
-            match curr_p {
-                Pattern::Dot => {
-                    immediate = true;
-                    continue;
-                }
-                _ => (),
-            }
-            dbg!(t);
-            todo!("call to self.next()?");
-            assert_eq!(immediate, false);
-            i += num::one();
+            todo!("")
+            // let Some((n, _)) = self.code_store.typed_node_store().try_resolve(&child) else {
+            //     dbg!();
+            //     return MatchingRes::zero();
+            // };
+            // let t = n.get_type();
+            // if t.is_spaces() {
+            //     continue;
+            // }
+            // match curr_p {
+            //     Pattern::Dot => {
+            //         immediate = true;
+            //         continue;
+            //     }
+            //     _ => (),
+            // }
+            // dbg!(t);
+            // todo!("call to self.next()?");
+            // assert_eq!(immediate, false);
+            // i += num::one();
         }
 
         todo!()
@@ -267,7 +269,7 @@ impl<
 
     fn handle_hidden(
         &mut self,
-        n: HAST::T,
+        n: <HAST as hyperast::types::AstLending<'_>>::RT,
         ty: TIdN::Ty,
         t: TIdN::Ty,
     ) -> MatchingRes<HAST::IdN, HAST::Idx> {
@@ -294,8 +296,8 @@ impl<
 impl<
         'a,
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -314,10 +316,8 @@ pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C: Converter>(
     id: HAST::IdN,
 ) -> bool
 where
-    HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyperast::types::NodeId<IdN = HAST::IdN>
-        + hyperast::types::TypedNodeId<Ty = Ty>
-        + 'static,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId,
     Ty: std::fmt::Debug + Eq + Copy,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
     Ty: for<'b> TryFrom<&'b str> + HyperType,

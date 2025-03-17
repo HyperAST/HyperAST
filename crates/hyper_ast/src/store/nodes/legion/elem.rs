@@ -13,8 +13,8 @@ use crate::{
     nodes::{CompressedNode, HashSize, RefContainer},
     store::defaults::LabelIdentifier,
     types::{
-        AnyType, Children, HyperType, IterableChildren, MySlice, NodeId, TypeTrait, Typed,
-        TypedNodeId, WithChildren, WithMetaData,
+        AnyType, Children, HyperType, NodeId, TypeTrait, Typed, TypedNodeId, WithChildren,
+        WithMetaData,
     },
 };
 
@@ -25,6 +25,8 @@ pub type EntryRef<'a> = legion::world::EntryRef<'a>;
 #[derive(ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct HashedNodeRef<'a, T = NodeIdentifier>(pub(super) EntryRef<'a>, PhantomData<T>);
+
+impl crate::types::AAAA for NodeIdentifier {}
 
 impl<'a, T> HashedNodeRef<'a, T> {
     #[doc(hidden)]
@@ -174,7 +176,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Eq for HashedNodeRef<'a, Id> {}
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Hash for HashedNodeRef<'a, Id> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        crate::types::WithHashs::hash(self, &Default::default()).hash(state)
+        crate::types::WithHashs::hash(self, SyntaxNodeHashsKinds::default()).hash(state)
     }
 }
 
@@ -321,11 +323,13 @@ impl<'a, T> HashedNodeRef<'a, T> {
     pub unsafe fn get_component_unchecked<C: Component>(&self) -> Result<&mut C, ComponentError> {
         self.0.get_component_unchecked::<C>()
     }
+}
 
+impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, T> {
     pub fn get_child_by_name(
         &self,
         name: &<HashedNodeRef<'a, T> as crate::types::Labeled>::Label,
-    ) -> Option<<HashedNodeRef<'a, T> as crate::types::Stored>::TreeId> {
+    ) -> Option<NodeIdentifier> {
         let labels = self
             .0
             .get_component::<CS<<HashedNodeRef<'a, T> as crate::types::Labeled>::Label>>()
@@ -376,10 +380,7 @@ where
         }
         let a = self.0.get_component::<LabelIdentifier>();
         let label: Option<LabelIdentifier> = a.ok().map(|x| x.clone());
-        let children = self.children().map(|x| {
-            let it = x.iter_children();
-            it.map(|x| x.clone()).collect()
-        });
+        let children = self.children().map(|mut x| x.map(|x| x.clone()).collect());
         // .0.get_component::<CS<legion::Entity>>();
         // let children = children.ok().map(|x| x.0.clone());
         Ok(CompressedNode::new(
@@ -508,32 +509,31 @@ impl<'a, T> crate::types::Labeled for HashedNodeRef<'a, T> {
 
 impl<'a, T> crate::types::Node for HashedNodeRef<'a, T> {}
 
-impl<'a, T> crate::types::Stored for HashedNodeRef<'a, T> {
-    type TreeId = NodeIdentifier;
-}
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Node for HashedNode<Id> {}
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Stored for HashedNode<Id> {
-    type TreeId = NodeIdentifier;
+impl<'a, T: crate::types::NodeId> crate::types::Stored for HashedNodeRef<'a, T> {
+    type TreeId = T;
 }
 
-impl<'a, T> HashedNodeRef<'a, T> {
-    pub fn cs(
-        &self,
-    ) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Node for HashedNode<Id> {}
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Stored for HashedNode<Id> {
+    type TreeId = Id::IdN;
+}
+
+impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, T> {
+    pub fn cs(&self) -> Result<crate::types::LendC<'_, Self, u16, NodeIdentifier>, ComponentError> {
         // let scount = self.0.get_component::<CSStaticCount>().ok();
         // if let Some(CSStaticCount(scount)) = scount {
         // if *scount == 1 {
         //     self.0
-        //         .get_component::<CS0<legion::Entity, 1>>()
+        //         .get_component::<CS0<NodeIdentifier, 1>>()
         //         .map(|x| x.into())
         //     } else if *scount == 2 {
         //         self.0
-        //             .get_component::<CS0<legion::Entity, 2>>()
+        //             .get_component::<CS0<NodeIdentifier, 2>>()
         //             .map(|x| x.into())
         //     } else
         // if *scount == 3 {
         //     self.0
-        //         .get_component::<CS0<legion::Entity, 3>>()
+        //         .get_component::<CS0<NodeIdentifier, 3>>()
         //         .map(|x| x.into())
         // } else {
         //     panic!()
@@ -541,47 +541,51 @@ impl<'a, T> HashedNodeRef<'a, T> {
         // } else {
         let r = self
             .0
-            .get_component::<CS<legion::Entity>>()
+            .get_component::<CS<NodeIdentifier>>()
             .map(|x| (*x.0).into())
             .or_else(|_| {
                 self.0
-                    .get_component::<compo::CS0<legion::Entity, 1>>()
+                    .get_component::<compo::CS0<NodeIdentifier, 1>>()
                     .map(|x| (&x.0).into())
             })
             .or_else(|_| {
                 self.0
-                    .get_component::<compo::CS0<legion::Entity, 2>>()
+                    .get_component::<compo::CS0<NodeIdentifier, 2>>()
                     .map(|x| (&x.0).into())
             });
         r
         // }
     }
-    pub fn no_spaces(
-        &self,
-    ) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
+    pub fn no_spaces(&self) -> Result<crate::types::LendC<'_, Self, u16, T::IdN>, ComponentError> {
         self.0
-            .get_component::<NoSpacesCS<legion::Entity>>()
+            .get_component::<NoSpacesCS<NodeIdentifier>>()
             .map(|x| (*x.0).into())
             .or_else(|_| {
                 self.0
-                    .get_component::<compo::NoSpacesCS0<legion::Entity, 1>>()
+                    .get_component::<compo::NoSpacesCS0<NodeIdentifier, 1>>()
                     .map(|x| (&x.0).into())
             })
             .or_else(|_| {
                 self.0
-                    .get_component::<compo::NoSpacesCS0<legion::Entity, 2>>()
+                    .get_component::<compo::NoSpacesCS0<NodeIdentifier, 2>>()
                     .map(|x| (&x.0).into())
             })
             .or_else(|_| self.cs())
     }
 }
 
-impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
+impl<'a, T: crate::types::NodeId> crate::types::CLending<'a, u16, T::IdN> for HashedNodeRef<'_, T> {
+    type Children = crate::types::ChildrenSlice<'a, T::IdN>;
+}
+
+impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> crate::types::WithChildren
+    for HashedNodeRef<'a, T>
+{
     type ChildIdx = u16;
-    type Children<'b>
-        = MySlice<Self::TreeId>
-    where
-        Self: 'b;
+    // type Children<'b>
+    //     = MySlice<Self::TreeId>
+    // where
+    //     Self: 'b;
 
     fn child_count(&self) -> u16 {
         self.cs()
@@ -593,12 +597,12 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
             .expect("too much children")
     }
 
-    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        self.cs()
-            .unwrap_or_else(|x| {
-                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!("{}", x)
-            })
+    fn child(&self, idx: &Self::ChildIdx) -> Option<NodeIdentifier> {
+        self.cs().ok()?
+            // .unwrap_or_else(|x| {
+            //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            //     panic!("{}", x)
+            // })
             .0
             .get(idx.to_usize().unwrap())
             .map(|x| *x)
@@ -608,7 +612,7 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
         // })
     }
 
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<NodeIdentifier> {
         let v = self.cs().ok()?;
         // .unwrap_or_else(|x| {
         //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
@@ -636,12 +640,16 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     //     cs.to_vec()
     // }
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
+    fn children(
+        &self,
+    ) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         self.cs().ok()
     }
 }
 
-impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
+impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> crate::types::WithRoles
+    for HashedNodeRef<'a, T>
+{
     fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(
         &self,
         at: Self::ChildIdx,
@@ -677,11 +685,11 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     type HK = SyntaxNodeHashsKinds;
     type HP = HashSize;
 
-    fn hash(&self, kind: &Self::HK) -> Self::HP {
+    fn hash(&self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
         self.0
             .get_component::<SyntaxNodeHashs<Self::HP>>()
             .unwrap()
-            .hash(kind)
+            .hash(&kind)
     }
 }
 
@@ -699,7 +707,9 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Tree
     for HashedNodeRef<'a, Id>
 {
     fn has_children(&self) -> bool {
-        self.cs().map(|x| !x.is_empty()).unwrap_or(false)
+        self.cs()
+            .map(|x| !crate::types::Childrn::is_empty(&x))
+            .unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {

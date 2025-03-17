@@ -85,12 +85,13 @@ fn simple() {
     {
         // check if everything is there
         use crate::types::NodeStore;
-        let entry = node_store.resolve(&entity);
-        use std::ops::Deref;
-        if let Some(t) = entry.get_component::<&Ty>() {
-            assert_eq!(&ty, t.deref());
-        } else {
-            unreachable!()
-        };
+        todo!()
+        // let entry = node_store.resolve(&entity);
+        // use std::ops::Deref;
+        // if let Some(t) = entry.get_component::<&Ty>() {
+        //     assert_eq!(&ty, t.deref());
+        // } else {
+        //     unreachable!()
+        // };
     }
 }

@@ -420,21 +420,18 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                 #[cfg(feature = "tsg")]
                 let tsg = if let Some(q) = &t.tsg {
                     let tsg = q.deref();
-                    type M<'hast, HAST, Acc> = hyperast_tsquery::QueryMatcher<'hast, HAST, Acc>;
-                    type ExtQ<'hast, HAST, Acc> = hyperast_tsquery::ExtendingStringQuery<
-                        M<'hast, HAST, Acc>,
+                    type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
+                    type ExtQ<'hast, TS, Acc> = hyperast_tsquery::ExtendingStringQuery<
+                        M<'hast, TS, Acc>,
                         tree_sitter::Language,
                     >;
 
                     let source: &str = tsg;
                     let language = hyperast_gen_ts_java::language();
 
-                    let mut file = tree_sitter_graph::ast::File::<
-                        M<
-                            &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
-                            &Acc,
-                        >,
-                    >::new(language.clone());
+                    let mut file = tree_sitter_graph::ast::File::<M<&SimpleStores, &Acc>>::new(
+                        language.clone(),
+                    );
 
                     // let mty: &[_] = &[];
                     // let query_source = ExtQ::new(language.clone(), Box::new(mty), source.len());
@@ -452,8 +449,9 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                     M::check(&mut file).unwrap();
 
                     let mut functions = tree_sitter_graph::functions::Functions::<
-                        tree_sitter_graph::graph::GraphErazing<
-                            hyperast_tsquery::MyNodeErazing<
+                        tree_sitter_graph::graph::Graph<
+                            // RNode<
+                            hyperast_tsquery::stepped_query_imm::Node<
                                 hyperast::store::SimpleStores<
                                     TStore,
                                     &hyperast::store::nodes::legion::NodeStoreInner,
@@ -462,7 +460,18 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                                 &Acc,
                             >,
                         >,
-                    >::stdlib();
+                        // tree_sitter_graph::graph::GraphErazing<
+                        //     hyperast_tsquery::MyNodeErazing<
+                        //         hyperast::store::SimpleStores<
+                        //             TStore,
+                        //             &hyperast::store::nodes::legion::NodeStoreInner,
+                        //             &hyperast::store::labels::LabelStore,
+                        //         >,
+                        //         &Acc,
+                        //     >,
+                        // >,
+                    >::default();
+                    todo!();
                     // TODO port those path functions to the generified variant in my fork
                     // hyperast_tsquery::add_path_functions(&mut functions);
                     let functions = functions.as_any();
@@ -731,12 +740,7 @@ impl RepositoryProcessor {
                     #[cfg(feature = "tsg")]
                     {
                         let spec: &tree_sitter_graph::ast::File<
-                            hyperast_tsquery::QueryMatcher<
-                                &hyperast::store::SimpleStores<
-                                    hyperast_gen_ts_java::types::TStore,
-                                >,
-                                &Acc,
-                            >,
+                            hyperast_tsquery::QueryMatcher<_, &Acc>,
                         > = tsg.0.downcast_ref().unwrap();
                         let query = java_proc.query.as_ref().map(|x| &x.0);
                         let functions = tsg.1.clone();
@@ -768,7 +772,7 @@ impl RepositoryProcessor {
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
                             .with_line_break(line_break);
-                    crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                    crate::java::handle_java_file::<_>(&mut java_tree_gen, n, t)
                 } else {
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(stores, md_cache)
                         .with_line_break(line_break);

@@ -90,9 +90,8 @@ fn compare_querying_group(c: &mut Criterion) {
             &p,
             |b, (q, f)| {
                 b.iter(|| {
-                    let query =
-                        hyperast_tsquery::Query::new(q.1, hyperast_gen_ts_java::language())
-                            .unwrap();
+                    let query = hyperast_tsquery::Query::new(q.1, hyperast_gen_ts_java::language())
+                        .unwrap();
                     let mut stores = hyperast::store::SimpleStores::<
                         hyperast_gen_ts_java::types::TStore,
                     >::default();
@@ -123,7 +122,8 @@ fn compare_querying_group(c: &mut Criterion) {
                     for _ in 0..p.0 .4 {
                         for &n in &roots {
                             let pos = hyperast::position::StructuralPosition::new(n);
-                            let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
+                            let cursor =
+                                hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
                             let matches = query.matches(cursor);
                             black_box(matches.count());
                         }
@@ -146,7 +146,11 @@ fn compare_querying_group(c: &mut Criterion) {
                         hyperast_gen_ts_java::types::TStore,
                     >::default();
                     let mut md_cache = Default::default();
-                    let more = hyperast_tsquery::PreparedQuerying::from(&precomp);
+                    let more = hyperast_tsquery::PreparedQuerying::<
+                        _,
+                        hyperast_gen_ts_java::types::TStore,
+                        _,
+                    >::from(&precomp);
                     let mut java_tree_gen =
                         JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, more);
                     let roots: Vec<_> = f
@@ -170,7 +174,8 @@ fn compare_querying_group(c: &mut Criterion) {
                     for _ in 0..p.0 .4 {
                         for &n in &roots {
                             let pos = hyperast::position::StructuralPosition::new(n);
-                            let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
+                            let cursor =
+                                hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
                             let matches = query.matches(cursor);
                             black_box(matches.count());
                         }

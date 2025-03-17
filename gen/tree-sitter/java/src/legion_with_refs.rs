@@ -4,6 +4,7 @@ use crate::{
     types::{TStore, Type},
     TNode,
 };
+use hyperast::store::nodes::legion::TMarker;
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
@@ -275,9 +276,7 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<Type>
-        + tree_gen::PreproTSG<'stores>
-        + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -476,8 +475,8 @@ pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::
     hyperast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
-impl<'stores, 'cache, 's, T, TS: JavaEnabledTypeStore>
-    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, NoOpMore<(TS, T), Acc>, true>
+impl<'stores, 'cache, TS: JavaEnabledTypeStore, X>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, NoOpMore<X, Acc>, true>
 {
     pub fn new(stores: &'stores mut SimpleStores<TS>, md_cache: &'cache mut MDCache) -> Self {
         Self {
@@ -516,8 +515,7 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
         cursor: tree_sitter::TreeCursor,
     ) -> FullNode<StatsGlobalData, Local>
     where
-        for<'s> More:
-            tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores> + tree_gen::More<Acc = Acc>,
+        More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
     {
         todo!()
     }
@@ -574,13 +572,7 @@ where
     TS: JavaEnabledTypeStore<Ty2 = Type>
         + 'static
         + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<Type>
-        + tree_gen::PreproTSG<'stores>
-        + tree_gen::More<
-            TS = TS,
-            T = hyperast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
-            Acc = Acc,
-        >,
+    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
@@ -773,9 +765,7 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<Type>
-        + tree_gen::PreproTSG<'stores>
-        + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
 {
     type Acc = Acc;
     type Global = Global<'stores>;
@@ -848,7 +838,7 @@ where
             if More::ENABLED {
                 acc.precomp_queries |=
                     self.more
-                        .match_precomp_queries(stores.clone(), &acc, label.as_deref());
+                        .match_precomp_queries(stores, &acc, label.as_deref());
             }
             let children_is_empty = acc.simple.children.is_empty();
 
@@ -860,12 +850,12 @@ where
             }
             if More::GRAPHING {
                 // TODO find a way of removing those 'static, probably an even lower API would work (the File<G> is really bad in the end)
-                // SAFETY: it is just an issue with associated types and invariants raising everything to 'static... 
-                let stores: SimpleStores<
-                    TS,
-                    &'static hyperast::store::nodes::legion::NodeStoreInner,
-                    &'static hyperast::store::labels::LabelStore,
-                > = unsafe { std::mem::transmute(stores.clone()) };
+                // SAFETY: it is just an issue with associated types and invariants raising everything to 'static...
+                // let stores: SimpleStores<
+                //     TS,
+                //     &'static hyperast::store::nodes::legion::NodeStoreInner,
+                //     &'static hyperast::store::labels::LabelStore,
+                // > = unsafe { std::mem::transmute(stores.clone()) };
                 self.more
                     .compute_tsg(stores, &acc, label.as_deref())
                     .unwrap();
@@ -943,9 +933,7 @@ impl<
         'stores,
         'cache,
         TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-        More: tree_gen::Prepro<Type>
-            + tree_gen::PreproTSG<'stores>
-            + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
+        More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
         const HIDDEN_NODES: bool,
     > NodeStoreExt<HashedNode>
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
@@ -1010,9 +998,9 @@ where
                 } else {
                     let node: HashedNodeRef<_> = self.stores.node_store.resolve(c);
                     let hashs = SyntaxNodeHashs {
-                        structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
-                        label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
-                        syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
+                        structt: WithHashs::hash(&node, SyntaxNodeHashsKinds::Struct),
+                        label: WithHashs::hash(&node, SyntaxNodeHashsKinds::Label),
+                        syntax: WithHashs::hash(&node, SyntaxNodeHashsKinds::Syntax),
                     };
                     let kind: TS::Ty = todo!(); //node.get_type();
                     let metrics = SubTreeMetrics {

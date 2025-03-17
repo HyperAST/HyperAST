@@ -7,7 +7,7 @@ use hyperast_gen_ts_tsquery::auto::tsq_ser_meta::Converter;
 use hyperast::position::position_accessors::{SolvedPosition, WithPreOrderOffsets};
 use hyperast::store::defaults::NodeIdentifier;
 use hyperast_gen_ts_tsquery::auto::tsq_transform;
-use hyperast_tsquery::Node as _;
+use hyperast_tsquery::{Cursor, Node as _};
 use num::integer::Average;
 
 type QStore = hyperast::store::SimpleStores<hyperast_gen_ts_tsquery::types::TStore>;
@@ -53,8 +53,9 @@ pub struct QueryLattice<E> {
 impl QueryLattice<NodeIdentifier> {
     fn generate_query0<'hast, HAST>(&mut self, stores: &'hast HAST, from: HAST::IdN) -> QueryId
     where
-        HAST: hyperast::types::HyperAST<'hast>,
+        HAST: hyperast::types::HyperAST,
         HAST::IdN: std::fmt::Debug,
+        HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
     {
         use hyperast_gen_ts_tsquery::auto::tsq_ser::TreeToQuery;
         let query = TreeToQuery::<_, _, true>::with_pred(stores, from, |_| true);
@@ -545,7 +546,7 @@ fn simp_search_imm_preds(
     let mut per_label = std::collections::HashMap::default();
     let pos = hyperast::position::structural_pos::CursorWithPersistance::new(query);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
-    let matches = meta_simp.matches(cursor);
+    let mut matches = meta_simp.matches(cursor);
     let Some(cid_p) = meta_simp.capture_index_for_name("pred") else {
         return Default::default();
     };
@@ -553,12 +554,15 @@ fn simp_search_imm_preds(
         return Default::default();
     };
     // let cid_i = meta_simp.capture_index_for_name("id").unwrap();
-    for capts in matches {
+    loop {
+        let Some(capts) = matches.next() else {
+            break
+        };
         let Some(p) = capts.nodes_for_capture_index(cid_p).next() else {
             continue;
         };
         let k = capts.nodes_for_capture_index(cid_l).next().unwrap();
-        let k = k.text(());
+        let k = k.text(matches.cursor().text_provider());
         // let v = capts.nodes_for_capture_index(cid_i).next().unwrap();
         // let v = v.text(());
         let v = "";

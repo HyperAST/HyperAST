@@ -4,13 +4,14 @@ use std::fmt::Display;
 use hyperast::types;
 use hyperast::types::HyperAST;
 use hyperast::types::HyperType as _;
-use hyperast::types::IterableChildren as _;
+use hyperast::types::Children as _;
+use hyperast::types::Childrn as _;
 use hyperast::types::WithPrecompQueries;
 use hyperast::types::WithRoles;
 
 pub struct TreeToQuery<
     'hast,
-    HAST: HyperAST<'hast>,
+    HAST: HyperAST,
     TIdN: hyperast::types::TypedNodeId,
     // vanilla tsq syntax
     const V: bool = false,
@@ -25,8 +26,8 @@ pub struct TreeToQuery<
 impl<
         'store,
         'a,
-        HAST: types::TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId,
     > TreeToQuery<'store, HAST, TIdN>
 {
     pub fn new(
@@ -45,16 +46,16 @@ impl<
 
 impl<
         'hast,
-        HAST: types::TypedHyperAST<'hast, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         const V: bool,
         const PP: bool,
     > Display for TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
     <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -64,16 +65,16 @@ where
 
 impl<
         'hast,
-        HAST: types::TypedHyperAST<'hast, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        HAST: types::TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId + 'static,
         const V: bool,
         const PP: bool,
     > TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
-    HAST::T: WithRoles,
-    HAST::T: WithPrecompQueries,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
     <HAST::TS as hyperast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn serialize(
@@ -110,10 +111,10 @@ where
                     let it = children.iter_children();
                     let mut f = false;
                     for id in it {
-                        if self.should_skip(id) {
+                        if self.should_skip(&id) {
                             continue;
                         }
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() && !kind.is_hidden() {
                             if PP {
                                 if f {
@@ -131,10 +132,10 @@ where
                     let it = children.iter_children();
                     let mut f = false;
                     for id in it {
-                        if self.should_skip(id) {
+                        if self.should_skip(&id) {
                             continue;
                         }
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() && !kind.is_hidden() {
                             if PP {
                                 if f {
@@ -153,11 +154,11 @@ where
                     write!(out, "(")?;
                     write!(out, "{}", kind.to_string())?;
                     for id in it {
-                        if self.should_skip(id) {
+                        if self.should_skip(&id) {
                             continue;
                         }
 
-                        let kind = self.stores.resolve_type(id);
+                        let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
                             if PP {
                                 write!(out, "\n{}", "  ".repeat(ind + 1))?;

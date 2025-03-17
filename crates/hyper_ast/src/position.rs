@@ -45,11 +45,12 @@ pub trait TreePath<IdN = NodeIdentifier, Idx = u16> {
     fn offset(&self) -> Option<&Idx>;
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN>,
-        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST: HyperAST<IdN = IdN::IdN>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
-        IdN::IdN: NodeId<IdN = IdN::IdN>;
+        IdN::IdN: NodeId<IdN = IdN::IdN>
+        ;
 }
 
 pub trait TreePathMut<IdN, Idx>: TreePath<IdN, Idx> {
@@ -164,7 +165,7 @@ pub mod position_accessors {
     where
         IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
         P: WithPreOrderPath<IdN> + RootedPosition<IdN>,
-        HAST: HyperAST<'store, IdN = IdN::IdN, Idx = P::Idx>,
+        HAST: HyperAST<IdN = IdN, Idx = P::Idx>,
         <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
         <IdN as NodeId>::IdN: std::fmt::Debug,
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
@@ -182,7 +183,7 @@ pub mod position_accessors {
             if !set.insert(x.clone()) {
                 panic!("path returns 2 times the same node")
             }
-            let b = store.node_store().resolve(prev.as_id());
+            let b = store.node_store().resolve(&prev);
             assert_eq!(x.as_id(), &b.child(&o0).expect("should have a child"));
             prev = x.clone();
         }
@@ -209,7 +210,7 @@ pub mod position_accessors {
     where
         IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
         P: WithPostOrderPath<IdN> + SolvedPosition<IdN>,
-        HAST: HyperAST<'store, IdN = IdN::IdN, Idx = P::Idx>,
+        HAST: HyperAST<IdN = IdN::IdN, Idx = P::Idx>,
         <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
         <IdN as NodeId>::IdN: std::fmt::Debug,
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
@@ -245,7 +246,7 @@ pub mod position_accessors {
     where
         IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
         P: WithFullPostOrderPath<IdN>,
-        HAST: HyperAST<'store, IdN = IdN::IdN, Idx = P::Idx>,
+        HAST: HyperAST<IdN = IdN::IdN, Idx = P::Idx>,
         <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
         <IdN as NodeId>::IdN: std::fmt::Debug,
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
@@ -374,8 +375,10 @@ pub mod computing_offset_bottom_up;
 
 mod computing_offset_top_down;
 pub use computing_offset_top_down::{
-    compute_position, compute_position_and_nodes, compute_position_and_nodes2,
-    compute_position_and_nodes3, compute_range,
+    compute_position, compute_position_and_nodes, 
+    // compute_position_and_nodes2,
+    // compute_position_and_nodes3, 
+    compute_range,
 };
 
 mod computing_path;

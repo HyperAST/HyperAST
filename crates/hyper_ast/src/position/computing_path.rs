@@ -1,7 +1,7 @@
 //! Gather most of the common behaviors used to compute a path from an offset
 use num::ToPrimitive;
 
-use crate::types::{HyperAST, IterableChildren, NodeStore, WithChildren, WithSerialization};
+use crate::types::{Children, Childrn, HyperAST, NodeStore, WithChildren, WithSerialization};
 
 /// must be in a file
 pub fn resolve_range<'store, HAST>(
@@ -11,8 +11,9 @@ pub fn resolve_range<'store, HAST>(
     stores: &'store HAST,
 ) -> (HAST::IdN, Vec<usize>)
 where
-    HAST: HyperAST<'store>,
-    HAST::T: WithSerialization,
+    HAST: HyperAST,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
     HAST::IdN: Copy,
 {
     let mut offset = 0;
@@ -22,7 +23,7 @@ where
         let b = stores.node_store().resolve(&x);
         if let Some(cs) = b.children() {
             for (y, child_id) in cs.iter_children().enumerate() {
-                let b = stores.node_store().resolve(child_id);
+                let b = stores.node_store().resolve(&child_id);
 
                 let len = b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
                 if offset + len < start {
@@ -31,14 +32,14 @@ where
                     break 'main;
                 } else {
                     offsets.push(y);
-                    x = *child_id;
+                    x = child_id;
                     break;
                 }
                 offset += len;
             }
         } else {
             break;
-        }
+        };
     }
     (x, offsets)
 }

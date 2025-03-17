@@ -278,7 +278,7 @@ impl CaptureRes {
 impl<IdN, Idx> CaptureRes<IdN, Idx> {
     pub fn try_label<'store, HAST>(&self, store: &'store HAST) -> Option<&'store str>
     where
-        HAST: HyperAST<'store, IdN = IdN, Idx = Idx>,
+        HAST: HyperAST<IdN = IdN, Idx = Idx>,
     {
         use hyperast::types::LabelStore;
         use hyperast::types::NodeStore;

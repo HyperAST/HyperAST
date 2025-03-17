@@ -4,12 +4,12 @@ use http::{HeaderMap, StatusCode};
 use hyperast::{
     position::position_accessors::WithPreOrderOffsets,
     store::defaults::NodeIdentifier,
-    types::{Children, HyperAST, IterableChildren, Typed, WithChildren, WithStats},
+    types::{Children, HyperAST, Childrn, Typed, WithChildren, WithStats},
 };
 use hyperast_vcs_git::git::Oid;
 use hyper_diff::{
     decompressed_tree_store::ShallowDecompressedTreeStore,
-    matchers::mapping_store::MultiMappingStore,
+    matchers::{mapping_store::MultiMappingStore, Decompressible},
 };
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -599,10 +599,12 @@ pub fn differential(
     let repositories = state.repositories.read().unwrap();
     let stores = &repositories.processor.main_stores;
 
-    let hyperast = &hyperast_vcs_git::no_space::as_nospaces(stores);
+    let hyperast = &hyperast_vcs_git::no_space::as_nospaces2(stores);
     let (src_tree, dst_tree) =
         crate::utils::get_pair_simp(&state.partial_decomps, hyperast, &current_tr, &other_tr);
     let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
+    let src_tree = Decompressible{hyperast, decomp: src_tree};
+    let dst_tree = Decompressible{hyperast, decomp: dst_tree};
 
     let mut mapper = hyper_diff::matchers::Mapper {
         hyperast,
@@ -614,7 +616,7 @@ pub fn differential(
     };
 
     let subtree_mappings =
-        { crate::matching::top_down(hyperast, mapper.mapping.src_arena, mapper.mapping.dst_arena) };
+        { crate::matching::top_down(hyperast, mapper.mapping.src_arena.decomp, mapper.mapping.dst_arena.decomp) };
 
     log::info!("done top_down mapping");
 
@@ -644,7 +646,7 @@ pub fn differential(
                 use hyper_diff::decompressed_tree_store::LazyDecompressedTreeStore;
                 let cs = mapper
                     .src_arena
-                    .decompress_children(&hyperast.node_store, &src);
+                    .decompress_children(&src);
                 if cs.is_empty() {
                     log::debug!("empty");
                     return true;

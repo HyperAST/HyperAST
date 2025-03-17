@@ -5,16 +5,18 @@ use crate::auto::tsq_ser_meta::Conv;
 
 use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatcher};
 
+use hyperast::types::AstLending;
+use hyperast::types::TypedLending;
 use tree_sitter::CaptureQuantifier as Quant;
 
 use hyperast::types::HyperType;
 use hyperast::types::TypedHyperAST;
-use hyperast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
+use hyperast::types::{Childrn, Typed, TypedNodeStore, WithChildren};
 
 pub struct MatchingIter<
     'store,
-    HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
     PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
 > {
     slf: PM,
@@ -27,8 +29,8 @@ pub struct MatchingIter<
 
 impl<
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
         PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > MatchingIter<'store, HAST, TIdN, PM>
 {
@@ -45,8 +47,8 @@ impl<
 
 impl<
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: hyperast::types::TypedNodeId, // <IdN = HAST::IdN>,
         PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > Iterator for MatchingIter<'store, HAST, TIdN, PM>
 where
@@ -70,8 +72,8 @@ where
 }
 impl<
         'store,
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+        HAST: TypedHyperAST<TIdN>,
+        TIdN: 'store + hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
         PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > MatchingIter<'store, HAST, TIdN, PM>
 where
@@ -87,7 +89,7 @@ where
         pattern: &Pattern<TIdN::Ty>,
         id: HAST::IdN,
     ) -> Vec<MatchingRes<HAST::IdN, HAST::Idx>> {
-        let Some((n, tid)) = (&self.code_store).typed_node_store().try_resolve(&id) else {
+        let Some((n, tid)) = (&self.code_store).try_resolve(&id) else {
             dbg!();
             return vec![];
         };
@@ -256,11 +258,7 @@ where
                             mut captures,
                         } => {
                             let name = name.clone();
-                            let n = (&self.code_store)
-                                .typed_node_store()
-                                .try_resolve(&id)
-                                .unwrap()
-                                .0;
+                            let n = (&self.code_store).try_resolve(&id).unwrap().0;
                             let v = CaptureRes {
                                 id: name,
                                 match_node: id.clone(),
@@ -464,7 +462,7 @@ where
         mut immediate: bool,
         // mut i: HAST::Idx,
         p_t: TIdN::Ty,
-        parent_node: &HAST::TT,
+        parent_node: &<HAST as TypedLending<'_, TIdN::Ty>>::TT,
     ) -> Vec<MatchingRes<HAST::IdN, HAST::Idx>> {
         // dbg!(i);
         let mut result = vec![];
@@ -481,6 +479,7 @@ where
                     let n = cs.node();
                     let t = n.get_type();
                     if t.is_spaces() {
+                        drop(n);
                         cs.adv();
                         continue;
                     }
@@ -490,6 +489,7 @@ where
                     // }
                     if t.is_syntax() {
                         dbg!(t);
+                        drop(n);
                         cs.adv();
                         continue;
                     }
@@ -512,6 +512,7 @@ where
             let n = cs.node();
             let t = n.get_type();
             if t.is_spaces() {
+                drop(n);
                 cs.adv();
                 continue;
             }
@@ -532,6 +533,7 @@ where
                 }
                 Pattern::NegatedField(field) => {
                     dbg!(field);
+                    drop(n);
                     cs.adv();
                     continue;
                 }
@@ -546,6 +548,7 @@ where
                         if immediate {
                             break;
                         }
+                        drop(n);
                         cs.adv();
                         continue;
                     } else {
@@ -622,6 +625,7 @@ where
                         if immediate {
                             break;
                         }
+                        drop(n);
                         cs.adv();
                         continue;
                     }
@@ -633,10 +637,12 @@ where
                 if !curr_p.unwrap_captures().is_any_node()
                     && t.as_shared() == hyperast::types::Shared::Comment
                 {
+                    drop(n);
                     cs.adv();
                     continue;
                 }
                 if t.is_syntax() {
+                    drop(n);
                     cs.adv();
                     continue;
                 }
@@ -811,6 +817,7 @@ where
                 break;
             }
             // assert_eq!(immediate, false);
+            drop(n);
             cs.adv();
         }
         result
@@ -843,8 +850,8 @@ impl<'store, HAST, IdN: Clone> Clone for ChildIt<'store, HAST, IdN> {
 }
 impl<'store, TIdN, HAST> ChildIt<'store, HAST, TIdN>
 where
-    HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyperast::types::TypedNodeId<IdN = HAST::IdN>,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
 {
     fn new(stores: &'store HAST, id: TIdN) -> Self {
         Self {
@@ -859,12 +866,8 @@ where
         todo!()
     }
     /// panics if nothing there, use peek before calling it
-    fn node(&self) -> HAST::TT {
-        self.stores
-            .typed_node_store()
-            .try_resolve(todo!())
-            .unwrap()
-            .0
+    fn node(&self) -> <HAST as TypedLending<'_, TIdN::Ty>>::TT {
+        self.stores.try_resolve(todo!()).unwrap().0
     }
     /// advance to next named node
     fn adv(&mut self) {

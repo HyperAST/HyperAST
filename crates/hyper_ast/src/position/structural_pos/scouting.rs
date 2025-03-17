@@ -8,7 +8,7 @@ use crate::PrimInt;
 use crate::{
     store::defaults::LabelIdentifier,
     types::{
-        self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
+        self, AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled,
         NodeId, NodeStore, TypeStore, Typed, WithChildren, WithSerialization,
     },
 };
@@ -47,8 +47,8 @@ impl<IdN: Eq + Copy, Idx: PrimInt> TreePath<IdN, Idx> for Scout<IdN, Idx> {
     }
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN>,
-        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST: HyperAST<IdN = IdN::IdN>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>,
@@ -134,10 +134,10 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         stores: &'store HAST,
     ) -> Position
     where
-        HAST: HyperAST<'store, IdN = IdN, Label = LabelIdentifier>,
-        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren<ChildIdx = Idx>,
+        HAST: HyperAST<IdN = IdN, Label = LabelIdentifier, Idx = Idx>,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization,
         // HAST::Types: Eq + TypeTrait,
-        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        HAST::Idx:  Debug,
         IdN: Copy + Debug + NodeId<IdN = IdN>,
     {
         self.check(stores).unwrap();
@@ -173,7 +173,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
                 let t = stores.resolve_type(&p);
                 // println!("t1:{:?}", t);
                 let o = self.path.offsets[i];
-                let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
+                let o: HAST::Idx = num::cast(o).unwrap();
                 let c: usize = {
                     let v: Vec<_> = b
                         .children()
@@ -226,7 +226,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             let t = stores.resolve_type(&p);
             // println!("t3:{:?}", t);
             let o = self.path.offsets[i];
-            let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
+            let o: HAST::Idx = num::cast(o).unwrap();
             let c: usize = {
                 let v: Vec<_> = b
                     .children()

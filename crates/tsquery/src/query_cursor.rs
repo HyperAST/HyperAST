@@ -788,12 +788,19 @@ where
     }
 }
 
-impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
+impl<'query, Cursor, Node> QueryCursor<'query, Cursor, Node> {
     /// Set the max depth where queries can start being matched
     /// For example, set it to 0 to only match on the node you start on.
     pub fn set_max_start_depth(&mut self, max: u32) {
         self.max_start_depth = max;
     }
+    pub fn _next_match(&mut self) -> Option<QueryMatch<Cursor>> {
+        todo!()
+    }
+
+}
+
+impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
 
     fn should_descend(&self, node_intersects_range: bool) -> bool {
         if node_intersects_range && self.depth < self.max_start_depth {

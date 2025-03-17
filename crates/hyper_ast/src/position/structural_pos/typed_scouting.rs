@@ -34,8 +34,8 @@ where
 
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
-        HAST: HyperAST<'store, IdN = <TIdN::IdN as NodeId>::IdN>,
-        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST: HyperAST<IdN = <TIdN::IdN as NodeId>::IdN>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         TIdN::IdN: NodeId,
         <TIdN::IdN as NodeId>::IdN: NodeId<IdN = <TIdN::IdN as NodeId>::IdN>,
@@ -219,13 +219,15 @@ where
         _stores: &'store HAST,
     ) -> Position
     where
-        HAST: HyperAST<'store, IdN = TIdN::IdN, Label = LabelIdentifier>,
-        HAST: crate::types::TypedHyperAST<'store, TIdN>,
-        <HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT:
-            Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,
-        <HAST as crate::types::HyperAST<'store>>::T: WithSerialization + WithChildren,
-        <<HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT as types::WithChildren>::ChildIdx:
-            Debug,
+        HAST: HyperAST<
+        // IdN = TIdN::IdN, 
+        Label = LabelIdentifier>,
+        HAST: crate::types::TypedHyperAST<TIdN>,
+        // <HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT:
+        //     Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,
+        // <HAST as crate::types::HyperAST<'store>>::T: WithSerialization + WithChildren,
+        // <<HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT as types::WithChildren>::ChildIdx:
+        //     Debug,
         HAST::IdN: Copy + Debug,
         TIdN: Debug,
         TIdN::IdN: NodeId<IdN = TIdN::IdN>,

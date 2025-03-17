@@ -51,7 +51,7 @@ pub struct ResultsSummary<MD> {
     pub gen_t: f64,
 }
 
-impl<'a, A, MD: Clone, HAST, DS, DD> DiffResult<A, Mapper<'a, HAST, DS, DD, VecStore<u32>>, MD> {
+impl<A, MD: Clone, HAST, DS, DD> DiffResult<A, Mapper<HAST, DS, DD, VecStore<u32>>, MD> {
     pub fn summarize(&self) -> ResultsSummary<MD> {
         use crate::actions::Actions;
         use crate::matchers::mapping_store::MappingStore;

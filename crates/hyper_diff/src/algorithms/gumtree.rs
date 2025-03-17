@@ -7,51 +7,50 @@ use crate::{
         heuristic::gt::{
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::GreedySubtreeMatcher,
-        },
-        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-        Mapper,
+        }, mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore}, Decompressible, Mapper, Mapping
     },
     tree::tree_path::CompressedTreePath,
 };
-use hyperast::types::{self, HyperAST};
+use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 
-type CDS<T> = CompletePostOrder<T, u32>;
+type CDS<HAST:HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 use super::MappingDurations;
 
 use super::{DiffResult, PreparedMappingDurations};
 
-pub fn diff<'store, HAST: HyperAST<'store>>(
-    hyperast: &'store HAST,
+pub fn diff<HAST: HyperAST + Copy>(
+    hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
 ) -> DiffResult<
     SimpleAction<
         HAST::Label,
-        CompressedTreePath<<HAST::T as types::WithChildren>::ChildIdx>,
+        CompressedTreePath<HAST::Idx>,
         HAST::IdN,
     >,
-    Mapper<'store, HAST, CDS<HAST::T>, CDS<HAST::T>, VecStore<u32>>,
+    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::Idx: hyperast::PrimInt,
-    HAST::Label: Debug + Clone + Copy,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::Label: Debug + Clone + Copy + Eq,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
     let now = Instant::now();
-    let mapper: Mapper<_, CDS<HAST::T>, CDS<HAST::T>, VecStore<_>> =
-        hyperast.decompress_pair(src, dst).into();
+    let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
+        hyperast.decompress_pair2(src, dst).into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
     let mapper =
-        GreedySubtreeMatcher::<_, _, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+        GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _, _>::match_it(mapper);
+    let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
     dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
@@ -62,11 +61,11 @@ where
 
     let mapper = mapper.map(
         |x| x,
-        |dst_arena| SimpleBfsMapper::from(node_store, dst_arena),
+        |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
     );
     let prepare_gen_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
-    let actions = ScriptGenerator::compute_actions(mapper.hyperast, &mapper.mapping).ok();
+    let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
     let gen_t = now.elapsed().as_secs_f64();
     dbg!(gen_t);
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);

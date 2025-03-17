@@ -13,15 +13,52 @@ impl Debug for NodeStore {
     }
 }
 
+impl<'a> crate::types::NLending<'a, NodeIdentifier> for NodeStore {
+    type N = HashedNodeRef<'a, NodeIdentifier>;
+}
+
+pub struct TMarker<IdN>(std::marker::PhantomData<IdN>);
+
+impl<IdN> Default for TMarker<IdN> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<'a, IdN: 'a + crate::types::NodeId> crate::types::NLending<'a, IdN> for TMarker<IdN> {
+    type N = HashedNodeRef<'a, IdN>;
+}
+
+impl<IdN> crate::types::Node for TMarker<IdN> {}
+
+impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
+    type TreeId = IdN;
+}
+
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
-    type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+    fn resolve(&self, id: &NodeIdentifier) -> <Self as crate::types::NLending<'_, NodeIdentifier>>::N {
         self.internal
             .entity(id.clone())
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
+
+    // type NMarker = TMarker<NodeIdentifier>;
 }
+
+
+// impl crate::types::NodStore<NodeIdentifier> for NodeStore {
+//     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
+// }
+
+// impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
+//     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+//         self.internal
+//             .entity(id.clone())
+//             .map(|x| HashedNodeRef::new(x))
+//             .unwrap()
+//     }
+// }
 
 impl NodeStore {
     pub fn len(&self) -> usize {

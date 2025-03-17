@@ -3,6 +3,8 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+use num::ToPrimitive;
+
 use crate::{utils::SafeUpcast, Capture};
 
 // TODO use indexes on typed collections, it will for me to remove some casts and will help to normalize/generify indexes.
@@ -159,6 +161,12 @@ impl Default for CaptureId {
     }
 }
 
+impl From<u32> for CaptureId {
+    fn from(value: u32) -> Self {
+        CaptureId(value.to_u16().expect("an u16 and not an u32"))
+    }
+}
+
 impl CaptureId {
     pub(crate) const NONE: Self = Self(u16::MAX);
     pub(crate) const ZERO: Self = Self(0);
@@ -234,10 +242,14 @@ impl<Node> Captures<Node> {
         &'a self,
         index: CaptureId,
     ) -> impl Iterator<Item = &'a Node> {
+        dbg!();
         self.0
             .iter()
             .filter(move |x| x.index == index)
             .map(|x| &x.node)
+    }
+    pub(crate) fn captures(&self) -> &[Capture<Node>] {
+        &self.0
     }
 
     pub(crate) fn clear(&mut self) {

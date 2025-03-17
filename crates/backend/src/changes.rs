@@ -5,9 +5,9 @@ use std::fmt::Debug;
 
 use hyperast::{
     store::defaults::NodeIdentifier,
-    types::{HyperAST, HyperType, IterableChildren, TypeStore, WithChildren, WithStats},
+    types::{HyperAST, HyperType, Childrn, TypeStore, WithChildren, WithStats},
 };
-use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers::Mapper};
+use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers::{Decompressible, Mapper}};
 
 use crate::{matching, no_space, utils::get_pair_simp};
 
@@ -46,7 +46,7 @@ pub(crate) fn added_deleted(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let with_spaces_stores = &repositories.processor.main_stores;
-    let stores = &no_space::as_nospaces(with_spaces_stores);
+    let stores = &no_space::as_nospaces2(with_spaces_stores);
 
     if src_tr == dst_tr {
         return Ok((
@@ -135,6 +135,8 @@ pub(crate) fn added_deleted(
                 // std::collections::hash_map::Entry::Vacant(entry) => {
                 let mappings = VecStore::default();
                 let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
+                let src_arena = Decompressible{hyperast, decomp: src_arena};
+                let dst_arena = Decompressible{hyperast, decomp: dst_arena};
                 dbg!(src_arena.len());
                 dbg!(dst_arena.len());
                 let src_size = stores.node_store.resolve(src_tr).size();
@@ -156,7 +158,7 @@ pub(crate) fn added_deleted(
                     mapper.mapping.src_arena.len(),
                     mapper.mapping.dst_arena.len(),
                 );
-                matching::full2(hyperast, &mut mapper);
+                matching::full2(&mut mapper);
                 let vec_store = mapper.mappings.clone();
 
                 dbg!();
@@ -227,7 +229,7 @@ pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(
     let mut stack = {
         let b = stores.node_store().resolve(root);
         let cs = b.children().unwrap();
-        let children = cs.iter_children().copied().collect();
+        let children = cs.iter_children().collect();
         let i_no_s = b.size_no_spaces() as u32;
         let i_w_s = b.size() as u32;
         vec![Ele {
@@ -279,7 +281,7 @@ pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(
                     // dbg!(b.size_no_spaces(), b.size());
                     Ele {
                         id,
-                        children: cs.iter_children().copied().collect(),
+                        children: cs.iter_children().collect(),
                         i_no_s: index_no_spaces + b.size_no_spaces() as u32 - 1,
                         i_w_s: index_with_spaces + b.size() as u32 - 1,
                         idx: 0,
