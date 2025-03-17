@@ -336,6 +336,13 @@ impl RepositoryProcessor {
                         let local = x.node.local.clone();
                         self.parsing_time += x.parsing_time;
                         self.processing_time += x.processing_time;
+                        log::debug!(
+                            "parsing, processing, n, f: {} {} {} {}",
+                            self.parsing_time.as_secs(),
+                            self.processing_time.as_secs(),
+                            cpp_proc.cache.md_cache.len(),
+                            cpp_proc.cache.object_map.len()
+                        );
                         (local, false)
                     })
                     .map_err(|_| crate::ParseErr::IllFormed)
