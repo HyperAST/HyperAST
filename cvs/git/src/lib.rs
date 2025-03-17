@@ -69,13 +69,25 @@ trait Accumulator: hyperast::tree_gen::Accumulator<Node = (LabelIdentifier, Self
     type Unlabeled;
 }
 
+pub(crate) struct StackEle<Acc, Oid = git2::Oid, O = BasicGitObject> {
+    id: Oid,
+    cs: Vec<O>,
+    acc: Acc,
+}
+
+impl<Acc> StackEle<Acc> {
+    pub(crate) fn new(id: Oid, cs: Vec<BasicGitObject>, acc: Acc) -> Self {
+        Self { id, cs, acc }
+    }
+}
+
 trait Processor<Acc: Accumulator, Oid = self::Oid, O = BasicGitObject> {
     fn process(&mut self) -> Acc::Unlabeled {
         loop {
-            if let Some(current_dir) = self.stack().last_mut().expect("never empty").1.pop() {
+            if let Some(current_dir) = self.stack().last_mut().expect("never empty").cs.pop() {
                 self.pre(current_dir)
-            } else if let Some((oid, _, acc)) = self.stack().pop() {
-                if let Some(x) = self.post(oid, acc) {
+            } else if let Some(StackEle { id, acc, .. }) = self.stack().pop() {
+                if let Some(x) = self.post(id, acc) {
                     return x;
                 }
             } else {
@@ -83,7 +95,7 @@ trait Processor<Acc: Accumulator, Oid = self::Oid, O = BasicGitObject> {
             }
         }
     }
-    fn stack(&mut self) -> &mut Vec<(Oid, Vec<O>, Acc)>;
+    fn stack(&mut self) -> &mut Vec<StackEle<Acc, Oid, O>>;
     fn pre(&mut self, current_dir: O);
     fn post(&mut self, oid: Oid, acc: Acc) -> Option<Acc::Unlabeled>;
 }

@@ -1,4 +1,5 @@
 use crate::processing::erased::ParametrizedCommitProcessor2Handle as PCP2Handle;
+use crate::StackEle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     make::{MakeModuleAcc, MakePartialAnalysis, MD},
@@ -27,7 +28,7 @@ pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_xml::types
 pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut RepositoryProcessor,
     repository: &'a Repository,
-    stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
+    stack: Vec<StackEle<Acc>>,
     dir_path: &'c mut Peekable<Components<'c>>,
     handle: ParametrizedCommitProcessorHandle,
 }
@@ -46,7 +47,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let name = std::str::from_utf8(&name).unwrap().to_string();
-        let stack = vec![(oid, prepared, Acc::from(name))];
+        let stack = vec![StackEle::new(oid, prepared, Acc::from(name))];
         Self {
             stack,
             repository,
@@ -76,7 +77,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     self.prepro
                         .help_handle_makefile(
                             oid,
-                            &mut self.stack.last_mut().unwrap().2,
+                            &mut self.stack.last_mut().unwrap().acc,
                             name,
                             &self.repository,
                             PCP2Handle(self.handle.1, std::marker::PhantomData),
@@ -86,7 +87,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     self.prepro
                         .help_handle_cpp_file2(
                             oid,
-                            &mut self.stack.last_mut().unwrap().2,
+                            &mut self.stack.last_mut().unwrap().acc,
                             &name,
                             self.repository,
                             PCP2Handle(self.handle.1, std::marker::PhantomData),
@@ -95,7 +96,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                 // } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
                 //     self.prepro.help_handle_cpp_file2(
                 //         oid,
-                //         &mut self.stack.last_mut().unwrap().2,
+                //         &mut self.stack.last_mut().unwrap().acc,
                 //         name,
                 //         self.repository,
                 //     )
@@ -119,7 +120,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
         if self.stack.is_empty() {
             Some(full_node)
         } else {
-            let w = &mut self.stack.last_mut().unwrap().2;
+            let w = &mut self.stack.last_mut().unwrap().acc;
             assert!(
                 !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
@@ -131,7 +132,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
         }
     }
 
-    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, MakeModuleAcc)> {
+    fn stack(&mut self) -> &mut Vec<StackEle<MakeModuleAcc>> {
         &mut self.stack
     }
 }
@@ -150,11 +151,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 .eq(std::ffi::OsStr::as_encoded_bytes(s.as_os_str()))
             {
                 self.dir_path.next();
-                self.stack.last_mut().expect("never empty").1.clear();
+                self.stack.last_mut().expect("never empty").cs.clear();
                 let tree = self.repository.find_tree(oid).unwrap();
                 let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
                 self.stack
-                    .push((oid, prepared, MakeModuleAcc::new(name.try_into().unwrap())));
+                    .push(StackEle::new(oid, prepared, MakeModuleAcc::new(name.try_into().unwrap())));
                 return;
             } else {
                 return;
@@ -169,14 +170,14 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         if let Some(already) = make_proc.get_caches_mut().object_map.get(&oid) {
             // reinit already computed node for post order
             let full_node = already.clone();
-            let w = &mut self.stack.last_mut().unwrap().2;
+            let w = &mut self.stack.last_mut().unwrap().acc;
             let name = self.prepro.intern_object_name(name);
             assert!(!w.primary.children_names.contains(&name));
             w.push_submodule(name, full_node);
             return;
         }
         log::debug!("make tree {:?}", name.try_str());
-        let parent_acc = &mut self.stack.last_mut().unwrap().2;
+        let parent_acc = &mut self.stack.last_mut().unwrap().acc;
         if true {
             // TODO also try to handle nested Makefiles
             let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
@@ -200,7 +201,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 &name,
                 cpp_handle,
             );
-            let parent_acc = &mut self.stack.last_mut().unwrap().2;
+            let parent_acc = &mut self.stack.last_mut().unwrap().acc;
             assert!(!parent_acc.primary.children_names.contains(&name));
             if helper.source_directories.0 {
                 parent_acc.push_source_directory(name, full_node);
@@ -223,16 +224,16 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
             if helper.submodules.0 {
                 // handle as Make module
-                self.stack.push((oid, prepared, helper.into()));
+                self.stack.push(StackEle::new(oid, prepared, helper.into()));
             } else {
                 // search further inside
-                self.stack.push((oid, prepared, helper.into()));
+                self.stack.push(StackEle::new(oid, prepared, helper.into()));
             };
         } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0) {
             let tree = self.repository.find_tree(oid).unwrap();
             // anyway try to find Make modules, but maybe can do better
             let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-            self.stack.push((oid, prepared, helper.into()));
+            self.stack.push(StackEle::new(oid, prepared, helper.into()));
         }
     }
 }
