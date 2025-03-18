@@ -20,9 +20,8 @@
 pub mod parser;
 
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
-use crate::types::{AstLending, ETypeStore, HyperAST, HyperASTShared, TypeStore};
+use crate::types::{ETypeStore, HyperAST, HyperASTShared};
 use crate::{hashed::NodeHashs, nodes::Space};
 
 use self::parser::Visibility;
@@ -1032,26 +1031,38 @@ pub fn hash32<T: ?Sized + std::hash::Hash>(t: &T) -> u32 {
     crate::utils::clamp_u64_to_u32(&crate::utils::hash(t))
 }
 
-pub trait Prepro<HAST: HyperAST> where HAST::TS: ETypeStore {
+pub trait Prepro<HAST: HyperAST>
+where
+    HAST::TS: ETypeStore,
+{
     const USING: bool;
-    fn preprocessing(&self, ty: <HAST::TS as ETypeStore>::Ty2) -> Result<crate::scripting::Acc, String>;
+    fn preprocessing(
+        &self,
+        ty: <HAST::TS as ETypeStore>::Ty2,
+    ) -> Result<crate::scripting::Acc, String>;
 }
 
-impl<HAST: HyperAST, Acc> Prepro<HAST> for NoOpMore<HAST::TS, Acc> where HAST::TS: ETypeStore {
+impl<HAST: HyperAST, Acc> Prepro<HAST> for NoOpMore<HAST::TS, Acc>
+where
+    HAST::TS: ETypeStore,
+{
     const USING: bool = false;
-    fn preprocessing(&self, _t: <HAST::TS as ETypeStore>::Ty2) -> Result<crate::scripting::Acc, String> {
+    fn preprocessing(
+        &self,
+        _t: <HAST::TS as ETypeStore>::Ty2,
+    ) -> Result<crate::scripting::Acc, String> {
         Ok(todo!())
     }
 }
 
 pub type PrecompQueries = u16;
 
-pub trait More<HAST: types::StoreLending2> {
+pub trait More<HAST: types::StoreRefAssoc> {
     type Acc: WithChildren<<HAST as HyperASTShared>::IdN>;
     const ENABLED: bool;
     fn match_precomp_queries(
         &self,
-        stores: <HAST as types::StoreLending2>::S<'_>,
+        stores: <HAST as types::StoreRefAssoc>::S<'_>,
         acc: &Self::Acc,
         label: Option<&str>,
     ) -> crate::tree_gen::PrecompQueries;
@@ -1067,14 +1078,14 @@ impl<T, Acc> Default for NoOpMore<T, Acc> {
 
 impl<HAST, Acc> More<HAST> for NoOpMore<HAST::TS, Acc>
 where
-    HAST: HyperAST + for<'a> types::StoreLending2,
+    HAST: HyperAST + for<'a> types::StoreRefAssoc,
     Acc: WithChildren<HAST::IdN>,
 {
     type Acc = Acc;
     const ENABLED: bool = false;
     fn match_precomp_queries(
         &self,
-        _stores: <HAST as types::StoreLending2>::S<'_>,
+        _stores: <HAST as types::StoreRefAssoc>::S<'_>,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> PrecompQueries {
@@ -1084,13 +1095,13 @@ where
 
 impl<HAST, Acc> PreproTSG<HAST> for NoOpMore<HAST::TS, Acc>
 where
-    HAST: HyperAST + for<'a> types::StoreLending2,
+    HAST: HyperAST + for<'a> types::StoreRefAssoc,
     Acc: WithChildren<HAST::IdN>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg(
         &self,
-        stores: <HAST as types::StoreLending2>::S<'_>,
+        stores: <HAST as types::StoreRefAssoc>::S<'_>,
         acc: &Self::Acc,
         label: Option<&str>,
     ) -> Result<usize, String> {
@@ -1098,66 +1109,16 @@ where
     }
 }
 
-pub trait PreproTSG<HAST: for<'a> types::StoreLending2>: More<HAST> {
+pub trait PreproTSG<HAST: for<'a> types::StoreRefAssoc>: More<HAST> {
     const GRAPHING: bool;
     fn compute_tsg(
         &self,
-        stores: <HAST as types::StoreLending2>::S<'_>,
+        stores: <HAST as types::StoreRefAssoc>::S<'_>,
         acc: &Self::Acc,
         label: Option<&str>,
     ) -> Result<usize, String>;
 }
 
 use crate::types;
-
-// trait WWW {
-//     type H: for<'a> types::StoreLending<'a>;
-//     fn www(&self, d: <Self::H as types::StoreLending<'_>>::S) -> ();
-// }
-
-// // transparent
-
-// struct XYZ<TS>(TS);
-// impl<TS: Copy + crate::types::TypeStore> WWW for XYZ<TS> {
-//     type H = crate::store::SimpleStores<TS>;
-//     fn www(&self, d: <Self::H as types::StoreLending<'_>>::S) -> () {}
-// }
-// fn swcwec<TS: Copy + crate::types::TypeStore, M: WWW<H = crate::store::SimpleStores<TS>>>(
-//     h: &mut crate::store::SimpleStores<TS>,
-//     m: M,
-// ) {
-//     let d = crate::store::SimpleStores {
-//         label_store: &h.label_store,
-//         node_store: &h.node_store.inner,
-//         type_store: h.type_store,
-//     };
-//     m.www(d);
-// }
-
-// // opaque
-
-// struct ABC<HAST>(PhantomData<HAST>);
-// impl<HAST: for<'a> types::StoreLending<'a>> WWW for ABC<HAST>
-// where
-//     for<'t> <HAST as AstLending<'t>>::RT: WithLabel,
-// {
-//     type H = HAST;
-//     fn www(&self, d: <Self::H as types::StoreLending<'_>>::S) -> () {}
-// }
-
-// // opaque gen
-
-// trait ZZZ<H: for<'a> types::StoreLending<'a>> {
-//     fn zzz(&self, d: <H as types::StoreLending<'_>>::S) -> ();
-// }
-
-// impl<HAST: for<'a> types::StoreLending<'a> + HyperAST> ZZZ<HAST> for XYZ<HAST::TS>
-// where
-//     for<'t> <HAST as AstLending<'t>>::RT: WithLabel,
-// {
-//     fn zzz(&self, d: <HAST as types::StoreLending<'_>>::S) -> () {
-//         let l: <<<HAST as types::StoreLending<'_>>::S as AstLending<'_>>::RT as WithLabel>::L;
-//     }
-// }
 
 pub mod metric_definition;

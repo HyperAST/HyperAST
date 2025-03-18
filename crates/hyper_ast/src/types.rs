@@ -5,7 +5,6 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::str::FromStr;
 
-use lending::NodeStore as _;
 use num::ToPrimitive;
 use strum_macros::AsRefStr;
 use strum_macros::Display;
@@ -786,12 +785,6 @@ impl<'a, T: Clone> Children<u16, T> for ChildrenSlice<'a, T> {
     }
 }
 
-impl<'a, T> ChildrenSlice<'a, T> {
-    fn is_empty(&self) -> bool {
-        <[T]>::is_empty(self.0)
-    }
-}
-
 impl<'a, T: Clone> Childrn<T> for ChildrenSlice<'a, T> {
     fn len(&self) -> usize {
         <[T]>::len(self.0)
@@ -839,6 +832,7 @@ impl<'a, T: Clone> Children<u8, T> for ChildrenSlice<'a, T> {
 
 /// just to show that it is not efficient
 /// NOTE: it might prove necessary for ecs like hecs
+#[allow(unused)]
 mod owned {
     use std::cell::{Ref, RefMut};
 
@@ -1116,53 +1110,57 @@ pub trait LLang<T>: Lang<Self::E> {
     fn as_lang_wrapper() -> LangWrapper<T>;
 }
 
-struct LLangTest;
+#[allow(unused)]
+mod lang_test {
+    use super::*;
+    struct LLangTest;
 
-#[derive(Clone, Copy, Display, strum_macros::EnumCount)]
-#[repr(u8)]
-enum TyTest {
-    A,
-    B,
-    C,
-}
-
-impl Lang<TyTest> for LLangTest {
-    fn make(t: TypeInternalSize) -> &'static TyTest {
-        todo!()
+    #[derive(Clone, Copy, Display, strum_macros::EnumCount)]
+    #[repr(u8)]
+    enum TyTest {
+        A,
+        B,
+        C,
     }
 
-    fn to_u16(t: TyTest) -> TypeInternalSize {
-        todo!()
-    }
-}
+    impl Lang<TyTest> for LLangTest {
+        fn make(t: TypeInternalSize) -> &'static TyTest {
+            todo!()
+        }
 
-impl LangRef<TyTest> for LLangTest {
-    fn name(&self) -> &'static str {
-        todo!()
-    }
-
-    fn make(&self, t: TypeInternalSize) -> &'static TyTest {
-        todo!()
+        fn to_u16(t: TyTest) -> TypeInternalSize {
+            todo!()
+        }
     }
 
-    fn to_u16(&self, t: TyTest) -> TypeInternalSize {
-        todo!()
+    impl LangRef<TyTest> for LLangTest {
+        fn name(&self) -> &'static str {
+            todo!()
+        }
+
+        fn make(&self, t: TypeInternalSize) -> &'static TyTest {
+            todo!()
+        }
+
+        fn to_u16(&self, t: TyTest) -> TypeInternalSize {
+            todo!()
+        }
+
+        fn ts_symbol(&self, t: TyTest) -> u16 {
+            todo!()
+        }
     }
 
-    fn ts_symbol(&self, t: TyTest) -> u16 {
-        todo!()
-    }
-}
+    impl LLang<TypeU16<Self>> for LLangTest {
+        type I = u16;
 
-impl LLang<TypeU16<Self>> for LLangTest {
-    type I = u16;
+        type E = TyTest;
 
-    type E = TyTest;
+        const TE: &[Self::E] = &[TyTest::A, TyTest::B, TyTest::C];
 
-    const TE: &[Self::E] = &[TyTest::A, TyTest::B, TyTest::C];
-
-    fn as_lang_wrapper() -> LangWrapper<TypeU16<Self>> {
-        unimplemented!("not important here")
+        fn as_lang_wrapper() -> LangWrapper<TypeU16<Self>> {
+            unimplemented!("not important here")
+        }
     }
 }
 
@@ -1300,25 +1298,6 @@ where
     }
 }
 
-// impl<L: LLang<Self, I = u16> + std::fmt::Debug> TypeTrait for TypeU16<L>
-// where
-//     L::E: TypeTrait<Lang = L>,
-//     L: Lang<Self>,
-// {
-//     type Lang = L;
-
-// }
-
-#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
-pub struct TypeU8<L: LLang<Self>>(u8, std::marker::PhantomData<L>);
-
-#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
-pub enum TypeEnumCommon<J: Lang<Self>, X: Lang<Self>, C: Lang<Self>, M: Lang<Self>> {
-    Java(u16, std::marker::PhantomData<J>),
-    Xml(u16, std::marker::PhantomData<X>),
-    C(u16, std::marker::PhantomData<C>),
-    Make(u16, std::marker::PhantomData<M>),
-}
 
 pub trait CompressedCompo {
     fn decomp(ptr: impl ErasedHolder, tid: std::any::TypeId) -> Self
@@ -1451,7 +1430,7 @@ pub trait StoreLending<'a, __ImplBound = &'a Self>: AstLending<'a, __ImplBound> 
         + AstLending<'a, RT = <Self as AstLending<'a, __ImplBound>>::RT>;
 }
 
-pub trait StoreLending2: HyperAST {
+pub trait StoreRefAssoc: HyperAST {
     type S<'a>: Copy
         + HyperAST<
             TS = <Self as HyperAST>::TS,

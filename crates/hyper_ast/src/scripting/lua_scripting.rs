@@ -1,9 +1,7 @@
 use crate::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
 use crate::store::SimpleStores;
 use crate::tree_gen::WithChildren;
-use crate::types::{
-    AnyType, AstLending, HyperAST, HyperASTShared, HyperType, NodeStore, Shared, Typed,
-};
+use crate::types::{AnyType, HyperAST, HyperType, Shared, StoreRefAssoc};
 use mlua::prelude::*;
 use mlua::{Lua, MetaMethod, Result, UserData, Value};
 use rhai::Dynamic;
@@ -324,7 +322,7 @@ impl Acc {
         ty: T,
         child: SubtreeHandle<T2>,
     ) -> Result<()> {
-        let now = Instant::now();
+        // let now = Instant::now();
         LUA_POOL.with_borrow_mut(|pool| {
             let lua = &mut pool[self.id as usize];
             // let lua = &mut self.lua;
@@ -340,7 +338,7 @@ impl Acc {
                 debug_assert!(m.is_nil());
                 Ok(())
             })?;
-            let prepare_time = now.elapsed().as_secs_f64();
+            // let prepare_time = now.elapsed().as_secs_f64();
             // unsafe { TIME_ACC += prepare_time };
             Ok(())
         })
@@ -611,14 +609,14 @@ where
 
 impl<HAST, Acc> crate::tree_gen::More<HAST> for Prepro<HAST, &Acc>
 where
-    HAST: HyperAST + for<'a> crate::types::StoreLending2,
+    HAST: StoreRefAssoc,
     Acc: WithChildren<HAST::IdN>,
 {
     type Acc = Acc;
     const ENABLED: bool = false;
     fn match_precomp_queries(
         &self,
-        _stores: <HAST as crate::types::StoreLending2>::S<'_>,
+        _stores: <HAST as StoreRefAssoc>::S<'_>,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> crate::tree_gen::PrecompQueries {
@@ -628,13 +626,13 @@ where
 
 impl<HAST, Acc> crate::tree_gen::PreproTSG<HAST> for Prepro<HAST, &Acc>
 where
-    HAST: HyperAST + for<'a> crate::types::StoreLending2,
+    HAST: StoreRefAssoc,
     Acc: WithChildren<HAST::IdN>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg(
         &self,
-        _stores: <HAST as crate::types::StoreLending2>::S<'_>,
+        _stores: <HAST as StoreRefAssoc>::S<'_>,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> std::result::Result<usize, std::string::String>
