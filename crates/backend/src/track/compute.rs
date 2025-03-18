@@ -1,6 +1,5 @@
 use hyper_diff::{decompressed_tree_store::lazy_post_order, matchers::Decompressible};
 use hyperast::position::position_accessors::{self, SolvedPosition};
-use hyperast_vcs_git::no_space::NoSpaceWrapper;
 
 use crate::MappingAloneCacheRef;
 
@@ -372,15 +371,7 @@ where
     }
 }
 
-// type NoSpaceStore<'a, 'store> = types::SimpleHyperAST<
-//     NoSpaceWrapper<'static, super::IdN>,
-//     TStore,
-//     no_space::NoSpaceNodeStoreWrapper<'store>,
-//     &'a hyperast::store::labels::LabelStore,
-// >;
-
 type NoSpaceStore<'a, 'store> = hyperast::store::SimpleStores<
-    // NoSpaceWrapper<'static, super::IdN>,
     TStore,
     no_space::NoSpaceNodeStoreWrapper<'store>,
     &'a hyperast::store::labels::LabelStore,

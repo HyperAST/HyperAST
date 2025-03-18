@@ -68,7 +68,7 @@ fn lazy_mapping<'a>(
             Decompressible<_, LazyPostOrder<_, u32>>,
             Decompressible<_, LazyPostOrder<_, u32>>,
             VecStore<_>,
-        > = hyperast.decompress_pair2(src, dst).into();
+        > = hyperast.decompress_pair(src, dst).into();
         // TODO factor
         let mapper = Mapper {
             hyperast,

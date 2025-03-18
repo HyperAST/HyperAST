@@ -1391,35 +1391,16 @@ where
 //         <LazyPostOrder<T, IdD>>::root(&self)
 //     }
 
-//     fn child<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdD
-//     where
-//         S: for<'b> types::NLending<'b, T::TreeId, N = <T as types::NLending<'b, T::TreeId>>::N>
-//             + NodeStore<T::TreeId>,
+//     fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD
 //     {
 //         todo!("deprecated")
 //     }
 
-//     fn children<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
-// where
-//         // 'a: 'b,
-//         // S: for<'b> NodeStore<T::TreeId, R<'b> = T>,
+//     fn children(&self, x: &IdD) -> Vec<IdD>
 //     {
 //         todo!("deprecated")
 //     }
 
-//     fn child4<S>(&self, store: &S, x: &IdD, p: &[impl PrimInt]) -> IdD
-// where
-//         // S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
-//     {
-//         <LazyPostOrder<T, IdD>>::child4(&self, store, x, p)
-//     }
-
-//     fn children4<S>(&self, store: &S, x: &IdD) -> Vec<IdD>
-// where
-//         // S: hyperast::types::inner_ref::NodeStore<T::TreeId, Ref = T>,
-//     {
-//         <LazyPostOrder<T, IdD>>::children4(&self, store, x)
-//     }
 // }
 
 // impl<HAST: HyperAST + Copy, IdD: PrimInt + Shallow<IdD>> LazyDecompressed<IdD> for &mut LazyPostOrder<T, IdD> {

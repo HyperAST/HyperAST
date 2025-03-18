@@ -158,10 +158,7 @@ impl<'store, 'cache, 's, TS: TsEnableTS>
         'cache,
         TS,
         tree_gen::NoOpMore<
-            (
-                TS,
-                crate::store::nodes::legion::TMarker<NodeIdentifier>,
-            ),
+            TS,
             Acc<TS::Ty2>,
         >,
         true,

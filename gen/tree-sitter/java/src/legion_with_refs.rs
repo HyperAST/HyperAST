@@ -4,7 +4,6 @@ use crate::{
     types::{TStore, Type},
     TNode,
 };
-use hyperast::store::nodes::legion::TMarker;
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
