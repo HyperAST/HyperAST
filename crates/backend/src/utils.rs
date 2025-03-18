@@ -1,11 +1,11 @@
 use std::{collections::HashMap, usize};
 
 use dashmap::{RwLock, SharedValue};
+use hyper_diff::decompressed_tree_store::lazy_post_order;
 use hyperast::{
     store::defaults::NodeIdentifier,
     types::{HyperAST, WithStats},
 };
-use hyper_diff::decompressed_tree_store::{lazy_post_order, PersistedNode};
 
 pub type LPO<T> = SharedValue<lazy_post_order::LazyPostOrder<T, u32>>;
 type IdN = NodeIdentifier;
@@ -33,8 +33,6 @@ where
                 src.clone(),
                 SharedValue::new({
                     let src = LazyPostOrder::<_, u32>::decompress(hyperast, src);
-                    let src: LazyPostOrder<PersistedNode<IdN>, u32> =
-                        unsafe { std::mem::transmute(src) };
                     src
                 }),
             );
@@ -44,8 +42,6 @@ where
                 dst.clone(),
                 SharedValue::new({
                     let dst = LazyPostOrder::<_, u32>::decompress(hyperast, dst);
-                    let dst: LazyPostOrder<PersistedNode<IdN>, u32> =
-                        unsafe { std::mem::transmute(dst) };
                     dst
                 }),
             );
@@ -55,12 +51,10 @@ where
     } else {
         let v1 = shard1.get_mut().entry(*src).or_insert_with(|| {
             let src = LazyPostOrder::<_, u32>::decompress(hyperast, src);
-            let src: LazyPostOrder<PersistedNode<IdN>, u32> = unsafe { std::mem::transmute(src) };
             SharedValue::new(src)
         });
         let v2 = shard2.unwrap().get_mut().entry(*dst).or_insert_with(|| {
             let dst = LazyPostOrder::<_, u32>::decompress(hyperast, dst);
-            let dst: LazyPostOrder<PersistedNode<IdN>, u32> = unsafe { std::mem::transmute(dst) };
             SharedValue::new(dst)
         });
         (v1, v2)
@@ -83,10 +77,7 @@ fn bi_sharding<'a>(
         HashMap<
             IdN,
             SharedValue<
-                hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-                    PersistedNode<IdN>,
-                    u32,
-                >,
+                hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<IdN, u32>,
             >,
         >,
     >,
@@ -95,10 +86,7 @@ fn bi_sharding<'a>(
             HashMap<
                 IdN,
                 SharedValue<
-                    hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-                        PersistedNode<IdN>,
-                        u32,
-                    >,
+                    hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<IdN, u32>,
                 >,
             >,
         >,
@@ -111,13 +99,8 @@ fn bi_sharding<'a>(
     let index2 = partial_comp_cache.determine_shard(hash2);
     let shards: &[_] = partial_comp_cache.shards();
     let shards = shards as *const [_];
-    let shards = shards
-        as *mut [RwLock<HashMap<IdN, SharedValue<LazyPostOrder<PersistedNode<IdN>, u32>>>>];
+    let shards = shards as *mut [RwLock<HashMap<IdN, SharedValue<LazyPostOrder<IdN, u32>>>>];
     let shards = unsafe { shards.as_mut().unwrap() };
-    // dbg!(index1, index2, shards.len());
-    // let mut shards:&mut [_] = unsafe { std::mem::transmute(shards) };
-
-    // let mut shard1: &mut RwLock<HashMap<IdN, SharedValue<LazyPostOrder<PersistedNode<IdN>, u32>>>> = &mut shards[index1];
     let (shard1, shard2) = if index1 == index2 {
         (&mut shards[index1], None)
     } else if index1 < index2 {

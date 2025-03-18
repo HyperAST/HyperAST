@@ -479,7 +479,7 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
                     Some((file.as_any(), functions))
                 } else {
-                    // unsafe { crate::java_processor::TSG }
+                    // crate::java_processor::TSG
                     None
                 };
                 let r = JavaProc {
@@ -514,7 +514,7 @@ impl Eq for Query {}
 
 // impl Default for Query {
 //     fn default() -> Self {
-//         let precomputeds = unsafe { crate::java_processor::SUB_QUERIES };
+//         let precomputeds = crate::java_processor::SUB_QUERIES;
 //         Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
 //     }
 // }
@@ -541,7 +541,7 @@ impl crate::processing::erased::CommitProc for JavaProc {
     fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         dbg!(&self.parameter.query);
         // if self.parameter.query.is_none() {
-        //     let s = unsafe { crate::java_processor::SUB_QUERIES };
+        //     let s = crate::java_processor::SUB_QUERIES;
         //     let s: Vec<_> = s.iter().map(|x| x.to_string()).collect();
         //     return Some(s.into());
         // }

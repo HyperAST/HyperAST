@@ -450,13 +450,6 @@ impl Highlighter {
         // eframe::web_sys::console::log_1(&tree.root_node().to_string());
         let node: &wasm_bindgen::JsValue =
             unsafe { std::mem::transmute(self.parsed.as_ref().unwrap().root_node()) };
-        // eframe::web_sys::console::log_1(node);
-        // eframe::web_sys::console::log_1(unsafe { std::mem::transmute(&self.parsed.as_ref().unwrap().root_node()) });
-        // eframe::web_sys::console::log_1(unsafe { std::mem::transmute(&self.parsed.as_ref().unwrap().root_node().start_position()) });
-        // eframe::web_sys::console::log_1(unsafe { std::mem::transmute(&self.parsed.as_ref().unwrap().root_node().end_position()) });
-        // eframe::web_sys::console::log_1(unsafe { std::mem::transmute(&self.parsed.as_ref().unwrap().root_node().start_position()) });
-        // eframe::web_sys::console::log_1(unsafe { std::mem::transmute(&self.parsed.as_ref().unwrap().root_node().end_position()) });
-        // eframe::web_sys::console::log_1(unsafe { std::mem::transmute(&query) });
 
         let start_position = unsafe {
             std::mem::transmute(&self.parsed.as_ref().unwrap().root_node().start_position())

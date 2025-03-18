@@ -585,7 +585,6 @@ where
                     // let mut child_step = &mut self.query.steps[self.states[_k].step_index as usize];
                     // let mut child_state = &mut self.states[_k];
                     // dbg!(self.states.len());
-                    // dbg!(unsafe { &(*self.query).steps }.len());
                     // dbg!(_j, _k);
                     // dbg!(state!(_k).step_index);
                     // dbg!(state!(@step).alternative_index);

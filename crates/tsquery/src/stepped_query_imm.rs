@@ -399,41 +399,18 @@ where
         file.check2()
     }
 
-    // type Node<'tree> = Node<'hast, HAST, &'acc Acc>;
-
     type Cursor = Vec<u16>;
-
-    // type Match<'cursor, 'tree: 'cursor>
-    //     = self::MyQMatch<'cursor, 'hast, HAST, &'acc Acc>
-    // where
-    //     Self: 'cursor;
-
-    // type Matches<'query, 'cursor: 'query, 'tree: 'cursor>
-    //     = self::MyQMatches<
-    //     'query,
-    //     'cursor,
-    //     'hast,
-    //     crate::QueryCursor<'query, Self::Node<'tree>, Self::Node<'tree>>,
-    //     HAST,
-    //     &'acc Acc,
-    // >
-    // where
-    //     Self: 'query,
-    //     Self: 'cursor;
-
-    // type I = u32;
 
     fn matches<'a>(
         &self,
         cursor: &mut Self::Cursor,
         node: &<Self as NodeLending<'a>>::Node,
-        // tree: Self::Node<'tree>,
-        // source: &'tree str,
     ) -> <Self as tree_sitter_graph::MatchesLending<'a>>::Matches {
         let matchs = self
             .query
             .matches::<_, <Self as NodeLending<'_>>::Node>(node.clone());
         // let matchs = self.query.matches_immediate(node.clone());
+        // TODO find a way to avoid transmuting
         let node = node.clone();
         let node = unsafe { std::mem::transmute(node) };
         let matchs = unsafe { std::mem::transmute(matchs) };
@@ -650,7 +627,6 @@ where
     fn text(&self) -> String {
         use hyperast::position::TreePath;
         let stores: &HAST = &self.0.stores;
-        // let stores: &HAST = unsafe { std::mem::transmute(&self.0.stores) };
         if let Some(root) = self.0.pos.node() {
             hyperast::nodes::TextSerializer::new(stores, *root).to_string()
         } else {
@@ -662,7 +638,6 @@ where
                 .as_ref()
                 .map_or("aaa", |x| x.as_ref())
                 .to_string()
-            // "".to_string()
         }
     }
 

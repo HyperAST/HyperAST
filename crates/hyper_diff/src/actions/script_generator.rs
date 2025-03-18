@@ -60,20 +60,6 @@ pub enum SimpleAction<Src, Dst, IdN, IdL, Idx> {
     // A(PhantomData<T>),
 }
 
-// impl<Src, Dst, T> ActionsVec<SimpleAction<Src, Dst, IdN, IdL, Idx>>
-// where
-//     T: Stored + Labeled + WithChildren,
-// {
-//     pub fn conv<U>(self) -> ActionsVec<SimpleAction<Src, Dst, U>>
-//     where
-//         U: Stored<TreeId = HAST::IdN>
-//             + Labeled<Label = T::Label>
-//             + WithChildren<ChildIdx = T::ChildIdx>,
-//     {
-//         unsafe { std::mem::transmute(self) }
-//     }
-// }
-
 impl<Src: Debug, Dst: Debug, IdN: Debug, IdL, Idx: Debug> Debug
     for SimpleAction<Src, Dst, IdN, IdL, Idx>
 {

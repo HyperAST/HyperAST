@@ -1,14 +1,11 @@
 #![feature(array_chunks)]
 #![feature(map_many_mut)]
 #![feature(iter_collect_into)]
-use std::{
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use backend::*;
 
-use axum::{body::Bytes, Router};
+use axum::Router;
 use backend::{
     app::{
         commit_metadata_route, fetch_code_route, fetch_git_file, querying_app, scripting_app,
@@ -17,11 +14,10 @@ use backend::{
     examples::{example_app, kv_store_app},
 };
 use dashmap::DashMap;
+use hyper_diff::matchers::mapping_store::VecStore;
 use hyperast::store::nodes::legion::NodeIdentifier;
 use hyperast_vcs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
-use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -30,8 +26,7 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-
-pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<PersistedNode<NodeIdentifier>>>;
+pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<NodeIdentifier>>;
 pub(crate) type MappingAloneCache =
     DashMap<(NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
 pub(crate) type MappingAloneCacheRef<'a> =
@@ -44,8 +39,7 @@ pub(crate) enum MappingStage {
 }
 
 type DS<T> = hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<T, u32>;
-pub type PersistableMappings<I> =
-    hyper_diff::matchers::Mapping<DS<PersistedNode<I>>, DS<PersistedNode<I>>, VecStore<u32>>;
+pub type PersistableMappings<I> = hyper_diff::matchers::Mapping<DS<I>, DS<I>, VecStore<u32>>;
 pub(crate) type MappingCache =
     DashMap<(NodeIdentifier, NodeIdentifier), PersistableMappings<NodeIdentifier>>;
 type SharedState = Arc<AppState>;
@@ -74,7 +68,10 @@ async fn main() {
             RepoConfig::CppMake,
         );
         repos.register_config(Forge::Github.repo("torvalds", "linux"), RepoConfig::CppMake);
-        repos.register_config(Forge::Github.repo("systemd", "systemd"), RepoConfig::CppMake);
+        repos.register_config(
+            Forge::Github.repo("systemd", "systemd"),
+            RepoConfig::CppMake,
+        );
         opts.repository.iter().for_each(|x| {
             repos.register_config(x.repo.clone(), x.config);
         })

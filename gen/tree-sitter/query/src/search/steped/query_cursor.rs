@@ -286,15 +286,6 @@ where
                 if Symbol::from(state!(@step).symbol) == WILDCARD_SYMBOL {
                     node_does_match = !node_is_error && (is_named || !state!(@step).is_named());
                 } else {
-                    // let s = state!(@step).symbol;
-                    // dbg!(query_step::symbol_name(
-                    //     unsafe { self.query.as_ref().unwrap() },
-                    //     symbol.to_usize() as u16
-                    // ));
-                    // dbg!(query_step::symbol_name(
-                    //     unsafe { self.query.as_ref().unwrap() },
-                    //     s
-                    // ));
                     node_does_match = symbol == Symbol::from(state!(@step).symbol);
                 }
                 let mut later_sibling_can_match = status.has_later_siblings();
@@ -306,10 +297,6 @@ where
                 }
                 let ss = state!(@step).supertype_symbol;
                 if Symbol::from(ss) != Symbol::END {
-                    // dbg!(query_step::symbol_name(
-                    //     unsafe { self.query.as_ref().unwrap() },
-                    //     ss
-                    // ));
                     self.cursor.current_status();
                     let has_supertype =
                         status.contains_supertype(state!(@step).supertype_symbol.into());

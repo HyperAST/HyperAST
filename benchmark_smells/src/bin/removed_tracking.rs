@@ -169,9 +169,6 @@ fn removed_tracking(
             // do the tracking at least in the fast case top_down/subtree matching
             let curr_comm = &preprocessed.commits.get(&oid).unwrap();
 
-            // let stores: &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore> =
-            //     unsafe { std::mem::transmute(stores) };
-
             let mut src_arena = Decompressible::<_, LazyPostOrder<_, u32>>::decompress(
                 nospace,
                 &curr_comm.ast_root,

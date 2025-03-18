@@ -31,6 +31,7 @@ pub struct NoSpaceNodeStoreWrapper<'a> {
     pub s: &'a NodeStore,
 }
 
+// TODO use ref_cast
 #[repr(transparent)]
 pub struct NoSpaceNodeStore<NS> {
     pub s: NS,
@@ -50,7 +51,7 @@ impl<NS> From<NS> for NoSpaceNodeStore<NS> {
 
 impl<NS> From<&NS> for &NoSpaceNodeStore<NS> {
     fn from(s: &NS) -> Self {
-        unsafe { std::mem::transmute(s) }
+        unsafe { std::mem::transmute(s) } // TODO use ref_cast
     }
 }
 

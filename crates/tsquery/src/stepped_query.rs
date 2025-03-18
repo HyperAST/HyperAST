@@ -374,6 +374,7 @@ where
             .query
             .matches::<_, <Self as NodeLending<'_>>::Node>(node.clone());
         // let matchs = self.query.matches_immediate(node.clone());
+        // TODO find a way to avoid transmuting
         let node = node.clone();
         let node = unsafe { std::mem::transmute(node) };
         let matchs = unsafe { std::mem::transmute(matchs) };
