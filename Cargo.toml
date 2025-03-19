@@ -55,6 +55,6 @@ hyperast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
 hyperast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
 
 [patch.crates-io] 
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "2d810c352ebda952635f9bba762e9cb4a27a172a", version = "0.12" }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "bcdb8e5bbb16636f47d155c0bdae5d19fd46a888", version = "0.12" }
 # tree-sitter-graph = { path = "../tree-sitter-graph", optional = true }
 

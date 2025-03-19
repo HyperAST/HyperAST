@@ -9031,6 +9031,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-graph"
 version = "0.12.2"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=bcdb8e5bbb16636f47d155c0bdae5d19fd46a888#bcdb8e5bbb16636f47d155c0bdae5d19fd46a888"
 dependencies = [
  "log",
  "regex",

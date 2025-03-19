@@ -30,9 +30,9 @@ impl<IdN: std::hash::Hash, C, Idx: std::hash::Hash> std::hash::Hash
     for StructuralPosition<IdN, Idx, C>
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.parents.last().hash(state);
         self.parents.first().hash(state);
-        self.offsets.hash(state);
+        self.offsets.iter().rev().for_each(|x| x.hash(state));
+        self.parents.last().hash(state);
     }
 }
 impl<IdN: std::cmp::PartialEq, C, Idx: std::cmp::PartialEq> PartialEq

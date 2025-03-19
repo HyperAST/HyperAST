@@ -3,11 +3,10 @@
 //! Trying to make this one applicable directly on subtrees, ie. immediated/shallow
 
 use hyperast::{
-    tree_gen::{self, WithLabel},
-    types::{
+    position::TreePathMut, tree_gen::{self, WithLabel}, types::{
         self, ETypeStore, HyperAST, HyperASTShared, Role, RoleStore, WithRoles, WithSerialization,
         WithStats,
-    },
+    }
 };
 use std::{fmt::Debug, vec};
 #[cfg(feature = "tsg")]
@@ -24,6 +23,26 @@ impl<HAST: HyperASTShared, Acc: WithLabel, Idx, P: Clone> From<Node<HAST, Acc, I
     fn from(value: Node<HAST, Acc, Idx, P>) -> Self {
         let pos = value.0.pos.clone();
         Self { pos }
+    }
+}
+
+#[cfg(feature = "tsg")]
+impl<P: Clone + std::hash::Hash> tree_sitter_graph::graph::SimpleNode
+    for NodeR<P>
+{
+    fn id(&self) -> usize {
+        use std::hash::Hasher;
+        let mut hasher = std::hash::DefaultHasher::new();
+        self.pos.hash(&mut hasher);
+        hasher.finish() as usize
+    }
+
+    fn parent(&self) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let mut r = self.clone();
+        todo!()
     }
 }
 
@@ -553,7 +572,7 @@ where
 }
 
 #[cfg(feature = "tsg")]
-impl<'hast, 'acc, 'l, HAST, Acc> tree_sitter_graph::graph::SyntaxNode for Node<HAST, &'acc Acc>
+impl<'hast, 'acc, 'l, HAST, Acc> tree_sitter_graph::graph::SimpleNode for Node<HAST, &'acc Acc>
 where
     HAST: HyperAST + Copy,
     HAST::IdN: std::hash::Hash + Copy + Debug,
@@ -574,6 +593,35 @@ where
         self.0.pos.hash(&mut hasher);
         hasher.finish() as usize
     }
+
+    fn parent(&self) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let mut r = self.clone();
+        if r.0.pos.pop().is_some() {
+            Some(r)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "tsg")]
+impl<'hast, 'acc, 'l, HAST, Acc> tree_sitter_graph::graph::SyntaxNode for Node<HAST, &'acc Acc>
+where
+    HAST: HyperAST + Copy,
+    HAST::IdN: std::hash::Hash + Copy + Debug,
+    HAST::Idx: std::hash::Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+        WithSerialization + types::WithChildren + WithStats + WithRoles,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type> + hyperast::types::RoleStore<IdF = IdF, Role = Role>,
+    Acc: hyperast::tree_gen::WithChildren<HAST::IdN>
+        + hyperast::tree_gen::WithRole<Role>
+        + hyperast::types::Typed,
+    &'acc Acc: WithLabel,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
 
     fn kind(&self) -> &'static str {
         use hyperast::types::HyperType;
@@ -642,13 +690,6 @@ where
     }
 
     fn named_child_count(&self) -> usize {
-        todo!()
-    }
-
-    fn parent(&self) -> Option<Self>
-    where
-        Self: Sized,
-    {
         todo!()
     }
 }

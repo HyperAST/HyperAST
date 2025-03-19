@@ -34,6 +34,33 @@ impl<'a, 'hast, HAST: HyperAST> Clone for NodeRef<'a, 'hast, HAST> {
     }
 }
 
+#[cfg(feature = "tsg")]
+impl<'a, 'hast, HAST: HyperAST> tree_sitter_graph::graph::SimpleNode for NodeRef<'a, 'hast, HAST>
+where
+    <HAST as HyperASTShared>::IdN: std::hash::Hash + Copy,
+    <HAST as HyperASTShared>::Idx: std::hash::Hash,
+{
+    fn id(&self) -> usize {
+        use std::hash::Hash;
+        use std::hash::Hasher;
+        let mut hasher = std::hash::DefaultHasher::new();
+        self.pos.hash(&mut hasher);
+        hasher.finish() as usize
+    }
+
+    fn parent(&self) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let mut s = self.clone();
+        if s.pos.up() {
+            Some(s)
+        } else {
+            None
+        }
+    }
+}
+
 // impl<'hast, HAST: HyperAST> PartialEq for Node<'hast, HAST> {
 //     fn eq(&self, other: &Self) -> bool {
 //         self.pos == other.pos
