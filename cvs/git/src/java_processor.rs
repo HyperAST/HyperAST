@@ -451,7 +451,6 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
                     let mut functions = tree_sitter_graph::functions::Functions::<
                         tree_sitter_graph::graph::Graph<
-                            // RNode<
                             hyperast_tsquery::stepped_query_imm::Node<
                                 hyperast::store::SimpleStores<
                                     TStore,
@@ -461,18 +460,7 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                                 &Acc,
                             >,
                         >,
-                        // tree_sitter_graph::graph::GraphErazing<
-                        //     hyperast_tsquery::MyNodeErazing<
-                        //         hyperast::store::SimpleStores<
-                        //             TStore,
-                        //             &hyperast::store::nodes::legion::NodeStoreInner,
-                        //             &hyperast::store::labels::LabelStore,
-                        //         >,
-                        //         &Acc,
-                        //     >,
-                        // >,
-                    >::default();
-                    todo!();
+                    >::essentials();
                     // TODO port those path functions to the generified variant in my fork
                     // hyperast_tsquery::add_path_functions(&mut functions);
                     let functions = functions.as_any();
@@ -758,6 +746,7 @@ impl RepositoryProcessor {
                             stores, md_cache, more
                         )
                         .with_line_break(line_break);
+                        panic!("rrr");
                         crate::java::handle_java_file(&mut java_tree_gen, n, t)
                     }
                 } else if let Some(precomp) = &java_proc.parameter.prepro {
@@ -766,6 +755,7 @@ impl RepositoryProcessor {
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
                             .with_line_break(line_break);
+                    panic!("rrr");
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
@@ -777,6 +767,7 @@ impl RepositoryProcessor {
                 } else {
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(stores, md_cache)
                         .with_line_break(line_break);
+                    panic!("rrr");
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 }
                 .map_err(|_| crate::ParseErr::IllFormed)?;
@@ -881,7 +872,8 @@ mod experiments {
             acc: JavaAcc,
         ) {
             let tree = self.repository.find_tree(*current_object.id()).unwrap();
-            self.stack.push(StackEle::new(*current_object.id(), prepared, acc));
+            self.stack
+                .push(StackEle::new(*current_object.id(), prepared, acc));
         }
         fn pre(
             &mut self,

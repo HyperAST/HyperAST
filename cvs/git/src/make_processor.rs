@@ -1,4 +1,4 @@
-use crate::processing::erased::ParametrizedCommitProcessor2Handle as PCP2Handle;
+use crate::processing::erased::{CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle};
 use crate::StackEle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
@@ -614,6 +614,25 @@ impl crate::processing::erased::CommitProc for MakeProc {
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
         self.commits.get(&commit_oid)
+    }
+
+    fn get_lang_handle(&self, lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
+        dbg!(self.parameter.cpp_handle.0.0);
+        if lang.eq_ignore_ascii_case("cpp") {
+            Some(ParametrizedCommitProcessorHandle(
+                CommitProcessorHandle(std::any::TypeId::of::<
+                    crate::cpp_processor::CppProcessorHolder,
+                >()),
+                self.parameter.cpp_handle.0,
+            ))
+        } else if lang.eq_ignore_ascii_case("java") {
+            if cfg!(debug_assertions) {
+                unimplemented!()
+            }
+            None
+        } else {
+            None
+        }
     }
 }
 

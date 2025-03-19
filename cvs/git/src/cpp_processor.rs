@@ -3,7 +3,7 @@ use crate::{
     git::BasicGitObject,
     make::MakeModuleAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
+    processing::{erased::{CommitProcExt, CommitProcessorHandle}, CacheHolding, InFiles, ObjectName, ParametrizedCommitProcessorHandle},
     Processor, StackEle,
 };
 use git2::{Oid, Repository};
@@ -15,6 +15,7 @@ use hyperast_gen_ts_cpp::{
     legion as cpp_gen,
     types::{CppEnabledTypeStore as _, Type},
 };
+use hyperast_tsquery::ArrayStr;
 use std::{iter::Peekable, path::Components, sync::Arc};
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
@@ -176,7 +177,7 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Parameter {
-    pub(crate) query: Option<std::sync::Arc<[String]>>,
+    pub(crate) query: Option<hyperast_tsquery::ZeroSepArrayStr>,
 }
 #[derive(Default)]
 pub(crate) struct CppProcessorHolder(Option<CppProc>);
@@ -200,7 +201,7 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
                 let l = 0; //self.0.len();
                            // self.0.push(CppProc(t));
                 let query = if let Some(q) = &t.query {
-                    Query::new(q.iter().map(|x| x.as_str()))
+                    Query::new(q.iter())
                 } else {
                     let precomputeds = crate::cpp_processor::SUB_QUERIES;
                     Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
@@ -256,6 +257,11 @@ impl crate::processing::erased::CommitProc for CppProc {
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
         self.commits.get(&commit_oid)
+    }
+
+    fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
+        dbg!(&self.parameter.query);
+        self.parameter.query.clone()
     }
 }
 

@@ -123,11 +123,7 @@ impl PreProcessedRepositories {
         use crate::processing::erased::Parametrized;
         let r = match config {
             RepoConfig::JavaMaven => {
-                let t = crate::java_processor::Parameter {
-                    query: None,
-                    prepro: None,
-                    tsg: None,
-                };
+                let t = crate::java_processor::Parameter::fast();
                 let h_java = self
                     .processor
                     .processing_systems
@@ -142,7 +138,8 @@ impl PreProcessedRepositories {
                 ConfiguredRepoHandle2 { spec: repo, config }
             }
             RepoConfig::CppMake => {
-                let t = crate::cpp_processor::Parameter { query: None };
+                let q: &[&str] = &["(translation_unit)"];
+                let t = crate::cpp_processor::Parameter { query: Some(q.into()) };
                 let h_cpp = self
                     .processor
                     .processing_systems

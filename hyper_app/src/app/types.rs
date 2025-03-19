@@ -272,13 +272,28 @@ impl egui_addon::Languages for Languages {
             #[cfg(not(target_arch = "wasm32"))]
             "JavaScript" => Some(egui_addon::Lang {
                 name: "JavaScript".into(),
-                #[cfg(feature="ts_highlight")]
+                #[cfg(feature = "ts_highlight")]
                 lang: {
                     let l: tree_sitter::Language = tree_sitter_javascript::LANGUAGE.into();
                     l
                 },
             }),
             _ => None,
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(PartialEq, Eq)]
+pub enum QueriedLang {
+    Cpp,
+    Java,
+}
+impl QueriedLang {
+    pub fn as_str(&self) -> &str {
+        match self {
+            QueriedLang::Cpp => "Cpp",
+            QueriedLang::Java => "Java",
         }
     }
 }
