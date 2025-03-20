@@ -125,6 +125,25 @@ struct QueryData {
     commits: u16,
     max_matches: u64,
     timeout: u64,
+    precomp: Option<QueryId>,
+}
+
+impl Default for QueryData {
+    fn default() -> Self {
+        QueryData {
+            name: "new".to_string(),
+            lang: "Java".to_string(),
+            query: code_editor::CodeEditor::new(
+                code_editor::EditorInfo::default().copied(),
+                r#""#.to_string(),
+            ),
+            results: vec![],
+            commits: 2,
+            max_matches: 3000,
+            timeout: 1000,
+            precomp: None,
+        }
+    }
 }
 
 // TODO plit by repo and query, maybe including config variations... but not commit limit for example
@@ -512,7 +531,7 @@ impl Default for AppData {
                 },
             ],
             queries: vec![QueryData {
-                name: "Simple".to_string(),
+                name: "simple".to_string(),
                 lang: "Java".to_string(),
                 query: code_editor::CodeEditor::new(
                     code_editor::EditorInfo::default().copied(),
@@ -540,10 +559,7 @@ impl Default for AppData {
 "#
                     .to_string(),
                 ),
-                results: vec![],
-                commits: 2,
-                max_matches: 3000,
-                timeout: 1000,
+                ..Default::default()
             }],
             queries_results: vec![],
             queries_differential_results: None,
@@ -855,6 +871,7 @@ struct MyTileTreeBehavior<'a> {
     selected_commit: &'a mut Option<(ProjectId, String)>,
     selected_baseline: &'a mut Option<String>,
     to_hide: Vec<egui_tiles::TileId>,
+    tab_to_add: Option<TabId>,
 }
 
 impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
@@ -880,26 +897,6 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
             }
             Tab::LocalQuery(id) => {
                 let query = &mut self.data.queries[*id as usize];
-                ui.horizontal(|ui| {
-                    ui.button("rename");
-                    egui::ComboBox::new((ui.id(), id), "Lang")
-                        .selected_text(query.lang.as_str())
-                        .show_ui(ui, |ui| {
-                            let v = "Cpp";
-                            if ui.selectable_label(v == query.lang, v).clicked() {
-                                if query.lang != v {
-                                    query.lang = v.to_string()
-                                }
-                            }
-                            let v = "Java";
-                            if ui.selectable_label(v == query.lang, v).clicked() {
-                                if query.lang != v {
-                                    query.lang = v.to_string()
-                                }
-                            }
-                        });
-                    ui.label(format!("{:?}", query.results))
-                });
                 ui.painter().rect_filled(
                     ui.available_rect_before_wrap(),
                     ui.visuals().window_rounding,
@@ -968,6 +965,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 //     &mut self.data.querying_context,
                 //     &mut self.data.query,
                 // );
+
                 Default::default()
             }
             Tab::RemoteQuery(id) => {
@@ -2030,13 +2028,23 @@ impl eframe::App for HyperApp {
                     selected_commit: &mut self.selected_commit,
                     selected_baseline: &mut self.selected_baseline,
                     to_hide: Default::default(),
+                    tab_to_add: None,
                 };
                 tree.ui(&mut tile_tree, ui);
+
                 if tile_tree.edited {
                     self.save_interval = std::time::Duration::ZERO;
                 }
                 for tile_id in tile_tree.to_hide {
                     tree.set_visible(tile_id, false);
+                }
+
+                if let Some(tid) = tile_tree.tab_to_add {
+                    let child = self.tree.tiles.insert_pane(tid);
+                    match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
+                        Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
+                        _ => todo!(),
+                    };
                 }
                 self.maximized = maximized;
             });
@@ -2062,6 +2070,19 @@ impl eframe::App for HyperApp {
                 UICommand::PersistApp => {
                     self.save_interval = std::time::Duration::ZERO;
                     self.persistance = true;
+                }
+                UICommand::NewQuery => {
+                    self.data.queries.push(crate::app::QueryData {
+                        ..Default::default()
+                    });
+                    let qid = self.data.queries.len() as u16 - 1;
+                    let tid = self.tabs.len() as u16;
+                    self.tabs.push(crate::app::Tab::LocalQuery(qid));
+                    let child = self.tree.tiles.insert_pane(tid);
+                    match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
+                        Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
+                        _ => todo!(),
+                    };
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 UICommand::ZoomIn => {

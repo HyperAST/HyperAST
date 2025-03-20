@@ -33,7 +33,7 @@ impl crate::HyperApp {
             };
             let title = self.tabs[pane as usize].title(&self.data);
             use super::re_ui_collapse::SectionCollapsingHeader;
-            SectionCollapsingHeader::new(title)
+            SectionCollapsingHeader::with_id(ui.id().with(pane), title)
                 .default_open(false)
                 .show(ui, |ui| {
                     if let super::Tab::ProjectSelection() = self.tabs[pane as usize] {
@@ -81,7 +81,80 @@ impl crate::HyperApp {
     }
     fn show_local_query_left_panel(&mut self, ui: &mut egui::Ui, id: u16) {
         let query = &mut self.data.queries[id as usize];
-        egui::Slider::new(&mut query.commits, 1..=100)
+        ui.horizontal(|ui| {
+            ui.label("name: ");
+            ui.text_edit_singleline(&mut query.name);
+        });
+        egui::ComboBox::new((ui.id(), "Lang", id), "Lang")
+            .selected_text(query.lang.as_str())
+            .show_ui(ui, |ui| {
+                let v = "Cpp";
+                if ui.selectable_label(v == query.lang, v).clicked() {
+                    if query.lang != v {
+                        query.lang = v.to_string()
+                    }
+                }
+                let v = "Java";
+                if ui.selectable_label(v == query.lang, v).clicked() {
+                    if query.lang != v {
+                        query.lang = v.to_string()
+                    }
+                }
+            });
+
+        let sel_precomp = if let Some(id) = query.precomp.clone() {
+            self.data.queries[id as usize].name.to_string()
+        } else {
+            "<none>".to_string()
+        };
+        let mut create_q = false;
+        egui::ComboBox::new((ui.id(), "Precomp", id), "Precomp")
+            .selected_text(sel_precomp)
+            .show_ui(ui, |ui| {
+                create_q = ui.button("new").clicked();
+                let mut precomp = None;
+                for (i, q) in self.data.queries.iter().enumerate() {
+                    let v = &q.name;
+                    if ui.selectable_label(i == id as usize, v).clicked() {
+                        if i == id as usize {
+                            precomp = Some(i);
+                        }
+                    }
+                }
+                let query = &mut self.data.queries[id as usize];
+                if let Some(precomp) = precomp {
+                    query.precomp = Some(precomp as u16);
+                }
+                if ui
+                    .selectable_label(query.precomp.is_none(), "<none>")
+                    .clicked()
+                {
+                    query.precomp = None;
+                }
+            });
+        if create_q {
+                self.data.queries.push(crate::app::QueryData {
+                    name: "precomp".to_string(),
+                    lang: self.data.queries[id as usize].lang.to_string(),
+                    query: egui_addon::code_editor::CodeEditor::new(
+                        egui_addon::code_editor::EditorInfo::default().copied(),
+                        r#"translation_unit"#.to_string(),
+                    ),
+                    ..Default::default()
+                });
+                let qid = self.data.queries.len() as u16 - 1;
+                let query = &mut self.data.queries[id as usize];
+                query.precomp = Some(qid);
+                let tid = self.tabs.len() as u16;
+                self.tabs.push(crate::app::Tab::LocalQuery(qid));
+                let child = self.tree.tiles.insert_pane(tid);
+                match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
+                    Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
+                    _ => todo!(),
+                };
+            }
+            let query = &mut self.data.queries[id as usize];
+            egui::Slider::new(&mut query.commits, 1..=100)
             .text("#commits")
             .clamping(egui::SliderClamping::Never)
             .ui(ui)
@@ -326,11 +399,11 @@ impl crate::HyperApp {
                         let w = &mut ui.style_mut().visuals.widgets;
                         w.hovered.weak_bg_fill = _n;
                         ui.selectable_label(false, "..").on_hover_ui(|ui| {
-                            ui.horizontal(|ui|{
+                            ui.horizontal(|ui| {
                                 ui.label("name:");
                                 ui.label(&query_data.name)
                             });
-                            ui.horizontal(|ui|{
+                            ui.horizontal(|ui| {
                                 ui.label("lang:");
                                 ui.label(&query_data.lang)
                             });
