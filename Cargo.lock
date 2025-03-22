@@ -4228,6 +4228,7 @@ dependencies = [
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
  "hyperast",
+ "hyperast_tsquery",
  "legion",
  "libc",
  "log",
@@ -4330,6 +4331,7 @@ dependencies = [
  "hyperast",
  "legion",
  "libc",
+ "log",
  "num",
  "pretty_assertions",
  "tree-sitter",
@@ -9031,6 +9033,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-graph"
 version = "0.12.2"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=bcdb8e5bbb16636f47d155c0bdae5d19fd46a888#bcdb8e5bbb16636f47d155c0bdae5d19fd46a888"
 dependencies = [
  "log",
  "regex",

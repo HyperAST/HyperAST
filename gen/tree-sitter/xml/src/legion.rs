@@ -196,6 +196,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
+        log::warn!("not retrieving roles");
         PreResult::Ok(acc)
     }
     fn pre(

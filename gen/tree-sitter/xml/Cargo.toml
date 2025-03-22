@@ -11,6 +11,7 @@ hyperast = { path = "../../../crates/hyper_ast", default-features = false }
 # hyperast = { workspace = true, default-features = false } # issue with hyper_app + wasm
 
 hashbrown = { version = "0.14.5", default-features = false, optional = true }
+log = { version = "0.4.6" }
 
 num = "0.4.0"
 

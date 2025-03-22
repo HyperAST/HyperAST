@@ -1091,6 +1091,31 @@ impl<'a, IdN, Idx> PartialEq for RefNode<'a, IdN, Idx> {
 
 impl<'a, IdN, Idx> Eq for RefNode<'a, IdN, Idx> {}
 
+impl<'a, IdN: std::hash::Hash, Idx: std::hash::Hash> std::hash::Hash for RefNode<'a, IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        if cfg!(debug_assertions) {
+            todo!("make tests to assert it gives the same results as in offsets_and_nodes")
+        }
+        // TODO make tests to assert it gives the same results as in offsets_and_nodes
+        let mut s = self.clone();
+        // self.parents.first().hash(state);
+        s.node().hash(state);
+        loop {
+            // self.offsets.hash(state);
+            s.offset().hash(state);
+            if !s.up() {
+                // self.parents.last().hash(state);
+                s.node().hash(state);
+                break;
+            }
+        }
+    }
+}
+
 pub struct ExtRefNode<'a, IdN, Idx = u16> {
     s: std::cell::Ref<'a, StructuralPositionStore2<IdN, Idx>>,
     h: Handle,

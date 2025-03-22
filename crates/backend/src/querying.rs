@@ -1,16 +1,16 @@
 use crate::{smells::globalize, SharedState};
 use axum::{response::IntoResponse, Json};
 use http::{HeaderMap, StatusCode};
-use hyperast::{
-    position::position_accessors::WithPreOrderOffsets,
-    store::defaults::NodeIdentifier,
-    types::{Children, HyperAST, Childrn, Typed, WithChildren, WithStats},
-};
-use hyperast_vcs_git::git::Oid;
 use hyper_diff::{
     decompressed_tree_store::ShallowDecompressedTreeStore,
     matchers::{mapping_store::MultiMappingStore, Decompressible},
 };
+use hyperast::{
+    position::position_accessors::WithPreOrderOffsets,
+    store::defaults::NodeIdentifier,
+    types::{Children, Childrn, HyperAST, Typed, WithChildren, WithStats},
+};
+use hyperast_vcs_git::git::Oid;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -25,6 +25,7 @@ pub struct Param {
 pub struct Content {
     pub language: String,
     pub query: String,
+    pub precomp: Option<String>,
     pub commits: usize,
     // TODO disable the incriminated pattern for subsequent matches
     /// checked per individual match
@@ -110,6 +111,7 @@ pub fn simple(
     let Content {
         language,
         query,
+        precomp,
         commits,
         max_matches,
         timeout,
@@ -119,12 +121,13 @@ pub fn simple(
     let config = if language == "Java" {
         hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyperast_vcs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::CppMake
     } else {
         hyperast_vcs_git::processing::RepoConfig::Any
     };
+    let lang = &language;
     let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
-        .ok_or_else(|| QueryingError::MissingLanguage(language))?;
+        .ok_or_else(|| QueryingError::MissingLanguage(language.to_string()))?;
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
@@ -135,11 +138,17 @@ pub fn simple(
         Some(repo) => repo,
         None => {
             let configs = &mut state.repositories.write().unwrap();
-            configs.register_config(repo_spec.clone(), config);
+            if let Some(precomp) = precomp {
+                configs.register_config_with_prequeries(repo_spec.clone(), config, &[&precomp]);
+            } else {
+                // configs.register_config_alt_lang(repo_spec.clone(), config, "C");
+                configs.register_config(repo_spec.clone(), config);
+            }
             log::error!("missing config for {}", repo_spec);
             configs.get_config(repo_spec.clone()).unwrap()
         }
     };
+
     let mut repo = repo.fetch();
     log::warn!("done cloning {}", &repo.spec);
     let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, commits)
@@ -147,13 +156,18 @@ pub fn simple(
     log::info!("done construction of {commits:?} in  {}", repo.spec);
     let language: tree_sitter::Language = language.clone();
 
-    let query = if INCREMENTAL_QUERIES {
-        hyperast_tsquery::Query::with_precomputed(
-            &query,
-            hyperast_gen_ts_java::language(),
-            hyperast_vcs_git::java_processor::sub_queries(),
-        )
-        .map(|x| x.1)
+    let precomputeds = INCREMENTAL_QUERIES
+        .then(|| {
+            state
+                .repositories
+                .write()
+                .unwrap()
+                .get_precomp_query(repo.config, lang)
+        })
+        .flatten();
+
+    let query = if let Some(precomputeds) = precomputeds {
+        hyperast_tsquery::Query::with_precomputed(&query, language, precomputeds).map(|x| x.1)
     } else {
         hyperast_tsquery::Query::new(&query, language)
     }
@@ -233,7 +247,7 @@ pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::
 
     headers.insert("commits", commits.len().into());
 
-    let pre_query = pre_query(&mut state, &path, &content);
+    let pre_query = pre_query(&mut state, &path, &content, repo.config);
     let Content {
         commits: mut proc_commit_limit,
         max_matches,
@@ -329,22 +343,22 @@ fn pre_repo(
     state: &mut SharedState,
     path: &Param,
     content: &Content,
-) -> Result<(hyperast_vcs_git::processing::ConfiguredRepo2, Vec<Oid>), Box<dyn std::error::Error>>
-{
+) -> Result<(hyperast_vcs_git::processing::ConfiguredRepo2, Vec<Oid>), Box<dyn std::error::Error>> {
     let Param { user, name, commit } = path.clone();
     let mut additional = commit.split("/");
     let commit = additional.next().unwrap();
     let Content {
         language,
-        query,
+        query: _,
+        precomp,
         commits,
-        max_matches,
-        timeout,
+        max_matches: _,
+        timeout: _,
     } = content.clone();
     let config = if language == "Java" {
         hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyperast_vcs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::CppMake
     } else {
         hyperast_vcs_git::processing::RepoConfig::Any
     };
@@ -355,10 +369,13 @@ fn pre_repo(
         .unwrap()
         .get_config(repo_spec.clone());
     let repo = match repo {
-        Some(repo) => repo,
-        None => {
+        Some(_) | None => {
             let configs = &mut state.repositories.write().unwrap();
-            configs.register_config(repo_spec.clone(), config);
+            if let Some(precomp) = precomp {
+                configs.register_config_with_prequeries(repo_spec.clone(), config, &[&precomp]);
+            } else {
+                configs.register_config(repo_spec.clone(), config);
+            }
             log::error!("missing config for {}", repo_spec);
             configs.get_config(repo_spec.clone()).unwrap()
         }
@@ -378,6 +395,7 @@ fn pre_query(
     state: &mut SharedState,
     path: &Param,
     content: &Content,
+    repo_config: hyperast_vcs_git::processing::ParametrizedCommitProcessorHandle,
 ) -> Result<hyperast_tsquery::Query, QueryingError> {
     let Param { user, name, commit } = path.clone();
     let mut additional = commit.split("/");
@@ -385,27 +403,32 @@ fn pre_query(
     let Content {
         language,
         query,
-        commits,
-        max_matches,
-        timeout,
-    } = content.clone();
+        precomp: _,
+        commits: _,
+        max_matches: _,
+        timeout: _,
+    } = &content;
     let config = if language == "Java" {
         hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyperast_vcs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::CppMake
     } else {
         hyperast_vcs_git::processing::RepoConfig::Any
     };
+    let lang = &language;
     let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
-        .ok_or_else(|| QueryingError::MissingLanguage(language))?;
+        .ok_or_else(|| QueryingError::MissingLanguage(language.to_string()))?;
     let language: tree_sitter::Language = language.clone();
-    let query = if INCREMENTAL_QUERIES {
-        hyperast_tsquery::Query::with_precomputed(
-            &query,
-            hyperast_gen_ts_java::language(),
-            hyperast_vcs_git::java_processor::sub_queries(),
-        )
-        .map(|x| x.1)
+
+    let precomputeds = INCREMENTAL_QUERIES.then(|| {
+        state
+            .repositories
+            .write()
+            .unwrap()
+            .get_precomp_query(repo_config, lang)
+    });
+    let query = if let Some(Some(precomputeds)) = precomputeds {
+        hyperast_tsquery::Query::with_precomputed(&query, language, precomputeds).map(|x| x.1)
     } else {
         hyperast_tsquery::Query::new(&query, language)
     }
@@ -493,6 +516,7 @@ pub fn differential(
     let Content {
         language,
         query,
+        precomp,
         max_matches,
         timeout,
         ..
@@ -501,12 +525,13 @@ pub fn differential(
     let config = if language == "Java" {
         hyperast_vcs_git::processing::RepoConfig::JavaMaven
     } else if language == "Cpp" {
-        hyperast_vcs_git::processing::RepoConfig::JavaMaven
+        hyperast_vcs_git::processing::RepoConfig::CppMake
     } else {
         hyperast_vcs_git::processing::RepoConfig::Any
     };
+    let lang = &language;
     let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
-        .ok_or_else(|| QueryingError::MissingLanguage(language))?;
+        .ok_or_else(|| QueryingError::MissingLanguage(language.to_string()))?;
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
@@ -517,7 +542,11 @@ pub fn differential(
         Some(repo) => repo,
         None => {
             let configs = &mut state.repositories.write().unwrap();
-            configs.register_config(repo_spec.clone(), config);
+            if let Some(precomp) = precomp {
+                configs.register_config_with_prequeries(repo_spec.clone(), config, &[&precomp]);
+            } else {
+                configs.register_config(repo_spec.clone(), config);
+            }
             log::error!("missing config for {}", repo_spec);
             configs.get_config(repo_spec.clone()).unwrap()
         }
@@ -534,13 +563,15 @@ pub fn differential(
     );
     let language: tree_sitter::Language = language.clone();
 
-    let query = if INCREMENTAL_QUERIES {
-        hyperast_tsquery::Query::with_precomputed(
-            &query,
-            hyperast_gen_ts_java::language(),
-            hyperast_vcs_git::java_processor::sub_queries(),
-        )
-        .map(|x| x.1)
+    let precomputeds = INCREMENTAL_QUERIES.then(|| {
+        state
+            .repositories
+            .write()
+            .unwrap()
+            .get_precomp_query(repo.config, lang)
+    });
+    let query = if let Some(Some(precomputeds)) = precomputeds {
+        hyperast_tsquery::Query::with_precomputed(&query, language, precomputeds).map(|x| x.1)
     } else {
         hyperast_tsquery::Query::new(&query, language)
     }
@@ -603,8 +634,14 @@ pub fn differential(
     let (src_tree, dst_tree) =
         crate::utils::get_pair_simp(&state.partial_decomps, hyperast, &current_tr, &other_tr);
     let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
-    let src_tree = Decompressible{hyperast, decomp: src_tree};
-    let dst_tree = Decompressible{hyperast, decomp: dst_tree};
+    let src_tree = Decompressible {
+        hyperast,
+        decomp: src_tree,
+    };
+    let dst_tree = Decompressible {
+        hyperast,
+        decomp: dst_tree,
+    };
 
     let mut mapper = hyper_diff::matchers::Mapper {
         hyperast,
@@ -615,8 +652,13 @@ pub fn differential(
         },
     };
 
-    let subtree_mappings =
-        { crate::matching::top_down(hyperast, mapper.mapping.src_arena.decomp, mapper.mapping.dst_arena.decomp) };
+    let subtree_mappings = {
+        crate::matching::top_down(
+            hyperast,
+            mapper.mapping.src_arena.decomp,
+            mapper.mapping.dst_arena.decomp,
+        )
+    };
 
     log::info!("done top_down mapping");
 
@@ -644,9 +686,7 @@ pub fn differential(
                     return false;
                 }
                 use hyper_diff::decompressed_tree_store::LazyDecompressedTreeStore;
-                let cs = mapper
-                    .src_arena
-                    .decompress_children(&src);
+                let cs = mapper.src_arena.decompress_children(&src);
                 if cs.is_empty() {
                     log::debug!("empty");
                     return true;

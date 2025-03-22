@@ -36,7 +36,7 @@ where
 {
     let now = Instant::now();
     let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
-        hyperast.decompress_pair2(src, dst).into();
+        hyperast.decompress_pair(src, dst).into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
     let mapper =

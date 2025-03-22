@@ -38,26 +38,6 @@ pub struct NodeStore {
     nodes: std::collections::HashMap<NodeIdentifier, boxing::ErasedMap>,
 }
 
-pub struct TMarker<IdN>(std::marker::PhantomData<IdN>);
-
-impl<IdN> Default for TMarker<IdN> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl<'a, IdN: 'a + crate::types::NodeId + TypedNodeId<IdN = NodeIdentifier>>
-    crate::types::NLending<'a, IdN> for TMarker<IdN>
-{
-    type N = HashedNodeRef<'a, IdN>;
-}
-
-impl<IdN> crate::types::Node for TMarker<IdN> {}
-
-impl<IdN: crate::types::NodeId> crate::types::Stored for TMarker<IdN> {
-    type TreeId = IdN;
-}
-
 impl<'a> crate::types::lending::NLending<'a, NodeIdentifier> for NodeStore {
     type N = HashedNodeRef<'a, NodeIdentifier>;
 }
@@ -69,8 +49,6 @@ impl crate::types::lending::NodeStore<NodeIdentifier> for NodeStore {
     ) -> <Self as crate::types::lending::NLending<'_, NodeIdentifier>>::N {
         HashedNodeRef(self.nodes.get(id).unwrap(), PhantomData)
     }
-
-    // type NMarker = TMarker<NodeIdentifier>;
 }
 
 impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TyNodeStore<TIdN>

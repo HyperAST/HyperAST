@@ -423,16 +423,6 @@ mod test {
         let dst = dst_tr.local.compressed_node;
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
-        let label_store = &tree_gen.stores.label_store;
-        // let node_store = &tree_gen.stores.node_store;
-        let node_store = &NoSpaceNodeStoreWrapper::from(&tree_gen.stores.node_store);
-
-        // let mut stores = SimpleHyperAST {
-        //     label_store: label_store,
-        //     type_store: hyperast_vcs_git::TStore::default(),
-        //     node_store: node_store,
-        //     _phantom: std::marker::PhantomData,
-        // };
         let stores = hyperast_vcs_git::no_space::as_nospaces2(tree_gen.stores);
 
         // print_tree_syntax_with_ids(
@@ -465,8 +455,6 @@ mod test {
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
         // type DS<IdN> = LazyPostOrder<IdN, u32>;
 
-        use hyperast::types::HyperAST;
-        // let mut mapper: (&_, (DS<_>, DS<_>)) = stores.decompress_pair2(&src, &dst);
         let mut src_arena = DS::decompress(&stores, &src);
         let mut dst_arena = DS::decompress(&stores, &dst);
         let src_arena = src_arena.as_mut();
@@ -1792,24 +1780,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
     let parse_t = now.elapsed().as_secs_f64();
 
-    // use hyperast_vcs_git::no_space::IntoNoSpace;
-    // let stores: hyperast::types::SimpleHyperAST<_, _, _, _> = (&stores).into();
-
-    // let aaa = hyperast_vcs_git::TStore::default();
-    // let stores: hyperast::types::SimpleHyperAST<_, _, _, _> = stores.change_type_store(aaa);
     let stores = hyperast_vcs_git::no_space::as_nospaces2(&java_gen.main_stores);
-    // // let stores = (&java_gen.main_stores).as_nospaces();
-    // let stores = java_gen.main_stores.as_nospaces();
-
-    // : hyperast::types::SimpleHyperAST<
-    //     hyperast_vcs_git::no_space::NoSpaceWrapper<
-    //     '_,
-    //     hyperast_gen_ts_java::types::TIdN<hyperast::store::defaults::NodeIdentifier>,
-    // >,
-    // &TStore,
-    // hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper<'_>,
-    // &LabelStore,
-    // >
 
     dbg!(&parse_t);
     dbg!(&src_tr.metrics.size);

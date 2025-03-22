@@ -94,6 +94,8 @@ pub enum UICommand {
 
     // NOTE: could take inspiration from zed on (kb) interations
 
+    NewQuery,
+
     // Compute commands:
     RunQuery,
     ComputeTrackingMappingFuture,
@@ -284,6 +286,11 @@ impl UICommand {
                 "Restart with WebGPU",
                 "Reloads the webpage and force WebGPU for rendering. All data will be lost."
             ),
+
+            UICommand::NewQuery => (
+                "Create new query",
+                "Create a new tree-sitter query"
+            ),
             
             UICommand::RunQuery => (
                 "Run current code query",
@@ -447,6 +454,7 @@ impl UICommand {
             Self::ViewportMode(_) => None,
             
             // TODO
+            UICommand::NewQuery => None,
             UICommand::RunQuery => None,
             UICommand::ComputeTrackingMappingFuture => None,
             UICommand::ComputeTrackingMappingPast => None,

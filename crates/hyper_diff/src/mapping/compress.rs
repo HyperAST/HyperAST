@@ -477,7 +477,7 @@ where
 mod test {
     use std::marker::PhantomData;
 
-    use hyperast::types::{DecompressedSubtree, SimpleHyperAST};
+    use hyperast::types::{DecompressedSubtree, SimpleStores};
 
     use crate::{
         decompressed_tree_store::{CompletePostOrder, DecompressedWithParent, PostOrderIterable},
@@ -506,12 +506,7 @@ mod test {
     fn hands_on() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena = D::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
         let dst_arena = D::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
@@ -619,12 +614,7 @@ mod test {
     fn hands_on2() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores(examples::example_gumtree_ambiguous());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -773,14 +763,8 @@ mod test {
         #[test]
         fn aaaa() {
             let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
-            // let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
 
-            let stores = SimpleHyperAST {
-                type_store: crate::tree::TStore,
-                node_store,
-                label_store,
-                _phantom: PhantomData::<_>,
-            };
+            let stores = SimpleStores::<crate::tree::TStore>::default();
 
             let mut mappings = DefaultMappingStore::default();
             let src_arena =
@@ -856,12 +840,7 @@ mod test {
     #[test]
     fn test_action2() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -927,12 +906,7 @@ mod test {
     fn test_gumtree_ambiguous() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores(examples::example_gumtree_ambiguous());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -992,12 +966,7 @@ mod test {
     #[test]
     fn test_gt_java_code() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_gt_java_code());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1054,12 +1023,7 @@ mod test {
     #[test]
     fn test_move2() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move2());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1158,12 +1122,7 @@ mod test {
     #[test]
     fn test_move3() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move3());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1264,12 +1223,7 @@ mod test {
     fn test_move_mix2b() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1369,12 +1323,7 @@ mod test {
     fn test_move_mix2() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move().0, examples::example_move1().1));
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1475,12 +1424,7 @@ mod test {
     #[test]
     fn test_move1b() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move1());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1572,12 +1516,7 @@ mod test {
     #[test]
     fn test_move1() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move1());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1669,12 +1608,7 @@ mod test {
     #[test]
     fn test_move() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1762,12 +1696,7 @@ mod test {
     #[test]
     fn test_simple1a() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple1());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1824,12 +1753,7 @@ mod test {
     #[test]
     fn test_simple1() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple1());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1882,12 +1806,7 @@ mod test {
     #[test]
     fn test_simple() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
@@ -1942,12 +1861,7 @@ mod test {
     #[test]
     fn test_single() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_single());
-        let stores = SimpleHyperAST {
-            type_store: crate::tree::TStore,
-            node_store,
-            label_store,
-            _phantom: PhantomData::<_>,
-        };
+        let stores = SimpleStores::<crate::tree::TStore>::default();
         let mut mappings = DefaultMappingStore::default();
         let src_arena =
             CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);

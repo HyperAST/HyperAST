@@ -137,29 +137,6 @@ pub(crate) mod store {
         }
     }
 
-    impl<'b> hyperast::types::inner_ref::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        type Ref = HashedNodeRef<'static, NodeIdentifier>;
-        fn scoped<R>(&self, id: &NodeIdentifier, f: impl Fn(&Self::Ref) -> R) -> R {
-            let t = &hyperast::types::NodeStore::resolve(self, id);
-            // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
-            let t = unsafe { std::mem::transmute(t) };
-            f(t)
-        }
-        fn scoped_mut<R>(&self, id: &NodeIdentifier, mut f: impl FnMut(&Self::Ref) -> R) -> R {
-            let t = &hyperast::types::NodeStore::resolve(self, id);
-            // SAFETY: safe as long as Self::Ref does not exposes its fake &'static fields
-            let t = unsafe { std::mem::transmute(t) };
-            f(t)
-        }
-        fn multi<R, const N: usize>(
-            &self,
-            id: &[NodeIdentifier; N],
-            f: impl Fn(&[Self::Ref; N]) -> R,
-        ) -> R {
-            todo!()
-        }
-    }
-
     impl<'b> hyperast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
         type I = LabelIdentifier;
 

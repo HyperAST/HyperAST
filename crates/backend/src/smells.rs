@@ -183,7 +183,6 @@ pub(crate) fn smells(
     let dst_tr = commit_dst.ast_root;
     let with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore> =
         &repositories.processor.main_stores;
-    let stores = &hyperast_vcs_git::no_space::as_nospaces(with_spaces_stores);
 
     // NOTE temporary bypass, will be fixed when adding polyglote facilities
     // SAFETY for now TStores are identical enough to be transmuted

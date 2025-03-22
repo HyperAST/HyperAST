@@ -145,6 +145,7 @@ pub(super) fn remote_compute_query(
             QueryContent {
                 language,
                 query: code_editors.query.code().to_string(),
+                precomp: None,
                 commits: single.content.len,
                 max_matches: u64::MAX,
                 timeout: u64::MAX,
@@ -154,6 +155,7 @@ pub(super) fn remote_compute_query(
             QueryContent {
                 language,
                 query: content.query.code().to_string(),
+                precomp: None,
                 commits: single.content.len,
                 max_matches: u64::MAX,
                 timeout: u64::MAX,
@@ -167,6 +169,7 @@ pub(super) fn remote_compute_query(
 pub(crate) struct QueryContent {
     pub(crate) language: String,
     pub(crate) query: String,
+    pub(crate) precomp: Option<String>,
     pub(crate) commits: usize,
     /// checked per individual match
     /// if triggered on first search (ie. first commit searched) it return directly

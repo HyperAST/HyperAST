@@ -7,8 +7,8 @@ use std::{
 };
 
 use dashmap::DashMap;
+use hyper_diff::matchers::mapping_store::VecStore;
 use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
-use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 
 use axum::body::Bytes;
 use hyperast::store::nodes::legion::NodeIdentifier;
@@ -87,8 +87,7 @@ pub(crate) enum MappingStage {
 }
 
 type DS<T> = hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<T, u32>;
-pub type PersistableMappings<I> =
-    hyper_diff::matchers::Mapping<DS<I>, DS<I>, VecStore<u32>>;
+pub type PersistableMappings<I> = hyper_diff::matchers::Mapping<DS<I>, DS<I>, VecStore<u32>>;
 pub(crate) type MappingCache =
     DashMap<(NodeIdentifier, NodeIdentifier), PersistableMappings<NodeIdentifier>>;
 type SharedState = Arc<AppState>;

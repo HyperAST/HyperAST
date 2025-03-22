@@ -49,35 +49,23 @@ impl<'a, TS, NS, LS> std::ops::Deref for QStoreRef<'a, TS, NS, LS> {
 
 impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNodeStore> {
     type IdN = store::nodes::DefaultNodeIdentifier;
-
     type Idx = u16;
     type Label = store::labels::DefaultLabelIdentifier;
-
-    // type T<'t> = store::nodes::legion::HashedNodeRef<'t, Self::IdN>;
-    // type RT = store::nodes::legion::HashedNodeRef<'static, Self::IdN>;
 }
 
 impl<'a, 'b, TS> hyperast::types::NLending<'a, <Self as HyperASTShared>::IdN>
     for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
 {
-    type N = <store::nodes::DefaultNodeStore as hyperast::types::NLending<'a, <Self as HyperASTShared>::IdN>>::N;
+    type N = <store::nodes::DefaultNodeStore as hyperast::types::NLending<
+        'a,
+        <Self as HyperASTShared>::IdN,
+    >>::N;
 }
 
 impl<'a, 'b, TS> hyperast::types::AstLending<'a>
     for QStoreRef<'b, TS, store::nodes::DefaultNodeStore>
 where
     TS: types::TypeStore<Ty = types::AnyType>,
-    // NS: crate::types::NStore,
-    // NS: crate::types::NodeStore<<NS as crate::types::NStore>::IdN>,
-    // LS: crate::types::LStore,
-    // <NS as crate::types::NStore>::IdN:
-    //     crate::types::NodeId<IdN = <NS as crate::types::NStore>::IdN>,
-    // for<'t> <NS as crate::types::NLending<'t, <NS as crate::types::NStore>::IdN>>::N:
-    //     crate::types::Tree<
-    //         Label = <LS as crate::types::LStore>::I,
-    //         TreeId = <NS as crate::types::NStore>::IdN,
-    //         ChildIdx = <NS as crate::types::NStore>::Idx,
-    //     >,
 {
     type RT = <store::nodes::DefaultNodeStore as hyperast::types::NLending<'a, Self::IdN>>::N;
 }
@@ -86,7 +74,6 @@ impl<'a, TS> types::HyperAST for QStoreRef<'a, TS, store::nodes::DefaultNodeStor
 where
     TS: types::TypeStore<Ty = types::AnyType>,
 {
-    // type TM = store::nodes::legion::TMarker<store::nodes::DefaultNodeIdentifier>;
     type NS = store::nodes::legion::NodeStore;
 
     fn node_store(&self) -> &Self::NS {
@@ -127,12 +114,8 @@ where
     }
 }
 
-impl<
-        'store,
-        'a,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId,
-    > TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
+impl<'store, 'a, HAST: types::TypedHyperAST<TIdN>, TIdN: hyperast::types::TypedNodeId>
+    TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
 where
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <TIdN::Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,

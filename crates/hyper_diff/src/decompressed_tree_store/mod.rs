@@ -265,10 +265,3 @@ impl<'a, IdD: PrimInt> Iterator for IterKr<'a, IdD> {
         num_traits::cast(self.0.next()?)
     }
 }
-pub struct PersistedNode<I>(I);
-
-impl<I> hyperast::types::Node for PersistedNode<I> {}
-
-impl<I: Eq + NodeId> hyperast::types::Stored for PersistedNode<I> {
-    type TreeId = I;
-}

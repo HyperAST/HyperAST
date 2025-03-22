@@ -269,7 +269,11 @@ where
             .map_or(false, |a| a.simple.kind.is_supertype())
         {
             if let Some(r) = cursor.0.field_name() {
-                acc.role.current = r.try_into().ok();
+                if let Ok(r) = r.try_into() {
+                    acc.role.current = Some(r);
+                } else {
+                    log::error!("cannot convert role: {}", r)
+                }
             }
         }
         PreResult::Ok(acc)

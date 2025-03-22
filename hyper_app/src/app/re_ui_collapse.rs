@@ -6,6 +6,7 @@ use re_ui::{list_item, DesignTokens, UiExt as _};
 #[allow(clippy::type_complexity)]
 pub struct SectionCollapsingHeader<'a> {
     label: egui::WidgetText,
+    id: Option<egui::Id>,
     default_open: bool,
     button: Option<Box<dyn list_item::ItemButton + 'a>>,
     help: Option<Box<dyn FnOnce(&mut egui::Ui) + 'a>>,
@@ -18,6 +19,18 @@ impl<'a> SectionCollapsingHeader<'a> {
     pub fn new(label: impl Into<egui::WidgetText>) -> Self {
         Self {
             label: label.into(),
+            id: None,
+            default_open: true,
+            button: None,
+            help: None,
+        }
+    }
+
+    #[inline]
+    pub fn with_id(id: egui::Id, label: impl Into<egui::WidgetText>) -> Self {
+        Self {
+            label: label.into(),
+            id: Some(id),
             default_open: true,
             button: None,
             help: None,
@@ -77,12 +90,13 @@ impl<'a> SectionCollapsingHeader<'a> {
     ) -> egui::CollapsingResponse<()> {
         let Self {
             label,
+            id,
             default_open,
             button,
             help,
         } = self;
 
-        let id = ui.make_persistent_id(label.text());
+        let id = id.unwrap_or_else(|| ui.make_persistent_id(label.text()));
 
         let mut content = list_item::LabelContent::new(label);
         if button.is_some() || help.is_some() {
@@ -144,12 +158,13 @@ impl<'a> SectionCollapsingHeader<'a> {
     ) -> egui::CollapsingResponse<()> {
         let Self {
             label,
+            id,
             default_open,
             button,
             help,
         } = self;
 
-        let id = ui.make_persistent_id(label.text());
+        let id = id.unwrap_or_else(|| ui.make_persistent_id(label.text()));
 
         let mut content = list_item::LabelContent::new(label).truncate(true);
         if button.is_some() || help.is_some() {

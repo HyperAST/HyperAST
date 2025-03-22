@@ -108,9 +108,9 @@ impl crate::HyperApp {
             let r = r.clone();
 
             let results_per_commit: Option<&super::ResultsPerCommit> = {
-                if let Some(r) = self.data.queries_results.iter().find(|x| x.0 == repo_id) {
-                    let qid = r.1;
-                    if let Some(Ok(r)) = r.2.get() {
+                if let Some(r) = self.data.queries_results.iter().find(|x| x.project == repo_id) {
+                    let qid = r.query;
+                    if let Some(Ok(r)) = r.content.get() {
                         let key = { (repo_id, qid, r.rows.lock().unwrap().0) };
                         Some(res_per_commit.get2(key, r))
                     } else {
@@ -169,9 +169,9 @@ impl crate::HyperApp {
                                 .data
                                 .queries_results
                                 .iter()
-                                .find(|x| x.0 == repo_id && x.1 == 0)
+                                .find(|x| x.project == repo_id && x.query == 0)
                                 .unwrap()
-                                .3;
+                                .tab;
                             if let super::Tab::QueryResults { id, format } =
                                 &mut self.tabs[tabid as usize]
                             {
@@ -237,9 +237,9 @@ impl crate::HyperApp {
                                 .data
                                 .queries_results
                                 .iter()
-                                .find(|x| x.0 == repo_id && x.1 == 0)
+                                .find(|x| x.project == repo_id && x.query == 0)
                                 .unwrap()
-                                .3;
+                                .tab;
                             if let super::Tab::QueryResults { id, format } =
                                 &mut self.tabs[tabid as usize]
                             {
@@ -414,9 +414,9 @@ impl crate::HyperApp {
             else {
                 continue;
             };
-            if let Some(r) = self.data.queries_results.iter().find(|x| x.0 == repo_id) {
-                let qid = r.1;
-                if let Some(Ok(r)) = r.2.get() {
+            if let Some(r) = self.data.queries_results.iter().find(|x| x.project == repo_id) {
+                let qid = r.query;
+                if let Some(Ok(r)) = r.content.get() {
                     let key = { (repo_id, qid, r.rows.lock().unwrap().0) };
                     res_per_commit.remove(key);
                 }

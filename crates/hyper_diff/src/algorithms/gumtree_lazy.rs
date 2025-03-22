@@ -44,7 +44,7 @@ where
     for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
     let now = Instant::now();
-    let mapper: (HAST, (DS<HAST>, DS<HAST>)) = hyperast.decompress_pair2(src, dst);
+    let mapper: (HAST, (DS<HAST>, DS<HAST>)) = hyperast.decompress_pair(src, dst);
     let mut mapper_owned: Mapper<_, DS<HAST>, DS<HAST>, VecStore<_>> = mapper.into();
     // TODO find better way, at least make a shorthand
     let mapper = Mapper {

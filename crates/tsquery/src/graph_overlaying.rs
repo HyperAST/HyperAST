@@ -1,8 +1,7 @@
 use super::stepped_query_imm;
 use hyperast::{
-    store::SimpleStores,
     tree_gen,
-    types::{self, AstLending, HyperAST, HyperASTShared, StoreLending, StoreLending2},
+    types::{self, AstLending, ETypeStore, HyperASTShared, StoreRefAssoc},
 };
 use std::{fmt::Debug, hash::Hash};
 
@@ -17,25 +16,22 @@ impl<'aaa, 'hast, 'g, 'q, 'm, HAST, Acc> tree_gen::More<HAST>
     for PreparedOverlay<
         &'q crate::Query,
         &'m tree_sitter_graph::ast::File<
-            stepped_query_imm::QueryMatcher<<HAST as hyperast::types::StoreLending2>::S<'_>, &Acc>,
+            stepped_query_imm::QueryMatcher<<HAST as StoreRefAssoc>::S<'_>, &Acc>,
         >,
     >
 where
-    // HAST: 'static + HyperAST + for<'a> types::StoreLending2,
-    HAST: types::StoreLending2,
+    HAST: StoreRefAssoc,
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Hash,
-    // for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
-    //     types::WithSerialization + types::WithStats + types::WithRoles,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+    for<'t> <HAST as AstLending<'t>>::RT:
         types::WithSerialization + types::WithStats + types::WithRoles,
     HAST::TS: 'static
         + Clone
-        + types::ETypeStore<Ty2 = Acc::Type>
+        + ETypeStore<Ty2 = Acc::Type>
         + types::RoleStore<IdF = u16, Role = types::Role>,
     Acc: tree_gen::WithRole<types::Role> + tree_gen::WithChildren<HAST::IdN> + types::Typed,
     for<'acc> &'acc Acc: tree_gen::WithLabel<L = &'acc str>,
-    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     type Acc = Acc;
 
@@ -43,7 +39,7 @@ where
 
     fn match_precomp_queries(
         &self,
-        stores: <HAST as hyperast::types::StoreLending2>::S<'_>,
+        stores: <HAST as StoreRefAssoc>::S<'_>,
         acc: &Acc,
         label: Option<&str>,
     ) -> tree_gen::PrecompQueries {
@@ -56,39 +52,11 @@ where
         }
         let pos = hyperast::position::StructuralPosition::empty();
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
-        // let cursor: crate::cursor_on_unbuild::Node<
-        //     <HAST as types::StoreLending<'_,>>::S,
-        //     &Acc,
-        //     <HAST as HyperASTShared>::Idx,
-        //     hyperast::position::structural_pos::StructuralPosition<
-        //         <HAST as HyperASTShared>::IdN,
-        //         <HAST as HyperASTShared>::Idx,
-        //     >,
-        //     &str,
-        // > = crate::cursor_on_unbuild::Node::<_, _, _, _, _> {
-        //     stores: stores,
-        //     acc: acc,
-        //     label: label,
-        //     offset: num::zero(),
-        //     pos: pos,
-        // };
-        // let qcursor = query.matches_immediate(cursor); // TODO filter on height (and visibility?)
-        // let cursor = unsafe { std::mem::transmute(cursor) };
         let mut qcursor: crate::QueryCursor<
             '_,
             _,
-            // crate::cursor_on_unbuild::Node<
-            //     <HAST as types::StoreLending<'_>>::S,
-            //     &Acc,
-            //     <HAST as HyperASTShared>::Idx,
-            //     hyperast::position::structural_pos::StructuralPosition<
-            //         <HAST as HyperASTShared>::IdN,
-            //         <HAST as HyperASTShared>::Idx,
-            //     >,
-            //     &str,
-            // >,
             crate::cursor_on_unbuild::Node<
-                <HAST as types::StoreLending2>::S<'_>,
+                <HAST as StoreRefAssoc>::S<'_>,
                 &Acc,
                 <HAST as HyperASTShared>::Idx,
                 hyperast::position::structural_pos::StructuralPosition<
@@ -114,28 +82,30 @@ where
 impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc> tree_gen::Prepro<HAST>
     for PreparedOverlay<
         &'q crate::Query,
-        &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<<HAST as hyperast::types::StoreLending2>::S<'_>, &Acc>>,
+        &'m tree_sitter_graph::ast::File<
+            stepped_query_imm::QueryMatcher<<HAST as StoreRefAssoc>::S<'_>, &Acc>,
+        >,
     >
 where
-    HAST::TS: types::ETypeStore,
-    HAST: types::StoreLending2,
+    HAST::TS: ETypeStore,
+    HAST: StoreRefAssoc,
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Hash,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+    for<'t> <HAST as AstLending<'t>>::RT:
         types::WithSerialization + types::WithStats + types::WithRoles,
     HAST::TS: 'static
         + Clone
-        + types::ETypeStore<Ty2 = Acc::Type>
+        + ETypeStore<Ty2 = Acc::Type>
         + types::RoleStore<IdF = u16, Role = types::Role>,
     Acc: tree_gen::WithRole<types::Role> + tree_gen::WithChildren<HAST::IdN> + types::Typed,
     for<'acc> &'acc Acc: tree_gen::WithLabel<L = &'acc str>,
-    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     const USING: bool = false;
 
     fn preprocessing(
         &self,
-        _ty: <HAST::TS as types::ETypeStore>::Ty2,
+        _ty: <HAST::TS as ETypeStore>::Ty2,
     ) -> Result<hyperast::scripting::Acc, String> {
         unimplemented!()
     }
@@ -146,19 +116,18 @@ impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc> tree_gen::PreproTSG<HAST>
     for PreparedOverlay<
         &'q crate::Query,
         &'m tree_sitter_graph::ast::File<
-            stepped_query_imm::QueryMatcher<<HAST as hyperast::types::StoreLending2>::S<'_>, &Acc>,
+            stepped_query_imm::QueryMatcher<<HAST as StoreRefAssoc>::S<'_>, &Acc>,
         >,
     >
 where
-    // HAST: 'static + HyperAST + for<'a> types::StoreLending<'a>,
-    HAST: types::StoreLending2,
+    HAST: StoreRefAssoc,
     HAST::IdN: 'static + Copy + Hash + Debug,
     HAST::Idx: 'static + Hash,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+    for<'t> <HAST as AstLending<'t>>::RT:
         types::WithSerialization + types::WithStats + types::WithRoles,
     HAST::TS: 'static
         + Clone
-        + types::ETypeStore<Ty2 = Acc::Type>
+        + ETypeStore<Ty2 = Acc::Type>
         + types::RoleStore<IdF = u16, Role = types::Role>
         + types::TypeStore,
     Acc: types::Typed
@@ -167,7 +136,7 @@ where
         + tree_gen::WithChildren<HAST::IdN>
         + types::Typed,
     for<'acc> &'acc Acc: tree_gen::WithLabel<L = &'acc str>,
-    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     const GRAPHING: bool = true;
     // TODO remove the 'static and other contraints, they add unnecessary unsafes
@@ -176,7 +145,7 @@ where
     // - bubling the mutability invariant from graph to HAST... (very bad)
     fn compute_tsg(
         &self,
-        stores: <HAST as hyperast::types::StoreLending2>::S<'_>,
+        stores: <HAST as StoreRefAssoc>::S<'_>,
         acc: &Acc,
         label: Option<&str>,
     ) -> Result<usize, String> {
@@ -334,7 +303,7 @@ where
 
         // TODO properly return and use the graph (also handle the error propagation)
         if graph.node_count() > 2 {
-            log::error!("curr kind {}", hyperast::types::Typed::get_type(acc));
+            log::error!("curr kind {}", types::Typed::get_type(acc));
             let s = graph.to_json().unwrap();
             log::error!("graph: {}", s);
         }

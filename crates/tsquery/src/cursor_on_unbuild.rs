@@ -3,13 +3,12 @@
 use crate::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use hyperast::position::TreePath;
 use hyperast::tree_gen;
-use hyperast::types::inner_ref::NodeStore as _;
 use hyperast::types::{
     self, HyperAST, HyperASTShared, HyperType as _, LabelStore as _, Labeled, NodeStore, Role,
     Tree, WithRoles,
 };
 
-use hyperast::types::{RoleStore as _, Stored};
+use hyperast::types::RoleStore as _;
 use hyperast::{position::TreePathMut, types::TypeStore};
 use num::ToPrimitive;
 

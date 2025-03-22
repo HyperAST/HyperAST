@@ -374,6 +374,7 @@ where
             .query
             .matches::<_, <Self as NodeLending<'_>>::Node>(node.clone());
         // let matchs = self.query.matches_immediate(node.clone());
+        // TODO find a way to avoid transmuting
         let node = node.clone();
         let node = unsafe { std::mem::transmute(node) };
         let matchs = unsafe { std::mem::transmute(matchs) };
@@ -494,7 +495,7 @@ where
 }
 
 #[cfg(feature = "tsg")]
-impl<'tree, HAST: hyperast::types::HyperAST> tree_sitter_graph::graph::SyntaxNode
+impl<'tree, HAST: hyperast::types::HyperAST> tree_sitter_graph::graph::SimpleNode
     for Node<'tree, HAST>
 where
     HAST::IdN: Copy + Hash + Debug,
@@ -509,6 +510,29 @@ where
         self.0.pos.hash(&mut hasher);
         hasher.finish() as usize
     }
+
+    fn parent(&self) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let mut r = self.clone();
+        if r.0.goto_parent() {
+            Some(r)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "tsg")]
+impl<'tree, HAST: hyperast::types::HyperAST> tree_sitter_graph::graph::SyntaxNode
+    for Node<'tree, HAST>
+where
+    HAST::IdN: Copy + Hash + Debug,
+    HAST::Idx: Copy + Hash,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
 
     fn kind(&self) -> &'static str {
         use hyperast::position::position_accessors::SolvedPosition;
@@ -555,13 +579,6 @@ where
     }
 
     fn named_child_count(&self) -> usize {
-        todo!()
-    }
-
-    fn parent(&self) -> Option<Self>
-    where
-        Self: Sized,
-    {
         todo!()
     }
 }

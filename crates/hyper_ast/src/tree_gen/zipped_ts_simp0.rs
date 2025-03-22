@@ -144,10 +144,7 @@ impl<'store, 'cache, 's, TS: TsEnableTS>
         'cache,
         TS,
         tree_gen::NoOpMore<
-            (
-                TS,
-                crate::store::nodes::legion::TMarker<NodeIdentifier>,
-            ),
+            TS,
             Acc<TS::Ty2>,
         >,
         true,
@@ -318,7 +315,12 @@ where
             .map_or(false, |a| a.simple.kind.is_supertype())
         {
             if let Some(r) = cursor.0.field_name() {
-                // acc.role.current = r.try_into().ok();
+                if let Ok(r) = TryInto::<crate::types::Role>::try_into(r) {
+                    // acc.role.current = Some(r);
+                    log::warn!("not retrieving roles");
+                } else {
+                    log::error!("cannot convert role: {}", r)
+                }
             }
         }
         PreResult::Ok(acc)

@@ -631,7 +631,6 @@ pub(crate) fn extract_focuses<'a>(
 pub(crate) type _R = hyperast::position::structural_pos::StructuralPosition<NodeIdentifier, u16>;
 
 pub(crate) type Stores<'a> = hyperast::store::SimpleStores<
-    // NoSpaceWrapper<'static, NodeIdentifier>,
     hyperast_vcs_git::TStore,
     hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper<'a>,
     &'a LabelStore,

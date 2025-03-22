@@ -451,7 +451,6 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
                     let mut functions = tree_sitter_graph::functions::Functions::<
                         tree_sitter_graph::graph::Graph<
-                            // RNode<
                             hyperast_tsquery::stepped_query_imm::Node<
                                 hyperast::store::SimpleStores<
                                     TStore,
@@ -461,25 +460,14 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                                 &Acc,
                             >,
                         >,
-                        // tree_sitter_graph::graph::GraphErazing<
-                        //     hyperast_tsquery::MyNodeErazing<
-                        //         hyperast::store::SimpleStores<
-                        //             TStore,
-                        //             &hyperast::store::nodes::legion::NodeStoreInner,
-                        //             &hyperast::store::labels::LabelStore,
-                        //         >,
-                        //         &Acc,
-                        //     >,
-                        // >,
-                    >::default();
-                    todo!();
+                    >::essentials();
                     // TODO port those path functions to the generified variant in my fork
                     // hyperast_tsquery::add_path_functions(&mut functions);
                     let functions = functions.as_any();
 
                     Some((file.as_any(), functions))
                 } else {
-                    // unsafe { crate::java_processor::TSG }
+                    // crate::java_processor::TSG
                     None
                 };
                 let r = JavaProc {
@@ -514,7 +502,7 @@ impl Eq for Query {}
 
 // impl Default for Query {
 //     fn default() -> Self {
-//         let precomputeds = unsafe { crate::java_processor::SUB_QUERIES };
+//         let precomputeds = crate::java_processor::SUB_QUERIES;
 //         Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
 //     }
 // }
@@ -541,7 +529,7 @@ impl crate::processing::erased::CommitProc for JavaProc {
     fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         dbg!(&self.parameter.query);
         // if self.parameter.query.is_none() {
-        //     let s = unsafe { crate::java_processor::SUB_QUERIES };
+        //     let s = crate::java_processor::SUB_QUERIES;
         //     let s: Vec<_> = s.iter().map(|x| x.to_string()).collect();
         //     return Some(s.into());
         // }
@@ -780,6 +768,19 @@ impl RepositoryProcessor {
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 }
                 .map_err(|_| crate::ParseErr::IllFormed)?;
+
+                self.parsing_time += r.parsing_time;
+                self.processing_time += r.processing_time;
+                log::info!(
+                    "parsing, processing, n, f: {} {} {} {}",
+                    self.parsing_time.as_secs(),
+                    self.processing_time.as_secs(),
+                    java_proc.cache.md_cache.len(),
+                    java_proc.cache.object_map.len()
+                );
+
+                let r = r.node;
+
                 #[cfg(debug_assertions)]
                 if let Ok(dd) = stores
                     .node_store
@@ -881,7 +882,8 @@ mod experiments {
             acc: JavaAcc,
         ) {
             let tree = self.repository.find_tree(*current_object.id()).unwrap();
-            self.stack.push(StackEle::new(*current_object.id(), prepared, acc));
+            self.stack
+                .push(StackEle::new(*current_object.id(), prepared, acc));
         }
         fn pre(
             &mut self,

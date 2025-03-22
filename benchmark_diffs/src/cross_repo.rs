@@ -8,7 +8,6 @@ use hyperast_vcs_git::{
     maven::MavenModuleAcc,
     maven_processor::MavenProcessorHolder,
     multi_preprocessed::PreProcessedRepositories,
-    no_space::as_nospaces,
     processing::{CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait},
 };
 use num_traits::ToPrimitive;

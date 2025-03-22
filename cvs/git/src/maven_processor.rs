@@ -103,6 +103,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
     fn post(&mut self, oid: Oid, acc: MavenModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.primary.name.clone();
         let full_node = Self::make(acc, self.prepro.main_stores_mut().mut_with_ts());
+        log::info!("tree size: {}", full_node.1.metrics.size);
         self.prepro
             .processing_systems
             .mut_or_default::<MavenProcessorHolder>()

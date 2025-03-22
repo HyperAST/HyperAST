@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, marker::PhantomData};
 
-use crate::types::{SimpleHyperAST, TypeStore};
+use crate::types::TypeStore;
 
 pub mod handle;
 pub mod labels;
@@ -88,49 +88,6 @@ where
     }
 }
 
-// impl<'a, IdN, TS, NS, LS> crate::types::NLending<'a, IdN> for SimpleStores<TS, NS, LS>
-// where
-//     <NS as crate::types::NLending<'a, IdN>>::N: crate::types::Tree<TreeId = IdN>,
-//     IdN: crate::types::NodeId<IdN = IdN>,
-//     NS: crate::types::NodeStore<IdN>,
-// {
-//     type N = <NS as crate::types::NLending<'a, IdN>>::N;
-// }
-
-// impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
-// where
-//     for<'a> <NS as crate::types::NLending<'a, IdN>>::N: crate::types::Tree<TreeId = IdN>,
-//     IdN: crate::types::NodeId<IdN = IdN>,
-//     NS: crate::types::NodeStore<IdN>,
-//     NS: crate::types::NStore<IdN = IdN>,
-//     LS: crate::types::LStore,
-// {
-//     fn resolve(&self, id: &IdN) -> <Self as crate::types::NLending<'_, IdN>>::N {
-//         self.node_store.resolve(id)
-//     }
-//     type NMarker = NS::NMarker;
-// }
-
-// impl<IdN, TS, NS, LS> crate::types::NodStore<IdN> for SimpleStores<TS, NS, LS>
-// where
-//     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
-//     IdN: crate::types::NodeId<IdN = IdN>,
-//     NS: crate::types::NodeStore<IdN>,
-// {
-//     type R<'a> = NS::R<'a>;
-// }
-
-// impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
-// where
-//     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
-//     IdN: crate::types::NodeId<IdN = IdN>,
-//     NS: crate::types::NodeStore<IdN>,
-// {
-//     fn resolve(&self, id: &IdN) -> Self::R<'_> {
-//         self.node_store.resolve(id)
-//     }
-// }
-
 impl<IdN, TS, NS, LS> crate::types::NodeStoreLean<IdN> for SimpleStores<TS, NS, LS>
 where
     NS::R: crate::types::Tree<TreeId = IdN>,
@@ -175,16 +132,4 @@ pub mod defaults {
     pub type LabelIdentifier = super::labels::DefaultLabelIdentifier;
     pub type LabelValue = super::labels::DefaultLabelValue;
     pub type NodeIdentifier = super::nodes::DefaultNodeIdentifier;
-}
-
-impl<'store, T, TS, NS, LS> From<&'store SimpleStores<TS, NS, LS>>
-    for SimpleHyperAST<T, &'store TS, &'store NS, &'store LS>
-{
-    fn from(value: &'store SimpleStores<TS, NS, LS>) -> Self {
-        Self {
-            node_store: &value.node_store,
-            label_store: &value.label_store,
-            _phantom: std::marker::PhantomData,
-        }
-    }
 }

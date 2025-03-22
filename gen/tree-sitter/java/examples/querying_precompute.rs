@@ -163,12 +163,10 @@ fn compare_all(
             //     )
             // };
             let h_res = prep_stepped(precomp, query, text);
-            let h_matches = h_res
-                .0
-                .matches(hyperast_tsquery::hyperast::TreeCursor::new(
-                    &h_res.1,
-                    hyperast::position::StructuralPosition::new(h_res.2),
-                ));
+            let h_matches = h_res.0.matches(hyperast_tsquery::hyperast::TreeCursor::new(
+                &h_res.1,
+                hyperast::position::StructuralPosition::new(h_res.2),
+            ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
             // let f_c = f_matches.into_iter().count();
@@ -251,16 +249,22 @@ fn prep_stepped<'store>(
     let (precomp, query) =
         hyperast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp)
             .unwrap();
+    let more =
+        hyperast_tsquery::PreparedQuerying::<_, hyperast_gen_ts_java::types::TStore, _>::from(
+            &precomp,
+        );
 
-    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut stores =
+        hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = {
-        legion_with_refs::JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-            more: precomp,
-        }
+        JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, precomp)
+        // legion_with_refs::JavaTreeGen {
+        //     line_break: "\n".as_bytes().to_vec(),
+        //     stores: &mut stores,
+        //     md_cache: &mut md_cache,
+        //     more: precomp,
+        // }
     };
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
