@@ -1,14 +1,13 @@
+use std::time::Instant;
+
 use crate::java_processor::SimpleStores;
-use crate::BasicDirAcc;
+use crate::{BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing};
 use crate::{
     preprocessed::IsSkippedAna, processing::ObjectName, Accumulator,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
 use hyperast::store::defaults::NodeIdentifier;
-use hyperast::store::labels::LabelStore;
-use hyperast::store::nodes::legion::NodeStoreInner;
-use hyperast::test_utils::simple_tree::H;
 use hyperast::tree_gen;
 use hyperast::{
     hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
@@ -28,24 +27,38 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     >,
     name: &ObjectName,
     text: &'b [u8],
-) -> Result<java_tree_gen::FNode, ()>
+) -> FileProcessingResult<java_tree_gen::FNode>
 where
     More: tree_gen::Prepro<SimpleStores>
-        + for<'a> tree_gen::PreproTSG<SimpleStores, Acc = java_tree_gen::Acc>,
+        + tree_gen::PreproTSG<SimpleStores, Acc = java_tree_gen::Acc>,
 {
-    let tree = match java_tree_gen::tree_sitter_parse(text) {
+    let time = Instant::now();
+    let tree = java_tree_gen::tree_sitter_parse(text);
+    let parsing_time = time.elapsed();
+    let tree = match tree {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST: {:?}", name.try_str());
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
-                return Err(());
+                return Err(FailedParsing {
+                    parsing_time,
+                    tree,
+                    error: "CST contains parsing errors",
+                });
             } else {
                 tree
             }
         }
     };
-    Ok(tree_gen.generate_file(&name.as_bytes(), text, tree.walk()))
+    let time = Instant::now();
+    let node = tree_gen.generate_file(&name.as_bytes(), text, tree.walk());
+    let processing_time = time.elapsed();
+    Ok(SuccessProcessing {
+        parsing_time,
+        processing_time,
+        node,
+    })
 }
 
 type PrecompQueries = u16;

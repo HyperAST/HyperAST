@@ -433,13 +433,15 @@ impl crate::HyperApp {
                 let language = query_data.lang.to_string();
                 let query = query_data.query.as_ref().to_string();
                 wasm_rs_dbg::dbg!(&query);
-                let commits = self.data.queries[q_res.query as usize].commits as usize;
+                let commits = query_data.commits as usize;
                 let commit = Commit {
                     repo: repo.clone(),
                     id: commit_slice.iter_mut().next().cloned().unwrap(),
                 };
-                let max_matches = self.data.queries[q_res.query as usize].max_matches;
-                let timeout = self.data.queries[q_res.query as usize].timeout;
+                let max_matches = query_data.max_matches;
+                let timeout = query_data.timeout;
+                let precomp = query_data.precomp.clone().map(|id| &self.data.queries[id as usize]);
+                let precomp = precomp.map(|p| p.query.as_ref().to_string());
                 let prom = querying::remote_compute_query_aux(
                     ui.ctx(),
                     &self.data.api_addr,
@@ -454,6 +456,7 @@ impl crate::HyperApp {
                         commits,
                         max_matches,
                         timeout,
+                        precomp,
                     },
                     commit_slice.iter_mut().skip(1).map(|x| x.to_string()),
                 );

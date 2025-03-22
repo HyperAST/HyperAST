@@ -205,3 +205,19 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
         self.metrics
     }
 }
+
+use std::time::Duration;
+
+pub(crate) struct FailedParsing<D = Duration> {
+    pub parsing_time: D,
+    pub tree: tree_sitter::Tree,
+    pub error: &'static str,
+}
+
+pub(crate) struct SuccessProcessing<N, D = Duration> {
+    pub parsing_time: D,
+    pub processing_time: D,
+    pub node: N,
+}
+
+pub(crate) type FileProcessingResult<N, D = Duration> = Result<SuccessProcessing<N, D>, FailedParsing<D>>;

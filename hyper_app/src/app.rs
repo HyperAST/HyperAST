@@ -1373,6 +1373,8 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                             };
                             let max_matches = self.data.queries[qid].max_matches;
                             let timeout = self.data.queries[qid].timeout;
+                            let precomp = self.data.queries[qid].precomp.clone().map(|id| &self.data.queries[id as usize]);
+                            let precomp = precomp.map(|p| p.query.as_ref().to_string());
                             let hash =
                                 hash((&query, self.selected_baseline.as_ref().unwrap().clone()));
                             let prom = querying::remote_compute_query_differential(
@@ -1386,6 +1388,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                 querying::QueryContent {
                                     language,
                                     query,
+                                    precomp,
                                     commits,
                                     max_matches,
                                     timeout,

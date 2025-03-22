@@ -1,8 +1,7 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    cpp_processor::SimpleStores, preprocessed::IsSkippedAna, processing::ObjectName, Accumulator,
-    BasicDirAcc, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    cpp_processor::SimpleStores, preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing, PROPAGATE_ERROR_ON_BAD_CST_NODE
 };
 
 use hyperast::{
@@ -37,21 +36,6 @@ use hyperast_gen_ts_cpp::{
 //         node: N,
 //     },
 // }
-
-pub struct FailedParsing<D = Duration> {
-    pub parsing_time: D,
-    pub tree: tree_sitter::Tree,
-    pub error: &'static str,
-}
-
-pub struct SuccessProcessing<N, D = Duration> {
-    pub parsing_time: D,
-    pub processing_time: D,
-    pub node: N,
-}
-
-pub type FileProcessingResult<N, D = Duration> = Result<SuccessProcessing<N, D>, FailedParsing<D>>;
-
 pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
     tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore, More>,
     name: &ObjectName,
@@ -59,7 +43,7 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
 ) -> FileProcessingResult<cpp_tree_gen::FNode>
 where
     More: tree_gen::Prepro<SimpleStores>
-        + for<'a> tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
+        + tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
 {
     // handling the parsing explicitly in this function is a good idea
     // to control complex stuff like timeout, instead of the call on next line
@@ -91,12 +75,12 @@ where
         }
     };
     let time = Instant::now();
-    let subtree = tree_gen.generate_file(name.as_bytes(), text, tree.walk());
+    let node = tree_gen.generate_file(name.as_bytes(), text, tree.walk());
     let processing_time = time.elapsed();
     Ok(SuccessProcessing {
         parsing_time,
         processing_time,
-        node: subtree,
+        node,
     })
 }
 

@@ -451,7 +451,6 @@ impl<Node: self::Node> QueryMatch<Node> {
         &'a self,
         index: CaptureId,
     ) -> impl Iterator<Item = &'a Node> {
-        dbg!();
         self.captures.nodes_for_capture_index(index)
     }
 }

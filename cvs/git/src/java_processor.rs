@@ -746,7 +746,6 @@ impl RepositoryProcessor {
                             stores, md_cache, more
                         )
                         .with_line_break(line_break);
-                        panic!("rrr");
                         crate::java::handle_java_file(&mut java_tree_gen, n, t)
                     }
                 } else if let Some(precomp) = &java_proc.parameter.prepro {
@@ -755,7 +754,6 @@ impl RepositoryProcessor {
                     let mut java_tree_gen =
                         java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
                             .with_line_break(line_break);
-                    panic!("rrr");
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
@@ -767,10 +765,22 @@ impl RepositoryProcessor {
                 } else {
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(stores, md_cache)
                         .with_line_break(line_break);
-                    panic!("rrr");
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 }
                 .map_err(|_| crate::ParseErr::IllFormed)?;
+
+                self.parsing_time += r.parsing_time;
+                self.processing_time += r.processing_time;
+                log::info!(
+                    "parsing, processing, n, f: {} {} {} {}",
+                    self.parsing_time.as_secs(),
+                    self.processing_time.as_secs(),
+                    java_proc.cache.md_cache.len(),
+                    java_proc.cache.object_map.len()
+                );
+
+                let r = r.node;
+
                 #[cfg(debug_assertions)]
                 if let Ok(dd) = stores
                     .node_store
