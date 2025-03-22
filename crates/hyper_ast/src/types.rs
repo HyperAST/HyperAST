@@ -76,6 +76,7 @@ role_impl!(
     Element => "element",
     Consequence => "consequence",
     Key => "key",
+    Function => "function",
 );
 
 #[allow(unused)]

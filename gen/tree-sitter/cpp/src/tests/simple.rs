@@ -3,8 +3,107 @@ use tree_sitter::Parser;
 
 use crate::{legion::tree_sitter_parse, types::TStore};
 
-type CppTreeGen<'store, 'cache, HAST, Acc> = crate::legion::CppTreeGen<'store, 'cache, TStore, NoOpMore<HAST, Acc>, true>;
+type CppTreeGen<'store, 'cache, HAST, Acc> =
+    crate::legion::CppTreeGen<'store, 'cache, TStore, NoOpMore<HAST, Acc>, true>;
 type SimpleStores = hyperast::store::SimpleStores<TStore>;
+
+static EX: &str = r#"
+void read_string(char *buf) {
+    scanf("%s ", buf);
+}"#;
+
+#[test]
+pub(crate) fn cpp_preproc_call_decl_test() {
+    let text = EX.as_bytes();
+    let tree = match tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // assert_eq!(
+    //     hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node).to_string(),
+    //     tree.root_node().to_sexp().to_string()
+    // );
+    println!(
+        "{}",
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyperast::nodes::SyntaxWithFieldsSerializer::new(&stores, x.compressed_node)
+    );
+
+    let query = Q;
+    let precomp: &[&str] = &["(translation_unit)"];
+    let (precomp, query) =
+        hyperast_tsquery::Query::with_precomputed(query, crate::language(), precomp).unwrap();
+    let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
+    let mut md_cache = Default::default();
+    let mut cpp_tree_gen = crate::legion::CppTreeGen::new(&mut stores, &mut md_cache);
+    //  {
+    //     line_break: "\n".as_bytes().to_vec(),
+    //     stores: &mut stores,
+    //     md_cache: &mut md_cache,
+    //     more: precomp,
+    // };
+    let tree = match crate::legion::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    log::trace!("sexp:\n{}", tree.root_node().to_sexp());
+    let full_node = cpp_tree_gen.generate_file(b"", text, tree.walk());
+    log::trace!(
+        "syntax ser:\n{}",
+        hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    );
+    let (query, stores, code) = (query, stores, full_node.local.compressed_node);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    let mut matches = query.matches(cursor);
+    let Some(m) = matches.next() else {
+        panic!();
+    };
+}
+
+static Q2: &str = r#"
+(translation_unit 
+    (function_definition 
+        type: (primitive_type) 
+        declarator: (function_declarator 
+            declarator: (identifier) 
+            parameters: (parameter_list (parameter_declaration 
+                type: (primitive_type) 
+                declarator: (pointer_declarator declarator: (identifier))))) 
+        body: (compound_statement 
+            (preproc_call_declaration 
+                function: (identifier) 
+                arguments: (argument_list (string_literal (string_content)) (identifier))))))
+"#;
+
+static Q: &str = r#"
+(function_definition
+  body: (compound_statement 
+    (preproc_call_declaration 
+        function: 
+           (identifier) 
+        arguments: (argument_list (string_literal (string_content)) (identifier))
+    )
+  )
+) @CVE-1900-0000_0
+"#;
+
 #[test]
 pub(crate) fn cpp_tree_sitter_simple() {
     let mut parser = Parser::new();
@@ -95,6 +194,7 @@ int main(int argl, int* argv) {
         hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
+
 #[test]
 pub(crate) fn cpp_issue_stockfish_movegen_test() {
     let text = {

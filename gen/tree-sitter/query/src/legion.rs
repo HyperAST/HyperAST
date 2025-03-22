@@ -195,6 +195,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
+        log::warn!("not retrieving roles");
         PreResult::Ok(acc)
     }
     fn pre(
