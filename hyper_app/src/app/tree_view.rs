@@ -84,6 +84,7 @@ pub(crate) mod store {
                         hyperast_gen_ts_java::types::Lang::make(raw);
                     t.into()
                 }
+                "hyperast_gen_ts_cpp::types_alt::Lang" | 
                 "hyperast_gen_ts_cpp::types::Lang" => {
                     let t: &'static dyn hyperast::types::HyperType =
                         hyperast_gen_ts_cpp::types::Lang::make(raw);
@@ -263,6 +264,7 @@ pub(crate) mod store {
                         hyperast_gen_ts_java::types::Lang::make(raw);
                     t.into()
                 }
+                "hyperast_gen_ts_cpp::types_alt::Lang" | 
                 "hyperast_gen_ts_cpp::types::Lang" => {
                     let t: &'static dyn hyperast::types::HyperType =
                         hyperast_gen_ts_cpp::types::Lang::make(raw);
