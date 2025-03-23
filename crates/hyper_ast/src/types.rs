@@ -77,6 +77,27 @@ role_impl!(
     Consequence => "consequence",
     Key => "key",
     Function => "function",
+    Operator => "operator",
+    Operand => "operand",
+    Dimensions => "dimensions",
+    Array => "array",
+    Index => "index",
+    Indices => "indices",
+    Argument => "argument",
+    Initializer => "initializer",
+    Path => "path",
+    DefaultValue => "default_value",
+    DefaultType => "default_type",
+    Message => "message",
+    Size => "size",
+    Member => "member",
+    Captures => "captures",
+    Directive => "directive",
+    Pattern => "pattern",
+    Designator => "designator",
+    Base => "base",
+    Label => "label",
+    Placement => "placement",
 );
 
 #[allow(unused)]
@@ -1298,7 +1319,6 @@ where
         self.e().lang_ref()
     }
 }
-
 
 pub trait CompressedCompo {
     fn decomp(ptr: impl ErasedHolder, tid: std::any::TypeId) -> Self

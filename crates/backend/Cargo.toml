@@ -137,3 +137,4 @@ rerun = ["dep:rerun", "dep:polyglote"]
 subtree-stats = [
     "hyperast_gen_ts_java/subtree-stats"
 ]
+alt_grammar = ["hyperast_gen_ts_cpp/impl_alt_grammar"]

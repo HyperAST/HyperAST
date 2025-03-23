@@ -596,9 +596,6 @@ where
             dyn_builder.add(bytes_len);
 
             let current_role = Option::take(&mut acc.role.current);
-            if let Some(r) = &current_role {
-                dbg!(r);
-            }
             acc.role.add_md(&mut dyn_builder);
             if More::ENABLED {
                 add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);

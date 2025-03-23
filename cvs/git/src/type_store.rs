@@ -48,6 +48,7 @@ impl<'a> hyperast::types::RoleStore for TStore {
                 hyperast_gen_ts_java::types::TStore::resolve_field(t.get_lang(), field_id)
             }
             #[cfg(feature = "cpp")]
+            "hyperast_gen_ts_cpp::types_alt::Lang" | 
             "hyperast_gen_ts_cpp::types::Lang" => {
                 let t = hyperast_gen_ts_cpp::types::TType::new(
                     hyperast_gen_ts_cpp::types::Type::Spaces,
@@ -76,6 +77,7 @@ impl<'a> hyperast::types::RoleStore for TStore {
                 hyperast_gen_ts_java::types::TStore::intern_role(t.get_lang(), role)
             }
             #[cfg(feature = "cpp")]
+            "hyperast_gen_ts_cpp::types_alt::Lang" | 
             "hyperast_gen_ts_cpp::types::Lang" => {
                 let t = hyperast_gen_ts_cpp::types::TType::new(
                     hyperast_gen_ts_cpp::types::Type::Spaces,

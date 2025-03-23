@@ -125,6 +125,7 @@ ts_highlight = [
     # "dep:tree-sitter",
     # "dep:web-tree-sitter-sg"
 ]
+alt_grammar = ["hyperast_gen_ts_cpp/alt_grammar"]
 
 # [patch.crates-io]
 
