@@ -514,6 +514,12 @@ where
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
+     
+        use hyperast::types::HyperType;
+        if !acc.simple.kind.is_file() {
+            log::warn!("ignoring parsing error at the root of the file");
+            acc.simple.kind = Type::TranslationUnit;
+        }
         let full_node = self.make(&mut global, acc, label);
         full_node
     }
