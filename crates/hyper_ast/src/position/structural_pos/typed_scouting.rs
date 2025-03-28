@@ -1,16 +1,10 @@
 use super::super::{TreePathMut, TypedTreePath};
 use super::{Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath};
-use std::{fmt::Debug, marker::PhantomData};
-
-use num::zero;
-
-use crate::types::{NodeId, Typed, TypedNodeId, WithChildren};
-
+use crate::types::{NodeId, TypedNodeId};
 use crate::PrimInt;
-use crate::{
-    store::defaults::LabelIdentifier,
-    types::{self, HyperAST, WithSerialization},
-};
+use crate::{store::defaults::LabelIdentifier, types::HyperAST};
+use num::zero;
+use std::{fmt::Debug, marker::PhantomData};
 
 #[derive(Clone, Debug)]
 pub struct TypedScout<TIdN: TypedNodeId, Idx> {
@@ -220,8 +214,9 @@ where
     ) -> Position
     where
         HAST: HyperAST<
-        // IdN = TIdN::IdN, 
-        Label = LabelIdentifier>,
+            // IdN = TIdN::IdN,
+            Label = LabelIdentifier,
+        >,
         HAST: crate::types::TypedHyperAST<TIdN>,
         // <HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT:
         //     Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,

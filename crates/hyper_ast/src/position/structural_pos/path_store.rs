@@ -6,7 +6,7 @@ use crate::{
     position::TreePath,
     store::defaults::LabelIdentifier,
     types::{
-        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
+        AnyType, HyperAST, LendT, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
         WithStats,
     },
     PrimInt,
@@ -65,9 +65,9 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     ) -> Vec<Position>
     where
         HAST: HyperAST<IdN = IdN, Label = LabelIdentifier, Idx = Idx>,
-        for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization + WithChildren + WithStats,
-        // HAST::Types: Eq + TypeTrait,
-        HAST::Idx:  Debug,
+        for<'t> LendT<'t, HAST>:
+            Typed<Type = AnyType> + WithSerialization + WithChildren + WithStats,
+        HAST::Idx: Debug,
         IdN: Copy + Eq + Debug + NodeId,
         IdN: NodeId<IdN = IdN> + Debug,
     {
@@ -86,10 +86,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     /// would ease approximate comparisons with other ASTs eg. spoon
     /// the basic idea would be to take the position of the parent.
     /// would be better to directly use a relaxed comparison.
-    pub fn to_relaxed_positions<HAST: HyperAST>(
-        &self,
-        _stores: &HAST,
-    ) -> Vec<Position> {
+    pub fn to_relaxed_positions<HAST: HyperAST>(&self, _stores: &HAST) -> Vec<Position> {
         todo!()
     }
 
@@ -104,8 +101,8 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             IdN = IdN,
             Label = LabelIdentifier,
         >,
-        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
-        HAST::Idx:  Debug,
+        for<'t> LendT<'t, HAST>: WithChildren<ChildIdx = Idx>,
+        HAST::Idx: Debug,
         IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
     {
         scout.path.check(stores).map_err(|_| "bad path")?;
@@ -154,8 +151,8 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), String>
     where
         HAST: HyperAST<IdN = IdN::IdN>,
-        for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren,
-        HAST::Idx:  Debug,
+        for<'t> LendT<'t, HAST>: WithChildren,
+        HAST::Idx: Debug,
         IdN: Copy + Eq + Debug + NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>,
     {

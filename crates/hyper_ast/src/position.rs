@@ -363,6 +363,8 @@ pub mod topological_offset;
 
 pub mod row_col;
 
+pub mod file_and_range;
+
 #[allow(unused)] // TODO remove all not working function and test the remaining ones
 mod spaces_related;
 pub use spaces_related::{

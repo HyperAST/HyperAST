@@ -1,21 +1,13 @@
 //! Gather most of the common behaviors used to compute positions in an HyperAST
 
-use num::ToPrimitive;
-
 use super::{Position, StructuralPosition, TreePath};
+use crate::types::{
+    Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, WithChildren, WithSerialization,
+};
 use crate::{types::WithStats, PrimInt};
+use num::ToPrimitive;
 use std::path::PathBuf;
 
-use crate::{
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::HashedNodeRef,
-    },
-    types::{
-        AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeStore, TypeStore,
-        WithChildren, WithSerialization,
-    },
-};
 /// precondition: root node do not contain a File node
 /// TODO make whole thing more specific to a path in a tree
 pub fn compute_range<'store, It, HAST>(
@@ -34,25 +26,22 @@ where
     let mut offset = 0;
     let mut x = root;
     for o in offsets {
-        let b = stores.node_store().resolve(&x);
-        let cs = b.children();
-        if let Some(cs) = cs {
-            for y in 0..o.to_usize().unwrap() {
-                let id = &cs[num::cast(y).unwrap()];
-                let b = stores.node_store().resolve(id);
-
-                offset += b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
-            }
-            if let Some(a) = cs.get(num::cast(o).unwrap()) {
-                x = *a;
-            } else {
-                break;
-            }
-        } else {
+        let cs = stores.resolve(&x);
+        let Some(cs) = cs.children() else {
             break;
+        };
+        for y in 0..o.to_usize().unwrap() {
+            let id = &cs[num::cast(y).unwrap()];
+            let b = stores.resolve(id);
+
+            offset += b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
         }
+        let Some(a) = cs.get(num::cast(o).unwrap()) else {
+            break;
+        };
+        x = *a;
     }
-    let b = stores.node_store().resolve(&x);
+    let b = stores.resolve(&x);
 
     let len = b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
     (offset, offset + len, x)
@@ -75,10 +64,7 @@ where
     let mut x = root;
     let mut path = vec![];
     for o in &mut *offsets {
-        // dbg!(offset);
-        let b = stores.node_store().resolve(&x);
-        // dbg!(b.get_type());
-        // dbg!(o.to_usize().unwrap());
+        let b = stores.resolve(&x);
 
         let t = stores.resolve_type(&x);
 
@@ -87,32 +73,18 @@ where
             path.push(l);
         }
 
-        if let Some(cs) = b.children() {
-            if !t.is_directory() {
-                for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(&y);
-                    offset += b.try_bytes_len().unwrap().to_usize().unwrap();
-                }
-            } else {
-                // for y in 0..o.to_usize().unwrap() {
-                //     let b = stores.node_store().resolve(cs[y]);
-                //     println!("{:?}",b.get_type());
-                // }
+        let Some(cs) = b.children() else { break };
+        if !t.is_directory() {
+            for y in cs.before(o.clone()).iter_children() {
+                let b = stores.resolve(&y);
+                offset += b.try_bytes_len().unwrap().to_usize().unwrap();
             }
-            // if o.to_usize().unwrap() >= cs.len() {
-            //     // dbg!("fail");
-            // }
-            if let Some(a) = cs.get(o) {
-                x = a.clone();
-            } else {
-                break;
-            }
-        } else {
-            break;
-        };
+        }
+        let Some(a) = cs.get(o) else { break };
+        x = a.clone();
     }
     assert!(offsets.next().is_none());
-    let b = stores.node_store().resolve(&x);
+    let b = stores.resolve(&x);
     let t = stores.resolve_type(&x);
     if t.is_directory() || t.is_file() {
         let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -146,45 +118,34 @@ where
     let mut path_ids = vec![];
     let mut path = vec![];
     for o in &mut *offsets {
-        // dbg!(offset);
-        let b = stores.node_store().resolve(&x);
-        // dbg!(b.get_type());
-        // dbg!(o.to_usize().unwrap());
+        let b = stores.resolve(&x);
 
         let t = stores.resolve_type(&x);
-
         if t.is_directory() || t.is_file() {
             let l = stores.label_store().resolve(b.get_label_unchecked());
             path.push(l);
         }
 
-        if let Some(cs) = b.children() {
-            if !t.is_directory() {
-                for y in cs.before(o.clone()).iter_children() {
-                    let b = stores.node_store().resolve(&y);
-                    offset += b.try_bytes_len().unwrap().to_usize().unwrap();
-                }
-            } else {
-                // for y in 0..o.to_usize().unwrap() {
-                //     let b = stores.node_store().resolve(cs[y]);
-                //     println!("{:?}",b.get_type());
-                // }
-            }
-            // if o.to_usize().unwrap() >= cs.len() {
-            //     // dbg!("fail");
-            // }
-            if let Some(a) = cs.get(o) {
-                x = a.clone();
-                path_ids.push(x.clone());
-            } else {
-                break;
-            }
-        } else {
+        let Some(cs) = b.children() else {
             break;
         };
+        if !t.is_directory() {
+            for y in cs.before(o.clone()).iter_children() {
+                let b = stores.resolve(&y);
+                offset += b
+                    .try_bytes_len()
+                    .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
+                    .unwrap()
+                    .to_usize()
+                    .unwrap();
+            }
+        }
+        let Some(a) = cs.get(o) else { break };
+        x = a.clone();
+        path_ids.push(x.clone());
     }
     assert!(offsets.next().is_none());
-    let b = stores.node_store().resolve(&x);
+    let b = stores.resolve(&x);
     let t = stores.resolve_type(&x);
     if t.is_directory() || t.is_file() {
         let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -192,7 +153,11 @@ where
     }
 
     let len = if !t.is_directory() {
-        b.try_bytes_len().unwrap().to_usize().unwrap()
+        b.try_bytes_len()
+            .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
+            .unwrap()
+            .to_usize()
+            .unwrap()
     } else {
         0
     };
@@ -201,65 +166,29 @@ where
     (Position::new(file, offset, len), path_ids)
 }
 
-// pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
-//     _root: HAST::IdN,
-//     _offsets: &mut It,
-//     _stores: &HAST,
-// ) -> (Position, Vec<HAST::IdN>)
-// where
-//     It::Item: Clone,
-//     HAST: 'store + crate::types::HyperASTShared,
-//     HAST::IdN: Clone,
-//     &'store HAST: crate::types::HyperASTLean,
-//     // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>:
-//     //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
-//     <&'store HAST as crate::types::HyperASTLean>::T:
-//         WithSerialization + WithChildren<ChildIdx = It::Item>,
-// {
-//     todo!()
-// }
-
-// pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
-//     _root: HAST::IdN,
-//     _offsets: &mut It,
-//     _stores: &HAST,
-// ) -> (Position, Vec<HAST::IdN>)
-// where
-//     It::Item: Clone,
-//     HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
-//     HAST::IdN: Clone,
-//     HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
-// {
-//     todo!()
-// }
-
-impl StructuralPosition<NodeIdentifier, u16> {
+impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
     pub fn make_position<'store, HAST>(&self, stores: &'store HAST) -> Position
     where
-        HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
-        for<'t> HAST::NS:
-            crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
-        HAST::TS: TypeStore<Ty = AnyType>,
-        // HAST::Types: 'static + TypeTrait + Debug,
+        HAST: HyperAST<IdN = IdN, Idx = Idx>,
+        for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+        IdN: crate::types::NodeId<IdN = IdN>,
     {
-        self.check(stores).unwrap();
-        // let parents = self.parents.iter().peekable();
+        if cfg!(debug_assertions) {
+            self.check(stores)
+                .expect("a well formed structural position");
+        }
         let mut from_file = false;
-        // let mut len = 0;
         let x = *self.node().unwrap();
-        let b = stores.node_store().resolve(&x);
+        let b = stores.resolve(&x);
 
         let t = stores.resolve_type(&x);
-        // println!("t0:{:?}", t);
         let len = if let Some(y) = b.try_bytes_len() {
             if !(t.is_file() || t.is_directory()) {
                 from_file = true;
             }
             y as usize
-            // Some(x)
         } else {
             0
-            // None
         };
         let mut offset = 0;
         let mut path = vec![];
@@ -269,42 +198,46 @@ impl StructuralPosition<NodeIdentifier, u16> {
         }
         let mut i = self.parents.len() - 1;
         if from_file {
-            while i > 0 {
+            loop {
+                if !(i > 0) {
+                    break;
+                }
                 let p = self.parents[i - 1];
-                let b = stores.node_store().resolve(&p);
-
+                let b = stores.resolve(&p);
                 let t = stores.resolve_type(&p);
-                // println!("t1:{:?}", t);
                 let o = self.offsets[i];
-                let c: usize = {
-                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
-                    v.iter()
-                        .map(|x| {
-                            let b = stores.node_store().resolve(x);
-
-                            // println!("{:?}", b.get_type());
-                            b.try_bytes_len().unwrap() as usize
-                        })
-                        .sum()
-                };
+                let c: usize = b
+                    .children()
+                    .unwrap()
+                    .before(o - num::one())
+                    .iter_children()
+                    .map(|x| {
+                        stores
+                            .resolve(&x)
+                            .try_bytes_len()
+                            .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
+                            .unwrap() as usize
+                    })
+                    .sum();
                 offset += c;
                 if t.is_file() {
                     from_file = false;
                     i -= 1;
                     break;
                 } else {
+                    debug_assert!(
+                        !t.is_directory(),
+                        "a file should have been crossed before reaching a dir"
+                    );
                     i -= 1;
                 }
             }
         }
         if self.parents.is_empty() {
-        } else if !from_file
-        // || (i == 0 && stores.node_store().resolve(self.nodes[i]).get_type() == Type::Program)
-        {
+        } else if !from_file {
             loop {
                 let n = self.parents[i];
-                let b = stores.node_store().resolve(&n);
-                // println!("t2:{:?}", b.get_type());
+                let b = stores.resolve(&n);
                 let l = stores.label_store().resolve(b.get_label_unchecked());
                 path.push(l);
                 if i == 0 {
@@ -315,19 +248,21 @@ impl StructuralPosition<NodeIdentifier, u16> {
             }
         } else {
             let p = self.parents[i - 1];
-            let b = stores.node_store().resolve(&p);
+            let b = stores.resolve(&p);
             let o = self.offsets[i];
-            let c: usize = {
-                let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
-                v.iter()
-                    .map(|x| {
-                        let b = stores.node_store().resolve(x);
-
-                        // println!("{:?}", b.get_type());
-                        b.try_bytes_len().unwrap() as usize
-                    })
-                    .sum()
-            };
+            let c: usize = b
+                .children()
+                .unwrap()
+                .before(o - num::one())
+                .iter_children()
+                .map(|x| {
+                    stores
+                        .resolve(&x)
+                        .try_bytes_len()
+                        .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
+                        .unwrap() as usize
+                })
+                .sum();
             offset += c;
         }
 
@@ -337,22 +272,19 @@ impl StructuralPosition<NodeIdentifier, u16> {
 
     pub fn make_file_line_range<'store, HAST>(&self, stores: &'store HAST) -> (String, usize, usize)
     where
-        HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
-        for<'t> HAST::NS:
-            crate::types::lending::NLending<'t, NodeIdentifier, N = HashedNodeRef<'t>>,
-        HAST::TS: TypeStore<Ty = AnyType>,
-        // HAST::Types: 'static + TypeTrait + Debug,
+        HAST: HyperAST<IdN = IdN, Idx = Idx>,
+        for<'t> crate::types::LendT<'t, HAST>: WithStats + WithSerialization,
+        IdN: crate::types::NodeId<IdN = IdN>,
     {
-        self.check(stores).unwrap();
-        // let parents = self.parents.iter().peekable();
+        if cfg!(debug_assertions) {
+            self.check(stores)
+                .expect("a well formed structural position");
+        }
         let mut from_file = false;
-        // let mut len = 0;
         let x = *self.node().unwrap();
-        let b = stores.node_store().resolve(&x);
+        let b = stores.resolve(&x);
 
         let t = stores.resolve_type(&x);
-        // println!("t0:{:?}", t);
-
         if !(t.is_file() || t.is_directory()) {
             from_file = true;
         }
@@ -368,39 +300,41 @@ impl StructuralPosition<NodeIdentifier, u16> {
         }
         let mut i = self.parents.len() - 1;
         if from_file {
-            while i > 0 {
+            loop {
+                if !(i > 0) {
+                    break;
+                }
                 let p = self.parents[i - 1];
-                let b = stores.node_store().resolve(&p);
+                let b = stores.resolve(&p);
 
-                let t = stores.resolve_type(&p);
                 let o = self.offsets[i];
-                let c: usize = {
-                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
-                    v.iter()
-                        .map(|x| {
-                            let b = stores.node_store().resolve(x);
-                            b.line_count()
-                        })
-                        .sum()
-                };
+                let c: usize = b
+                    .children()
+                    .unwrap() // always have children as we are going up
+                    .before(o - num::one())
+                    .iter_children()
+                    .map(|x| stores.resolve(&x).line_count())
+                    .sum();
                 offset += c;
+                let t = stores.resolve_type(&p);
                 if t.is_file() {
                     from_file = false;
                     i -= 1;
                     break;
                 } else {
+                    debug_assert!(
+                        !t.is_directory(),
+                        "a file should have been crossed before reaching a dir"
+                    );
                     i -= 1;
                 }
             }
         }
         if self.parents.is_empty() {
-        } else if !from_file
-        // || (i == 0 && stores.node_store().resolve(self.nodes[i]).get_type() == Type::Program)
-        {
+        } else if !from_file {
             loop {
                 let n = self.parents[i];
-                let b = stores.node_store().resolve(&n);
-                // println!("t2:{:?}", b.get_type());
+                let b = stores.resolve(&n);
                 let l = stores.label_store().resolve(b.get_label_unchecked());
                 path.push(l);
                 if i == 0 {
@@ -414,19 +348,23 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 i += 1;
             }
             let p = self.parents[i - 1];
-            let b = stores.node_store().resolve(&p);
+            let b = stores.resolve(&p);
             let o = self.offsets[i];
-            let c: usize = {
-                let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
-                v.iter()
-                    .map(|x| {
-                        let b = stores.node_store().resolve(x);
 
-                        // println!("{:?}", b.get_type());
-                        b.try_bytes_len().unwrap() as usize
-                    })
-                    .sum()
-            };
+            // TODO make a debug assert node at offset o being that should correspond to prev node
+            let c: usize = b
+                .children()
+                .unwrap() // always have children as we are going up
+                .before(o - num::one())
+                .iter_children()
+                .map(|x| {
+                    stores
+                        .resolve(&x)
+                        .try_bytes_len()
+                        .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
+                        .unwrap() as usize
+                })
+                .sum();
             offset += c;
         }
 
@@ -436,3 +374,15 @@ impl StructuralPosition<NodeIdentifier, u16> {
         (file, offset, len)
     }
 }
+
+/// Not an end-user error.
+/// This error might be raised in case WithSerialization is missing the derived data
+/// meaning:
+///   depending on the type of node, the partiular derived data might not have been added
+///   during the construction of the corresponding subtree
+///   by Default a Directory does not have a length in bytes
+///
+/// TODO In order to deprecate this error, work has to be done
+/// to only provide this accessor on non-directory subtrees
+#[derive(Debug)]
+pub(crate) struct MissingByteLenError<T: std::fmt::Debug>(T);

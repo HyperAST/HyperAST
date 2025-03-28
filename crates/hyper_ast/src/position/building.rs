@@ -20,6 +20,10 @@ pub trait ReceiveRows<T, O> {
 pub trait ReceiveColumns<T, O> {
     fn push(self, col: T) -> O;
 }
+pub trait SetLineSpan<T, O> {
+    fn set(self, lines: T) -> O;
+}
+
 pub mod top_down {
     use super::*;
     pub trait CreateBuilder {
@@ -83,9 +87,12 @@ pub mod top_down {
     {
         type S1: ReceiveIdx<Idx, Self::S2>;
         type S2: ReceiveOffset<IdO, Self::S3>;
-        type S3: ReceiveIdxNoSpace<Idx, Self>;
-        type O0: SetNode<IdN, O>;
+        type S3: ReceiveIdxNoSpace<Idx, Self::S4>;
+        type S4: ReceiveRows<IdO, Self>;
+        type O0: SetLineSpan<IdO, Self::O1>;
+        type O1: SetNode<IdN, O>;
     }
+
     impl<IdN, Idx, IdO, O, T> ReceiveInFile<IdN, Idx, IdO, O> for T
     where
         T: ReceiveParent<IdN, T>
@@ -96,13 +103,16 @@ pub mod top_down {
             + ReceiveColumns<IdO, T>
             + ReceiveIdx<Idx, T>
             + SetLen<IdO, T>
+            + SetLineSpan<IdO, T>
             + ReceiveIdxNoSpace<Idx, T>,
     {
         type S1 = T;
         type S2 = T;
         type S3 = T;
+        type S4 = T;
 
         type O0 = T;
+        type O1 = T;
     }
 
     // Great bu try to fusion with `ReceiveInFile`s
@@ -159,8 +169,9 @@ pub mod bottom_up {
     }
 
     pub trait ReceiveInFile<IdN, Idx, IdO, O>:
-        Sized + SetLen<IdO, Self::SA1> + Transition<Self::SB1<O>>
+        Sized + SetLen<IdO, Self::SA0> + Transition<Self::SB1<O>>
     {
+        type SA0: SetLineSpan<IdO, Self::SA1>;
         type SA1: ReceiveNode<IdN, Self::SA2> + ReceiveDirName<Self::SB1<O>> + SetRoot<IdN, O>;
         type SA2: ReceiveOffset<IdO, Self::SA3>;
         type SA3: ReceiveRows<IdO, Self::SA4>;
@@ -179,10 +190,12 @@ pub mod bottom_up {
             // TODO should not be possible to add rows after having added columns
             + ReceiveIdx<Idx, T>
             + ReceiveDirName<T>
-            + SetLen<IdO, T>,
+            + SetLen<IdO, T>
+            + SetLineSpan<IdO, T>,
         T: Transition<T>,
         T: Transition<O>,
     {
+        type SA0 = T;
         type SA1 = T;
         type SA2 = T;
         type SA3 = T;
@@ -308,6 +321,13 @@ mod impl_c_p_p_receivers2 {
     {
         fn set(self, len: IdO) -> Self {
             Self(self.0.set(len), self.1.set(len))
+        }
+    }
+    impl<T: PrimInt, A: super::SetLineSpan<T, A>, B: super::SetLineSpan<T, B>>
+        super::SetLineSpan<T, Self> for CompoundPositionPreparer<A, B>
+    {
+        fn set(self, lines: T) -> Self {
+            Self(self.0.set(lines), self.1.set(lines))
         }
     }
     // impl<IdN, A: top_down::SetNode<IdN, A>, B: top_down::SetNode<IdN, B>>

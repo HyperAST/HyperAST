@@ -204,6 +204,12 @@ mod impl_receivers {
         }
     }
 
+    impl<T: PrimInt> building::SetLineSpan<T, Self> for super::RowCol<T> {
+        fn set(self, _lines: T) -> Self {
+            self
+        }
+    }
+
     impl<T: PrimInt> top_down::FileSysReceiver for super::RowCol<T> {
         type InFile<O> = Self;
     }
