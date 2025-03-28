@@ -257,3 +257,46 @@ impl ArrayStr for ZeroSepArrayStr {
         self.len
     }
 }
+
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct ZeroSepArrayStrStatic {
+    len: usize,
+    s: &'static str,
+}
+
+impl From<&[&str]> for ZeroSepArrayStrStatic {
+    fn from(arr: &[&str]) -> Self {
+        arr.into_iter().collect()
+    }
+}
+
+impl<T: AsRef<str>> FromIterator<T> for ZeroSepArrayStrStatic {
+    fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
+        let mut len = 0;
+        let mut s = String::default();
+        for x in iter {
+            if !s.is_empty() {
+                s.push('\0');
+            }
+            let x = x.as_ref();
+            len = len + 1 + x.chars().filter(|x|*x=='\0').count();
+            s.push_str(x);
+        }
+        let s: Box<str> = s.into();
+        let s = Box::leak(s);
+        log::debug!("making a str static to build a ZeroSepArrayStrStatic");
+        Self { len, s }
+    }
+}
+
+
+impl ArrayStr for ZeroSepArrayStrStatic {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        Box::new(self.s.split('\0'))
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+}

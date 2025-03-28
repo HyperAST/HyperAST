@@ -3,6 +3,7 @@ use std::ops::Range;
 use axum::Json;
 use code2query::QueryLattice;
 use hashbrown::HashSet;
+use hyper_diff::actions::Actions;
 use hyperast::position::position_accessors::SolvedPosition;
 use hyperast::{
     position::{
@@ -11,7 +12,6 @@ use hyperast::{
     },
     types::Children,
 };
-use hyper_diff::actions::Actions;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
@@ -222,10 +222,17 @@ pub(crate) fn smells(
     let matches = if simple_matching {
         matching::matches_default(with_spaces_stores, dst_tr, bad.iter().map(|x| x.0.as_str()))?
     } else if prepro_matching {
+        let precomputeds = state
+            .repositories
+            .read()
+            .unwrap()
+            .get_precomp_query(*repo_handle.config(), "Java")
+            .expect("some precomputed patterns should been provided");
         matching::matches_with_precomputeds(
             with_spaces_stores,
             dst_tr,
             bad.iter().map(|x| x.0.as_str()),
+            precomputeds,
         )?
     } else {
         unreachable!()

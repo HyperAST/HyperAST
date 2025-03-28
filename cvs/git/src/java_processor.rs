@@ -638,7 +638,7 @@ pub static TSG: &str = r#"
 }
 "#;
 
-pub fn sub_queries() -> &'static [&'static str] {
+fn sub_queries() -> &'static [&'static str] {
     SUB_QUERIES
 }
 

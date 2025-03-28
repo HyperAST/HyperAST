@@ -6290,7 +6290,7 @@ dependencies = [
  "syn 2.0.99",
  "tree-sitter",
  "tree-sitter-c",
- "tree-sitter-cpp 0.23.4",
+ "tree-sitter-cpp 0.23.1",
  "tree-sitter-graph",
  "tree-sitter-java 0.23.5",
  "tree-sitter-loader",
