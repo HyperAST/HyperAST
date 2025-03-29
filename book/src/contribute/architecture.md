@@ -4,25 +4,29 @@ This document describes the architecture of the project. It is suppose to be hig
 
 ## Overview of the structure
 
-- **hyperast** core crate representing the HyperAST structure
+- **crates/hyperast** core crate representing the HyperAST structure
 
 - **hyper_app** graphical interface to interact with the HyperAST (web and native support)
-    - compute metrics 
+    - compute metrics
         > see also [Compute code metrics (GUI)](../quickstart/compute_code_metrics.md)
     - code tracking
         > see also [Track code (GUI)](../quickstart/track_code.md)
 
-- **server** Rest API and server to remotely access HyperAST
+- **crates/backend** Rest API and server to remotely access HyperAST
+
+- **crates/tsquery** query system for code in hyperast
 
 - **book** your currently reading it!
 
-- **cvs/git** facilities to handle the git control versioning system
+- **vcs/git** facilities to handle the git control versioning system
 
 - __gen/tree-sitter/*__ tree sitter grammars of supported language
     - Java
     - C++
-    - Xml use for maven's pom.xml
-    
-- **hyper_diff** algorithms to compute AST diffs 
+    - Xml (used for maven's pom.xml)
 
-- **egui_addon** small addon of functionalities used in hyper_app
+- **crates/hyper_diff** algorithms to compute AST diffs
+
+- **lib/egui_addon** small addon of functionalities used in hyper_app
+
+- **lib/polyglote** generates node types from tree-sitter grammars
