@@ -162,6 +162,7 @@ fn main() -> std::io::Result<()> {
         }
         let types = preprocess_aux(&lang)?;
         println!("{}", types);
+        types.pp_fields();
     }
     Ok(())
 }

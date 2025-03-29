@@ -140,6 +140,24 @@ impl TypeSys {
             )
         })
     }
+
+    fn deuplicated_fields(&self) -> std::collections::HashSet<String> {
+        let mut fields = std::collections::HashSet::new();
+        for (_, fs) in self.concrete_fields() {
+            for (f, _) in fs {
+                fields.insert(f);
+            }
+        }
+        fields
+    }
+
+    pub fn pp_fields(&self) {
+        let fields = self.deuplicated_fields();
+        for f in fields {
+            use heck::ToUpperCamelCase;
+            println!("{} => \"{}\",", f.to_upper_camel_case(), f);
+        }
+    }
 }
 
 impl Debug for TypeSys {
