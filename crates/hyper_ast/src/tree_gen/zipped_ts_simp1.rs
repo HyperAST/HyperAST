@@ -295,9 +295,9 @@ where
         let node = cursor.node();
         let kind = TS::obtain_type(&node);
         if HIDDEN_NODES {
-            // if kind.is_repeat() {
-            //     return PreResult::Ignore;
-            // }
+            if kind.is_repeat() || kind.is_hidden() {
+                return PreResult::Ignore;
+            }
         }
         if node.0.is_missing() {
             dbg!("missing");

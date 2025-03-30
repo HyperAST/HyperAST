@@ -6,9 +6,7 @@ use super::TotalBytesGlobalData;
 use super::TreeGen;
 use super::P;
 
-use super::parser::Node as _;
 use super::parser::TreeCursor as _;
-use super::Accumulator as _;
 use super::GlobalData as _;
 use super::WithByteRange as _;
 
@@ -19,13 +17,11 @@ pub trait ZippedTreeGen: TreeGen
 where
     Self::Global: TotalBytesGlobalData,
 {
-    // # results
-    // type Node1;
     type Stores;
     // # source
     type Text: ?Sized;
     type Node<'a>: parser::Node;
-    type TreeCursor<'a>: parser::TreeCursor<N=Self::Node<'a>> + std::fmt::Debug + Clone;
+    type TreeCursor<'a>: parser::TreeCursor<N = Self::Node<'a>> + std::fmt::Debug + Clone;
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
@@ -73,7 +69,9 @@ where
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 
-    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {"".to_string()}
+    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {
+        "".to_string()
+    }
 
     fn stores(&mut self) -> &mut Self::Stores;
 
