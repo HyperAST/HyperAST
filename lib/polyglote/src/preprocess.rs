@@ -46,7 +46,9 @@ impl Helper for hecs::EntityRef<'_> {
             && !self.has::<Fields>()
     }
     fn is_concrete(&self) -> bool {
-        !self.has::<Hidden>() && !self.has::<SubTypes>() && self.has::<DChildren>()
+        !self.has::<Hidden>()
+            && !self.has::<SubTypes>()
+            && (self.has::<DChildren>() || self.has::<Fields>())
     }
     fn is_abstract(&self) -> bool {
         !self.has::<Hidden>()
@@ -118,12 +120,14 @@ impl TypeSys {
     }
 
     pub fn concrete_children(&self) -> impl Iterator<Item = (String, Vec<String>)> + '_ {
-        self.it_entities().filter(Helper::is_concrete).map(|v| {
-            (
-                v.t(),
-                v.get_map::<DChildren, _>(|e| self.types.entity(*e).unwrap().t()),
-            )
-        })
+        self.it_entities()
+            .filter(|v| v.is_concrete() && v.has::<DChildren>())
+            .map(|v| {
+                (
+                    v.t(),
+                    v.get_map::<DChildren, _>(|e| self.types.entity(*e).unwrap().t()),
+                )
+            })
     }
 
     pub fn r#abstract(&self) -> impl Iterator<Item = String> + '_ {
