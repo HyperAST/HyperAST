@@ -5,7 +5,8 @@ pub mod legion;
 #[cfg(all(feature = "impl", feature = "legion"))]
 mod legion_ts_simp;
 
-
+#[cfg(test)]
+mod tests;
 
 pub mod types;
 #[allow(unused)]

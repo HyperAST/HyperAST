@@ -625,6 +625,7 @@ where
 
             let mut no_s_idx = zero();
             let mut byte_offset = 0;
+            let mut rows = zero();
             for y in cs.before(idx.clone()).iter_children() {
                 let b = stores.node_store().resolve(&y);
                 if !stores.resolve_type(&y).is_spaces() {
@@ -632,9 +633,16 @@ where
                 }
                 let len = b.try_bytes_len().unwrap().to_usize().unwrap();
                 byte_offset += len;
+                // TODO count lines
             }
             use building::top_down::{ReceiveIdxNoSpace, ReceiveOffset, ReceiveParent};
-            builder = builder.push(x).push(idx).push(byte_offset).push(no_s_idx);
+            use building::ReceiveRows;
+            builder = builder
+                .push(x)
+                .push(idx)
+                .push(byte_offset)
+                .push(no_s_idx)
+                .push(rows);
             // builder.push(x, idx, byte_offset, (no_s_idx,));
             let a = cs.get(idx).expect("no child at path");
             // no_spaces.push(no_s_idx);
@@ -650,7 +658,8 @@ where
         let len = num::cast(len).unwrap();
         use building::top_down::SetNode;
         use building::SetLen;
-        builder.set(len).set_node(x)
+        use building::SetLineSpan;
+        builder.set(len).set(todo!()).set_node(x)
     }
 }
 

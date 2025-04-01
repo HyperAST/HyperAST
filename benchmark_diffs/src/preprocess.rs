@@ -47,7 +47,7 @@ fn parse_unchecked<'b: 'stores, 'stores>(
     full_node1
 }
 
-// TODO make it cvs/files or a module of hyperast (it will also serve as an example)
+// TODO make it vcs/files or a module of hyperast (it will also serve as an example)
 pub struct JavaPreprocessFileSys {
     pub main_stores: SimpleStores<TStore>,
     pub java_md_cache: MDCache,

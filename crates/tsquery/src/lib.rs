@@ -53,6 +53,7 @@ pub use stepped_query_imm::QueryMatcher;
 
 pub use utils::ArrayStr;
 pub use utils::ZeroSepArrayStr;
+pub use utils::ZeroSepArrayStrStatic;
 
 type Depth = u32;
 type Precomps = u16;

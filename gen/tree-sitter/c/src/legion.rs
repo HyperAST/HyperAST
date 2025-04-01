@@ -1,6 +1,6 @@
 use crate::types::{CEnabledTypeStore, Type};
 use crate::TNode;
-use hyperast::store::nodes::legion::{dyn_builder, NodeStoreInner};
+use hyperast::store::nodes::legion::dyn_builder;
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
     self, add_md_precomp_queries, NoOpMore, RoleAcc, TotalBytesGlobalData as _,
@@ -52,7 +52,6 @@ pub type MDCache = HashMap<NodeIdentifier, MD>;
 // they can be qualitative metadata .eg a hash or they can be quantitative .eg lines of code
 pub struct MD {
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    ana: Option<PartialAnalysis>,
     precomp_queries: PrecompQueries,
 }
 
@@ -60,7 +59,6 @@ impl From<Local> for MD {
     fn from(x: Local) -> Self {
         MD {
             metrics: x.metrics,
-            ana: x.ana,
             precomp_queries: x.precomp_queries,
         }
     }
@@ -68,17 +66,12 @@ impl From<Local> for MD {
 
 pub type Global<'a> = SpacedGlobalData<'a>;
 
-/// TODO temporary placeholder
-#[derive(Debug, Clone, Default)]
-pub struct PartialAnalysis {}
-
 type PrecompQueries = u16;
 
 #[derive(Debug, Clone)]
 pub struct Local {
     pub compressed_node: NodeIdentifier,
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    pub ana: Option<PartialAnalysis>,
     pub role: Option<Role>,
     pub precomp_queries: PrecompQueries,
 }
@@ -95,8 +88,6 @@ impl Local {
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
         acc.precomp_queries |= self.precomp_queries;
-
-        // TODO things with this.ana
     }
 }
 
@@ -107,7 +98,6 @@ pub struct Acc {
     start_byte: usize,
     end_byte: usize,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    ana: Option<PartialAnalysis>,
     padding_start: usize,
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
@@ -118,7 +108,6 @@ pub type FNode = FullNode<BasicGlobalData, Local>;
 impl Accumulator for Acc {
     type Node = FNode;
     fn push(&mut self, full_node: Self::Node) {
-        // dbg!(self.simple.kind);
         full_node.local.acc(self);
     }
 }
@@ -181,7 +170,6 @@ impl Debug for Acc {
             .field("start_byte", &self.start_byte)
             .field("end_byte", &self.end_byte)
             .field("metrics", &self.metrics)
-            .field("ana", &self.ana)
             .field("padding_start", &self.padding_start)
             .field("indentation", &self.indentation)
             .finish()
@@ -215,7 +203,6 @@ where
             &parent_indentation,
         );
         let labeled = node.has_label();
-        let ana = self.build_ana(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
@@ -226,7 +213,6 @@ where
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
             metrics: Default::default(),
-            ana,
             padding_start: 0,
             indentation: indent,
             role: Default::default(),
@@ -248,15 +234,13 @@ where
         let node = cursor.node();
         let kind = TS::obtain_type(&node);
         if HIDDEN_NODES {
-            if kind.is_hidden() || kind.is_repeat() {
-                // dbg!(kind);
-                // return PreResult::Ignore;
+            if kind.is_repeat() {
+                return PreResult::Ignore;
+            } else if kind.is_hidden() {
+                return PreResult::Ignore;
             }
         }
         if node.0.is_missing() {
-            // dbg!(kind);
-            // dbg!(node.0.start_byte());
-            // dbg!(node.0.end_byte());
             // must skip missing nodes, i.e., leafs added by tree-sitter to fix CST,
             // needed to avoid breaking invarient, as the node has no span:
             // `is_parent_hidden && parent.end_byte() <= acc.begin_byte()`
@@ -294,15 +278,11 @@ where
             global.sum_byte_length(),
             &parent_indentation,
         );
-        // if global.sum_byte_length() < 400 {
-        //     dbg!((kind,node.start_byte(),node.end_byte(),global.sum_byte_length(),indent.len()));
-        // }
         Acc {
             labeled: node.has_label(),
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
             metrics: Default::default(),
-            ana: self.build_ana(&kind),
             padding_start: global.sum_byte_length(),
             indentation: indent,
             simple: BasicAccumulator {
@@ -328,14 +308,8 @@ where
             text,
             parent.indentation(),
         );
-        // dbg!(parent.simple.kind, parent.end_byte);
-        // dbg!(acc.simple.kind, acc.end_byte);
-        // if acc.simple.kind == Type::ExpressionStatement {
-        //     dbg!();
-        // }
         if let Some(spacing) = spacing {
             let local = self.make_spacing(spacing);
-            // debug_assert_ne!(parent.simple.children.len(), 0, "{:?}", parent.simple);
             parent.push(FullNode {
                 global: global.simple(),
                 local,
@@ -352,9 +326,7 @@ where
     }
 }
 
-impl<'store, 'cache, TS: CEnabledTypeStore>
-    CTreeGen<'store, 'cache, TS, NoOpMore<TS, Acc>, true>
-{
+impl<'store, 'cache, TS: CEnabledTypeStore> CTreeGen<'store, 'cache, TS, NoOpMore<TS, Acc>, true> {
     pub fn new(stores: &'store mut SimpleStores<TS>, md_cache: &'cache mut MDCache) -> Self {
         Self {
             line_break: "\n".as_bytes().to_vec(),
@@ -384,21 +356,17 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
     CTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: CEnabledTypeStore<Ty2 = Type>,
-    More: tree_gen::Prepro<SimpleStores<TS>>
-        + tree_gen::More<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>> + tree_gen::More<SimpleStores<TS>, Acc = Acc>,
 {
     pub fn with_more<M>(self, more: M) -> CTreeGen<'store, 'cache, TS, M, HIDDEN_NODES> {
         CTreeGen {
             line_break: self.line_break,
             stores: self.stores,
             md_cache: self.md_cache,
-            more: more,
+            more,
         }
     }
-    fn make_spacing(
-        &mut self,
-        spacing: Vec<u8>, //Space>,
-    ) -> Local {
+    fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
         let interned_kind = TS::intern(kind);
         debug_assert_eq!(kind, TS::resolve(interned_kind));
@@ -452,7 +420,6 @@ where
                 hashs,
                 line_count,
             },
-            ana: Default::default(),
             role: None,
             precomp_queries: Default::default(),
         }
@@ -512,22 +479,13 @@ where
         let full_node = self.make(&mut global, acc, label);
         full_node
     }
-
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
-        if kind == &Type::TranslationUnit {
-            Some(PartialAnalysis {})
-        } else {
-            None
-        }
-    }
 }
 
 impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
     for CTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: CEnabledTypeStore<Ty2 = Type>,
-    More: tree_gen::Prepro<SimpleStores<TS>>
-        + tree_gen::More<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>> + tree_gen::More<SimpleStores<TS>, Acc = Acc>,
     TS::Ty2: hyperast::tree_gen::utils_ts::TsType,
 {
     type Acc = Acc;
@@ -556,7 +514,6 @@ where
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
             let md = self.md_cache.get(&compressed_node).unwrap();
-            let ana = md.ana.clone();
             debug_assert_eq!(metrics.height, md.metrics.height);
             debug_assert_eq!(metrics.size, md.metrics.size);
             debug_assert_eq!(metrics.size_no_spaces, md.metrics.size_no_spaces);
@@ -567,7 +524,6 @@ where
             Local {
                 compressed_node,
                 metrics,
-                ana,
                 role: acc.role.current,
                 precomp_queries,
             }
@@ -613,14 +569,12 @@ where
                 compressed_node,
                 MD {
                     metrics: metrics.clone(),
-                    ana: acc.ana.clone(),
                     precomp_queries: acc.precomp_queries.clone(),
                 },
             );
             Local {
                 compressed_node,
                 metrics,
-                ana: acc.ana,
                 role: current_role,
                 precomp_queries: acc.precomp_queries,
             }
@@ -631,15 +585,5 @@ where
             local,
         };
         full_node
-    }
-}
-
-/// TODO partialana
-impl PartialAnalysis {
-    pub(crate) fn refs_count(&self) -> usize {
-        0 //TODO
-    }
-    pub(crate) fn refs(&self) -> impl Iterator<Item = Vec<u8>> {
-        vec![vec![0_u8]].into_iter() //TODO
     }
 }

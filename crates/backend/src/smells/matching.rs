@@ -1,7 +1,6 @@
 use super::SearchResult;
 
 use hyperast::store::defaults::NodeIdentifier;
-use hyperast_vcs_git::java_processor::sub_queries;
 
 pub(crate) fn matches_default<'a>(
     with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
@@ -69,6 +68,7 @@ pub(crate) fn matches_with_precomputeds<'a>(
     with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore>,
     tr: NodeIdentifier,
     queries: impl Iterator<Item = &'a str>,
+    precomputeds: impl hyperast_tsquery::ArrayStr,
 ) -> Result<Vec<usize>, String> {
     let mut len = 0;
     let (_, qqq) = hyperast_tsquery::Query::with_precomputed(
@@ -79,7 +79,7 @@ pub(crate) fn matches_with_precomputeds<'a>(
             })
             .collect::<String>(),
         hyperast_gen_ts_java::language(),
-        sub_queries(),
+        precomputeds,
     )
     .map_err(|e| e.to_string())?;
     if qqq.enabled_pattern_count() != len {
@@ -104,13 +104,14 @@ pub(crate) fn matches_with_precomputed(
     tr: NodeIdentifier,
     result: &mut SearchResult,
 ) -> Result<(), String> {
+    let precomputeds: &[_] = todo!();
     let (_, qqq) = hyperast_tsquery::Query::with_precomputed(
         &result.query,
         hyperast_gen_ts_java::language(),
-        sub_queries(),
+        precomputeds,
     )
     .map_err(|e| e.to_string())?;
-    if qqq.pattern_count() != 1 + sub_queries().len() {
+    if qqq.pattern_count() != 1 + precomputeds.len() {
         dbg!(qqq.pattern_count());
         return Err("different number of patterns".to_string());
     }

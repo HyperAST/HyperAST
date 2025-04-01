@@ -9,8 +9,8 @@ use crate::store::{
 use crate::tree_gen::{
     self, has_final_space,
     parser::{Node as _, TreeCursor},
-    Accumulator, BasicAccumulator, GlobalData, Parents, PreResult,
-    SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _, WithByteRange,
+    Accumulator, BasicAccumulator, GlobalData, Parents, PreResult, SpacedGlobalData,
+    SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _, WithByteRange,
 };
 use crate::{
     filter::BloomSize,
@@ -139,16 +139,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
 }
 
 impl<'store, 'cache, 's, TS: TsEnableTS>
-    TsTreeGen<
-        'store,
-        'cache,
-        TS,
-        tree_gen::NoOpMore<
-            TS,
-            Acc<TS::Ty2>,
-        >,
-        true,
-    >
+    TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
 {
@@ -172,7 +163,7 @@ where
     // # source
     type Text: ?Sized;
     type Node<'a>: tree_gen::parser::Node;
-    type TreeCursor<'a>: tree_gen::parser::TreeCursor<N=Self::Node<'a>>;
+    type TreeCursor<'a>: tree_gen::parser::TreeCursor<N = Self::Node<'a>>;
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
@@ -233,7 +224,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>,
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -389,7 +380,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>,
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local<TS::Ty2> {
         let kind = TS::Ty2::spaces();
@@ -594,7 +585,7 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>,
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     type Acc = Acc<TS::Ty2>;
     type Global = SpacedGlobalData<'stores>;

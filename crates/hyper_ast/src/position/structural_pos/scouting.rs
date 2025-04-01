@@ -1,17 +1,12 @@
 use super::super::TreePathMut;
 use super::{Position, StructuralPosition, StructuralPositionStore, TreePath};
-use std::fmt::Debug;
-
-use num::{one, traits::NumAssign, zero};
-
-use crate::PrimInt;
-use crate::{
-    store::defaults::LabelIdentifier,
-    types::{
-        self, AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled,
-        NodeId, NodeStore, TypeStore, Typed, WithChildren, WithSerialization,
-    },
+use crate::types::{
+    AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeId, Typed,
+    WithChildren, WithSerialization,
 };
+use crate::PrimInt;
+use num::{one, traits::NumAssign, zero};
+use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 pub struct Scout<IdN, Idx> {
@@ -48,7 +43,6 @@ impl<IdN: Eq + Copy, Idx: PrimInt> TreePath<IdN, Idx> for Scout<IdN, Idx> {
     fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
         HAST: HyperAST<IdN = IdN::IdN>,
-        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>,
@@ -92,14 +86,8 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         s
     }
     pub fn up(&mut self, x: &StructuralPositionStore<IdN, Idx>) -> Option<IdN> {
-        // println!("up {} {:?}", self.root, self.path);
-        // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
-        //     assert!(self.root == 0);
-        // }
         if self.path.parents.is_empty() {
-            // let o = x.offsets[self.root];
             self.path = StructuralPosition::empty();
-            // self.path = StructuralPosition::with_offset(x.nodes[self.root], o);
             assert_eq!(self.path.parents.len(), self.path.offsets.len());
             if self.ancestors == 0 {
                 None
@@ -107,26 +95,12 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
                 self.ancestors = x.parents[self.ancestors];
                 Some(self.node_always(x))
             }
-            // if o == 0 {
-            //     assert!(self.path.offsets[0] == 0);
-            //     assert!(self.root == 0);
-            // }
         } else {
             self._up();
             Some(self.node_always(x))
         }
-        // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
-        //     assert!(self.root == 0);
-        // }
     }
 }
-
-// impl From<StructuralPosition> for Scout {
-//     fn from(x: StructuralPosition) -> Self {
-//         Self { root: 0, path: x }
-//     }
-// }
-
 impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
     pub fn make_position<'store, HAST>(
         &self,
@@ -134,29 +108,24 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         stores: &'store HAST,
     ) -> Position
     where
-        HAST: HyperAST<IdN = IdN, Label = LabelIdentifier, Idx = Idx>,
-        for<'t> <HAST as crate::types::AstLending<'t>>::RT: Typed<Type = AnyType> + WithSerialization,
-        // HAST::Types: Eq + TypeTrait,
-        HAST::Idx:  Debug,
+        HAST: HyperAST<IdN = IdN, Idx = Idx>,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+            Typed<Type = AnyType> + WithSerialization,
+        HAST::Idx: Debug,
         IdN: Copy + Debug + NodeId<IdN = IdN>,
     {
         self.check(stores).unwrap();
-        // let parents = self.parents.iter().peekable();
         let mut from_file = false;
-        // let mut len = 0;
         let x = self.node_always(sp);
-        let b = stores.node_store().resolve(&x);
+        let b = stores.resolve(&x);
         let t = stores.resolve_type(&x);
-        // println!("t0:{:?}", t);
         let len = if let Some(y) = b.try_bytes_len() {
             if !(t.is_file() || t.is_directory()) {
                 from_file = true;
             }
             y as usize
-            // Some(x)
         } else {
             0
-            // None
         };
         let mut offset = 0;
         let mut path = vec![];
@@ -169,9 +138,8 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         if from_file {
             while i > 0 {
                 let p = self.path.parents[i - 1];
-                let b = stores.node_store().resolve(&p);
+                let b = stores.resolve(&p);
                 let t = stores.resolve_type(&p);
-                // println!("t1:{:?}", t);
                 let o = self.path.offsets[i];
                 let o: HAST::Idx = num::cast(o).unwrap();
                 let c: usize = {
@@ -183,8 +151,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
                         .collect();
                     v.iter()
                         .map(|x| {
-                            let b = stores.node_store().resolve(x);
-                            // println!("{:?}", b.get_type());
+                            let b = stores.resolve(x);
                             b.try_bytes_len().unwrap() as usize
                         })
                         .sum()
@@ -200,14 +167,11 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             }
         }
         if self.path.parents.is_empty() {
-        } else if !from_file
-        // || (i == 0 && stores.node_store().resolve(self.path.nodes[i]).get_type() == Type::Program)
-        {
+        } else if !from_file {
             loop {
                 from_file = false;
                 let n = self.path.parents[i];
-                let b = stores.node_store().resolve(&n);
-                // println!("t2:{:?}", b.get_type());
+                let b = stores.resolve(&n);
                 let l = stores.label_store().resolve(b.get_label_unchecked());
                 path.push(l);
                 if i == 0 {
@@ -222,24 +186,16 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             } else {
                 self.path.parents[i - 1]
             };
-            let b = stores.node_store().resolve(&p);
+            let b = stores.resolve(&p);
             let t = stores.resolve_type(&p);
-            // println!("t3:{:?}", t);
             let o = self.path.offsets[i];
             let o: HAST::Idx = num::cast(o).unwrap();
             let c: usize = {
-                let v: Vec<_> = b
-                    .children()
+                b.children()
                     .unwrap()
                     .before(o - one())
                     .iter_children()
-                    .collect();
-                v.iter()
-                    .map(|x| {
-                        let b = stores.node_store().resolve(x);
-                        // println!("{:?}", b.get_type());
-                        b.try_bytes_len().unwrap() as usize
-                    })
+                    .map(|x| stores.resolve(&x).try_bytes_len().unwrap())
                     .sum()
             };
             offset += c;

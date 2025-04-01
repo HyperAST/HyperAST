@@ -160,7 +160,7 @@ pub fn simple(
         .then(|| {
             state
                 .repositories
-                .write()
+                .read()
                 .unwrap()
                 .get_precomp_query(repo.config, lang)
         })
@@ -423,7 +423,7 @@ fn pre_query(
     let precomputeds = INCREMENTAL_QUERIES.then(|| {
         state
             .repositories
-            .write()
+            .read()
             .unwrap()
             .get_precomp_query(repo_config, lang)
     });
@@ -566,7 +566,7 @@ pub fn differential(
     let precomputeds = INCREMENTAL_QUERIES.then(|| {
         state
             .repositories
-            .write()
+            .read()
             .unwrap()
             .get_precomp_query(repo.config, lang)
     });

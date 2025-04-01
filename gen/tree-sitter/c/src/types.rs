@@ -398,17 +398,6 @@ impl HyperType for Type {
         self
     }
 
-    /// ```
-    /// # fn main() {
-    /// # use hyperast_gen_ts_cpp::types::Type;
-    /// # use hyperast::types::HyperType;
-    /// let k0 = Type::FunctionDefinition.as_static();
-    /// let k1 = Type::FunctionDefinition.as_static();
-    /// let k2 = Type::EnumSpecifier.as_static();
-    /// assert!(std::ptr::eq(k0,k1));
-    /// assert!(!std::ptr::eq(k0,k2));
-    /// # }
-    /// ```
     fn as_static(&self) -> &'static dyn HyperType {
         let t = <C as hyperast::types::Lang<Type>>::to_u16(*self);
         let t = <C as hyperast::types::Lang<Type>>::make(t);

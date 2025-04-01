@@ -1065,6 +1065,7 @@ dependencies = [
  "serde-aux",
  "serde_json",
  "syn 2.0.99",
+ "test-log",
  "tokio",
  "tower 0.5.2",
  "tower-http",
@@ -6289,7 +6290,7 @@ dependencies = [
  "syn 2.0.99",
  "tree-sitter",
  "tree-sitter-c",
- "tree-sitter-cpp 0.23.4",
+ "tree-sitter-cpp 0.23.1",
  "tree-sitter-graph",
  "tree-sitter-java 0.23.5",
  "tree-sitter-loader",
@@ -8513,6 +8514,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-log"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7f46083d221181166e5b6f6b1e5f1d499f3a76888826e6cb1d057554157cd0f"
+dependencies = [
+ "env_logger 0.11.5",
+ "test-log-macros",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "test-log-macros"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "888d0c3c6db53c0fdab160d2ed5e12ba745383d3e85813f2ea0f2b1475ab553f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
 ]
 
 [[package]]

@@ -409,6 +409,12 @@ mod impl_c_p_p_receivers {
             self
         }
     }
+
+    impl<IdN, Idx: PrimInt, C, T> building::SetLineSpan<T, Self> for StructuralPosition<IdN, Idx, C> {
+        fn set(self, _lines: T) -> Self {
+            self
+        }
+    }
     // impl<IdN, Idx: PrimInt, C> top_down::SetNode<IdN, SolvedStructuralPosition<IdN, Idx, C>>
     //     for StructuralPosition<IdN, Idx, C>
     // {

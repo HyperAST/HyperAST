@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::PrimInt;
 
 use super::{position_accessors, tags};
@@ -7,7 +5,7 @@ use super::{position_accessors, tags};
 pub struct Offsets<Idx, Config = tags::TopDownFull> {
     /// offsets to go through a tree from top to bottom
     offsets: Vec<Idx>,
-    _phantom: PhantomData<Config>,
+    _phantom: std::marker::PhantomData<Config>,
 }
 impl<Idx, C> Into<Vec<Idx>> for Offsets<Idx, C> {
     fn into(self) -> Vec<Idx> {
@@ -18,13 +16,13 @@ impl<Idx, C> Into<Vec<Idx>> for Offsets<Idx, C> {
 pub struct OffsetsRef<'a, Idx, Config = tags::TopDownFull> {
     /// offsets to go through a tree from top to bottom
     offsets: &'a [Idx],
-    _phantom: PhantomData<Config>,
+    _phantom: std::marker::PhantomData<Config>,
 }
 impl<'a, Idx> From<&'a [Idx]> for OffsetsRef<'a, Idx> {
     fn from(offsets: &'a [Idx]) -> Self {
         Self {
             offsets,
-            _phantom: PhantomData,
+            _phantom: Default::default(),
         }
     }
 }
@@ -55,7 +53,11 @@ impl<IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets for RootedOffsets<
 }
 
 impl<IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets for RootedOffsets<IdN, Idx> {
-    type It<'b> = std::iter::Copied<std::slice::Iter<'b, Idx>> where Self: 'b, Idx: 'b;
+    type It<'b>
+        = std::iter::Copied<std::slice::Iter<'b, Idx>>
+    where
+        Self: 'b,
+        Idx: 'b;
 
     fn iter_offsets(&self) -> Self::It<'_> {
         self.offsets.iter().copied()
@@ -96,7 +98,11 @@ impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets
 impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
     for RootedOffsetsRef<'a, IdN, Idx>
 {
-    type It<'b> = std::iter::Copied<std::slice::Iter<'b, Idx>> where Self: 'b, Idx: 'b;
+    type It<'b>
+        = std::iter::Copied<std::slice::Iter<'b, Idx>>
+    where
+        Self: 'b,
+        Idx: 'b;
 
     fn iter_offsets(&self) -> Self::It<'_> {
         self.offsets.iter().copied()
@@ -150,8 +156,8 @@ mod impl_receivers {
     impl<Idx: PrimInt> building::top_down::ReceiveIdx<Idx, Self>
         for Offsets<Idx, tags::TopDownNoSpace>
     {
-        fn push(self, _idx: Idx) -> Self {
-            // self.offsets.push(idx);
+        fn push(mut self, idx: Idx) -> Self {
+            self.offsets.push(idx);
             self
         }
     }
@@ -181,8 +187,15 @@ mod impl_receivers {
             self
         }
     }
+
     impl<Idx: PrimInt, IdO, C> building::SetLen<IdO, Self> for Offsets<Idx, C> {
         fn set(self, _len: IdO) -> Self {
+            self
+        }
+    }
+
+    impl<Idx: PrimInt, C, T> building::SetLineSpan<T, Self> for Offsets<Idx, C> {
+        fn set(self, _lines: T) -> Self {
             self
         }
     }

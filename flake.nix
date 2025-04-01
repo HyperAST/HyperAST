@@ -82,7 +82,7 @@
         packages = {
           hyperast = hyperast-backend;
 
-          hyperast-dockerImage = pkgs.dockerTools.buildImage {
+          hyperast-dockerImage = pkgs.dockerTools.buildLayeredImage {
             name = "HyperAST";
             tag = "0.2.0";
             runAsRoot = ''

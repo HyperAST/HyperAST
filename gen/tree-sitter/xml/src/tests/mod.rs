@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use hyperast::store::{labels::LabelStore, SimpleStores};
+use hyperast::store::SimpleStores;
 use tree_sitter::Parser;
 
 use crate::{
@@ -13,9 +13,7 @@ fn xml_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
-        parser
-            .set_language(&crate::language())
-            .unwrap();
+        parser.set_language(&crate::language()).unwrap();
     }
 
     let text = {
@@ -88,6 +86,18 @@ fn hyperAST_on_pom() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::<TStore>::default();
+    let mut tree_gen = XmlTreeGen::new(&mut stores);
+    let x = tree_gen.generate_file(b"", &text, tree.walk()).local;
+    let id = x.compressed_node;
+    use hyperast::nodes;
+    println!("{}", nodes::SexpSerializer::new(&stores, id));
+    println!("{}", nodes::SyntaxWithFieldsSerializer::new(&stores, id));
+    println!("{}", nodes::TextSerializer::new(&stores, id));
+    println!(
+        "{}",
+        nodes::SimpleSerializer::<_, _, true>::new(&stores, id)
+    );
 }
 
 #[test]

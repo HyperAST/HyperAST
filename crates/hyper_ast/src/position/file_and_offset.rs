@@ -62,14 +62,14 @@ impl<T: PrimInt + Display> Display for Position<PathBuf, T> {
 
 // TODO use an interface for TopDownPositionBuilder, should actually be the same as position here, this way you can see the generated pos as a DTO
 // TODO in the same way finishing a prepare struct could directly be converted into a position, or be an accumulator itself (actually better for some structs)
-impl<IdN, Idx, IdO: PrimInt> Into<super::file_and_offset::Position<PathBuf, IdO>>
+impl<IdN, Idx, IdO: PrimInt> Into<Position<PathBuf, IdO>>
     for super::spaces_related::TopDownPositionBuilder<IdN, Idx, IdO>
 {
-    fn into(self) -> super::file_and_offset::Position<PathBuf, IdO> {
+    fn into(self) -> Position<PathBuf, IdO> {
         // TODO how to handle position of directory ?
         let range = self.range.unwrap();
         let len = range.end - range.start;
-        super::file_and_offset::Position {
+        Position {
             file: self.file,
             offset: range.start,
             len,
@@ -242,6 +242,12 @@ mod impl_receivers {
     impl<IdO: PrimInt> building::SetLen<IdO, Self> for super::Position<PathBuf, IdO> {
         fn set(mut self, len: IdO) -> Self {
             self.len = len;
+            self
+        }
+    }
+
+    impl<IdO: PrimInt, T> building::SetLineSpan<T, Self> for super::Position<PathBuf, IdO> {
+        fn set(self, _row: T) -> Self {
             self
         }
     }

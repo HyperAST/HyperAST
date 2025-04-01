@@ -1,7 +1,7 @@
 //! Gather most of the common behaviors used to compute a path from an offset
 use num::ToPrimitive;
 
-use crate::types::{Children, Childrn, HyperAST, NodeStore, WithChildren, WithSerialization};
+use crate::types::{Childrn, HyperAST, WithChildren, WithSerialization};
 
 /// must be in a file
 pub fn resolve_range<'store, HAST>(
@@ -20,10 +20,10 @@ where
     let mut x = root;
     let mut offsets = vec![];
     'main: loop {
-        let b = stores.node_store().resolve(&x);
+        let b = stores.resolve(&x);
         if let Some(cs) = b.children() {
             for (y, child_id) in cs.iter_children().enumerate() {
-                let b = stores.node_store().resolve(&child_id);
+                let b = stores.resolve(&child_id);
 
                 let len = b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
                 if offset + len < start {
