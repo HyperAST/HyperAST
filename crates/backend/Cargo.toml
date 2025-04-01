@@ -1,15 +1,12 @@
 [package]
 name = "backend"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 
 [dependencies]
 tree-sitter = { workspace = true }
 tree-sitter-cli = "0.23.0"
-hyperast = { workspace = true, default-features = false, features = [
-    "serialize",
-    "fetched",
-] }
+hyperast = { workspace = true, features = ["serialize", "fetched"] }
 hyperast_gen_ts_cpp = { workspace = true }
 hyperast_gen_ts_java = { workspace = true }
 hyperast_gen_ts_xml = { workspace = true }

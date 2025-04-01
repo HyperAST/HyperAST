@@ -679,7 +679,7 @@ pub mod utils_ts {
         }
     }
 
-    extern "C" {
+    unsafe extern "C" {
         fn ts_tree_cursor_goto_first_child_internal(
             self_: *mut tree_sitter::ffi::TSTreeCursor,
         ) -> TreeCursorStep;

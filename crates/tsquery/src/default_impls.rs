@@ -1,6 +1,6 @@
-use crate::{ffi, CNLending};
+use crate::{CNLending, ffi};
 
-use super::{indexed::Symbol, Cursor, Status, TreeCursorStep};
+use super::{Cursor, Status, TreeCursorStep, indexed::Symbol};
 
 pub struct TreeCursor<'a> {
     text: &'a [u8],
@@ -26,7 +26,7 @@ impl<'a> Cursor for TreeCursor<'a> {
     // type NodeRef<'b> = tree_sitter::Node<'a> where Self: 'b;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_goto_next_sibling_internal(
                 self_: *mut ffi::TSTreeCursor,
             ) -> TreeCursorStep;
@@ -38,7 +38,7 @@ impl<'a> Cursor for TreeCursor<'a> {
     }
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_goto_first_child_internal(
                 self_: *mut ffi::TSTreeCursor,
             ) -> TreeCursorStep;
@@ -58,7 +58,7 @@ impl<'a> Cursor for TreeCursor<'a> {
     }
 
     fn parent_is_error(&self) -> bool {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_parent_node(self_: *const ffi::TSTreeCursor) -> ffi::TSNode;
         }
         unsafe {
@@ -88,7 +88,7 @@ impl<'a> Cursor for TreeCursor<'a> {
 
     #[inline]
     fn current_status(&self) -> TSStatus {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_current_status(
                 self_: *const ffi::TSTreeCursor,
                 field_id: *mut ffi::TSFieldId,
@@ -231,10 +231,12 @@ impl<'a> super::Node for tree_sitter::Node<'a> {
         Equal
     }
 
-    fn text<'s, 'l>(&'s self, text_provider: <Self as super::TextLending<'l>>::TP) -> super::BB<'s, 'l, str> {
+    fn text<'s, 'l>(
+        &'s self,
+        text_provider: <Self as super::TextLending<'l>>::TP,
+    ) -> super::BB<'s, 'l, str> {
         // self.utf8_text(text_provider).unwrap().into()
-        let r = std::str::from_utf8(&text_provider[self.start_byte()..self.end_byte()])
-            .unwrap();
+        let r = std::str::from_utf8(&text_provider[self.start_byte()..self.end_byte()]).unwrap();
         super::BB::B(r)
     }
 

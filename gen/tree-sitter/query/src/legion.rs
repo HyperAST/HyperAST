@@ -365,7 +365,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -466,8 +466,7 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
         } else {
             let hashs = hbuilder.build();
 
-            let mut dyn_builder =
-                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(
@@ -612,8 +611,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         } else {
             let hashs = hbuilder.build();
 
-            let mut dyn_builder =
-                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(

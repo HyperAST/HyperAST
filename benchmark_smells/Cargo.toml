@@ -1,8 +1,8 @@
 
 [package]
 name = "hyperast_benchmark_smells"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 autobins = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

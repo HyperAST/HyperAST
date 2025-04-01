@@ -1,26 +1,25 @@
 ///! fully compress all subtrees from a Java CST
 use crate::types::JavaEnabledTypeStore;
 use crate::{
-    types::{TStore, Type},
     TNode,
+    types::{TStore, Type},
 };
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
-        legion::{dyn_builder, eq_node, HashedNodeRef},
         EntityBuilder,
+        legion::{HashedNodeRef, dyn_builder, eq_node},
     },
 };
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
-    self,
+    self, Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
     parser::{Node, TreeCursor},
-    Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
 };
-use hyperast::tree_gen::{add_md_precomp_queries, NoOpMore, RoleAcc};
 use hyperast::tree_gen::{
     GlobalData as _, StatsGlobalData, TextedGlobalData, TotalBytesGlobalData as _,
 };
+use hyperast::tree_gen::{NoOpMore, RoleAcc, add_md_precomp_queries};
 use hyperast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -31,10 +30,10 @@ use hyperast::{
     filter::BloomSize,
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::Space,
-    store::{nodes::legion::compo, nodes::DefaultNodeStore as NodeStore, SimpleStores},
+    store::{SimpleStores, nodes::DefaultNodeStore as NodeStore, nodes::legion::compo},
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, AccIndentation, Accumulator,
-        BasicAccumulator, Spaces, ZippedTreeGen,
+        AccIndentation, Accumulator, BasicAccumulator, Spaces, ZippedTreeGen, compute_indentation,
+        get_spacing, has_final_space,
     },
     types::LabelStore as LabelStoreTrait,
 };
@@ -275,7 +274,8 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>>
+        + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -518,7 +518,8 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
         cursor: tree_sitter::TreeCursor,
     ) -> FullNode<StatsGlobalData, Local>
     where
-        More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+        More: tree_gen::Prepro<SimpleStores<TS>>
+            + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
     {
         todo!()
     }
@@ -575,7 +576,8 @@ where
     TS: JavaEnabledTypeStore<Ty2 = Type>
         + 'static
         + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>>
+        + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
@@ -698,7 +700,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -775,7 +777,8 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>>
+        + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
 {
     type Acc = Acc;
     type Global = Global<'stores>;
@@ -839,7 +842,7 @@ where
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let node_store: &_ = vacant.1 .1;
+            let node_store: &_ = vacant.1.1;
             let stores = SimpleStores {
                 type_store: self.stores.type_store.clone(),
                 label_store: &self.stores.label_store,
@@ -883,7 +886,7 @@ where
                 acc.ana.as_ref(),
             );
             #[cfg(feature = "subtree-stats")]
-            vacant.1 .1.add_height_dedup(metrics.height, metrics.hashs);
+            vacant.1.1.add_height_dedup(metrics.height, metrics.hashs);
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
 
@@ -940,12 +943,12 @@ where
 }
 
 impl<
-        'stores,
-        'cache,
-        TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-        More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
-        const HIDDEN_NODES: bool,
-    > NodeStoreExt<HashedNode>
+    'stores,
+    'cache,
+    TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
+    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    const HIDDEN_NODES: bool,
+> NodeStoreExt<HashedNode>
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS::Ty: TypeTrait,
@@ -1076,7 +1079,7 @@ where
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
 
                 let vacant = insertion.vacant();
-                let node_store: &_ = vacant.1 .1;
+                let node_store: &_ = vacant.1.1;
                 let stores = SimpleStores {
                     type_store: self.stores.type_store.clone(),
                     node_store,

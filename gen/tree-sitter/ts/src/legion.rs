@@ -383,7 +383,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> TsTreeGen<'store, 'cache, TS> {
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -483,8 +483,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
             let hashs = hbuilder.build();
             use hyperast::store::nodes::EntityBuilder as _;
 
-            let mut dyn_builder =
-                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(

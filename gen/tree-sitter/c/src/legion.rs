@@ -1,16 +1,15 @@
-use crate::types::{CEnabledTypeStore, Type};
 use crate::TNode;
+use crate::types::{CEnabledTypeStore, Type};
 use hyperast::store::nodes::legion::dyn_builder;
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
-    self, add_md_precomp_queries, NoOpMore, RoleAcc, TotalBytesGlobalData as _,
+    self, NoOpMore, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries,
 };
 use hyperast::tree_gen::{
-    compute_indentation, get_spacing, has_final_space,
-    parser::{Node as _, TreeCursor},
     AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
     SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-    ZippedTreeGen,
+    ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+    parser::{Node as _, TreeCursor},
 };
 use hyperast::types;
 use hyperast::{
@@ -19,11 +18,11 @@ use hyperast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::{
-            legion::{compo, eq_node, NodeIdentifier},
-            DefaultNodeStore as NodeStore, EntityBuilder,
-        },
         SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore, EntityBuilder,
+            legion::{NodeIdentifier, compo, eq_node},
+        },
     },
     types::{LabelStore as _, Role},
 };
@@ -456,7 +455,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -532,7 +531,7 @@ where
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let node_store: &_ = vacant.1 .1;
+            let node_store: &_ = vacant.1.1;
             let stores = SimpleStores {
                 type_store: self.stores.type_store.clone(),
                 label_store: &self.stores.label_store,

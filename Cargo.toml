@@ -14,10 +14,7 @@ members = [
     "benchmark_smells",
     "benchmark",
 ]
-exclude = [
-    "crates/ref-mining-evaluation",
-    "hyperast_wasm",
-]
+exclude = ["crates/ref-mining-evaluation", "hyperast_wasm"]
 default-members = [
     "crates/hyper_ast",
     "crates/hyper_diff",
@@ -43,7 +40,7 @@ default-members = [
 tree-sitter-graph = { version = "0.12.0" }
 tree-sitter = { version = "0.23.0" }
 hyper_diff = { path = "./crates/hyper_diff" }
-hyperast = { path = "./crates/hyper_ast" }
+hyperast = { path = "./crates/hyper_ast", default-features = false }
 hyperast_tsquery = { path = "./crates/tsquery" }
 hyperast_vcs_git = { path = "./vcs/git" }
 polyglote = { path = "./lib/polyglote" }

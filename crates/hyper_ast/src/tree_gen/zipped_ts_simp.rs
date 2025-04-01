@@ -1,17 +1,17 @@
-use super::{parser::Visibility, utils_ts::*, zipped::Has, P};
+use super::{P, parser::Visibility, utils_ts::*, zipped::Has};
 use crate::store::{
-    nodes::{
-        legion::{compo, dyn_builder, eq_node, NodeIdentifier},
-        DefaultNodeStore as NodeStore,
-    },
     SimpleStores,
+    nodes::{
+        DefaultNodeStore as NodeStore,
+        legion::{NodeIdentifier, compo, dyn_builder, eq_node},
+    },
 };
 use crate::tree_gen::{
-    self, compute_indentation, get_spacing, has_final_space,
+    self, AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+    PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData,
+    TotalBytesGlobalData as _, TreeGen, WithByteRange, ZippedTreeGen, compute_indentation,
+    get_spacing, has_final_space,
     parser::{Node as _, TreeCursor},
-    AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
-    SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _, TreeGen,
-    WithByteRange, ZippedTreeGen,
 };
 use crate::{
     filter::BloomSize,
@@ -182,7 +182,7 @@ where
     type Node<'b> = TNode<'b>;
     type TreeCursor<'b> = TTreeCursor<'b>;
 
-    fn gen(
+    fn r#gen(
         &mut self,
         text: &Self::Text,
         stack: &mut Parents<Self::Acc>,
@@ -735,7 +735,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 

@@ -1,7 +1,7 @@
 [package]
 name = "hyperast_gen_ts_cpp"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 
 [dependencies]
 tree-sitter = { workspace = true, optional = true }
@@ -30,7 +30,7 @@ enumset = "1.0.8"
 serde = { version = "1.0.130" }
 
 tree-sitter-cpp = { version = "0.23.1", optional = true }
-tree-sitter-cpp_alt = { package="tree-sitter-cpp" , git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.23.1", rev = "81216ae5ba2778522eee06392cf0352b9410e4fe", optional = true }
+tree-sitter-cpp_alt = { package = "tree-sitter-cpp", git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.23.1", rev = "81216ae5ba2778522eee06392cf0352b9410e4fe", optional = true }
 
 
 [dev-dependencies]
@@ -50,13 +50,6 @@ impl_intern = [
     "dep:tree-sitter",
     "hyperast/ts",
 ]
-impl = [
-    "impl_intern",
-    "dep:tree-sitter-cpp",
-]
+impl = ["impl_intern", "dep:tree-sitter-cpp"]
 alt_grammar = []
-impl_alt_grammar = [
-    "alt_grammar",
-    "impl_intern",
-    "dep:tree-sitter-cpp_alt",
-]
+impl_alt_grammar = ["alt_grammar", "impl_intern", "dep:tree-sitter-cpp_alt"]

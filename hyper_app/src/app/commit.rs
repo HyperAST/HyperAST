@@ -471,7 +471,7 @@ impl SelectedProjects {
         self.commits.len()
     }
 
-    pub(crate) fn project_ids(&self) -> impl Iterator<Item = ProjectId> {
+    pub(crate) fn project_ids(&self) -> impl Iterator<Item = ProjectId> + use<> {
         (0..self.repositories.len()).into_iter().map(ProjectId)
     }
 
@@ -932,7 +932,7 @@ mod commits_layouting {
                     let branch = &branches[old_idx];
                     (branch.target, branch.is_tag, branch.is_merged)
                 };
-                if let Some(&idx) = &indices.get(&target) {
+                if let Some(&idx) = indices.get(&target) {
                     let info = &mut commits[idx];
                     if is_tag {
                         info.tags.push(old_idx);

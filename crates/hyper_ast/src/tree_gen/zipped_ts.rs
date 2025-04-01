@@ -1,7 +1,7 @@
 use super::utils_ts::*;
 
-use crate::store::nodes::legion::{dyn_builder, RawHAST};
-use crate::tree_gen::{self, add_md_precomp_queries, RoleAcc, TotalBytesGlobalData as _};
+use crate::store::nodes::legion::{RawHAST, dyn_builder};
+use crate::tree_gen::{self, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries};
 use crate::types::{self, HyperType};
 use crate::{
     filter::BloomSize,
@@ -9,18 +9,17 @@ use crate::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::{
-            legion::{compo, eq_node, NodeIdentifier},
-            DefaultNodeStore as NodeStore,
-        },
         SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore,
+            legion::{NodeIdentifier, compo, eq_node},
+        },
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space,
-        parser::{Node as _, TreeCursor},
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
         PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
-        WithByteRange, ZippedTreeGen,
+        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
     },
     types::{LabelStore as _, Role},
 };
@@ -181,16 +180,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
 }
 
 impl<'store, 'cache, 's, TS: TsEnableTS>
-    TsTreeGen<
-        'store,
-        'cache,
-        TS,
-        tree_gen::NoOpMore<
-            TS,
-            Acc<TS::Ty2>,
-        >,
-        true,
-    >
+    TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
 {
@@ -220,7 +210,7 @@ impl<'store, 'cache, TS, More> TsTreeGen<'store, 'cache, TS, More>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
 }
 
@@ -229,7 +219,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -383,7 +373,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     fn make_spacing(
         &mut self,
@@ -474,7 +464,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -504,7 +494,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     type Acc = Acc<TS::Ty2>;
     type Global = SpacedGlobalData<'store>;
@@ -553,7 +543,7 @@ where
             let vacant = insertion.vacant();
             let mut dyn_builder = dyn_builder::EntityBuilder::new();
             {
-                let node_store = &*vacant.1 .1;
+                let node_store = &*vacant.1.1;
                 let stores = SimpleStores {
                     type_store: self.stores.type_store.clone(),
                     label_store: &self.stores.label_store,
@@ -562,7 +552,7 @@ where
                 let more = &self.more;
                 // TsTreeGen::<_, _, HIDDEN_NODES>::custom_dd(stores, more, &mut dyn_builder, &mut acc, label);
 
-                todo!("AAA");//acc.precomp_queries |= more.match_precomp_queries(stores, &acc, label.as_deref());
+                todo!("AAA"); //acc.precomp_queries |= more.match_precomp_queries(stores, &acc, label.as_deref());
                 if More::ENABLED {
                     add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
                 }
@@ -618,8 +608,9 @@ where
 // and can add derived data to subtree
 
 impl<'store, 'cache, TS: types::ETypeStore, More, const HIDDEN_NODES: bool>
-    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES> where 
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
+where
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     fn custom_dd(
         stores: RawHAST<TS>,
@@ -627,9 +618,8 @@ impl<'store, 'cache, TS: types::ETypeStore, More, const HIDDEN_NODES: bool>
         dyn_builder: &mut dyn_builder::EntityBuilder,
         acc: &mut Acc<TS::Ty2>,
         label: Option<String>,
-    )
-    {
-        todo!("AAA");//acc.precomp_queries |= more.match_precomp_queries(stores, &*acc, label.as_deref());
+    ) {
+        todo!("AAA"); //acc.precomp_queries |= more.match_precomp_queries(stores, &*acc, label.as_deref());
         if More::ENABLED {
             add_md_precomp_queries(dyn_builder, acc.precomp_queries);
         }
