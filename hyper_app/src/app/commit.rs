@@ -41,12 +41,8 @@ impl CommitMetadata {
         if ui.available_width() > 300.0 {
             ui.label(format!("Parents: {}", self.parents.join(" + ")));
         } else {
-            let text = self
-                .parents
-                .iter()
-                .map(|x| &x[..8])
-                .intersperse(" + ")
-                .collect::<String>();
+            use itertools::intersperse;
+            let text = intersperse(self.parents.iter().map(|x| &x[..8]), " + ").collect::<String>();
             let label = ui.label(format!("Parents: {}", text));
             if label.hovered() {
                 let text = self.parents.join(" + ");
@@ -226,11 +222,13 @@ pub(super) fn fetch_merge_pr2(
             .and_then(|x| x.content.ok_or("No content".into()));
 
         let resource = resource.map(|x| {
-
-            let request = ehttp::Request::post(&format!(
-                "{}/{}/{}/{}",
-                url_fork, x.head_commit.repo.user, x.head_commit.repo.name, x.head_commit.id,
-            ), Default::default());
+            let request = ehttp::Request::post(
+                &format!(
+                    "{}/{}/{}/{}",
+                    url_fork, x.head_commit.repo.user, x.head_commit.repo.name, x.head_commit.id,
+                ),
+                Default::default(),
+            );
             ehttp::fetch(request, |x| log::info!("{:?}", x));
 
             log::error!("{:?}", x);
@@ -792,7 +790,7 @@ pub(crate) fn compute_commit_layout_timed(
                 index.insert(current.clone(), (r.times.len(), r.subs.len()));
                 if let Some(commit) = commits(&current) {
                     // universal time then ?
-                    let time = commit.time;// + commit.timezone as i64 * 60;
+                    let time = commit.time; // + commit.timezone as i64 * 60;
                     r.min_time = time.min(r.min_time);
                     r.max_time = time.max(r.max_time);
                     r.commits.push(format!("{current}"));
@@ -832,7 +830,7 @@ pub(crate) fn compute_commit_layout_timed(
                 } else if r.times[end - 1] != -1 {
                     delta_time = (r.times[prev] - r.times[end - 1]).abs();
                     r.max_delta = r.max_delta.max(delta_time);
-                } else if let Some(t) = r.times[start..end - 1].iter().rev().find(|x|**x!=-1) {
+                } else if let Some(t) = r.times[start..end - 1].iter().rev().find(|x| **x != -1) {
                     delta_time = (r.times[prev] - t).abs();
                     r.max_delta = r.max_delta.max(delta_time);
                 // } else if r.times[end - 2] != -1 {

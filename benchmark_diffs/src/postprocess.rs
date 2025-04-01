@@ -236,13 +236,16 @@ pub mod compressed_bf_post_process {
                 hast_bf.set((x % bf_l as u32) as usize, true);
                 !gt_bf[(x % bf_l as u32) as usize]
             };
+            use const_chunks::IteratorConstChunks;
             assert!(!is_not_here(0));
             assert!(!is_not_here(42));
             let mut g = |h: &[u8; 16]| {
                 let [l1, l2, l3, l4] = h
-                    .array_chunks::<4>()
-                    .map(|x| u32::from_be_bytes(*x))
-                    .array_chunks::<4>()
+                    .into_iter()
+                    .cloned()
+                    .const_chunks::<4>()
+                    .map(|x| u32::from_be_bytes(x))
+                    .const_chunks::<4>()
                     .next()
                     .unwrap();
 

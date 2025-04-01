@@ -241,9 +241,7 @@ where
         let mut has = Has::Down;
         loop {
             dbg!(cursor.0.node().kind());
-            if has != Has::Up
-                && let Some(_) = cursor.goto_first_child_extended()
-            {
+            if has != Has::Up && cursor.goto_first_child_extended().is_some() {
                 has = Has::Down;
                 self._pre(global, text, cursor, stack, &mut has);
             } else {

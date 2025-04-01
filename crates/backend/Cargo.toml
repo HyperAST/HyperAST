@@ -81,6 +81,7 @@ nohash-hasher = "0.2.0"
 serde-aux = "4.1.2"
 
 dashmap = { version = "5.4.0", features = ["raw-api"] }
+clashmap = { version = "1.2.0", features = ["raw-api"] }
 
 enumset = "1.0.12"
 num = "0.4.0"
@@ -93,7 +94,7 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 
 clap = { version = "3.0", features = ["derive"] }
 
-hashbrown = "0.14.5"
+hashbrown = "0.15.2"
 
 tree-sitter-graph = { workspace = true, optional = true }
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
@@ -115,7 +116,9 @@ hyper-util = { version = "0.1", default-features = false, features = [
 ] }
 rustls = { version = "0.23" }
 http-body-util = "0.1.2"
-
+const-chunks = "0.3.0" # waiting for stabilization
+get-many-mut = "0.1.0" # waiting for stabilization
+lock_api = "0.4.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"

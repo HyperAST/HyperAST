@@ -169,50 +169,50 @@ fn validity_qgram_distance_hash() {
         .normalized("##abaaacdef##".as_bytes(), "##abcdefg##".as_bytes()));
 }
 
-extern crate test;
 use hyperast::compat::DefaultHashBuilder;
-use test::Bencher;
+// extern crate test;
+// use test::Bencher;
 
-const PAIR1: (&[u8], &[u8]) = ("abaaacdefg".as_bytes(), "abcdefg".as_bytes());
-const PAIR2: (&[u8], &[u8]) = (
-    "abaaeqrogireiuvnlrpgacdefg".as_bytes(),
-    "qvvsdflflvjehrgipuerpq".as_bytes(),
-);
+// const PAIR1: (&[u8], &[u8]) = ("abaaacdefg".as_bytes(), "abcdefg".as_bytes());
+// const PAIR2: (&[u8], &[u8]) = (
+//     "abaaeqrogireiuvnlrpgacdefg".as_bytes(),
+//     "qvvsdflflvjehrgipuerpq".as_bytes(),
+// );
 
-#[allow(soft_unstable)]
-#[bench]
-fn bench_hash(b: &mut Bencher) {
-    b.iter(|| qgram_distance_hash::<2>(PAIR1.0, PAIR1.1))
-}
+// #[allow(soft_unstable)]
+// #[bench]
+// fn bench_hash(b: &mut Bencher) {
+//     b.iter(|| qgram_distance_hash::<2>(PAIR1.0, PAIR1.1))
+// }
 
-#[allow(soft_unstable)]
-#[bench]
-fn bench_hash_opti(b: &mut Bencher) {
-    b.iter(|| qgram_distance_hash_opti(PAIR1.0, PAIR1.1))
-}
+// #[allow(soft_unstable)]
+// #[bench]
+// fn bench_hash_opti(b: &mut Bencher) {
+//     b.iter(|| qgram_distance_hash_opti(PAIR1.0, PAIR1.1))
+// }
 
-#[allow(soft_unstable)]
-#[bench]
-fn bench_hash_opti2(b: &mut Bencher) {
-    b.iter(|| qgram_distance_hash_opti(PAIR2.0, PAIR2.1))
-}
+// #[allow(soft_unstable)]
+// #[bench]
+// fn bench_hash_opti2(b: &mut Bencher) {
+//     b.iter(|| qgram_distance_hash_opti(PAIR2.0, PAIR2.1))
+// }
 
-#[allow(soft_unstable)]
-#[bench]
-fn bench_single_hash(b: &mut Bencher) {
-    b.iter(|| qgram_distance_single_hash::<2>("abcdefg".as_bytes(), "abcdefg".as_bytes()))
-}
+// #[allow(soft_unstable)]
+// #[bench]
+// fn bench_single_hash(b: &mut Bencher) {
+//     b.iter(|| qgram_distance_single_hash::<2>("abcdefg".as_bytes(), "abcdefg".as_bytes()))
+// }
 
-#[allow(soft_unstable)]
-#[bench]
-fn bench_str_distance(b: &mut Bencher) {
-    use str_distance::DistanceMetric;
-    b.iter(|| super::str_distance_patched::QGram::new(3).normalized(PAIR1.0, PAIR1.1))
-}
+// #[allow(soft_unstable)]
+// #[bench]
+// fn bench_str_distance(b: &mut Bencher) {
+//     use str_distance::DistanceMetric;
+//     b.iter(|| super::str_distance_patched::QGram::new(3).normalized(PAIR1.0, PAIR1.1))
+// }
 
-#[allow(soft_unstable)]
-#[bench]
-fn bench_str_distance2(b: &mut Bencher) {
-    use str_distance::DistanceMetric;
-    b.iter(|| super::str_distance_patched::QGram::new(3).normalized(PAIR2.0, PAIR2.1))
-}
+// #[allow(soft_unstable)]
+// #[bench]
+// fn bench_str_distance2(b: &mut Bencher) {
+//     use str_distance::DistanceMetric;
+//     b.iter(|| super::str_distance_patched::QGram::new(3).normalized(PAIR2.0, PAIR2.1))
+// }

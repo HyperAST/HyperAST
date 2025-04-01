@@ -838,54 +838,52 @@ pub mod utils_ts {
                 return None;
             };
             let mut cursor = cursor.clone();
-            if self.has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
-            {
-                self.stack.push(cursor);
-                self.has = Has::Down;
-                self.vis.push(visibility == Visibility::Hidden);
-                Some(visibility)
-            } else {
-                use std::ops::Deref;
-                if let Some(visibility) = cursor.goto_next_sibling_extended() {
-                    let _ = self.stack.pop().unwrap();
-                    let c = self.stack.last_mut().unwrap();
-                    if c.node().end_byte() <= cursor.node().start_byte() {
-                        self.has = Has::Up;
-                        let vis = if *self.vis.last().unwrap().deref() {
-                            Visibility::Hidden
-                        } else {
-                            Visibility::Visible
-                        };
-                        return Some(vis);
-                    }
+            if self.has != Has::Up {
+                if let Some(visibility) = cursor.goto_first_child_extended() {
                     self.stack.push(cursor);
+                    self.has = Has::Down;
                     self.vis.push(visibility == Visibility::Hidden);
-                    self.has = Has::Right;
-                    Some(visibility)
-                } else if let Some(c) = self.stack.pop() {
-                    self.has = Has::Up;
-                    if self.stack.is_empty() {
-                        self.stack.push(c);
-                        None
-                        // depends on usage
-                        // let vis = if self.vis.pop().unwrap() {
-                        //     Visibility::Hidden
-                        // } else {
-                        //     Visibility::Visible
-                        // };
-                        // Some(vis)
-                    } else {
-                        let vis = if *self.vis.last().unwrap().deref() {
-                            Visibility::Hidden
-                        } else {
-                            Visibility::Visible
-                        };
-                        Some(vis)
-                    }
-                } else {
-                    None
+                    return Some(visibility);
                 }
+            }
+            if let Some(visibility) = cursor.goto_next_sibling_extended() {
+                let _ = self.stack.pop().unwrap();
+                let c = self.stack.last_mut().unwrap();
+                if c.node().end_byte() <= cursor.node().start_byte() {
+                    self.has = Has::Up;
+                    let vis = if *self.vis.last().unwrap() {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Visible
+                    };
+                    return Some(vis);
+                }
+                self.stack.push(cursor);
+                self.vis.push(visibility == Visibility::Hidden);
+                self.has = Has::Right;
+                Some(visibility)
+            } else if let Some(c) = self.stack.pop() {
+                self.has = Has::Up;
+                if self.stack.is_empty() {
+                    self.stack.push(c);
+                    None
+                    // depends on usage
+                    // let vis = if self.vis.pop().unwrap() {
+                    //     Visibility::Hidden
+                    // } else {
+                    //     Visibility::Visible
+                    // };
+                    // Some(vis)
+                } else {
+                    let vis = if *self.vis.last().unwrap() {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Visible
+                    };
+                    Some(vis)
+                }
+            } else {
+                None
             }
         }
     }

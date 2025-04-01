@@ -148,16 +148,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
 }
 
 impl<'store, 'cache, 's, TS: TsEnableTS>
-    TsTreeGen<
-        'store,
-        'cache,
-        TS,
-        tree_gen::NoOpMore<
-            TS,
-            Acc<TS::Ty2>,
-        >,
-        true,
-    >
+    TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
 {
@@ -242,9 +233,7 @@ where
         let mut has = Has::Down;
         loop {
             dbg!(cursor.0.node().kind());
-            if has != Has::Up
-                && let Some(_) = cursor.goto_first_child_extended()
-            {
+            if has != Has::Up && cursor.goto_first_child_extended().is_some() {
                 has = Has::Down;
                 global.down();
                 match self.pre_skippable(text, cursor, &stack, global) {
@@ -309,8 +298,9 @@ where
                 }
             }
             continue;
-            if has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
+            if let Some(visibility) = (has != Has::Up)
+                .then(|| cursor.goto_first_child_extended())
+                .flatten()
             {
                 has = Has::Down;
                 global.down();

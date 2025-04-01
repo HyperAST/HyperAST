@@ -1,4 +1,6 @@
-use crate::processing::erased::{CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle};
+use crate::processing::erased::{
+    CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
+};
 use crate::StackEle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
@@ -154,8 +156,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 self.stack.last_mut().expect("never empty").cs.clear();
                 let tree = self.repository.find_tree(oid).unwrap();
                 let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-                self.stack
-                    .push(StackEle::new(oid, prepared, MakeModuleAcc::new(name.try_into().unwrap())));
+                self.stack.push(StackEle::new(
+                    oid,
+                    prepared,
+                    MakeModuleAcc::new(name.try_into().unwrap()),
+                ));
                 return;
             } else {
                 return;
@@ -325,7 +330,10 @@ impl From<(&mut MakeModuleAcc, &ObjectName)> for MakeModuleHelper {
     fn from((parent_acc, name): (&mut MakeModuleAcc, &ObjectName)) -> Self {
         let process = |mut v: &mut Option<Vec<PathBuf>>| {
             let mut v = drain_filter_strip(&mut v, name.as_bytes());
-            let c = v.extract_if(|x| x.components().next().is_none()).count();
+            let c = vec_extract_if_polyfill::MakeExtractIf::extract_if(&mut v, |x| {
+                x.components().next().is_none()
+            })
+            .count();
             (c > 0, v)
         };
         Self {
@@ -352,8 +360,7 @@ fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf>
     let mut new_sub_modules = vec![];
     let name = std::str::from_utf8(&name).unwrap();
     if let Some(sub_modules) = v {
-        sub_modules
-            .extract_if(|x| x.starts_with(name))
+        vec_extract_if_polyfill::MakeExtractIf::extract_if(sub_modules, |x| x.starts_with(name))
             .for_each(|x| {
                 let x = x.strip_prefix(name).unwrap().to_owned();
                 new_sub_modules.push(x);
@@ -617,7 +624,7 @@ impl crate::processing::erased::CommitProc for MakeProc {
     }
 
     fn get_lang_handle(&self, lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
-        dbg!(self.parameter.cpp_handle.0.0);
+        dbg!(self.parameter.cpp_handle.0 .0);
         if lang.eq_ignore_ascii_case("cpp") {
             Some(ParametrizedCommitProcessorHandle(
                 CommitProcessorHandle(std::any::TypeId::of::<

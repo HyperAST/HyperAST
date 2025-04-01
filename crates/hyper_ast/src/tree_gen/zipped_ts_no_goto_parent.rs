@@ -139,16 +139,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
 }
 
 impl<'store, 'cache, 's, TS: TsEnableTS>
-    TsTreeGen<
-        'store,
-        'cache,
-        TS,
-        tree_gen::NoOpMore<
-            TS,
-            Acc<TS::Ty2>,
-        >,
-        true,
-    >
+    TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
 {
@@ -310,8 +301,9 @@ where
                 cursor.0.depth()
             );
             dbg!((cursor_stack.len(), stack.len()));
-            if has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
+            if let Some(visibility) = (has != Has::Up)
+                .then(|| cursor.goto_first_child_extended())
+                .flatten()
             {
                 dbg!(cursor.node().kind());
                 cursor_stack.push(cursor);
@@ -492,8 +484,9 @@ impl<'a, const HIDDEN_NODES: bool> PrePost<'a, HIDDEN_NODES> {
         // dbg!(cursor.0.node().start_byte()..cursor.0.node().end_byte());
         // dbg!(cursor.0.depth());
         let mut cursor = cursor.clone();
-        if self.has != Has::Up
-            && let Some(visibility) = cursor.goto_first_child_extended()
+        if let Some(visibility) = (self.has != Has::Up)
+            .then(|| cursor.goto_first_child_extended())
+            .flatten()
         {
             self.stack.push(cursor);
             self.has = Has::Down;

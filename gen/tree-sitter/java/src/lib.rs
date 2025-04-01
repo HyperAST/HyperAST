@@ -1,7 +1,3 @@
-#![feature(min_specialization)]
-#![feature(let_chains)]
-// #![feature(generic_const_exprs)]
-#![feature(variant_count)]
 #![recursion_limit = "4096"]
 
 #[cfg(feature = "impl")]
@@ -48,5 +44,3 @@ pub fn language() -> tree_sitter::Language {
 pub fn node_types() -> &'static str {
     tree_sitter_java::NODE_TYPES
 }
-
-

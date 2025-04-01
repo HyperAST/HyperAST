@@ -1,5 +1,3 @@
-#![feature(array_chunks)]
-#![feature(iter_array_chunks)]
 //! Benchmark of diff using the hyperAST, compared against https://github.com/GumTreeDiff/gumtree
 
 //! algorithm: gumtree zs changedistiller rted

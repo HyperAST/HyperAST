@@ -1,5 +1,3 @@
-#![feature(test)]
-#![feature(extract_if)]
 #[cfg(feature = "impact")]
 pub mod allrefs;
 pub mod cpp;
@@ -220,4 +218,5 @@ pub(crate) struct SuccessProcessing<N, D = Duration> {
     pub node: N,
 }
 
-pub(crate) type FileProcessingResult<N, D = Duration> = Result<SuccessProcessing<N, D>, FailedParsing<D>>;
+pub(crate) type FileProcessingResult<N, D = Duration> =
+    Result<SuccessProcessing<N, D>, FailedParsing<D>>;

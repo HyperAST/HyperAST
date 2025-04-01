@@ -98,8 +98,8 @@ fn lazy_subtree_mapping<'a, 'b>(
     src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
 ) -> hyper_diff::matchers::Mapping<
-    dashmap::mapref::one::RefMut<'a, NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
-    dashmap::mapref::one::RefMut<'a, NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
+    clashmap::mapref::one::RefMut<'a, NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
+    clashmap::mapref::one::RefMut<'a, NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
     mapping_store::MultiVecStore<u32>,
 > {
     use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
@@ -117,7 +117,7 @@ fn lazy_subtree_mapping<'a, 'b>(
     let (mut decompress_src, mut decompress_dst) = {
         use hyperast::types::DecompressedFrom;
         let cached_decomp = |id: &NodeIdentifier| -> Option<
-            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
+            clashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<NodeIdentifier, u32>>,
         > {
             let decompress = partial_comp_cache
                 .try_entry(*id)?

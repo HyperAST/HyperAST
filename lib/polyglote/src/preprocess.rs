@@ -431,9 +431,7 @@ impl TypeSys {
             .query_mut::<(&mut SubTypes, &mut Vec<TsType>)>()
             .into_iter()
             .for_each(|(e, (s, v))| {
-                v.drain(..)
-                    .map(|x| names.get(x.ty()).unwrap().to_owned())
-                    .collect_into(&mut s.0);
+                s.0.extend(v.drain(..).map(|x| names.get(x.ty()).unwrap().to_owned()));
                 cmd.remove::<(Vec<TsType>,)>(e);
                 for e in &mut s.0 {
                     cmd.insert_one(*e, SubType);
@@ -444,11 +442,7 @@ impl TypeSys {
             .query_mut::<(&mut DChildren, &mut Vec<TsType>)>()
             .into_iter()
             .for_each(|(e, (s, v))| {
-                // dbg!(&v);
-                // dbg!(&names);
-                v.drain(..)
-                    .filter_map(|x| names.get(x.ty()).copied())
-                    .collect_into(&mut s.0);
+                s.0.extend(v.drain(..).filter_map(|x| names.get(x.ty()).copied()));
                 cmd.remove::<(Vec<TsType>,)>(e);
                 for e in &mut s.0 {
                     cmd.insert_one(*e, Child);

@@ -1,7 +1,4 @@
 // #![feature(min_specialization)]
-#![feature(exact_size_is_empty)]
-#![feature(slice_index_methods)]
-#![feature(let_chains)]
 
 pub mod compat;
 #[cfg(feature = "legion")]
@@ -12,11 +9,11 @@ pub mod hashed;
 pub mod impact;
 pub mod nodes;
 pub mod position;
+pub mod scripting;
 pub mod store;
 pub mod tree_gen;
 pub mod types;
 pub mod usage;
-pub mod scripting;
 pub mod utils;
 
 pub trait PrimInt: num::PrimInt + num::traits::NumAssign + std::fmt::Debug {}

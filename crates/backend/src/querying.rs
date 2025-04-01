@@ -631,9 +631,10 @@ pub fn differential(
     let stores = &repositories.processor.main_stores;
 
     let hyperast = &hyperast_vcs_git::no_space::as_nospaces2(stores);
-    let (src_tree, dst_tree) =
-        crate::utils::get_pair_simp(&state.partial_decomps, hyperast, &current_tr, &other_tr);
-    let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
+    let binding = crate::utils::bind_tree_pair(&state.partial_decomps, &current_tr, &other_tr);
+    let mut locked = binding.lock();
+    let (src_tree, dst_tree) = locked.as_mut(hyperast);
+
     let src_tree = Decompressible {
         hyperast,
         decomp: src_tree,

@@ -241,25 +241,25 @@ where
         let mut has = Has::Down;
         loop {
             dbg!(cursor.0.node().kind());
-            if has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
-            {
-                has = Has::Down;
-                self._pre(global, text, cursor, stack, &mut has, visibility);
-            } else {
-                if let Some(visibility) = cursor.goto_next_sibling_extended() {
-                    has = Has::Right;
-                    global.right();
-                    self._post(stack, global, text);
+            if has != Has::Up {
+                if let Some(visibility) = cursor.goto_first_child_extended() {
+                    has = Has::Down;
                     self._pre(global, text, cursor, stack, &mut has, visibility);
-                    dbg!()
-                } else if cursor.goto_parent() {
-                    has = Has::Up;
-                    self._post(stack, global, text);
-                } else {
-                    dbg!();
-                    break;
+                    continue;
                 }
+            }
+            if let Some(visibility) = cursor.goto_next_sibling_extended() {
+                has = Has::Right;
+                global.right();
+                self._post(stack, global, text);
+                self._pre(global, text, cursor, stack, &mut has, visibility);
+                dbg!()
+            } else if cursor.goto_parent() {
+                has = Has::Up;
+                self._post(stack, global, text);
+            } else {
+                dbg!();
+                break;
             }
         }
     }

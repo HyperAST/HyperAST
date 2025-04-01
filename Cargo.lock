@@ -1023,12 +1023,15 @@ dependencies = [
  "axum-macros",
  "base64 0.13.1",
  "clap 3.2.25",
+ "clashmap",
+ "const-chunks",
  "dashmap",
  "enumset",
  "futures",
  "futures-util",
+ "get-many-mut",
  "graphql_client",
- "hashbrown 0.14.5",
+ "hashbrown 0.15.2",
  "headers",
  "http 1.3.1",
  "http-body-util",
@@ -1044,6 +1047,7 @@ dependencies = [
  "hyperast_tsquery",
  "hyperast_vcs_git",
  "jemallocator",
+ "lock_api",
  "log",
  "nohash-hasher",
  "num",
@@ -1722,6 +1726,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
+name = "clashmap"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8a055b1f1bf558eae4959f6dd77cf2d7d50ae1483928e60ef21ca5a24fd4321"
+dependencies = [
+ "crossbeam-utils",
+ "hashbrown 0.15.2",
+ "lock_api",
+ "parking_lot_core 0.9.10",
+ "polonius-the-crab",
+ "replace_with",
+]
+
+[[package]]
 name = "clean-path"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1889,6 +1907,12 @@ dependencies = [
  "cfg-if",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "const-chunks"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92d63d857efc8e722f18e9e2bbdd32b53084211090eb4b3df5d3170eddd0c76d"
 
 [[package]]
 name = "const-random"
@@ -3357,6 +3381,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "get-many-mut"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e1027d8e4b47b5b11577479d544a4054c29e692115c5c6e782c29f37066a2f7"
+
+[[package]]
 name = "gethostname"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3724,6 +3754,8 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash",
 ]
 
@@ -3847,6 +3879,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3ede5cfa60c958e60330d65163adbc4211e15a2653ad80eb0cce878de120121"
 dependencies = [
  "rayon",
+]
+
+[[package]]
+name = "higher-kinded-types"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "561985554c8b8d4808605c90a5f1979cc6c31a5d20b78465cd59501233c6678e"
+dependencies = [
+ "never-say-never",
 ]
 
 [[package]]
@@ -4068,6 +4109,7 @@ dependencies = [
  "hyperast_gen_ts_java",
  "hyperast_gen_ts_xml",
  "image",
+ "itertools 0.10.5",
  "js-sys",
  "lazy_static",
  "log",
@@ -4092,6 +4134,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-highlight",
  "tree-sitter-javascript",
+ "vec_extract_if_polyfill",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-logger",
@@ -4172,6 +4215,7 @@ dependencies = [
  "bitvec",
  "byteorder",
  "cfg-if",
+ "const-chunks",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
  "hyper_diff",
@@ -4400,6 +4444,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-graph",
  "tuples",
+ "vec_extract_if_polyfill",
 ]
 
 [[package]]
@@ -5428,6 +5473,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "never-say-never"
+version = "6.6.666"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf5a574dadd7941adeaa71823ecba5e28331b8313fb2e1c6a5c7e5981ea53ad6"
+
+[[package]]
 name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6301,6 +6352,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22686f4785f02a4fcc856d3b3bb19bf6c8160d103f7a99cc258bddd0251dc7f2"
 
 [[package]]
+name = "polonius-the-crab"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e97ca2c89572ae41bbec1c99498251f87dd5a94e500c5ec19c382dd593dd5ce9"
+dependencies = [
+ "higher-kinded-types",
+ "never-say-never",
+]
+
+[[package]]
 name = "polyglote"
 version = "0.2.0"
 dependencies = [
@@ -6325,6 +6386,7 @@ dependencies = [
  "tree-sitter-query",
  "tree-sitter-typescript",
  "tree-sitter-xml",
+ "vec_extract_if_polyfill",
 ]
 
 [[package]]
@@ -7793,6 +7855,12 @@ name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
+
+[[package]]
+name = "replace_with"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 
 [[package]]
 name = "reqwest"
@@ -10055,6 +10123,12 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vec_extract_if_polyfill"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40c9cb5fb67c2692310b6eb3fce7dd4b6e4c9a75be4f2f46b27f0b2b7799759c"
 
 [[package]]
 name = "vec_map"

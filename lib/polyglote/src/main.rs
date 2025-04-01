@@ -1,5 +1,3 @@
-#![feature(iter_collect_into)]
-#![feature(extract_if)]
 use std::collections::BTreeMap;
 mod macr;
 
