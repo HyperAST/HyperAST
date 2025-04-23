@@ -54,7 +54,7 @@ criterion = { version = "0.5.1", features = [
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    "real_blackbox",
+    # "real_blackbox" # need nightly
 ] }
 hyperast_tsquery = { workspace = true }
 hyperast_gen_ts_tsquery = { workspace = true }
