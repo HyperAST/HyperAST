@@ -3,19 +3,21 @@
 //! Trying to make this one applicable directly on subtrees, ie. immediated/shallow
 
 use hyperast::{
-    position::TreePathMut, tree_gen::{self, WithLabel}, types::{
+    position::TreePathMut,
+    tree_gen::{self, WithLabel},
+    types::{
         self, ETypeStore, HyperAST, HyperASTShared, Role, RoleStore, WithRoles, WithSerialization,
         WithStats,
-    }
+    },
 };
 use std::{fmt::Debug, vec};
 #[cfg(feature = "tsg")]
 use tree_sitter_graph::{
-    graph::{NodeLender, NodeLending, NodesLending, NNN},
     MatchLender, MatchLending, MatchesLending, QueryWithLang,
+    graph::{NNN, NodeLender, NodeLending, NodesLending},
 };
 
-use crate::{hyperast_cursor::NodeR, CaptureId};
+use crate::{CaptureId, hyperast_cursor::NodeR};
 
 impl<HAST: HyperASTShared, Acc: WithLabel, Idx, P: Clone> From<Node<HAST, Acc, Idx, P>>
     for NodeR<P>
@@ -27,9 +29,7 @@ impl<HAST: HyperASTShared, Acc: WithLabel, Idx, P: Clone> From<Node<HAST, Acc, I
 }
 
 #[cfg(feature = "tsg")]
-impl<P: Clone + std::hash::Hash> tree_sitter_graph::graph::SimpleNode
-    for NodeR<P>
-{
+impl<P: Clone + std::hash::Hash> tree_sitter_graph::graph::SimpleNode for NodeR<P> {
     fn id(&self) -> usize {
         use std::hash::Hasher;
         let mut hasher = std::hash::DefaultHasher::new();
@@ -123,8 +123,8 @@ where
         self.0.has_child_with_field_id(field_id)
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        self.0.equal(&other.0)
+    fn equal(&self, other: &Self, text_provider: <Self as super::TextLending<'_>>::TP) -> bool {
+        self.0.equal(&other.0, text_provider)
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
@@ -622,7 +622,6 @@ where
     &'acc Acc: WithLabel,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
-
     fn kind(&self) -> &'static str {
         use hyperast::types::HyperType;
         self.0.kind().as_static_str()
@@ -886,7 +885,7 @@ where
         &self,
         index: Self::I,
     ) -> impl tree_sitter_graph::graph::NodeLender
-           + tree_sitter_graph::graph::NodeLending<'_, Node = NNN<'_, '_, Self>> {
+    + tree_sitter_graph::graph::NodeLending<'_, Node = NNN<'_, '_, Self>> {
         CapturedNodesIter::<HAST, &'acc Acc> {
             stores: self.stores.clone(),
             index,

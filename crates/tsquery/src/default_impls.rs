@@ -204,15 +204,15 @@ impl<'a> super::Node for tree_sitter::Node<'a> {
         self.child_by_field_id(field_id).is_some()
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        self.id() == other.id()
+    fn equal(&self, other: &Self, text_provider: <Self as super::TextLending<'_>>::TP) -> bool {
+        self.text(text_provider) == other.text(text_provider)
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
         use std::cmp::Ordering::*;
         let left = self;
         let right = other;
-        if !left.equal(right) {
+        if left.id() != right.id() {
             let left_start = left.start_byte();
             let right_start = right.start_byte();
             if left_start < right_start {

@@ -53,11 +53,7 @@ where
         Self: Sized,
     {
         let mut s = self.clone();
-        if s.pos.up() {
-            Some(s)
-        } else {
-            None
-        }
+        if s.pos.up() { Some(s) } else { None }
     }
 }
 
@@ -307,6 +303,19 @@ impl<'a, 'hast, HAST: HyperAST> super::TextLending<'a> for self::Node<'hast, HAS
     type TP = &'hast <HAST as HyperAST>::LS;
 }
 
+impl<'hast, HAST: HyperAST> PartialEq for self::Node<'hast, HAST>
+where
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.pos == other.pos
+    }
+}
+
 impl<'hast, HAST: HyperAST> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
@@ -361,15 +370,15 @@ where
         child_by_role(self.stores, &mut slf.pos, role).is_some()
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        &self.pos == &other.pos
+    fn equal(&self, other: &Self, _text_provider: <Self as super::TextLending<'_>>::TP) -> bool {
+        self.pos.node() == other.pos.node()
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
         use std::cmp::Ordering::*;
         let left = self;
         let right = other;
-        if !left.equal(right) {
+        if left != right {
             return self.pos.cmp(&other.pos);
         }
         Equal
@@ -384,6 +393,19 @@ where
 
 impl<'a, 'b, 'hast, HAST: HyperAST> super::TextLending<'a> for self::NodeRef<'b, 'hast, HAST> {
     type TP = &'hast <HAST as HyperAST>::LS;
+}
+
+impl<'a, 'hast, HAST: HyperAST> PartialEq for self::NodeRef<'a, 'hast, HAST>
+where
+    HAST::IdN: std::fmt::Debug + Copy,
+    HAST::TS: RoleStore,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithPrecompQueries,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.pos == other.pos
+    }
 }
 
 impl<'a, 'hast, HAST: HyperAST> super::Node for self::NodeRef<'a, 'hast, HAST>
@@ -440,22 +462,17 @@ where
         child_by_role(self.stores, &mut slf.pos, role).is_some()
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        &self.pos == &other.pos
+    fn equal(&self, other: &Self, _text_provider: <Self as super::TextLending<'_>>::TP) -> bool {
+        self.pos.node() == other.pos.node()
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
-        use std::cmp::Ordering::*;
-        let left = self;
-        let right = other;
-        if !left.equal(right) {
-            return self.pos.cmp(&other.pos);
-        }
-        Equal
+        self.pos.cmp(&other.pos)
     }
+
     fn text<'s, 'l>(
         &'s self,
-        text_provider: <Self as super::TextLending<'l>>::TP,
+        _text_provider: <Self as super::TextLending<'l>>::TP,
     ) -> super::BiCow<'s, 'l, str> {
         text(self.stores, &self.pos)
     }
