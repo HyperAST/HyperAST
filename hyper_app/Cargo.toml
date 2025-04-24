@@ -118,8 +118,13 @@ syntect = { version = "5", features = [
 web-sys = "^0.3.70"
 
 [target.'cfg(all(target_os = "macos", not(target_arch = "wasm32")))'.dependencies]
-cocoa = "0.25.0"
-objc = "0.2.7"
+objc2 = "0.5.2"
+objc2-foundation = { version = "0.2.2", features = ["NSUserDefaults"] }
+objc2-app-kit = { version = "0.2.2", features = [
+    "NSLayoutConstraint",
+    "NSColorSpace",
+    "objc2-quartz-core",
+] }
 
 [features]
 default = ["serde"]
