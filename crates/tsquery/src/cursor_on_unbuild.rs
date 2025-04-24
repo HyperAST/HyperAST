@@ -531,28 +531,42 @@ where
         Equal
     }
 
-    fn text<'s, 'l>(&'s self, _tp: <Self as super::TextLending<'l>>::TP) -> super::BB<'s, 'l, str> {
+    fn text<'s, 'l>(&'s self, _tp: <Self as super::TextLending<'l>>::TP) -> super::BiCow<'s, 'l, str> {
         if let Some(id) = self.pos.node() {
             let n = self.stores.resolve(id);
             if n.has_children() {
                 // dbg!();
-                return super::BB::B("".into());
+                if cfg!(debug_assertions) {
+                    unimplemented!("We can do the serialization, but in general I think it should not be done during the preprocessing phase as it circumvent the purpose of code patterns. Instead the code should be properly described as a pattern.")
+                }
+                log::error!("trying to serialize a subtree for pattern matching during the construction of the HyperAST. You should instead properly describe your code pattern");
+                return super::BiCow::B("".into()); // silently returns
+                // TODO implement the serialization in another function, in case it is needed for a legitimate purpose.
                 // let r = hyperast::nodes::TextSerializer::new(self.stores, *id).to_string();
                 // return r.into();
             }
             if let Some(l) = n.try_get_label() {
                 let ls = self.stores.label_store();
                 let l = ls.resolve(l);
-                return super::BB::A(l);
+                return super::BiCow::A(l);
             }
-            super::BB::B("".into())
+            super::BiCow::B("".into())
         } else if !self.acc.child_count() == 0 {
-            todo!()
+            if cfg!(debug_assertions) {
+                unimplemented!("We can do the serialization, but in general I think it should not be done during the preprocessing phase as it circumvent the purpose of code patterns. Instead the code should be properly described as a pattern.")
+            }
+            log::error!("trying to serialize a subtree for pattern matching during the construction of the HyperAST. You should instead properly describe your code pattern");
+            super::BiCow::B("".into()) // silently returns
+            // TODO implement the serialization in another function, in case it is needed for a legitimate purpose.
+            // let mut buf = String::new();
+            // for id in self.acc.children() {
+            //     buf += &hyperast::nodes::TextSerializer::new(&self.stores, *id).to_string();
+            // }
+            // super::BiCow::Owned(buf)
         } else if let Some(label) = &self.label {
-            todo!()
-            // label.as_ref().into()
+            super::BiCow::A(label.as_ref())
         } else {
-            super::BB::B("".into())
+            super::BiCow::B("".into())
         }
     }
 }

@@ -215,7 +215,7 @@ fn bench_baseline(
             .collect();
         b.iter(|| {
             let mut count = 0;
-            for (q, t, text) in f.into_iter() {
+            for (q, t, text) in f.iter() {
                 let mut cursor = tree_sitter::QueryCursor::default();
                 count += black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
             }

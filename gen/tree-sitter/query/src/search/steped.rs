@@ -9,7 +9,7 @@
 
 const PATTERN_DONE_MARKER: u16 = u16::MAX;
 const NONE: u16 = u16::MAX;
-const WILDCARD_SYMBOL: Symbol = Symbol(0);
+const WILDCARD_SYMBOL: Symbol = Symbol::WILDCARD_SYMBOL;
 
 // #define MAX_STEP_CAPTURE_COUNT 3
 const MAX_STEP_CAPTURE_COUNT: usize = 3;
@@ -23,24 +23,7 @@ struct StepId(usize);
 struct CaptureListId(usize);
 struct PatternId(usize);
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub struct Symbol(u16);
-
-impl Symbol {
-    const ERROR: Symbol = Symbol(u16::MAX - 1);
-    const NONE: Symbol = Symbol(u16::MAX);
-    const END: Symbol = Symbol(0);
-
-    fn to_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl From<u16> for Symbol {
-    fn from(value: u16) -> Self {
-        Symbol(value)
-    }
-}
+pub use hyperast_tsquery::Symbol;
 
 pub struct Query {
     q: *mut crate::search::steped::TSQuery,
@@ -836,100 +819,9 @@ impl Status for TSStatus {
     }
 }
 
-pub trait TextLending<'a> {
-    type TP: Copy;
-}
-pub trait Node: Clone + for<'a> TextLending<'a> {
-    type IdF;
-
-    fn symbol(&self) -> Symbol;
-
-    fn is_named(&self) -> bool;
-    fn str_symbol(&self) -> &str;
-
-    fn start_point(&self) -> tree_sitter::Point;
-
-    // fn child_by_field_id(&self, field_id: FieldId) -> Option<Self>;
-    fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool;
-
-    fn equal(&self, other: &Self) -> bool;
-    fn compare(&self, other: &Self) -> std::cmp::Ordering;
-    // fn id(&self) -> usize;
-    fn text(&self, text_provider: <Self as TextLending<'_>>::TP) -> std::borrow::Cow<str>;
-    fn text_equal(
-        &self,
-        text_provider: <Self as TextLending<'_>>::TP,
-        other: impl Iterator<Item = u8>,
-    ) -> bool {
-        self.text(text_provider)
-            .as_bytes()
-            .iter()
-            .copied()
-            .eq(other)
-    }
-}
-
-impl<'a, 'b> TextLending<'b> for tree_sitter::Node<'a> {
-    type TP = &'a [u8];
-}
-
-impl<'a> Node for tree_sitter::Node<'a> {
-    type IdF = tree_sitter::ffi::TSFieldId;
-    fn symbol(&self) -> Symbol {
-        self.kind_id().into()
-    }
-
-    fn is_named(&self) -> bool {
-        self.is_named()
-    }
-
-    fn str_symbol(&self) -> &str {
-        self.kind()
-    }
-
-    fn start_point(&self) -> tree_sitter::Point {
-        self.start_position()
-    }
-
-    fn has_child_with_field_id(&self, field_id: tree_sitter::ffi::TSFieldId) -> bool {
-        self.child_by_field_id(field_id).is_some()
-    }
-
-    fn equal(&self, other: &Self) -> bool {
-        self.id() == other.id()
-    }
-
-    fn compare(&self, other: &Self) -> std::cmp::Ordering {
-        use std::cmp::Ordering::*;
-        let left = self;
-        let right = other;
-        if !left.equal(right) {
-            let left_start = left.start_byte();
-            let right_start = right.start_byte();
-            if left_start < right_start {
-                return Less;
-            } else if left_start > right_start {
-                return Greater;
-            }
-            let left_node_count = left.end_byte();
-            let right_node_count = right.end_byte();
-            if left_node_count > right_node_count {
-                return Less;
-            } else if left_node_count < right_node_count {
-                return Greater;
-            }
-        }
-        Equal
-    }
-    // type TP<'b> = &'a [u8];
-    fn text(&self, text_provider: <Self as TextLending<'_>>::TP) -> std::borrow::Cow<str> {
-        self.utf8_text(text_provider).unwrap().into()
-    }
-
-    // fn id(&self) -> usize {
-    //     self.id()
-    // }
-}
+use hyperast_tsquery::BiCow;
+use hyperast_tsquery::Node;
+use hyperast_tsquery::TextLending;
 
 // mod analyze;
 

@@ -377,7 +377,7 @@ where
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
-    ) -> super::BB<'s, 'l, str> {
+    ) -> super::BiCow<'s, 'l, str> {
         text(self.stores, &self.pos)
     }
 }
@@ -456,7 +456,7 @@ where
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
-    ) -> super::BB<'s, 'l, str> {
+    ) -> super::BiCow<'s, 'l, str> {
         text(self.stores, &self.pos)
     }
 }
@@ -509,7 +509,7 @@ fn symbol<'hast, HAST: HyperAST>(
 fn text<'hast, 'l, HAST: HyperAST>(
     stores: &'hast HAST,
     pos: &impl AAA<HAST::IdN, HAST::Idx>,
-) -> super::BB<'hast, 'l, str>
+) -> super::BiCow<'hast, 'l, str>
 where
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
@@ -518,18 +518,18 @@ where
     let n = stores.node_store().resolve(&id);
     if n.has_children() {
         let r = hyperast::nodes::TextSerializer::new(stores, id).to_string();
-        return super::BB::O(r);
+        return super::BiCow::Owned(r);
     }
     if let Some(l) = n.try_get_label() {
         let l = stores.label_store().resolve(l);
-        return super::BB::A(l);
+        return super::BiCow::A(l);
     }
     let ty = stores.resolve_type(&id);
     if !ty.is_named() {
-        super::BB::A(ty.as_static_str())
+        super::BiCow::A(ty.as_static_str())
         // ty.to_string().into()
     } else {
-        super::BB::A("".into())
+        super::BiCow::A("".into())
     }
 }
 

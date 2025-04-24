@@ -234,10 +234,10 @@ impl<'a> super::Node for tree_sitter::Node<'a> {
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
-    ) -> super::BB<'s, 'l, str> {
+    ) -> super::BiCow<'s, 'l, str> {
         // self.utf8_text(text_provider).unwrap().into()
         let r = std::str::from_utf8(&text_provider[self.start_byte()..self.end_byte()]).unwrap();
-        super::BB::B(r)
+        super::BiCow::B(r)
     }
 
     // fn id(&self) -> usize {

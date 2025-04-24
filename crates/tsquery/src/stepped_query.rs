@@ -88,7 +88,7 @@ where
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
-    ) -> super::BB<'s, 'l, str> {
+    ) -> super::BiCow<'s, 'l, str> {
         self.0.text(text_provider)
     }
 }
