@@ -8,7 +8,7 @@ use std::{
 use string_interner::DefaultHashBuilder;
 use string_interner::Symbol;
 
-use crate::types::{AnyType, Children, HyperType, NodeId, TypeTrait, TypedNodeId, AAAA};
+use crate::types::{AAAA, AnyType, Children, HyperType, NodeId, TypeTrait, TypedNodeId};
 
 use strum_macros::*;
 #[cfg(feature = "native")]
@@ -281,7 +281,7 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+impl<'a, Id> super::ErasedHolder for HashedNodeRef<'a, Id> {
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if std::any::TypeId::of::<T>() == tid {
             todo!("{:?}", std::any::type_name::<T>())

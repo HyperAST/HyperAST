@@ -1,5 +1,6 @@
-use crate::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
+use super::{Subtr, SubtreeHandle};
 use crate::store::SimpleStores;
+use crate::store::nodes::legion::HashedNodeRef;
 use crate::tree_gen::WithChildren;
 use crate::types::{AnyType, HyperAST, HyperType, Shared, StoreRefAssoc};
 use mlua::prelude::*;
@@ -58,12 +59,12 @@ local LoC = 0
 local b = true
 
 function acc(c)
-  if c.is_comment then
+  if c.is_comment() then
     b = false
   elseif b then
     LoC += c.LoC
     b = true
-  else 
+  else
     b = true
   end
 end
@@ -245,15 +246,12 @@ impl UserData for Ty {
     }
 }
 
-pub struct Subtr<'a, T>(
-    pub T,
-    pub &'a crate::store::nodes::legion::dyn_builder::EntityBuilder,
-);
 impl<'a, T: HyperType> crate::scripting::lua_scripting::Subtree for Subtr<'a, T> {
     fn ty(&self) -> &'static dyn HyperType {
         self.0.as_static()
     }
 }
+
 impl<'a, T: HyperType> UserData for Subtr<'a, T> {}
 
 pub struct SubtrLegion<'a, T>(
@@ -273,12 +271,6 @@ impl<'a, T: HyperType> UserData for SubtrLegion<'a, T> {}
 impl mlua::UserData for AnyType {}
 impl mlua::UserData for HashedNodeRef<'_> {}
 
-pub struct SubtreeHandle<T>(NodeIdentifier, PhantomData<T>);
-impl<T> From<NodeIdentifier> for SubtreeHandle<T> {
-    fn from(value: NodeIdentifier) -> Self {
-        Self(value, PhantomData)
-    }
-}
 impl<T: HyperType + Send + Sync + 'static> mlua::UserData for SubtreeHandle<T> {
     // fn add_fields<'lua, F: LuaUserDataFields<'lua, Self>>(fields: &mut F) {
     //     fields.add_meta_field(name, value);
@@ -380,7 +372,7 @@ impl Acc {
     pub fn finish_with_label<T: HyperType>(
         self,
         subtree: &Subtr<T>,
-        label: String,
+        label: &str,
     ) -> Result<DerivedData> {
         LUA_POOL.with_borrow_mut(|pool| {
             let lua = &mut pool[self.id as usize];
@@ -462,7 +454,7 @@ impl TryFrom<&LuaTable<'_>> for DerivedData {
                         from: v.type_name(),
                         to: "rhai::Dynamic",
                         message: Some(format!("WIP in {}:{}", file!(), line!())),
-                    })
+                    });
                 }
             };
             map.insert(key.into(), value);
@@ -579,11 +571,16 @@ where
     <HAST::TS as crate::types::ETypeStore>::Ty2: HyperType + 'static,
 {
     const USING: bool = true;
+    type Scope = self::Acc;
     fn preprocessing(
         &self,
         ty: <HAST::TS as crate::types::ETypeStore>::Ty2,
-    ) -> std::result::Result<self::Acc, String> {
-        self.clone().init(ty).map_err(|x| x.to_string())
+    ) -> std::result::Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error>
+    {
+        self.clone().init(ty).map_err(|x| x.into())
+    }
+    fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts {
+        &()
     }
 }
 
@@ -593,11 +590,16 @@ where
     <HAST::TS as crate::types::ETypeStore>::Ty2: HyperType + 'static,
 {
     const USING: bool = true;
+    type Scope = self::Acc;
     fn preprocessing(
         &self,
         ty: <HAST::TS as crate::types::ETypeStore>::Ty2,
-    ) -> std::result::Result<self::Acc, String> {
+    ) -> std::result::Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error>
+    {
         (*self).preprocessing(ty)
+    }
+    fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts {
+        &()
     }
 }
 

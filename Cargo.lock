@@ -4360,6 +4360,7 @@ dependencies = [
  "log",
  "num",
  "pretty_assertions",
+ "rayon",
  "serde",
  "tree-sitter",
  "tree-sitter-java 0.23.5",

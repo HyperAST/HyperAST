@@ -24,7 +24,7 @@ mod matching;
 mod pull_requests;
 mod querying;
 mod scriptingv1;
-mod smells;
+pub mod smells;
 pub mod track;
 #[cfg(feature = "tsg")]
 mod tsg;
@@ -422,7 +422,7 @@ fn run_scripting(
         let store = &state.repositories.read().unwrap().processor.main_stores;
         let n = store.node_store.resolve(commit.ast_root);
         let dd = n
-            .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
+            .get_component::<hyperast::scripting::DerivedData>()
             .unwrap();
         let s = dd.0.get(show);
         log::debug!("{show} ! {:?}", s);
@@ -446,7 +446,7 @@ fn run_scripting(
     let stores = &state.repositories.read().unwrap().processor.main_stores;
     let n = stores.node_store.resolve(commit.ast_root);
     let dd = n
-        .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
+        .get_component::<hyperast::scripting::DerivedData>()
         .unwrap();
     let s = dd.0.get(show);
     log::debug!("{:?}", s);

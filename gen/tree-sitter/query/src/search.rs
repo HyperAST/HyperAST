@@ -7,8 +7,8 @@ use crate::auto::tsq_ser_meta::Conv;
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
-use hyperast::store::nodes::legion::NodeIdentifier;
 use hyperast::store::SimpleStores;
+use hyperast::store::nodes::legion::NodeIdentifier;
 use hyperast::types::{HyperAST, Labeled};
 
 mod preprocess;
@@ -329,11 +329,7 @@ pub fn ts_query2_with_label_hash(
     text: &[u8],
 ) -> Option<(legion::Entity, u32)> {
     let mut md_cache = Default::default();
-    let mut query_tree_gen = TsQueryTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores,
-        md_cache: &mut md_cache,
-    };
+    let mut query_tree_gen = TsQueryTreeGen::new(stores, &mut md_cache);
 
     let tree = match crate::legion::tree_sitter_parse(text) {
         Ok(t) => t,

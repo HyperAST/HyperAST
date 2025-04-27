@@ -97,6 +97,8 @@ harness = false
 
 [features]
 default = ["impl"]
+# default = ["impl", "subtree-stats", "bevy"]
+
 legion = ["hyperast/legion", "dep:legion"]
 impact = [
     "dep:string-interner",
@@ -120,3 +122,4 @@ tsg = [
 subtree-stats = ["hyperast/subtree-stats"]
 scripting = ["hyperast/scripting"]
 all_examples = []
+bevy = ["hyperast/bevy_ecs"]

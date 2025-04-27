@@ -15,11 +15,10 @@ use hyperast::{
         nodes::{DefaultNodeStore as NodeStore, legion::NodeIdentifier},
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space,
-        parser::{Node as _, TreeCursor},
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
         PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
-        WithByteRange, ZippedTreeGen,
+        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
     },
     types::LabelStore as _,
 };

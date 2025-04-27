@@ -1031,10 +1031,16 @@ where
     HAST::TS: ETypeStore,
 {
     const USING: bool;
+    #[cfg(feature = "scripting")]
+    type Scope: crate::scripting::Accumulable + crate::scripting::Finishable;
+    #[cfg(not(feature = "scripting"))]
+    type Scope: crate::scripting::Scriptable;
     fn preprocessing(
         &self,
         ty: <HAST::TS as ETypeStore>::Ty2,
-    ) -> Result<crate::scripting::Acc, String>;
+    ) -> Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error>;
+
+    fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts;
 }
 
 impl<HAST: HyperAST, Acc> Prepro<HAST> for NoOpMore<HAST::TS, Acc>
@@ -1042,11 +1048,16 @@ where
     HAST::TS: ETypeStore,
 {
     const USING: bool = false;
+    type Scope = crate::scripting::Acc;
     fn preprocessing(
         &self,
         _t: <HAST::TS as ETypeStore>::Ty2,
-    ) -> Result<crate::scripting::Acc, String> {
-        Ok(todo!())
+    ) -> Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error> {
+        todo!()
+    }
+
+    fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts {
+        todo!()
     }
 }
 

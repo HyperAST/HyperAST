@@ -7,7 +7,7 @@ use legion::{
 use num::ToPrimitive;
 
 use crate::{
-    filter::{Bloom, BloomResult, BloomSize, BF},
+    filter::{BF, Bloom, BloomResult, BloomSize},
     hashed::{NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     impact::serialize::{CachedHasher, Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
@@ -25,8 +25,6 @@ pub type EntryRef<'a> = legion::world::EntryRef<'a>;
 #[derive(ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct HashedNodeRef<'a, T = NodeIdentifier>(pub(super) EntryRef<'a>, PhantomData<T>);
-
-impl crate::types::AAAA for NodeIdentifier {}
 
 impl<'a, T> HashedNodeRef<'a, T> {
     #[doc(hidden)]
@@ -47,6 +45,8 @@ impl<'a, T> From<&'a EntryRef<'a>> for &'a HashedNodeRef<'a, T> {
         HashedNodeRef::ref_cast(value)
     }
 }
+
+impl crate::types::AAAA for NodeIdentifier {}
 
 impl NodeId for NodeIdentifier {
     type IdN = Self;
@@ -598,7 +598,8 @@ impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> crate::types::WithChildr
     }
 
     fn child(&self, idx: &Self::ChildIdx) -> Option<NodeIdentifier> {
-        self.cs().ok()?
+        self.cs()
+            .ok()?
             // .unwrap_or_else(|x| {
             //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
             //     panic!("{}", x)
@@ -693,7 +694,7 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+impl<'a, Id> crate::store::nodes::ErasedHolder for HashedNodeRef<'a, Id> {
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             self.get_component().ok()

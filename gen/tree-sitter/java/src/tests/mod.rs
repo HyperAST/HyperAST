@@ -9,6 +9,10 @@ mod tsg_hyperast;
 #[cfg(all(feature = "tsg", debug_assertions))]
 mod tsqueries_java;
 
+mod test_bevy;
+
+mod test_cases;
+
 // fn f() {
 //     tree_sitter_java::language().node_kind_count();
 // }

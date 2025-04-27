@@ -5,7 +5,7 @@ use hyperast::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{HashedNodeRef, NodeStore},
     },
-    types::{self, Children, NodeId, AAAA},
+    types::{self, AAAA, Children, NodeId},
 };
 
 pub fn as_nospaces2<'a, TS>(

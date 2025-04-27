@@ -3,14 +3,14 @@ use std::sync::Arc;
 
 use super::{Capture, Pattern, Predicate, PreparedMatcher, QuickTrigger};
 
-use hyperast::store::nodes::legion::NodeIdentifier;
 use hyperast::store::SimpleStores;
-use hyperast::types::{HyperAST, Children, Childrn, Labeled, Typed, WithChildren};
+use hyperast::store::nodes::legion::NodeIdentifier;
+use hyperast::types::{Children, Childrn, HyperAST, Labeled, Typed, WithChildren};
 
 use tree_sitter::CaptureQuantifier as Quant;
 
 use crate::auto::tsq_ser_meta::Converter;
-use crate::types::{TsQuery, TStore};
+use crate::types::{TStore, TsQuery};
 
 pub struct PreparingMatcher<Ty, C> {
     root_types: Vec<Ty>,
@@ -69,10 +69,7 @@ impl<Ty, C> From<PreparingMatcher<Ty, C>> for PreparedMatcher<Ty, C> {
 }
 
 impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
-    pub fn new(
-        query_store: &'a SimpleStores<TStore>,
-        query: NodeIdentifier,
-    ) -> Self {
+    pub fn new(query_store: &'a SimpleStores<TStore>, query: NodeIdentifier) -> Self {
         let preparing = Self::new_aux(query_store, query);
 
         preparing.into()
@@ -241,8 +238,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             } else if t == Type::Spaces {
             } else if t == Type::RParen {
             } else if t == Type::AnonymousNode {
-                patterns
-                    .push(Self::process_anonymous_node(query_store, *rule_id, preparing).into())
+                patterns.push(Self::process_anonymous_node(query_store, *rule_id, preparing).into())
             } else if t == Type::Capture {
                 break;
             } else if t == Type::Predicate {

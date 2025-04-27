@@ -12,7 +12,7 @@ hyperast_gen_ts_java = { workspace = true }
 hyperast_gen_ts_xml = { workspace = true }
 hyper_diff = { workspace = true }
 hyperast_vcs_git = { workspace = true }
-hyperast_gen_ts_tsquery = { workspace = true }
+hyperast_gen_ts_tsquery = { workspace = true, features = ["synth_par"] }
 hyperast_tsquery = { workspace = true }
 polyglote = { workspace = true, optional = true }
 
@@ -116,6 +116,9 @@ http-body-util = "0.1.2"
 const-chunks = "0.3.0" # waiting for stabilization
 get-many-mut = "0.1.0" # waiting for stabilization
 lock_api = "0.4.1"
+
+# regex = "1.10.5"
+# glob = "0.3.2"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"

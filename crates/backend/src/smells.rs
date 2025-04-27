@@ -1,25 +1,23 @@
 use std::ops::Range;
 
 use axum::Json;
-use code2query::QueryLattice;
 use hashbrown::HashSet;
 use hyper_diff::actions::Actions;
 use hyperast::position::position_accessors::SolvedPosition;
 use hyperast::{
     position::{
-        position_accessors::{RootedPosition, WithPreOrderOffsets},
         TreePathMut,
+        position_accessors::{RootedPosition, WithPreOrderOffsets},
     },
     types::Children,
 };
+use hyperast_gen_ts_tsquery::code2query::QueryLattice;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
 use crate::SharedState;
 
 pub(crate) mod matching;
-
-mod code2query;
 
 mod diffing;
 
@@ -147,7 +145,6 @@ pub(crate) fn smells(
     };
 
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let configs = state.clone();
     let repo_handle = state
         .repositories
         .write()
@@ -184,12 +181,9 @@ pub(crate) fn smells(
     let with_spaces_stores: &hyperast::store::SimpleStores<hyperast_vcs_git::TStore> =
         &repositories.processor.main_stores;
 
-    // NOTE temporary bypass, will be fixed when adding polyglote facilities
-    // SAFETY for now TStores are identical enough to be transmuted
-    // TODO use a proper wrapper
-    // TODO alternatively rework the type store and node types entirely with some compile time links/macros
+    // NOTE temporary solution, will be fixed when adding more polyglote facilities
     let sss: &hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore> =
-        unsafe { std::mem::transmute(with_spaces_stores) };
+        with_spaces_stores.with_ts();
     let meta_gen = hyperast_tsquery::Query::new(&meta_gen, hyperast_gen_ts_java::language())
         .map_err(|x| x.to_string())?;
     let meta_simp = hyperast_tsquery::Query::new(&meta_simp, hyperast_gen_ts_tsquery::language())
@@ -212,8 +206,10 @@ pub(crate) fn smells(
             acc.entry(x.0).or_default().push(x.1);
             acc
         });
-    let query_lattice =
-        QueryLattice::with_examples(sss, ex_map.keys().copied(), &meta_gen, &meta_simp);
+    let query_lattice = QueryLattice::with_examples_by_size_try::<
+        _,
+        hyperast_gen_ts_java::types::TIdN<_>,
+    >(sss, ex_map.keys().copied(), &meta_gen, &meta_simp);
     let bad: Vec<_> = query_lattice
         .iter()
         .filter(|x| 5 < x.1.len() && x.1.len() * 2 < ex_map.len())

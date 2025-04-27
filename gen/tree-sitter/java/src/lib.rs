@@ -1,9 +1,11 @@
 #![recursion_limit = "4096"]
 
+#[cfg(all(feature = "impl", feature = "bevy"))]
+pub mod bevy;
 #[cfg(feature = "impl")]
 pub mod compat;
 #[cfg(feature = "impl")]
-pub mod legion_with_refs;
+pub mod legion_with_refs; // TODO rename and move to a module for construction
 
 pub mod types;
 #[allow(unused)]
