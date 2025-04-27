@@ -185,9 +185,9 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
         label_id: L,
     ) -> M
     where
-        K: 'static + Sized + std::marker::Send + std::marker::Sync,
-        L: 'static + std::marker::Send + std::marker::Sync,
-        Id: 'static + std::marker::Send + std::marker::Sync,
+        K: hyperast::store::nodes::Compo,
+        L: hyperast::store::nodes::Compo,
+        Id: 'static + Send + Sync,
     {
         dyn_builder.add(interned_kind);
         dyn_builder.add(label_id);
@@ -196,7 +196,7 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
         let children_names = self.children_names;
         assert_eq!(children_names.len(), children.len());
         if !children.is_empty() {
-            use hyperast::store::nodes::legion::compo::CS;
+            use hyperast::store::nodes::compo::CS;
             dyn_builder.add(CS(children_names.into_boxed_slice()));
             dyn_builder.add(CS(children.into_boxed_slice()));
         }

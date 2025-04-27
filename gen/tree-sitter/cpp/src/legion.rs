@@ -1,5 +1,6 @@
 use crate::TNode;
 use crate::types::{CppEnabledTypeStore, Type};
+use hyperast::store::nodes::compo;
 use hyperast::store::nodes::legion::dyn_builder;
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
@@ -21,7 +22,7 @@ use hyperast::{
         SimpleStores,
         nodes::{
             DefaultNodeStore as NodeStore, EntityBuilder,
-            legion::{NodeIdentifier, compo, eq_node},
+            legion::{NodeIdentifier, eq_node},
         },
     },
     types::{LabelStore as _, Role},

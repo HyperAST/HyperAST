@@ -4,6 +4,7 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{types::TIdN, TNode};
 use legion::world::EntryRef;
 
+use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
 use hyperast::{
     filter::BloomSize,
     full::FullNode,
@@ -11,11 +12,8 @@ use hyperast::{
     nodes::Space,
     store::{
         nodes::{
-            legion::{
-                compo::{self, NoSpacesCS, CS},
-                HashedNodeRef, NodeIdentifier,
-            },
             DefaultNodeStore as NodeStore, EntityBuilder,
+            legion::{HashedNodeRef, NodeIdentifier},
         },
         SimpleStores,
     },
@@ -195,7 +193,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
-        log::warn!("not retrieving roles");
+        log::trace!("not retrieving roles");
         PreResult::Ok(acc)
     }
     fn pre(

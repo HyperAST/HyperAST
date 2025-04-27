@@ -11,6 +11,7 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
+use hyperast::store::nodes::compo;
 use hyperast::store::nodes::legion::RawHAST;
 use hyperast::types::ETypeStore as _;
 use hyperast::{
@@ -417,7 +418,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
     let children_is_empty = primary.children.is_empty();
     if !acc.status.is_empty() {
-        dyn_builder.add(acc.status);
+        dyn_builder.add(compo::Flags(acc.status));
     }
     let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
     let metrics = metrics.map_hashs(|h| h.build());

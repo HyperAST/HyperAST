@@ -4,6 +4,7 @@ use crate::{
     TNode,
     types::{TStore, Type},
 };
+use hyperast::store::nodes::compo;
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
@@ -30,7 +31,7 @@ use hyperast::{
     filter::BloomSize,
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::Space,
-    store::{SimpleStores, nodes::DefaultNodeStore as NodeStore, nodes::legion::compo},
+    store::{SimpleStores, nodes::DefaultNodeStore as NodeStore},
     tree_gen::{
         AccIndentation, Accumulator, BasicAccumulator, Spaces, ZippedTreeGen, compute_indentation,
         get_spacing, has_final_space,
@@ -809,6 +810,7 @@ where
         self.stores
             .node_store
             .inner
+            .stats()
             .add_height_non_dedup(metrics.height);
         // &metrics.hashs.structt,
 
@@ -886,7 +888,8 @@ where
                 acc.ana.as_ref(),
             );
             #[cfg(feature = "subtree-stats")]
-            vacant.1.1.add_height_dedup(metrics.height, metrics.hashs);
+            vacant.1.1.stats()
+                .add_height_dedup(metrics.height, metrics.hashs);
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
 

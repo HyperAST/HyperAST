@@ -4,20 +4,15 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::TNode;
 use legion::world::EntryRef;
 
+use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
 use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::{
-            legion::{
-                compo::{self, NoSpacesCS, CS},
-                NodeIdentifier,
-            },
-            DefaultNodeStore as NodeStore,
-        },
         SimpleStores,
+        nodes::{DefaultNodeStore as NodeStore, legion::NodeIdentifier},
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space,

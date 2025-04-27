@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-use super::compo::{self, NoSpacesCS, CS};
+use crate::store::nodes::compo::{self, NoSpacesCS, CS};
 
 pub type NodeIdentifier = legion::Entity;
 pub type EntryRef<'a> = legion::world::EntryRef<'a>;

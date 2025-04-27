@@ -1,9 +1,10 @@
 use super::utils_ts::*;
+use crate::store::nodes::compo;
 use crate::store::{
     SimpleStores,
     nodes::{
         DefaultNodeStore as NodeStore,
-        legion::{NodeIdentifier, compo, dyn_builder, eq_node},
+        legion::{NodeIdentifier, dyn_builder, eq_node},
     },
 };
 use crate::tree_gen::{

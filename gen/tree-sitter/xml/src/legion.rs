@@ -4,6 +4,7 @@ use std::{fmt::Debug, vec};
 use legion::world::EntryRef;
 use tuples::CombinConcat;
 
+use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
 use hyperast::{
     filter::BloomSize,
     full::FullNode,
@@ -13,11 +14,7 @@ use hyperast::{
         SimpleStores,
         nodes::{
             DefaultNodeStore as NodeStore,
-            legion::{
-                NodeIdentifier, PendingInsert,
-                compo::{self, CS, NoSpacesCS},
-                eq_node,
-            },
+            legion::{NodeIdentifier, PendingInsert, eq_node},
         },
     },
     tree_gen::{

@@ -1,5 +1,6 @@
 use super::utils_ts::*;
 
+use crate::store::nodes::compo;
 use crate::store::nodes::legion::{RawHAST, dyn_builder};
 use crate::tree_gen::{self, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries};
 use crate::types::{self, HyperType};
@@ -12,7 +13,7 @@ use crate::{
         SimpleStores,
         nodes::{
             DefaultNodeStore as NodeStore,
-            legion::{NodeIdentifier, compo, eq_node},
+            legion::{NodeIdentifier, eq_node},
         },
     },
     tree_gen::{
