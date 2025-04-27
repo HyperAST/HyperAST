@@ -104,7 +104,7 @@ impl Drop for Acc {
     }
 }
 
-use super::{Acc, Prepro};
+use super::{Acc, DerivedData, Prepro};
 
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -424,12 +424,6 @@ impl Acc {
 // static mut TIME_INIT: f64 = 0.0;
 // static mut TIME_ACC: f64 = 0.0;
 // static mut TIME_FINISH: f64 = 0.0;
-
-#[derive(Default)]
-pub struct DerivedData(
-    // good way to improve compatibility and reusability
-    pub rhai::Map,
-);
 
 impl TryFrom<&LuaTable<'_>> for DerivedData {
     type Error = mlua::Error;

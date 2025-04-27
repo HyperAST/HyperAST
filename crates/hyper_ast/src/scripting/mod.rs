@@ -11,6 +11,14 @@ mod exp_mlua;
 #[cfg(feature = "scripting")]
 mod metrics; // TODO migrate to rhai_impl and preprocessing // TODO migrate to lua_impl and preprocessing
 
+#[cfg(feature = "scripting")]
+#[derive(Default)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::prelude::Component))]
+pub struct DerivedData(
+    // good way to improve compatibility and reusability
+    pub rhai::Map,
+);
+
 #[derive(PartialEq, Eq)]
 pub struct Prepro<HAST, Acc> {
     txt: std::sync::Arc<str>,

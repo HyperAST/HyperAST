@@ -26,6 +26,7 @@ pub fn is_cyclomatic_persisted<K: TypeTrait>(t: &K) -> bool {
 /// From https://bitbucket.org/sealuzh/lisa/src/master/lisa-module/src/main/scala/ch/uzh/ifi/seal/lisa/module/analysis/object-oriented/MccAnalysis.scala
 /// same POV https://github.com/qxo/eclipse-metrics-plugin/blob/08e51bd48725494aaa82023716ce659504948610/net.sourceforge.metrics/src/net/sourceforge/metrics/calculators/McCabe.java
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::prelude::Component))]
 pub struct Mcc {
     value: u32,
 }

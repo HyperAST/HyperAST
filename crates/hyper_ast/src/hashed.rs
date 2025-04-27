@@ -38,6 +38,7 @@ pub trait ComputableNodeHashs: NodeHashs {
 }
 
 #[derive(Default, Clone, Copy, Eq)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
 pub struct SyntaxNodeHashs<T: PrimInt> {
     pub structt: T,
     pub label: T,
