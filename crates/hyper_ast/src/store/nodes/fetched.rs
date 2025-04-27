@@ -67,12 +67,12 @@ impl<'de> serde::Deserialize<'de> for LabelIdentifier {
 }
 impl From<crate::store::defaults::LabelIdentifier> for LabelIdentifier {
     fn from(value: crate::store::defaults::LabelIdentifier) -> Self {
-        Self(value)
+        Self(value.0)
     }
 }
 impl From<&crate::store::defaults::LabelIdentifier> for LabelIdentifier {
     fn from(value: &crate::store::defaults::LabelIdentifier) -> Self {
-        Self(*value)
+        Self(value.0)
     }
 }
 impl From<LabelIdentifier> for u32 {
