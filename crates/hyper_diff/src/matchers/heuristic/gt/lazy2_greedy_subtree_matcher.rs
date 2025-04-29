@@ -177,7 +177,7 @@ where
         let mut sib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         let mut psib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         let mut p_in_p_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
-        dbg!(&ambiguous_mappings.len());
+        log::debug!("Ambiguous mappings: {}", ambiguous_mappings.len());
         ambiguous_mappings.sort_by(|a, b| {
             let cached_coef_sib = |l: &(Dsrc::IdD, Ddst::IdD)| {
                 sib_sim
@@ -400,7 +400,7 @@ where
             dst_arena,
         );
         let match_init_t = now.elapsed().as_secs_f64();
-        dbg!(match_init_t);
+        log::debug!("Match init time: {:.6}s", match_init_t);
         while src_trees.peek_height() != -1 && dst_trees.peek_height() != -1 {
             // println!("multi_mappings={}", multi_mappings.len());
             while src_trees.peek_height() != dst_trees.peek_height() {
