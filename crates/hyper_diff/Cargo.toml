@@ -11,7 +11,7 @@ enum-map = "2.4.1"
 bitvec = "1.0.1"
 str-distance = "0.1.0"
 log = { version = "0.4.6" }
-hyperast = { workspace = true }
+hyperast = { workspace = true, features = ["native", "legion"] }
 
 logging_timer = "1.1.0"
 
@@ -26,9 +26,26 @@ criterion = { version = "0.4", features = [
 env_logger = "0.11.3"
 hungarian = "1.1.1"
 
+hyperast_gen_ts_java = { workspace = true, features = ["impl"] }
+
+
 [lib]
 bench = false
 
 [[bench]]
 name = "compressed_path_iter"
 harness = false
+
+[[bench]]
+name = "qgrams"
+harness = false
+
+[[bench]]
+name = "simple_tree"
+harness = false
+features = ["java"]
+
+[[bench]]
+name = "legion_tree"
+harness = false
+features = ["java"]
