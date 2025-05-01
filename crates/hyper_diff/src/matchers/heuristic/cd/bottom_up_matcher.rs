@@ -1,10 +1,9 @@
 use crate::{
     decompressed_tree_store::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice,
-        PostOrder, PostOrderIterable, Shallow, ShallowDecompressedTreeStore,
+        PostOrder, PostOrderIterable,
     },
-    matchers::{mapping_store::MonoMappingStore, Mapping},
-    utils::sequence_algorithms::longest_common_subsequence,
+    matchers::{mapping_store::MonoMappingStore, similarity_metrics},
 };
 use hyperast::types::{
     self, DecompressedFrom, HashKind, HyperAST, NodeId, NodeStore, Tree, TypeStore, WithHashs,
@@ -103,14 +102,27 @@ where
             let dst_tree = dst_trees.next().unwrap();
             let number_of_leaves = self.number_of_leaves_src(&src_tree);
 
-            log::trace!("Examining source tree with {} leaves", number_of_leaves);
+            log::debug!("Examining source tree with {} leaves", number_of_leaves);
 
-            if self.is_mapping_allowed(&src_tree, &dst_tree)
-                && !(self.src_arena.children(&src_tree).is_empty()
-                    || self.dst_arena.children(&dst_tree).is_empty())
-            {
-                let similarity = 0.7; // TODO: implement similarity metric
-                log::trace!("Mapping allowed, similarity: {}", similarity);
+            let mapping_allowed = self.is_mapping_allowed(&src_tree, &dst_tree);
+            let src_is_leaf = self.src_arena.children(&src_tree).is_empty();
+            let dst_is_leaf = self.dst_arena.children(&dst_tree).is_empty();
+
+            log::debug!(
+                "Mapping allowed: {}, source tree is leaf: {}, destination tree is leaf: {}",
+                mapping_allowed,
+                src_is_leaf,
+                dst_is_leaf
+            );
+
+            if mapping_allowed && !(src_is_leaf || dst_is_leaf) {
+                let similarity = similarity_metrics::chawathe_similarity(
+                    &self.src_arena.descendants(&src_tree),
+                    &self.dst_arena.descendants(&dst_tree),
+                    &self.mappings,
+                );
+
+                log::debug!("Mapping allowed, similarity: {}", similarity);
 
                 if (number_of_leaves > max_number_of_leaves && similarity >= struct_sim_threshold1)
                     || (number_of_leaves <= max_number_of_leaves
@@ -122,6 +134,7 @@ where
                 }
             }
         }
+        log::debug!("Completed mapping process");
         ()
     }
 
@@ -140,7 +153,14 @@ where
     /// This function checks if a mapping between two nodes is allowed.
     /// It returns true if the nodes are of the same type, and are both unmapped.
     fn is_mapping_allowed(&self, src_tree: &M::Src, dst_tree: &M::Dst) -> bool {
-        if self.mappings.get_src(dst_tree).is_some() || self.mappings.get_dst(src_tree).is_none() {
+        let src_linked = self.mappings.get_src(dst_tree).is_some();
+        let dst_linked = self.mappings.get_dst(src_tree).is_some();
+
+        log::debug!("Checking mapping between {:?} and {:?}", src_tree, dst_tree);
+        log::debug!("Source linked: {}", src_linked);
+        log::debug!("Destination linked: {}", dst_linked);
+
+        if src_linked || dst_linked {
             return false;
         }
 
@@ -150,7 +170,62 @@ where
         let src_type = self.stores.resolve_type(&original_src);
         let dst_type = self.stores.resolve_type(&original_dst);
 
+        log::debug!("Source type: {:?}", src_type);
+        log::debug!("Destination type: {:?}", dst_type);
+
         src_type == dst_type
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+    use crate::{
+        decompressed_tree_store::CompletePostOrder,
+        matchers::{mapping_store::DefaultMappingStore, Decompressible, Mapper},
+        tests::examples::example_simple,
+        tree::simple_tree::vpair_to_stores,
+    };
+
+    fn init() {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Debug)
+            .try_init();
+    }
+
+    #[test]
+    fn test_single_node_match() {
+        init();
+        // Create two identical single-node trees
+        let (stores, src, dst) = vpair_to_stores(example_simple());
+
+        log::info!("Initialized logging");
+
+        // Create the mapping structure
+        let mapping = Mapper {
+            hyperast: &stores,
+            mapping: crate::matchers::Mapping {
+                src_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
+                    &stores, &src,
+                ),
+                dst_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
+                    &stores, &dst,
+                ),
+                mappings: DefaultMappingStore::default(),
+            },
+        };
+
+        // Run the bottom-up matcher
+        let result = BottomUpMatcher::match_it(mapping);
+
+        // Verify that the root nodes are mapped to each other
+        let mapped_root = result
+            .mapping
+            .mappings
+            .get_dst(&result.mapping.src_arena.root());
+        assert!(mapped_root.is_some());
+        assert_eq!(mapped_root.unwrap(), result.mapping.dst_arena.root());
+    }
+}
