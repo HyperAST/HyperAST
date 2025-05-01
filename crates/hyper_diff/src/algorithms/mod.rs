@@ -3,6 +3,7 @@ use crate::{
     matchers::{mapping_store::VecStore, Mapper},
 };
 
+pub mod change_distiller;
 pub mod gumtree;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
