@@ -9,13 +9,10 @@ mod tsg_hyperast;
 #[cfg(all(feature = "tsg", debug_assertions))]
 mod tsqueries_java;
 
+#[cfg(all(feature = "impl", feature = "bevy"))]
 mod test_bevy;
 
 mod test_cases;
-
-// fn f() {
-//     tree_sitter_java::language().node_kind_count();
-// }
 
 #[test]
 fn type_test_generic_eq() {
