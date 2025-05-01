@@ -3,9 +3,9 @@ use super::{
     PostOrderIterable, ShallowDecompressedTreeStore,
 };
 use crate::matchers::Decompressible;
-use hyperast::types::{self, Children, Childrn, HyperAST, WithChildren};
 use hyperast::PrimInt;
-use num_traits::{cast, one, zero, ToPrimitive};
+use hyperast::types::{self, Children, Childrn, HyperAST, WithChildren};
+use num_traits::{ToPrimitive, cast, one, zero};
 use std::fmt::Debug;
 
 pub struct BasicPostOrder<IdN, IdD> {
@@ -185,21 +185,19 @@ impl<IdN, IdD: PrimInt> BasicPostOrder<IdN, IdD> {
     where
         IdN: types::NodeId<IdN = IdN>,
     {
+        struct Element<IdC, Idx, IdD> {
+            curr: IdC,
+            idx: Idx,
+            lld: IdD,
+        }
         let mut stack = vec![Element {
             curr: root.clone(),
             idx: zero(),
             lld: IdD::zero(),
-            children: vec![],
         }];
         let mut llds: Vec<IdD> = vec![];
         let mut id_compressed = vec![];
-        while let Some(Element {
-            curr,
-            idx,
-            lld,
-            children,
-        }) = stack.pop()
-        {
+        while let Some(Element { curr, idx, lld }) = stack.pop() {
             let x = store.resolve(&curr);
             let children1: Option<
                 _, // &<<S as NLending<'_, T::TreeId>>::N as types::CLending<'_, _, T::TreeId>>::Children,
@@ -212,22 +210,19 @@ impl<IdN, IdD: PrimInt> BasicPostOrder<IdN, IdD> {
                     curr,
                     idx: idx + one(),
                     lld,
-                    children,
                 });
                 stack.push(Element {
                     curr: child.clone(),
                     idx: zero(),
                     lld: zero(),
-                    children: vec![],
                 });
             } else {
                 let curr_idx = cast(id_compressed.len()).unwrap();
-                let value = if l.is_some() { curr_idx } else { lld };
+                let value = if l.is_none() { curr_idx } else { lld };
                 if let Some(tmp) = stack.last_mut() {
                     if tmp.idx == one() {
                         tmp.lld = value;
                     }
-                    tmp.children.push(curr_idx);
                 }
                 llds.push(value);
                 id_compressed.push(curr);
@@ -241,12 +236,6 @@ impl<IdN, IdD: PrimInt> BasicPostOrder<IdN, IdD> {
             llds,
         }
     }
-}
-struct Element<IdC, Idx, IdD> {
-    curr: IdC,
-    idx: Idx,
-    lld: IdD,
-    children: Vec<IdD>,
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD>
@@ -383,11 +372,7 @@ where
             return None;
         }
         let sib = lld - num_traits::one();
-        if &sib < p_lld {
-            None
-        } else {
-            Some(sib)
-        }
+        if &sib < p_lld { None } else { Some(sib) }
     }
 }
 
