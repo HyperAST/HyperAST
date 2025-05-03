@@ -1,5 +1,3 @@
-#![feature(iter_intersperse)]
-#![feature(entry_insert)]
 
 pub mod compare;
 pub mod comparisons;
@@ -655,7 +653,7 @@ where
             "Help" | "h" => {
                 println!(
                     "Help navigating references:
-                NO\tn: default go back up to declarations 
+                NO\tn: default go back up to declarations
                 Quit\tq: quit the whole prompt, you can also CTRL-C
                 Help\th: current manual
                 !#: select a range of a reference found in the baseline

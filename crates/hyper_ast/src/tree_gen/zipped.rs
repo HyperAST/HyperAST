@@ -1,14 +1,14 @@
-use super::parser;
-use super::parser::Visibility;
 use super::Accumulator;
+use super::P;
 use super::Parents;
 use super::TotalBytesGlobalData;
 use super::TreeGen;
-use super::P;
+use super::parser;
+use super::parser::Visibility;
 
-use super::parser::TreeCursor as _;
 use super::GlobalData as _;
 use super::WithByteRange as _;
+use super::parser::TreeCursor as _;
 
 /// Define a zipped visitor, where you mostly have to implement,
 /// [`ZippedTreeGen::pre`] going down,
@@ -75,7 +75,7 @@ where
 
     fn stores(&mut self) -> &mut Self::Stores;
 
-    fn gen(
+    fn r#gen(
         &mut self,
         text: &Self::Text,
         stack: &mut Parents<Self::Acc>,

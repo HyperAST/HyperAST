@@ -5,7 +5,7 @@ use hyperast::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{HashedNodeRef, NodeStore},
     },
-    types::{self, Children, NodeId, AAAA},
+    types::{self, AAAA, Children, NodeId},
 };
 
 pub fn as_nospaces2<'a, TS>(
@@ -180,20 +180,20 @@ impl<'a> hyperast::types::ErasedHolder for NoSpaceWrapper<'a, MIdN<NodeIdentifie
         self.0.unerase_ref(tid)
     }
 
-    unsafe fn unerase_ref_unchecked<T: 'static + types::Compo>(
+    unsafe fn unerase_ref_unchecked<T: hyperast::types::Compo>(
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {
-        self.0.unerase_ref_unchecked(tid)
+        unsafe { self.0.unerase_ref_unchecked(tid) }
     }
 }
 
-impl<'a> hyperast::types::ErasedHolder for NoSpaceWrapper<'a, NodeIdentifier> {
-    unsafe fn unerase_ref_unchecked<T: 'static + hyperast::types::Compo>(
+impl<'a> hyperast::store::nodes::ErasedHolder for NoSpaceWrapper<'a, NodeIdentifier> {
+    unsafe fn unerase_ref_unchecked<T: 'static + hyperast::store::nodes::Compo>(
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {
-        self.0.unerase_ref_unchecked(tid)
+        unsafe { self.0.unerase_ref_unchecked(tid) }
     }
 
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {

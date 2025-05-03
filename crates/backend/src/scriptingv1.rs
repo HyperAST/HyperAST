@@ -13,15 +13,15 @@ mod stats;
 use crate::SharedState;
 use average::Merge;
 use axum::Json;
+use hyperast::store::nodes::compo::Flags;
 use hyperast::types::HyperAST;
 use hyperast::{
     store::defaults::NodeIdentifier,
     types::{HyperType, LabelStore, Labeled, WithChildren, WithStats},
 };
-use num::ToPrimitive;
 use rhai::{
-    packages::{BasicArrayPackage, CorePackage, Package},
     Array, Dynamic, Engine, Instant, Scope,
+    packages::{BasicArrayPackage, CorePackage, Package},
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -385,9 +385,9 @@ fn simple_aux(
                 let node_store = &stores.node_store;
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
-                use hyperast_vcs_git::maven::SemFlags;
-                n.get_component::<EnumSet<SemFlags>>()
-                    .map_or(false, |x| x.contains(SemFlags::IsMavenModule))
+                use hyperast_vcs_git::maven::SemFlag;
+                n.get_component::<Flags<EnumSet<SemFlag>>>()
+                    .map_or(false, |x| x.contains(SemFlag::IsMavenModule))
             });
             let s = state.clone();
             filter_engine.register_fn("hold_maven_submodule", move || {
@@ -395,9 +395,9 @@ fn simple_aux(
                 let node_store = &stores.node_store;
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
-                use hyperast_vcs_git::maven::SemFlags;
-                n.get_component::<EnumSet<SemFlags>>()
-                    .map_or(false, |x| x.contains(SemFlags::HoldMavenSubModule))
+                use hyperast_vcs_git::maven::SemFlag;
+                n.get_component::<Flags<EnumSet<SemFlag>>>()
+                    .map_or(false, |x| x.contains(SemFlag::HoldMavenSubModule))
             });
             let s = state.clone();
             filter_engine.register_fn("hold_java_folder", move || {
@@ -405,10 +405,11 @@ fn simple_aux(
                 let node_store = &stores.node_store;
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
-                use hyperast_vcs_git::maven::SemFlags;
-                n.get_component::<EnumSet<SemFlags>>().map_or(false, |x| {
-                    x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
-                })
+                use hyperast_vcs_git::maven::SemFlag;
+                n.get_component::<Flags<EnumSet<SemFlag>>>()
+                    .map_or(false, |x| {
+                        x.contains(SemFlag::HoldMainFolder) || x.contains(SemFlag::HoldTestFolder)
+                    })
             });
             add_utils(&mut filter_engine);
             let prepared: Dynamic = filter_engine
@@ -507,9 +508,9 @@ fn simple_aux(
             let node_store = &stores.node_store;
             let n = node_store.resolve(current);
             use enumset::EnumSet;
-            use hyperast_vcs_git::maven::SemFlags;
-            n.get_component::<EnumSet<SemFlags>>()
-                .map_or(false, |x| x.contains(SemFlags::IsMavenModule))
+            use hyperast_vcs_git::maven::SemFlag;
+            n.get_component::<Flags<EnumSet<SemFlag>>>()
+                .map_or(false, |x| x.contains(SemFlag::IsMavenModule))
         });
         let s = state.clone();
         acc_engine.register_fn("hold_maven_submodule", move || {
@@ -517,9 +518,9 @@ fn simple_aux(
             let node_store = &stores.node_store;
             let n = node_store.resolve(current);
             use enumset::EnumSet;
-            use hyperast_vcs_git::maven::SemFlags;
-            n.get_component::<EnumSet<SemFlags>>()
-                .map_or(false, |x| x.contains(SemFlags::HoldMavenSubModule))
+            use hyperast_vcs_git::maven::SemFlag;
+            n.get_component::<Flags<EnumSet<SemFlag>>>()
+                .map_or(false, |x| x.contains(SemFlag::HoldMavenSubModule))
         });
         let s = state.clone();
         acc_engine.register_fn("hold_java_folder", move || {
@@ -527,10 +528,11 @@ fn simple_aux(
             let node_store = &stores.node_store;
             let n = node_store.resolve(current);
             use enumset::EnumSet;
-            use hyperast_vcs_git::maven::SemFlags;
-            n.get_component::<EnumSet<SemFlags>>().map_or(false, |x| {
-                x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
-            })
+            use hyperast_vcs_git::maven::SemFlag;
+            n.get_component::<Flags<EnumSet<SemFlag>>>()
+                .map_or(false, |x| {
+                    x.contains(SemFlag::HoldMainFolder) || x.contains(SemFlag::HoldTestFolder)
+                })
         });
         #[cfg(feature = "impact")]
         {

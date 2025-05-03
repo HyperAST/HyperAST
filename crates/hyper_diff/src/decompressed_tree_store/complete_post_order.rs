@@ -35,8 +35,8 @@ pub struct CompletePostOrder<IdN, IdD> {
     pub(super) kr: bitvec::boxed::BitBox,
 }
 
-impl<HAST: HyperAST + Copy, IdD> Deref for CompletePostOrder<HAST, IdD> {
-    type Target = SimplePostOrder<HAST, IdD>;
+impl<IdN, IdD> Deref for CompletePostOrder<IdN, IdD> {
+    type Target = SimplePostOrder<IdN, IdD>;
 
     fn deref(&self) -> &Self::Target {
         &self.simple

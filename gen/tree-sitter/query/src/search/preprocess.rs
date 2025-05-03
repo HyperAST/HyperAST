@@ -3,14 +3,14 @@ use std::sync::Arc;
 
 use super::{Capture, Pattern, Predicate, PreparedMatcher, QuickTrigger};
 
-use hyperast::store::nodes::legion::NodeIdentifier;
 use hyperast::store::SimpleStores;
-use hyperast::types::{HyperAST, Children, Childrn, Labeled, Typed, WithChildren};
+use hyperast::store::nodes::legion::NodeIdentifier;
+use hyperast::types::{Children, Childrn, HyperAST, Labeled, Typed, WithChildren};
 
 use tree_sitter::CaptureQuantifier as Quant;
 
 use crate::auto::tsq_ser_meta::Converter;
-use crate::types::{TsQuery, _TStore};
+use crate::types::{TStore, TsQuery};
 
 pub struct PreparingMatcher<Ty, C> {
     root_types: Vec<Ty>,
@@ -69,17 +69,14 @@ impl<Ty, C> From<PreparingMatcher<Ty, C>> for PreparedMatcher<Ty, C> {
 }
 
 impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
-    pub fn new(
-        query_store: &'a SimpleStores<crate::types::_TStore>,
-        query: NodeIdentifier,
-    ) -> Self {
+    pub fn new(query_store: &'a SimpleStores<TStore>, query: NodeIdentifier) -> Self {
         let preparing = Self::new_aux(query_store, query);
 
         preparing.into()
     }
 
     pub(crate) fn new_aux(
-        query_store: &'a SimpleStores<_TStore>,
+        query_store: &'a SimpleStores<TStore>,
         query: legion::Entity,
     ) -> PreparingMatcher<Ty, C> {
         use crate::types::TIdN;
@@ -87,16 +84,16 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         use hyperast::types::LabelStore;
         let mut res = PreparingMatcher::default();
         let n = query_store.node_store.resolve(query);
-        let t: Type = query_store.resolve_type(&query);
+        let t: Type = *query_store.resolve_type(&query);
         assert_eq!(t, Type::Program);
         let Some(cs) = n.children() else { return res };
         for rule_id in cs.iter_children() {
             let rule = query_store.node_store.resolve(rule_id);
-            let t = query_store.resolve_type(&rule_id);
+            let t = *query_store.resolve_type(&rule_id);
             if t == Type::NamedNode {
                 res.quantifiers.push(Default::default());
                 let ty = rule.child(&1).unwrap();
-                assert_eq!(query_store.resolve_type(&ty), Type::Identifier);
+                assert_eq!(*query_store.resolve_type(&ty), Type::Identifier);
                 let ty = query_store.node_store.resolve(ty);
                 let l = ty.try_get_label();
                 let l = query_store.label_store.resolve(&l.unwrap());
@@ -115,16 +112,16 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 let mut capture = vec![];
                 for id in cs.iter_children() {
                     let i = query_store.node_store.resolve(id);
-                    let i_ty = query_store.resolve_type(&id);
+                    let i_ty = *query_store.resolve_type(&id);
                     if i_ty == Type::Capture {
                         let mut cs = i.children().unwrap().iter_children();
                         let n_id = cs.next().unwrap();
                         let n = query_store.node_store.resolve(n_id);
-                        let t = query_store.resolve_type(&n_id);
+                        let t = *query_store.resolve_type(&n_id);
                         assert_eq!(t, Type::At);
                         let name = cs.next().unwrap();
                         let ty = query_store.node_store.resolve(name);
-                        assert_eq!(query_store.resolve_type(&name), Type::Identifier);
+                        assert_eq!(*query_store.resolve_type(&name), Type::Identifier);
                         let name = ty.try_get_label().unwrap();
                         let name = query_store.label_store.resolve(&name);
                         dbg!(name);
@@ -199,11 +196,10 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         res
     }
     pub(crate) fn process_named_node(
-        query_store: &'a SimpleStores<crate::types::_TStore>,
+        query_store: &'a SimpleStores<TStore>,
         rule: NodeIdentifier,
         preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
-        use crate::types::TIdN;
         use crate::types::Type;
         use hyperast::types::LabelStore;
         let mut patterns = vec![];
@@ -242,8 +238,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             } else if t == Type::Spaces {
             } else if t == Type::RParen {
             } else if t == Type::AnonymousNode {
-                patterns
-                    .push(Self::process_anonymous_node(query_store, *rule_id, preparing).into())
+                patterns.push(Self::process_anonymous_node(query_store, *rule_id, preparing).into())
             } else if t == Type::Capture {
                 break;
             } else if t == Type::Predicate {
@@ -423,7 +418,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         }
     }
     pub(crate) fn process_field_definition(
-        query_store: &'a SimpleStores<crate::types::_TStore>,
+        query_store: &'a SimpleStores<TStore>,
         rule: NodeIdentifier,
         preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
@@ -484,7 +479,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     }
 
     pub(crate) fn process_anonymous_node(
-        query_store: &SimpleStores<_TStore>,
+        query_store: &SimpleStores<TStore>,
         rule: NodeIdentifier,
         preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
@@ -618,7 +613,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     }
 
     pub(crate) fn preprocess_predicate(
-        query_store: &SimpleStores<_TStore>,
+        query_store: &SimpleStores<TStore>,
         rule: NodeIdentifier,
     ) -> Predicate<String> {
         use crate::types::TIdN;
@@ -721,7 +716,7 @@ pub(crate) fn preprocess_capture_pred_arg(
         hyperast::store::nodes::legion::HashedNodeRef<'_, NodeIdentifier>,
         crate::types::Type,
     >,
-    query_store: &SimpleStores<_TStore>,
+    query_store: &SimpleStores<TStore>,
 ) -> String {
     use crate::types::Type;
     use hyperast::types::LabelStore;

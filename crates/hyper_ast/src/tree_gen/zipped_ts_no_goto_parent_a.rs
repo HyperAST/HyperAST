@@ -1,16 +1,17 @@
-use super::{parser::Visibility, utils_ts::*, zipped::Has, P};
+use super::{P, parser::Visibility, utils_ts::*, zipped::Has};
+use crate::store::nodes::compo;
 use crate::store::{
-    nodes::{
-        legion::{compo, dyn_builder, eq_node, NodeIdentifier},
-        DefaultNodeStore as NodeStore,
-    },
     SimpleStores,
+    nodes::{
+        DefaultNodeStore as NodeStore,
+        legion::{NodeIdentifier, dyn_builder, eq_node},
+    },
 };
 use crate::tree_gen::{
-    self, has_final_space,
-    parser::{Node as _, TreeCursor},
-    Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
+    self, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
     SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _, WithByteRange,
+    has_final_space,
+    parser::{Node as _, TreeCursor},
 };
 use crate::{
     filter::BloomSize,
@@ -139,16 +140,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
 }
 
 impl<'store, 'cache, 's, TS: TsEnableTS>
-    TsTreeGen<
-        'store,
-        'cache,
-        TS,
-        tree_gen::NoOpMore<
-            TS,
-            Acc<TS::Ty2>,
-        >,
-        true,
-    >
+    TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
 {
@@ -227,7 +219,7 @@ where
 
     fn stores(&mut self) -> &mut Self::Stores;
 
-    fn gen(
+    fn r#gen(
         &mut self,
         text: &Self::Text,
         stack: &mut Parents<Self::Acc>,
@@ -248,7 +240,7 @@ where
     type Node<'b> = TNode<'b>;
     type TreeCursor<'b> = TTreeCursor<'b, HIDDEN_NODES>;
 
-    fn gen(
+    fn r#gen(
         &mut self,
         text: &Self::Text,
         stack: &mut Parents<Self::Acc>,
@@ -475,7 +467,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 

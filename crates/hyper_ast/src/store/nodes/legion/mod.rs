@@ -1,18 +1,13 @@
-use crate::{
-    types::{
-        Compo, CompoRegister, ErasedHolder, ErasedInserter, NodeId, Typed, TypedNodeId,
-        TypedNodeStore,
-    },
-    utils::make_hash,
-};
+use super::{Compo, CompoRegister, ErasedHolder, ErasedInserter};
+use crate::types::{NodeId, Typed, TypedNodeId, TypedNodeStore};
+use crate::utils::make_hash;
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
-    storage::{Component, IntoComponentSource},
     EntityStore, World,
+    storage::{Component, IntoComponentSource},
 };
 use std::{fmt::Debug, hash::Hash, ops::Deref};
 
-pub mod compo;
 pub mod dyn_builder;
 mod elem;
 pub use elem::{EntryRef, HashedNode, HashedNodeRef, NodeIdentifier};
@@ -27,17 +22,7 @@ pub struct NodeStoreInner {
     count: usize,
     errors: usize,
     #[cfg(feature = "subtree-stats")]
-    pub height_counts: Vec<u32>,
-    #[cfg(feature = "subtree-stats")]
-    pub height_counts_non_dedup: Vec<u32>,
-    #[cfg(feature = "subtree-stats")]
-    pub height_counts_structural: Vec<u32>,
-    #[cfg(feature = "subtree-stats")]
-    pub structurals: std::collections::HashSet<u32>,
-    #[cfg(feature = "subtree-stats")]
-    pub height_counts_label: Vec<u32>,
-    #[cfg(feature = "subtree-stats")]
-    pub labels: std::collections::HashSet<u32>,
+    stats: super::NodeStoreStats,
     // roots: HashMap<(u8, u8, u8), NodeIdentifier>,
     // dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
     internal: legion::World,
@@ -60,18 +45,9 @@ impl<'a> PendingInsert<'a> {
             _ => None,
         }
     }
-    pub fn stash(
-        self,
-    ) -> (
-        crate::compat::hash_map::RawVacantEntryMut<'a, legion::Entity, (), ()>,
-        (u64,),
-    ) {
-        let vacant = self.vacant();
-        (vacant.0, (vacant.1 .0,))
-    }
     pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
         self.1
-             .1
+            .1
             .internal
             .entry_ref(id)
             .map(|x| HashedNodeRef::new(x))
@@ -80,7 +56,7 @@ impl<'a> PendingInsert<'a> {
     pub fn occupied(&'a self) -> Option<(NodeIdentifier, (u64, &'a NodeStoreInner))> {
         match &self.0 {
             hashbrown::hash_map::RawEntryMut::Occupied(occupied) => {
-                Some((occupied.key().clone(), (self.1 .0, self.1 .1)))
+                Some((occupied.key().clone(), (self.1.0, self.1.1)))
             }
             _ => None,
         }
@@ -100,6 +76,24 @@ impl<'a> PendingInsert<'a> {
 }
 
 impl NodeStore {
+    pub fn get<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
+        &'a self,
+        hashable: &V,
+        eq: Eq,
+    ) -> Option<legion::Entity> {
+        let Self {
+            dedup,
+            inner: NodeStoreInner {
+                internal: backend, ..
+            },
+        } = self;
+        let hash = make_hash(&self.inner.hasher, hashable);
+        let entry = dedup.raw_entry().from_hash(hash, |symbol| {
+            let r = eq(backend.entry_ref(*symbol).unwrap());
+            r
+        });
+        entry.map(|x| *x.0)
+    }
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
         hashable: &V,
@@ -132,7 +126,7 @@ impl NodeStore {
         let (&mut symbol, _) = {
             let symbol = inner.internal.push(components);
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner
+                let node: HashedNodeRef<'_, NodeIdentifier> = inner
                     .internal
                     .entry_ref(*id)
                     .map(|x| HashedNodeRef::new(x))
@@ -155,7 +149,7 @@ impl NodeStore {
         let (&mut symbol, _) = {
             let symbol = inner.internal.extend(components)[0];
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner
+                let node: HashedNodeRef<'_, NodeIdentifier> = inner
                     .internal
                     .entry_ref(*id)
                     .map(|x| HashedNodeRef::new(x))
@@ -271,20 +265,8 @@ impl Debug for NodeStore {
             .field("internal_len", &self.inner.internal.len());
         // .field("internal", &self.internal)
 
-        fn lim<T>(v: &[T]) -> &[T] {
-            &v[..v.len().min(30)]
-        }
         #[cfg(feature = "subtree-stats")]
-        r.field("height_counts", &lim(&self.inner.height_counts_structural));
-        #[cfg(feature = "subtree-stats")]
-        r.field("height_counts", &lim(&self.inner.height_counts_label));
-        #[cfg(feature = "subtree-stats")]
-        r.field("height_counts", &lim(&self.inner.height_counts));
-        #[cfg(feature = "subtree-stats")]
-        r.field(
-            "height_counts_non_dedup",
-            &lim(&self.inner.height_counts_non_dedup),
-        );
+        r.field("stats", &self.inner.stats);
 
         r.finish()
     }
@@ -306,6 +288,10 @@ impl crate::types::lending::NodeStore<NodeIdentifier> for NodeStore {
     ) -> <Self as crate::types::lending::NLending<'_, NodeIdentifier>>::N {
         crate::types::lending::NodeStore::resolve(&self.inner, id)
     }
+}
+
+impl crate::types::NStoreRefAssoc for NodeStore {
+    type S = NodeStoreInner;
 }
 
 impl<'a> crate::types::lending::NLending<'a, NodeIdentifier> for NodeStoreInner {
@@ -413,53 +399,9 @@ impl NodeStoreInner {
     pub fn len(&self) -> usize {
         self.internal.len()
     }
-
     #[cfg(feature = "subtree-stats")]
-    pub fn add_height_non_dedup(&mut self, height: u32) {
-        accumulate_height(&mut self.height_counts_non_dedup, height);
-    }
-
-    #[cfg(feature = "subtree-stats")]
-    pub fn add_height_dedup(&mut self, height: u32, hashs: crate::hashed::SyntaxNodeHashs<u32>) {
-        self.add_height(height);
-        self.add_height_label(height, hashs.label);
-        self.add_height_structural(height, hashs.structt);
-    }
-
-    #[cfg(feature = "subtree-stats")]
-    fn add_height(&mut self, height: u32) {
-        accumulate_height(&mut self.height_counts, height);
-    }
-
-    #[cfg(feature = "subtree-stats")]
-    fn add_height_structural(&mut self, height: u32, hash: u32) {
-        if not_there(&mut self.structurals, hash) {
-            accumulate_height(&mut self.height_counts_structural, height);
-        }
-    }
-
-    #[cfg(feature = "subtree-stats")]
-    fn add_height_label(&mut self, height: u32, hash: u32) {
-        if not_there(&mut self.labels, hash) {
-            accumulate_height(&mut self.height_counts_label, height);
-        }
-    }
-
-    #[cfg(feature = "subtree-stats")]
-    fn not_there(hash_set: &mut std::collections::HashSet<u32>, hash: u32) -> bool {
-        if hash_set.contains(&hash) {
-            return false;
-        }
-        hash_set.insert(hash);
-        true
-    }
-
-    #[cfg(feature = "subtree-stats")]
-    fn accumulate_height(counts: &mut Vec<u32>, height: u32) {
-        if counts.len() <= height as usize {
-            counts.resize(height as usize + 1, 0);
-        }
-        counts[height as usize] += 1;
+    pub fn stats(&mut self) -> &mut super::NodeStoreStats {
+        &mut self.stats
     }
 }
 
@@ -476,17 +418,7 @@ impl NodeStore {
                 count: 0,
                 errors: 0,
                 #[cfg(feature = "subtree-stats")]
-                height_counts: Vec::with_capacity(100),
-                #[cfg(feature = "subtree-stats")]
-                height_counts_non_dedup: Vec::with_capacity(100),
-                #[cfg(feature = "subtree-stats")]
-                height_counts_structural: Vec::with_capacity(100),
-                #[cfg(feature = "subtree-stats")]
-                structurals: std::collections::HashSet::with_capacity(100),
-                #[cfg(feature = "subtree-stats")]
-                height_counts_label: Vec::with_capacity(100),
-                #[cfg(feature = "subtree-stats")]
-                labels: std::collections::HashSet::with_capacity(100),
+                stats: Default::default(),
                 // roots: Default::default(),
                 internal: Default::default(),
                 hasher: Default::default(),
@@ -507,7 +439,7 @@ impl Default for NodeStore {
 
 mod stores_impl {
     use crate::{
-        store::SimpleStores,
+        store::{SimpleStores, defaults::LabelIdentifier},
         types::{
             self, HyperAST, HyperASTShared, LStore, LendN, NStore, NodeId, NodeStore, TypeStore,
             TypeTrait, TypedHyperAST, TypedNodeId,
@@ -543,10 +475,10 @@ mod stores_impl {
         LS: LStore,
         <NS as NStore>::IdN: NodeId<IdN = <NS as NStore>::IdN>,
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
     {
         type RT = <NS as types::NLending<'a, Self::IdN>>::N;
     }
@@ -570,10 +502,10 @@ mod stores_impl {
         LS: LStore,
         <NS as NStore>::IdN: NodeId<IdN = <NS as NStore>::IdN>,
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
     {
         type N = <NS as types::NLending<'a, <NS as NStore>::IdN>>::N;
     }
@@ -585,10 +517,10 @@ mod stores_impl {
         LS: LStore,
         <NS as NStore>::IdN: NodeId<IdN = <NS as NStore>::IdN>,
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
     {
         type RT = <NS as types::NLending<'a, <NS as NStore>::IdN>>::N;
     }
@@ -602,10 +534,10 @@ mod stores_impl {
         LS: LStore,
         LS: types::LabelStore<str, I = <LS as LStore>::I>,
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
     {
         type NS = NS;
 
@@ -628,10 +560,10 @@ mod stores_impl {
         LS: LStore,
         <NS as NStore>::IdN: NodeId<IdN = <NS as NStore>::IdN>,
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
         Ty: TypeTrait,
     {
         type TT = TypedHolder<<Self as types::AstLending<'a>>::RT, Ty>;
@@ -664,10 +596,10 @@ mod stores_impl {
         LS: LStore,
         LS: types::LabelStore<str, I = <LS as LStore>::I>,
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
     {
         type NS = NS;
 
@@ -694,12 +626,11 @@ mod stores_impl {
         NS: NodeStore<NS::IdN>,
         LS: LStore,
         LS: types::LabelStore<str, I = <LS as LStore>::I>,
-
         for<'t> LendN<'t, NS, <NS as NStore>::IdN>: types::Tree<
-            Label = <LS as LStore>::I,
-            TreeId = <NS as NStore>::IdN,
-            ChildIdx = <NS as NStore>::Idx,
-        >,
+                Label = <LS as LStore>::I,
+                TreeId = <NS as NStore>::IdN,
+                ChildIdx = <NS as NStore>::Idx,
+            >,
     {
         fn try_resolve(
             &self,
@@ -723,20 +654,52 @@ mod stores_impl {
         }
     }
 
-    impl<'a, TS: Copy + types::TypeStore> types::StoreLending<'a> for crate::store::SimpleStores<TS> {
-        type S = crate::store::SimpleStores<
-            TS,
-            &'a super::NodeStoreInner,
-            &'a crate::store::labels::LabelStore,
-        >;
+    impl<'a, TS, NS> types::StoreLending<'a> for crate::store::SimpleStores<TS, NS>
+    where
+        TS: Copy + types::TypeStore,
+        NS: NStore,
+        NS: NodeStore<NS::IdN>,
+        NS::IdN: NodeId<IdN = NS::IdN>,
+        // LS: LStore,
+        // LS: types::LabelStore<str, I = <LS as LStore>::I>,
+        for<'t> LendN<'t, NS, NS::IdN>: types::Tree<
+                // Label = <LS as LStore>::I,
+                Label = LabelIdentifier,
+                TreeId = NS::IdN,
+                ChildIdx = NS::Idx,
+            >,
+        NS: types::NStoreRefAssoc,
+        &'a NS::S: NStore<IdN = NS::IdN, Idx = NS::Idx>,
+        &'a NS::S: NodeStore<NS::IdN>,
+        for<'t> &'a NS::S:
+            types::NLending<'t, NS::IdN, N = <NS as types::NLending<'t, NS::IdN>>::N>,
+    {
+        type S = crate::store::SimpleStores<TS, &'a NS::S, &'a crate::store::labels::LabelStore>;
     }
 
-    impl<TS: Copy + types::TypeStore> types::StoreRefAssoc for crate::store::SimpleStores<TS> {
-        type S<'a> = crate::store::SimpleStores<
-            TS,
-            &'a super::NodeStoreInner,
-            &'a crate::store::labels::LabelStore,
-        >;
+    impl<TS, NS> types::StoreRefAssoc for crate::store::SimpleStores<TS, NS>
+    where
+        TS: Copy + types::TypeStore,
+        NS: NStore,
+        for<'a> NS: 'a,
+        NS: NodeStore<NS::IdN>,
+        NS::IdN: NodeId<IdN = NS::IdN>,
+        // LS: LStore,
+        // LS: types::LabelStore<str, I = <LS as LStore>::I>,
+        for<'t> LendN<'t, NS, NS::IdN>: types::Tree<
+                // Label = <LS as LStore>::I,
+                Label = LabelIdentifier,
+                TreeId = NS::IdN,
+                ChildIdx = NS::Idx,
+            >,
+        NS: types::NStoreRefAssoc,
+        for<'a> &'a NS::S: NStore<IdN = NS::IdN, Idx = NS::Idx>,
+        for<'a> &'a NS::S: NodeStore<NS::IdN>,
+        for<'a, 't> &'a NS::S:
+            types::NLending<'t, NS::IdN, N = <NS as types::NLending<'t, NS::IdN>>::N>,
+    {
+        type S<'a> =
+            crate::store::SimpleStores<TS, &'a NS::S, &'a crate::store::labels::LabelStore>;
     }
 }
 
@@ -759,7 +722,7 @@ where
         if l != label_id {
             return false;
         } else {
-            use compo::CS; // FIXME not
+            use super::compo::CS; // FIXME not
             let cs = x.get_component::<CS<I>>();
             let r = match cs {
                 Ok(CS(cs)) => cs.as_ref() == children,

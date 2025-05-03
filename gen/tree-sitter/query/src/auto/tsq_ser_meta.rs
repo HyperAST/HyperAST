@@ -129,12 +129,12 @@ where
 }
 
 impl<
-        'store,
-        'a,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId,
-        C: Converter<Ty = TIdN::Ty>,
-    > TreeToQuery<'store, HAST, TIdN, C>
+    'store,
+    'a,
+    HAST: types::TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId,
+    C: Converter<Ty = TIdN::Ty>,
+> TreeToQuery<'store, HAST, TIdN, C>
 {
     pub fn with_pred(
         stores: &'store HAST,
@@ -148,7 +148,7 @@ impl<
             crate::search::ts_query2(&mut query_store.0.write().unwrap(), matcher.as_bytes());
         let matcher = {
             let preparing = crate::search::PreparedMatcher::<TIdN::Ty, C>::new_aux(
-                query_store.0.read().unwrap().with_ts(),
+                &query_store.0.read().unwrap(),
                 query,
             );
             preparing.into()
@@ -164,12 +164,12 @@ impl<
 }
 
 impl<
-        'store,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId + 'static,
-        F: Converter<Ty = TIdN::Ty>,
-        const PP: bool,
-    > Display for TreeToQuery<'store, HAST, TIdN, F, PP>
+    'store,
+    HAST: types::TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId + 'static,
+    F: Converter<Ty = TIdN::Ty>,
+    const PP: bool,
+> Display for TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
     TIdN::Ty: types::TypeTrait,
@@ -180,12 +180,12 @@ where
 }
 
 impl<
-        'store,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId + 'static,
-        F: Converter<Ty = TIdN::Ty>,
-        const PP: bool,
-    > TreeToQuery<'store, HAST, TIdN, F, PP>
+    'store,
+    HAST: types::TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId + 'static,
+    F: Converter<Ty = TIdN::Ty>,
+    const PP: bool,
+> TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
     TIdN::Ty: types::TypeTrait,

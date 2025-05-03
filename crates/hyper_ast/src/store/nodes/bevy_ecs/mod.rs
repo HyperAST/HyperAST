@@ -16,6 +16,16 @@ mod md1;
 
 // mod md2;
 
+mod inner;
+
+pub use inner::{HashedNodeRef, NodeIdentifier, NodeStore, NodeStoreInner};
+
+pub use bevy_ecs::component::Component;
+
+pub use super::legion::dyn_builder;
+pub use inner::eq_node;
+pub use inner::eq_space;
+
 mod md_sys_tree_size {
     use super::*;
 
@@ -114,7 +124,7 @@ mod md_sys_tree_hash {
         TreeHashAcc(0)
     }
     // self -> md
-    pub fn init_leaf(x: (&Type, Option<&impl std::hash::Hash>),s: &TreeSize) -> TreeHash {
+    pub fn init_leaf(x: (&Type, Option<&impl std::hash::Hash>), s: &TreeSize) -> TreeHash {
         finish(init(), x, s)
     }
     // &mut acc , child, md
