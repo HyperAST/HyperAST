@@ -57,3 +57,7 @@ criterion = { version = "0.4", features = [
 [[bench]]
 name = "my_bench"
 harness = false
+
+[[bench]]
+name = "comparing_cd"
+harness = false
