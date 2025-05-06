@@ -4,7 +4,7 @@ use std::{
 };
 
 use hyperast::compat::HashMap;
-use num_traits::{cast, one, zero, PrimInt};
+use num_traits::{PrimInt, cast, one, zero};
 
 pub trait MappingStore {
     type Src;
@@ -86,7 +86,7 @@ impl<T: PrimInt + Debug> VecStore<T> {
     }
 
     pub fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
-        if self.is_src(&t1) && self.is_dst(&t2) {
+        if !self.is_src(&t1) && !self.is_dst(&t2) {
             self.link(t1, t2);
             true
         } else {
@@ -182,7 +182,7 @@ impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
     }
 
     fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
-        if self.is_src(&t1) && self.is_dst(&t2) {
+        if !self.is_src(&t1) && !self.is_dst(&t2) {
             self.link(t1, t2);
             true
         } else {
@@ -190,7 +190,8 @@ impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
         }
     }
 
-    type Iter<'a> = MonoIter<'a,T,T>
+    type Iter<'a>
+        = MonoIter<'a, T, T>
     where
         Self: 'a;
 
@@ -347,8 +348,14 @@ impl<T: PrimInt> MappingStore for MultiVecStore<T> {
 }
 
 impl<T: PrimInt> MultiMappingStore for MultiVecStore<T> {
-    type Iter1<'a> = Iter<'a,T> where T: 'a  ;
-    type Iter2<'a> = Iter<'a,T> where T: 'a ;
+    type Iter1<'a>
+        = Iter<'a, T>
+    where
+        T: 'a;
+    type Iter2<'a>
+        = Iter<'a, T>
+    where
+        T: 'a;
     fn get_srcs(&self, dst: &Self::Dst) -> &[Self::Src] {
         self.dst_to_srcs[cast::<_, usize>(*dst).unwrap()]
             .as_ref()
@@ -501,7 +508,7 @@ impl<T: PrimInt + Debug + Hash> HashStore<T> {
     }
 
     pub fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
-        if self.is_src(&t1) && self.is_dst(&t2) {
+        if !self.is_src(&t1) && !self.is_dst(&t2) {
             self.link(t1, t2);
             true
         } else {
@@ -576,7 +583,7 @@ impl<T: PrimInt + Debug + Hash> MonoMappingStore for HashStore<T> {
     }
 
     fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
-        if self.is_src(&t1) && self.is_dst(&t2) {
+        if !self.is_src(&t1) && !self.is_dst(&t2) {
             self.link(t1, t2);
             true
         } else {
@@ -584,7 +591,8 @@ impl<T: PrimInt + Debug + Hash> MonoMappingStore for HashStore<T> {
         }
     }
 
-    type Iter<'a> = HMIter<'a,T,T>
+    type Iter<'a>
+        = HMIter<'a, T, T>
     where
         Self: 'a;
 
