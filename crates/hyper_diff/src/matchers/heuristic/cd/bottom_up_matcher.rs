@@ -5,10 +5,10 @@ use crate::{
     },
     matchers::{mapping_store::MonoMappingStore, similarity_metrics},
 };
+use hyperast::PrimInt;
 use hyperast::types::{
     self, DecompressedFrom, HashKind, HyperAST, NodeId, NodeStore, Tree, TypeStore, WithHashs,
 };
-use hyperast::PrimInt;
 use num_traits::{ToPrimitive, Zero};
 use std::fmt::Debug;
 use std::{collections::HashMap, hash::Hash};
@@ -21,23 +21,23 @@ pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
 }
 
 impl<
-        Dsrc: DecompressedTreeStore<HAST, M::Src>
-            + DecompressedWithParent<HAST, M::Src>
-            + PostOrder<HAST, M::Src>
-            + PostOrderIterable<HAST, M::Src>
-            + DecompressedFrom<HAST, Out = Dsrc>
-            + ContiguousDescendants<HAST, M::Src>
-            + POBorrowSlice<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst>
-            + DecompressedWithParent<HAST, M::Dst>
-            + PostOrder<HAST, M::Dst>
-            + PostOrderIterable<HAST, M::Dst>
-            + DecompressedFrom<HAST, Out = Ddst>
-            + ContiguousDescendants<HAST, M::Dst>
-            + POBorrowSlice<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-    > BottomUpMatcher<Dsrc, Ddst, HAST, M>
+    Dsrc: DecompressedTreeStore<HAST, M::Src>
+        + DecompressedWithParent<HAST, M::Src>
+        + PostOrder<HAST, M::Src>
+        + PostOrderIterable<HAST, M::Src>
+        + DecompressedFrom<HAST, Out = Dsrc>
+        + ContiguousDescendants<HAST, M::Src>
+        + POBorrowSlice<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst>
+        + DecompressedWithParent<HAST, M::Dst>
+        + PostOrder<HAST, M::Dst>
+        + PostOrderIterable<HAST, M::Dst>
+        + DecompressedFrom<HAST, Out = Ddst>
+        + ContiguousDescendants<HAST, M::Dst>
+        + POBorrowSlice<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+> BottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -55,9 +55,9 @@ where
             dst_arena: mapping.mapping.dst_arena,
             mappings: mapping.mapping.mappings,
         };
-        // matcher
-        // .mappings
-        // .topit(matcher.src_arena.len(), matcher.dst_arena.len());
+        matcher
+            .mappings
+            .topit(matcher.src_arena.len(), matcher.dst_arena.len());
         Self::execute(&mut matcher);
         crate::matchers::Mapper {
             hyperast: mapping.hyperast,
@@ -70,22 +70,6 @@ where
     }
 
     pub fn execute(&mut self) {
-        // List<Tree> dstTrees = TreeUtils.postOrder(dst);
-        // for (Tree currentSrcTree : src.postOrder()) {
-        //     int numberOfLeaves = numberOfLeaves(currentSrcTree);
-        //     for (Tree currentDstTree : dstTrees) {
-        //         if (mappings.isMappingAllowed(currentSrcTree, currentDstTree)
-        //                 && !(currentSrcTree.isLeaf() || currentDstTree.isLeaf())) {
-        //             double similarity = SimilarityMetrics.chawatheSimilarity(currentSrcTree, currentDstTree, mappings);
-        //             if ((numberOfLeaves > maxNumberOfLeaves && similarity >= structSimThreshold1)
-        //                     || (numberOfLeaves <= maxNumberOfLeaves && similarity >= structSimThreshold2)) {
-        //                 mappings.addMapping(currentSrcTree, currentDstTree);
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
-
         let mut dst_trees = self.dst_arena.iter_df_post::<true>();
         let max_number_of_leaves = 1000; // TODO: make configurable
         let struct_sim_threshold1 = 0.5;
@@ -183,7 +167,7 @@ mod tests {
     use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
     use crate::{
         decompressed_tree_store::CompletePostOrder,
-        matchers::{mapping_store::DefaultMappingStore, Decompressible, Mapper},
+        matchers::{Decompressible, Mapper, mapping_store::DefaultMappingStore},
         tests::examples::example_simple,
         tree::simple_tree::vpair_to_stores,
     };
