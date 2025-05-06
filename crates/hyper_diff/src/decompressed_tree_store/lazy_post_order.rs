@@ -647,8 +647,7 @@ where
         cast(self._root()).unwrap()
     }
 
-    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD
-    {
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
         let store = self.hyperast;
         let mut r = *x;
         for d in p {
@@ -669,8 +668,7 @@ where
         r
     }
 
-    fn children(&self, x: &IdD) -> Vec<IdD>
-    {
+    fn children(&self, x: &IdD) -> Vec<IdD> {
         debug_assert!(
             self.id_parent.len() == 0 || self.id_parent[x.to_usize().unwrap()] != zero(),
             "x has not been initialized"
@@ -699,8 +697,7 @@ where
     }
 }
 
-impl<'d, IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD>
-{
+impl<'d, IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD> {
     pub fn child_decompressed<HAST>(
         mut self,
         store: HAST,
@@ -847,8 +844,7 @@ where
     }
 }
 
-impl<IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD>
-{
+impl<IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD> {
     fn is_decompressed(&self, x: &IdD) -> bool {
         self.id_parent.len() == 0 || self.id_parent[x.to_usize().unwrap()] != zero()
     }
@@ -931,8 +927,7 @@ where
     HAST::IdN: Debug,
     for<'t> <HAST as AstLending<'t>>::RT: WithStats,
 {
-    fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo
-    {
+    fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo {
         self.complete_subtree(x);
         let range = self.slice_range(x);
         let basic = BasicPOSlice {

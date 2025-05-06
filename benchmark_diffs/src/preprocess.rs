@@ -4,11 +4,11 @@ use hyperast::{
     store::{defaults::LabelIdentifier, SimpleStores},
     types::LabelStore as _,
 };
-use hyperast_vcs_git::java::JavaAcc;
 use hyperast_gen_ts_java::{
     legion_with_refs::{self, FNode, JavaTreeGen, Local, MDCache, MD},
     types::{TStore, Type},
 };
+use hyperast_vcs_git::java::JavaAcc;
 use std::path::{Path, PathBuf};
 
 pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
@@ -54,7 +54,6 @@ pub struct JavaPreprocessFileSys {
 }
 
 impl JavaPreprocessFileSys {
-
     pub(crate) fn help_handle_java_file(
         &mut self,
         path: PathBuf,
@@ -327,11 +326,8 @@ fn make(
         .primary
         .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
     let hashable = primary.metrics.hashs.most_discriminating();
-    let eq = hyperast::store::nodes::legion::eq_node(
-        &interned_kind,
-        Some(&label_id),
-        &primary.children,
-    );
+    let eq =
+        hyperast::store::nodes::legion::eq_node(&interned_kind, Some(&label_id), &primary.children);
     let insertion = node_store.prepare_insertion(&hashable, eq);
 
     if let Some(id) = insertion.occupied_id() {

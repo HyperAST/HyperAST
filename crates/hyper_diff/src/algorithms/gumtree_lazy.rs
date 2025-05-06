@@ -61,14 +61,14 @@ where
         LazyGreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
-    dbg!(&subtree_matcher_t, &subtree_mappings_s);
+    //dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let bottomup_prepare_t = 0.;
     let now = Instant::now();
     let mapper = GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper);
-    dbg!(&now.elapsed().as_secs_f64());
+    //dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
-    dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
+    //dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
     let now = Instant::now();
 
     // TODO find better way, at least make a shorthand
@@ -98,7 +98,7 @@ where
     let now = Instant::now();
     let actions = ScriptGenerator::compute_actions(mapper.hyperast, &mapper.mapping).ok();
     let gen_t = now.elapsed().as_secs_f64();
-    dbg!(gen_t);
+    //dbg!(gen_t);
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
         mapping_durations: PreparedMappingDurations {

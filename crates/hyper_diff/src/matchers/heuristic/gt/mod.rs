@@ -1,4 +1,4 @@
-use hyperast::types::{NodeId, NodeStore, WithChildren, Childrn};
+use hyperast::types::{Childrn, NodeId, NodeStore, WithChildren};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
@@ -13,6 +13,7 @@ pub mod lazy_bottom_up_matcher;
 pub mod lazy_greedy_bottom_up_matcher;
 pub mod lazy_greedy_subtree_matcher;
 // pub mod simple_bottom_up_matcher2;
+pub mod simple_marriage_bottom_up_matcher;
 
 pub fn size<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where

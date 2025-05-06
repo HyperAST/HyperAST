@@ -7,18 +7,26 @@ autobenches = false
 [dependencies]
 specs = "0.20.0"
 num-traits = "0.2.14"
-enum-map="2.4.1"
+enum-map = "2.4.1"
 bitvec = "1.0.1"
 str-distance = "0.1.0"
 log = { version = "0.4.6" }
-hyperast = { workspace = true }
+hyperast = { workspace = true, features = ["native", "legion"] }
+rand = "0.9.1"
 
 logging_timer = "1.1.0"
 
 [dev-dependencies]
-criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+criterion = { version = "0.4", features = [
+    "rayon",
+    "plotters",
+    "cargo_bench_support",
+    "html_reports",
+    "real_blackbox",
+] }
 env_logger = "0.11.3"
 hungarian = "1.1.1"
+hyperast_gen_ts_java = { workspace = true, features = ["impl"] }
 
 [lib]
 bench = false

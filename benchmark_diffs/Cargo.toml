@@ -38,12 +38,20 @@ pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
+criterion = "0.4"
 
 # [build-dependencies]
 
 [dev-dependencies]
 hyperast_gen_ts_java = { workspace = true }
+criterion = { version = "0.4", features = [
+    "rayon",
+    "plotters",
+    "cargo_bench_support",
+    "html_reports",
+    "real_blackbox",
+] }
 
-# [[bin]]
-# name = "window_combination"
-# path = "binwindow_combination.rs"
+[[bench]]
+name = "gumtree"
+harness = false

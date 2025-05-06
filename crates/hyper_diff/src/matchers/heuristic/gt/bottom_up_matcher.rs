@@ -57,6 +57,40 @@ where
         }
         candidates
     }
+
+    pub(super) fn get_src_candidates(&self, dst: &M::Dst) -> Vec<M::Src> {
+        let mut seeds = vec![];
+        let s = &self.dst_arena.original(dst);
+        for c in self.dst_arena.descendants(dst) {
+            if self.mappings.is_dst(&c) {
+                let m = self.mappings.get_src_unchecked(&c);
+                seeds.push(m);
+            }
+        }
+        let mut candidates = vec![];
+        let mut visited = bitvec::bitbox![0;self.src_arena.len()];
+
+        let t = self.stores.resolve_type(s);
+        for mut seed in seeds {
+            loop {
+                let Some(parent) = self.src_arena.parent(&seed) else {
+                    break;
+                };
+                if visited[parent.to_usize().unwrap()] {
+                    break;
+                }
+                visited.set(parent.to_usize().unwrap(), true);
+                let p = &self.src_arena.original(&parent);
+                if self.stores.resolve_type(p) == t
+                    && !(self.mappings.is_src(&parent) || parent == self.src_arena.root())
+                {
+                    candidates.push(parent);
+                }
+                seed = parent;
+            }
+        }
+        candidates
+    }
 }
 
 impl<

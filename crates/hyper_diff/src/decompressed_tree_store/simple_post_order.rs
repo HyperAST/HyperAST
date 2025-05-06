@@ -295,7 +295,7 @@ impl<IdN, IdD: PrimInt> SimplePostOrder<IdN, IdD> {
                 });
             } else {
                 let curr_idx = cast(id_compressed.len()).unwrap();
-                let value = if l.is_some() {
+                let value = if l.is_none() {
                     curr_idx
                 } else {
                     for x in children {
@@ -559,8 +559,7 @@ where
     HAST::IdN: Debug,
     for<'t> <HAST as types::AstLending<'t>>::RT: WithSerialization,
 {
-    pub fn position<'b>(&mut self, c: &IdD) -> &Position
-    {
+    pub fn position<'b>(&mut self, c: &IdD) -> &Position {
         let stores = self.ds.hyperast;
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
@@ -696,8 +695,7 @@ where
     F: Fn(U, HAST::IdN) -> U,
     G: Fn(U, HAST::IdN) -> U,
 {
-    pub fn position<'b>(&mut self, c: &IdD) -> &U
-    {
+    pub fn position<'b>(&mut self, c: &IdD) -> &U {
         let stores = self.ds.hyperast;
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();

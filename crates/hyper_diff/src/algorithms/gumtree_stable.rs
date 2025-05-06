@@ -5,8 +5,8 @@ use crate::{
     decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
     matchers::{
         heuristic::gt::{
-            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::GreedySubtreeMatcher,
+            simple_marriage_bottom_up_matcher::SimpleMarriageBottomUpMatcher,
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
         Decompressible, Mapper,
@@ -16,7 +16,7 @@ use crate::{
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
 
-type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+pub type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
@@ -38,20 +38,18 @@ where
     let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
         hyperast.decompress_pair(src, dst).into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
-
-    // let now = Instant::now();
-    // let mapper =
-    // GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
-    // let subtree_matcher_t = now.elapsed().as_secs_f64();
-    // let subtree_mappings_s = mapper.mappings().len();
-    // dbg!(&subtree_matcher_t, &subtree_mappings_s);
-
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper =
+        GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+    let subtree_matcher_t = now.elapsed().as_secs_f64();
+    let subtree_mappings_s = mapper.mappings().len();
+    //dbg!(&subtree_matcher_t, &subtree_mappings_s);
+    let now = Instant::now();
+    let mapper = SimpleMarriageBottomUpMatcher::<_, _, _, _>::match_it(mapper);
     //dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
-    dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
+    //dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
     let now = Instant::now();
 
     let mapper = mapper.map(
@@ -66,8 +64,7 @@ where
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
         mapping_durations: PreparedMappingDurations {
-            //mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
-            mappings: MappingDurations([0., bottomup_matcher_t]),
+            mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
             preparation: [subtree_prepare_t, 0.0],
         },
         mapper,

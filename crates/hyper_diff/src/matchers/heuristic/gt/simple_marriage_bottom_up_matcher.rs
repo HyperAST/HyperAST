@@ -10,14 +10,13 @@ use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
 use hyperast::PrimInt;
 use num_traits::{cast, one};
-use rand::prelude::*;
 use std::fmt::Debug;
 
 /// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
 ///
 /// it will allow to make use complex types as const generics
 /// ie. make the different threshold neater
-pub struct GreedyBottomUpMatcher<
+pub struct SimpleMarriageBottomUpMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -41,7 +40,7 @@ impl<
         const SIM_THRESHOLD_NUM: u64, // = 1,
         const SIM_THRESHOLD_DEN: u64, // = 2,
     > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
-    for GreedyBottomUpMatcher<
+    for SimpleMarriageBottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,
@@ -79,7 +78,15 @@ impl<
         const SIM_THRESHOLD_NUM: u64,
         const SIM_THRESHOLD_DEN: u64,
     >
-    GreedyBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+    SimpleMarriageBottomUpMatcher<
+        Dsrc,
+        Ddst,
+        HAST,
+        M,
+        SIZE_THRESHOLD,
+        SIM_THRESHOLD_NUM,
+        SIM_THRESHOLD_DEN,
+    >
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -153,29 +160,25 @@ where
             if self.internal.src_arena.parent(&a).is_none() {
                 // TODO remove and flip const param of iter_df_post
                 break;
-            }
-            if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
-                let mut candidates = self.internal.get_dst_candidates(&a);
-                let mut rng = rand::rng();
-                candidates.shuffle(&mut rng);
-                let mut best = None;
-                let mut max: f64 = -1.;
-                for cand in candidates {
-                    let sim = similarity_metrics::SimilarityMeasure::range(
-                        &self.internal.src_arena.descendants_range(&a),
-                        &self.internal.dst_arena.descendants_range(&cand),
-                        &self.internal.mappings,
-                    )
-                    .dice();
-                    if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
-                        max = sim;
-                        best = Some(cand);
+            } else if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
+                if let Some(best_dst) = self.best_dst_candidate(&a) {
+                    if self.best_src_candidate(&best_dst) == Some(a) {
+                        self.last_chance_match_zs(a, best_dst);
+                        self.internal.mappings.link(a, best_dst);
                     }
                 }
-
-                if let Some(best) = best {
-                    self.last_chance_match_zs(a, best);
-                    self.internal.mappings.link(a, best);
+            } else if self.internal.mappings.is_src(&a)
+                && self.has_unmapped_src_children(&a)
+                && self.has_unmapped_dst_children(
+                    &self
+                        .internal
+                        .mappings
+                        .get_dst(&a)
+                        .expect("No dst found for src"),
+                )
+            {
+                if let Some(dst) = self.internal.mappings.get_dst(&a) {
+                    self.last_chance_match_zs(a, dst)
                 }
             }
         }
@@ -188,6 +191,62 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
+    }
+
+    fn has_unmapped_src_children(&self, src: &M::Src) -> bool {
+        for a in self.internal.src_arena.descendants(src) {
+            if !self.internal.mappings.is_src(&a) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn has_unmapped_dst_children(&self, dst: &M::Dst) -> bool {
+        for a in self.internal.dst_arena.descendants(dst) {
+            if !self.internal.mappings.is_dst(&a) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn best_dst_candidate(&self, src: &M::Src) -> Option<M::Dst> {
+        let candidates = self.internal.get_dst_candidates(src);
+        let mut best = None;
+        let mut max: f64 = -1.;
+        for cand in candidates {
+            let sim = similarity_metrics::SimilarityMeasure::range(
+                &self.internal.src_arena.descendants_range(src),
+                &self.internal.dst_arena.descendants_range(&cand),
+                &self.internal.mappings,
+            )
+            .chawathe();
+            if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
+                max = sim;
+                best = Some(cand);
+            }
+        }
+        best
+    }
+
+    fn best_src_candidate(&self, dst: &M::Dst) -> Option<M::Src> {
+        let candidates = self.internal.get_src_candidates(dst);
+        let mut best = None;
+        let mut max: f64 = -1.;
+        for cand in candidates {
+            let sim = similarity_metrics::SimilarityMeasure::range(
+                &self.internal.src_arena.descendants_range(&cand),
+                &self.internal.dst_arena.descendants_range(dst),
+                &self.internal.mappings,
+            )
+            .chawathe();
+            if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
+                max = sim;
+                best = Some(cand);
+            }
+        }
+        best
     }
 
     fn src_has_children(&mut self, src: M::Src) -> bool {

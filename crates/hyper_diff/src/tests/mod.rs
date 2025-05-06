@@ -12,13 +12,15 @@ macro_rules! tree {
         SimpleTree::new($k, None, vec![$($x),+])
     };
 }
-pub(crate) use tree; 
+pub(crate) use tree;
 
 pub mod action_generator2_simple_tests;
 pub mod action_generator2_tests;
 pub mod action_generator_tests;
 #[cfg(test)]
 pub mod examples;
+#[cfg(test)]
+pub mod gumtree_stable;
 pub mod hungarian_tests;
 #[cfg(test)]
 pub mod lazy_decompression_tests;
