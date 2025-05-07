@@ -1,5 +1,5 @@
-use hyper_diff::algorithms;
-use hyperast::store::SimpleStores;
+use hyper_diff::{actions::action_vec::actions_vec_f, algorithms};
+use hyperast::{store::SimpleStores, types::NodeId};
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
 
@@ -47,4 +47,14 @@ fn test_cd_diff() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
+
+    if let Some(actions) = _diff_result.actions {
+        actions_vec_f(
+            &actions,
+            &_diff_result.mapper.hyperast,
+            src_tr.local.compressed_node.as_id().clone(),
+        )
+    }
+
+    assert!(false)
 }
