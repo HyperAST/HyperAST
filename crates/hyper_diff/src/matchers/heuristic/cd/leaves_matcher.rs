@@ -156,14 +156,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decompressed_tree_store::CompletePostOrder;
-    use crate::matchers::{Decompressible, Mapper, mapping_store::DefaultMappingStore};
-    use crate::tests::examples::example_simple;
+    use crate::decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore};
+    use crate::matchers::Decompressible;
+    use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
     use crate::tree::simple_tree::vpair_to_stores;
 
     #[test]
     fn test_leaves_matcher() {
-        let (stores, src, dst) = vpair_to_stores(example_simple());
+        let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_gt_java_code());
 
         let mapping = Mapper {
             hyperast: &stores,
@@ -179,6 +179,11 @@ mod tests {
         };
 
         let result = LeavesMatcher::match_it(mapping);
+
+        let src_fmt = |src: u16| result.src_arena.original(&src).to_string();
+        let dst_fmt = |dst: u16| result.dst_arena.original(&dst).to_string();
+        let display_vec = result.mapping.mappings.display(&src_fmt, &dst_fmt);
+        println!("Mappings:\n{}", display_vec);
 
         assert!(result.mapping.mappings.src_to_dst.len() > 0);
     }

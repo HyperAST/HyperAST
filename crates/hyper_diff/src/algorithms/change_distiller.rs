@@ -7,8 +7,7 @@ use crate::{
     decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
     matchers::{
         Decompressible, Mapper,
-        heuristic::gt::greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
+        mapping_store::{MappingStore, VecStore},
     },
     tree::tree_path::CompressedTreePath,
 };
