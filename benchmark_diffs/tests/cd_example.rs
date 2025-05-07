@@ -5,13 +5,16 @@ use std::path::Path;
 
 // Define test case paths relative to root/../datasets/defects4j
 const TEST_CASE: (&str, &str, &str) = (
-    "Jsoup_17",
-    "before/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
-    "after/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
+    // "Jsoup_17",
+    // "before/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
+    // "after/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
+    "Chart",
+    "before/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
+    "after/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
 );
 
 #[test]
-fn test_cd_jsoup_diff() {
+fn test_cd_diff() {
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
