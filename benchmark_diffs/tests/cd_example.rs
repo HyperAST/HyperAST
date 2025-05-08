@@ -1,5 +1,5 @@
 use hyper_diff::{actions::action_vec::actions_vec_f, algorithms};
-use hyperast::{store::SimpleStores, types::NodeId};
+use hyperast::{nodes::SyntaxSerializer, store::SimpleStores, types::NodeId};
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
 
@@ -41,19 +41,31 @@ fn test_cd_diff() {
     let (src_tr, dst_tr) =
         parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
-    // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::change_distiller::diff(
+    // Perform the diff
+    let diff_result = algorithms::change_distiller::diff(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
 
-    if let Some(actions) = _diff_result.actions {
+    println!(
+        "Src Tree:\n{}",
+        SyntaxSerializer::new(&stores, src_tr.local.compressed_node)
+    );
+    println!(
+        "Dst Tree:\n{}",
+        SyntaxSerializer::new(&stores, dst_tr.local.compressed_node)
+    );
+
+    println!("stats from diffing: \n{:#?}", &diff_result.summarize());
+
+    if let Some(actions) = diff_result.actions {
         actions_vec_f(
             &actions,
-            &_diff_result.mapper.hyperast,
+            &diff_result.mapper.hyperast,
             src_tr.local.compressed_node.as_id().clone(),
-        )
+        );
+        actions.iter().for_each(|a| println!("{:?}", a));
     }
 
     assert!(false)
