@@ -1,3 +1,25 @@
+/// Macro for constructing simple trees.
+///
+/// # Arguments
+///
+/// * `$k` - The type/value of the node
+/// * `$l` - Optional label for the node
+///
+/// # Examples
+///
+/// ```
+/// // Create a single node with no label or children
+/// tree!(type);
+///
+/// // Create a node with a label but no children
+/// tree!(type, label);
+///
+/// // Create a node with children but no label
+/// tree!(type; [child1, child2]);
+///
+/// // Create a node with both label and children
+/// tree!(type, label; [child1, child2]);
+/// ```
 macro_rules! tree {
     ( $k:expr ) => {
         SimpleTree::new($k, None, vec![])
@@ -12,7 +34,7 @@ macro_rules! tree {
         SimpleTree::new($k, None, vec![$($x),+])
     };
 }
-pub(crate) use tree; 
+pub(crate) use tree;
 
 pub mod action_generator2_simple_tests;
 pub mod action_generator2_tests;

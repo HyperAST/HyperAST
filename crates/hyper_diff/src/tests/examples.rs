@@ -26,6 +26,36 @@ pub(crate) fn example_simple() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+/// This example is taken from GumTree: cd_v0.xlm and cd_v1.xml
+pub(crate) fn example_leaf_swap() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "a"; [
+            tree!(4, "b"),
+            tree!(5, "c"),
+    ]);
+    let dst = tree!(
+        0, "a"; [
+            tree!(5, "c"),
+            tree!(4, "b"),
+    ]);
+    (src, dst)
+}
+
+/// Simple tree with same structure but different labels for the children of same type
+pub(crate) fn example_leaf_label_swap() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "a"; [
+            tree!(1, "b"),
+            tree!(1, "c"),
+    ]);
+    let dst = tree!(
+        0, "a"; [
+            tree!(1, "c"),
+            tree!(1, "b"),
+    ]);
+    (src, dst)
+}
+
 #[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_simple1() -> (ST<u8>, ST<u8>) {
     let src = tree!(
