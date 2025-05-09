@@ -8,6 +8,7 @@ use crate::{
         Decompressible, Mapper,
         heuristic::gt::{
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+            xy_bottom_up_matcher::XYBottomUpMatcher,
             greedy_subtree_matcher::GreedySubtreeMatcher,
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},

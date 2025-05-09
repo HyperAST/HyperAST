@@ -1,3 +1,4 @@
+cargo-features = ["profile-rustflags"]
 
 [package]
 name = "hyperast_benchmark_diffs"
@@ -45,6 +46,8 @@ jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
 [dev-dependencies]
 hyperast_gen_ts_java = { workspace = true }
 
-# [[bin]]
-# name = "window_combination"
-# path = "binwindow_combination.rs"
+criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+
+[[bench]]
+name = "my_bench"
+harness = false
