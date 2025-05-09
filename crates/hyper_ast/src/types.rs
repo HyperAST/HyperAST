@@ -548,7 +548,7 @@ impl HyperType for u8 {
     }
 
     fn is_spaces(&self) -> bool {
-        todo!()
+        false
     }
 
     fn is_syntax(&self) -> bool {
@@ -1328,10 +1328,9 @@ where
     }
 }
 
-pub use crate::store::nodes::ErasedHolder;
 pub use crate::store::nodes::Compo;
 pub use crate::store::nodes::CompressedCompo;
-
+pub use crate::store::nodes::ErasedHolder;
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore {}
 
@@ -1509,7 +1508,7 @@ impl HyperType for AnyType {
     }
 
     fn is_spaces(&self) -> bool {
-        self.0.is_spaces()
+        false
     }
 
     fn is_syntax(&self) -> bool {

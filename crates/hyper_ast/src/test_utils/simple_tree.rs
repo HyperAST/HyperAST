@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
-use num::{cast, NumCast, PrimInt, ToPrimitive};
+use num::{NumCast, PrimInt, ToPrimitive, cast};
 
 use crate::types::{
     HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
@@ -679,7 +679,7 @@ pub struct Ty(u8);
 
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        f.write_fmt(format_args!("Ty{}", self.0))
     }
 }
 
@@ -716,7 +716,7 @@ impl HyperType for Ty {
     }
 
     fn is_spaces(&self) -> bool {
-        todo!()
+        self.0.is_spaces()
     }
 
     fn is_syntax(&self) -> bool {
