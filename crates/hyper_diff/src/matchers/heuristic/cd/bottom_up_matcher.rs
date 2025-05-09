@@ -6,12 +6,8 @@ use crate::{
     matchers::{mapping_store::MonoMappingStore, similarity_metrics},
 };
 use hyperast::PrimInt;
-use hyperast::types::{
-    self, DecompressedFrom, HashKind, HyperAST, NodeId, NodeStore, Tree, TypeStore, WithHashs,
-};
-use num_traits::{ToPrimitive, Zero};
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, WithHashs};
 use std::fmt::Debug;
-use std::{collections::HashMap, hash::Hash};
 
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
@@ -74,29 +70,14 @@ where
         let struct_sim_threshold1 = 0.6;
         let struct_sim_threshold2 = 0.4;
 
-        log::debug!(
-            "Starting bottom-up matching with thresholds: {}, {}",
-            struct_sim_threshold1,
-            struct_sim_threshold2
-        );
-
         for s in self.src_arena.iter_df_post::<true>() {
             let src_tree = s;
             let number_of_leaves = self.number_of_leaves_src(&src_tree);
 
             for dst_tree in self.dst_arena.iter_df_post::<true>() {
-                log::debug!("Examining source tree with {} leaves", number_of_leaves);
-
                 let mapping_allowed = self.is_mapping_allowed(&src_tree, &dst_tree);
                 let src_is_leaf = self.src_arena.children(&src_tree).is_empty();
                 let dst_is_leaf = self.dst_arena.children(&dst_tree).is_empty();
-
-                log::debug!(
-                    "Mapping allowed: {}, source tree is leaf: {}, destination tree is leaf: {}",
-                    mapping_allowed,
-                    src_is_leaf,
-                    dst_is_leaf
-                );
 
                 if mapping_allowed && !(src_is_leaf || dst_is_leaf) {
                     let similarity = similarity_metrics::chawathe_similarity(
@@ -105,21 +86,17 @@ where
                         &self.mappings,
                     );
 
-                    log::debug!("Mapping allowed, similarity: {}", similarity);
-
                     if (number_of_leaves > max_number_of_leaves
                         && similarity >= struct_sim_threshold1)
                         || (number_of_leaves <= max_number_of_leaves
                             && similarity >= struct_sim_threshold2)
                     {
-                        log::debug!("Adding mapping for trees with similarity {}", similarity);
                         self.mappings.link(src_tree, dst_tree);
                         break;
                     }
                 }
             }
         }
-        log::debug!("Completed mapping process");
         ()
     }
 
@@ -137,10 +114,6 @@ where
         let src_linked = self.mappings.get_src(dst_tree).is_some();
         let dst_linked = self.mappings.get_dst(src_tree).is_some();
 
-        log::debug!("Checking mapping between {:?} and {:?}", src_tree, dst_tree);
-        log::debug!("Source linked: {}", src_linked);
-        log::debug!("Destination linked: {}", dst_linked);
-
         if src_linked || dst_linked {
             return false;
         }
@@ -150,9 +123,6 @@ where
 
         let src_type = self.stores.resolve_type(&original_src);
         let dst_type = self.stores.resolve_type(&original_dst);
-
-        log::debug!("Source type: {:?}", src_type);
-        log::debug!("Destination type: {:?}", dst_type);
 
         src_type == dst_type
     }

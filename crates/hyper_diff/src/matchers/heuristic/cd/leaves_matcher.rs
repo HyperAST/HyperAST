@@ -78,19 +78,21 @@ where
     }
 
     fn execute(&mut self) {
-        let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
         let dst_leaves: Vec<M::Dst> = self
             .dst_arena
             .iter_df_post::<true>()
             .filter(|t| self.dst_arena.children(t).is_empty())
             .collect();
 
-        // Collect potential mappings
-        for src_leaf in self
+        let src_leaves: Vec<M::Src> = self
             .src_arena
             .iter_df_post::<true>()
             .filter(|t| self.src_arena.children(t).is_empty())
-        {
+            .collect();
+
+        let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+
+        for &src_leaf in &src_leaves {
             for &dst_leaf in &dst_leaves {
                 if self.is_mapping_allowed(&src_leaf, &dst_leaf) {
                     let sim = self.compute_label_similarity(&src_leaf, &dst_leaf);
@@ -108,17 +110,8 @@ where
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
 
-        println!(
-            "Sorted mappings: {:?}",
-            leaves_mappings
-                .iter()
-                .map(|mapping| mapping.sim)
-                .collect::<Vec<_>>()
-        );
-
         // Process mappings in order
         for mapping in leaves_mappings {
-            println!("Linking {:?} to {:?}", mapping.src, mapping.dst);
             self.mappings
                 .link_if_both_unmapped(mapping.src, mapping.dst);
         }
@@ -137,13 +130,6 @@ where
 
         let src_type = self.stores.resolve_type(&original_src);
         let dst_type = self.stores.resolve_type(&original_dst);
-
-        println!(
-            "is_mapping_allowed src_type={:?}, dst_type={:?}, allowed={}",
-            src_type,
-            dst_type,
-            src_type == dst_type
-        );
 
         src_type == dst_type
     }
@@ -164,10 +150,6 @@ where
                 let dst_label = self.stores.label_store().resolve(&dst_label_id);
                 let dist =
                     str_distance::QGram::new(3).normalized(src_label.chars(), dst_label.chars());
-                println!(
-                    "compute_label_similarity: src_label = {}, dst_label = {}, dist = {}",
-                    src_label, dst_label, dist
-                );
                 1.0 - dist
             }
             _ => 0.0,

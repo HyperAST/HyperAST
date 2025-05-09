@@ -12,6 +12,7 @@ use crate::{
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
+use log::debug;
 use std::{fmt::Debug, time::Instant};
 
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
@@ -32,10 +33,13 @@ where
     HAST::Label: Debug + Copy + Eq,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
+    log::debug!("Starting ChangeDistiller Algorithm. Preparing subtrees");
     let now = Instant::now();
     let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
         hyperast.decompress_pair(src, dst).into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
+    log::debug!("Subtree prepare time: {}", subtree_prepare_t);
+    log::debug!("Starting LeavesMatcher");
     let now = Instant::now();
     let mapper = LeavesMatcher::<_, _, _, _>::match_it(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
@@ -45,6 +49,7 @@ where
         subtree_matcher_t,
         subtree_mappings_s
     );
+    log::debug!("Starting BottomUpMatcher");
     let now = Instant::now();
     let mapper = BottomUpMatcher::<_, _, _, _>::match_it(mapper);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
@@ -54,6 +59,8 @@ where
         bottomup_matcher_t,
         bottomup_mappings_s
     );
+    log::debug!("Starting script generation");
+
     let now = Instant::now();
 
     let mapper = mapper.map(
