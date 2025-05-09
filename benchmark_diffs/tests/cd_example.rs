@@ -1,4 +1,7 @@
-use hyper_diff::{actions::action_vec::actions_vec_f, algorithms};
+use hyper_diff::{
+    actions::{Actions, action_vec::actions_vec_f},
+    algorithms,
+};
 use hyperast::{nodes::SyntaxSerializer, store::SimpleStores, types::NodeId};
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
@@ -57,9 +60,7 @@ fn test_cd_diff() {
         SyntaxSerializer::new(&stores, dst_tr.local.compressed_node)
     );
 
-    println!("stats from diffing: \n{:#?}", &diff_result.summarize());
-
-    if let Some(actions) = diff_result.actions {
+    if let Some(actions) = diff_result.actions.as_ref() {
         actions_vec_f(
             &actions,
             &diff_result.mapper.hyperast,
@@ -67,6 +68,8 @@ fn test_cd_diff() {
         );
         actions.iter().for_each(|a| println!("{:?}", a));
     }
+
+    println!("stats from diffing: \n{:#?}", &diff_result.summarize());
 
     assert!(false)
 }
