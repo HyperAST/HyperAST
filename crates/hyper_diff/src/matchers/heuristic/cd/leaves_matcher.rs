@@ -9,8 +9,8 @@ use hyperast::PrimInt;
 use hyperast::types::{
     DecompressedFrom, HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs,
 };
+use std::cmp::Ordering;
 use std::fmt::Debug;
-use std::{cmp::Ordering, fmt::Display};
 use str_distance::DistanceMetric;
 
 struct MappingWithSimilarity<M: MonoMappingStore> {
@@ -108,8 +108,17 @@ where
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
 
+        println!(
+            "Sorted mappings: {:?}",
+            leaves_mappings
+                .iter()
+                .map(|mapping| mapping.sim)
+                .collect::<Vec<_>>()
+        );
+
         // Process mappings in order
         for mapping in leaves_mappings {
+            println!("Linking {:?} to {:?}", mapping.src, mapping.dst);
             self.mappings
                 .link_if_both_unmapped(mapping.src, mapping.dst);
         }
@@ -129,6 +138,13 @@ where
         let src_type = self.stores.resolve_type(&original_src);
         let dst_type = self.stores.resolve_type(&original_dst);
 
+        println!(
+            "is_mapping_allowed src_type={:?}, dst_type={:?}, allowed={}",
+            src_type,
+            dst_type,
+            src_type == dst_type
+        );
+
         src_type == dst_type
     }
 
@@ -146,7 +162,13 @@ where
             (Some(src_label_id), Some(dst_label_id)) => {
                 let src_label = self.stores.label_store().resolve(&src_label_id);
                 let dst_label = self.stores.label_store().resolve(&dst_label_id);
-                1.0 - str_distance::QGram::new(3).normalized(src_label.chars(), dst_label.chars())
+                let dist =
+                    str_distance::QGram::new(3).normalized(src_label.chars(), dst_label.chars());
+                println!(
+                    "compute_label_similarity: src_label = {}, dst_label = {}, dist = {}",
+                    src_label, dst_label, dist
+                );
+                1.0 - dist
             }
             _ => 0.0,
         }
@@ -155,14 +177,20 @@ where
 
 #[cfg(test)]
 mod tests {
+    use hyperast::nodes::SyntaxSerializer;
+    use hyperast::test_utils::simple_tree::DisplayTree;
+    use hyperast::types::WithChildren;
+
     use super::*;
     use crate::decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore};
     use crate::matchers::Decompressible;
+    use crate::matchers::mapping_store::MappingStore;
     use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
     use crate::tree::simple_tree::vpair_to_stores;
 
     #[test]
-    fn test_leaves_matcher() {
+    #[ignore]
+    fn test_leaves_matcher_manual() {
         let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_gt_java_code());
 
         let mapping = Mapper {
@@ -186,5 +214,66 @@ mod tests {
         println!("Mappings:\n{}", display_vec);
 
         assert!(result.mapping.mappings.src_to_dst.len() > 0);
+    }
+
+    #[test]
+    fn test_leaves_matcher() {
+        let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
+
+        println!(
+            "Src Tree:\n{}",
+            DisplayTree::new(&stores.label_store, &stores.node_store, src)
+        );
+
+        println!(
+            "Dst Tree:\n{}",
+            DisplayTree::new(&stores.label_store, &stores.node_store, dst)
+        );
+        println!("Src Tree:\n{}", SyntaxSerializer::new(&stores, src));
+        println!("Dst Tree:\n{}", SyntaxSerializer::new(&stores, dst));
+
+        let mapping = Mapper {
+            hyperast: &stores,
+            mapping: crate::matchers::Mapping {
+                src_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
+                    &stores, &src,
+                ),
+                dst_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
+                    &stores, &dst,
+                ),
+                mappings: DefaultMappingStore::default(),
+            },
+        };
+
+        let result = LeavesMatcher::match_it(mapping);
+
+        assert_eq!(2, result.mappings.len());
+        println!("Mappings: {:?}", result.mappings);
+        assert!(HyperAST::resolve(&stores, &dst).child(&0).is_some());
+        assert!(HyperAST::resolve(&stores, &dst).child(&1).is_some());
+        assert!(HyperAST::resolve(&stores, &src).child(&0).is_some());
+        assert!(HyperAST::resolve(&stores, &src).child(&1).is_some());
+
+        println!(
+            "Src Children: {:?}",
+            HyperAST::resolve(&stores, &src).children()
+        );
+        println!(
+            "Dst Children: {:?}",
+            HyperAST::resolve(&stores, &dst).children()
+        );
+
+        let dst_c0 = HyperAST::resolve(&stores, &dst).child(&0).unwrap();
+        let dst_c1 = HyperAST::resolve(&stores, &dst).child(&1).unwrap();
+        let src_c0 = HyperAST::resolve(&stores, &src).child(&0).unwrap();
+        let src_c1 = HyperAST::resolve(&stores, &src).child(&1).unwrap();
+
+        println!("dst_0: {:?}", dst_c0);
+        println!("dst_1: {:?}", dst_c1);
+        println!("src_0: {:?}", src_c0);
+        println!("src_1: {:?}", src_c1);
+
+        assert!(result.mappings.has(&src_c0, &dst_c1));
+        assert!(result.mappings.has(&src_c1, &dst_c0));
     }
 }
