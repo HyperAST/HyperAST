@@ -70,10 +70,9 @@ where
     }
 
     pub fn execute(&mut self) {
-        let mut dst_trees = self.dst_arena.iter_df_post::<true>();
-        let max_number_of_leaves = 1000; // TODO: make configurable
-        let struct_sim_threshold1 = 0.5;
-        let struct_sim_threshold2 = 0.6;
+        let max_number_of_leaves = 4; // TODO: make configurable
+        let struct_sim_threshold1 = 0.6;
+        let struct_sim_threshold2 = 0.4;
 
         log::debug!(
             "Starting bottom-up matching with thresholds: {}, {}",
@@ -83,38 +82,40 @@ where
 
         for s in self.src_arena.iter_df_post::<true>() {
             let src_tree = s;
-            let dst_tree = dst_trees.next().unwrap();
             let number_of_leaves = self.number_of_leaves_src(&src_tree);
 
-            log::debug!("Examining source tree with {} leaves", number_of_leaves);
+            for dst_tree in self.dst_arena.iter_df_post::<true>() {
+                log::debug!("Examining source tree with {} leaves", number_of_leaves);
 
-            let mapping_allowed = self.is_mapping_allowed(&src_tree, &dst_tree);
-            let src_is_leaf = self.src_arena.children(&src_tree).is_empty();
-            let dst_is_leaf = self.dst_arena.children(&dst_tree).is_empty();
+                let mapping_allowed = self.is_mapping_allowed(&src_tree, &dst_tree);
+                let src_is_leaf = self.src_arena.children(&src_tree).is_empty();
+                let dst_is_leaf = self.dst_arena.children(&dst_tree).is_empty();
 
-            log::debug!(
-                "Mapping allowed: {}, source tree is leaf: {}, destination tree is leaf: {}",
-                mapping_allowed,
-                src_is_leaf,
-                dst_is_leaf
-            );
-
-            if mapping_allowed && !(src_is_leaf || dst_is_leaf) {
-                let similarity = similarity_metrics::chawathe_similarity(
-                    &self.src_arena.descendants(&src_tree),
-                    &self.dst_arena.descendants(&dst_tree),
-                    &self.mappings,
+                log::debug!(
+                    "Mapping allowed: {}, source tree is leaf: {}, destination tree is leaf: {}",
+                    mapping_allowed,
+                    src_is_leaf,
+                    dst_is_leaf
                 );
 
-                log::debug!("Mapping allowed, similarity: {}", similarity);
+                if mapping_allowed && !(src_is_leaf || dst_is_leaf) {
+                    let similarity = similarity_metrics::chawathe_similarity(
+                        &self.src_arena.descendants(&src_tree),
+                        &self.dst_arena.descendants(&dst_tree),
+                        &self.mappings,
+                    );
 
-                if (number_of_leaves > max_number_of_leaves && similarity >= struct_sim_threshold1)
-                    || (number_of_leaves <= max_number_of_leaves
-                        && similarity >= struct_sim_threshold2)
-                {
-                    log::debug!("Adding mapping for trees with similarity {}", similarity);
-                    self.mappings.link(src_tree, dst_tree);
-                    break;
+                    log::debug!("Mapping allowed, similarity: {}", similarity);
+
+                    if (number_of_leaves > max_number_of_leaves
+                        && similarity >= struct_sim_threshold1)
+                        || (number_of_leaves <= max_number_of_leaves
+                            && similarity >= struct_sim_threshold2)
+                    {
+                        log::debug!("Adding mapping for trees with similarity {}", similarity);
+                        self.mappings.link(src_tree, dst_tree);
+                        break;
+                    }
                 }
             }
         }
@@ -123,15 +124,11 @@ where
     }
 
     fn number_of_leaves_src(&self, src_tree: &M::Src) -> usize {
-        let children = &self.src_arena.children(src_tree);
-        if children.is_empty() {
-            1 // If no children, this is a leaf
-        } else {
-            children
-                .iter()
-                .map(|child| self.number_of_leaves_src(child))
-                .sum()
-        }
+        self.src_arena
+            .descendants(src_tree)
+            .iter()
+            .filter(|tree| self.src_arena.children(tree).is_empty())
+            .count()
     }
 
     /// This function checks if a mapping between two nodes is allowed.
