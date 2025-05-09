@@ -61,7 +61,7 @@ impl<T: Debug, IdD: PrimInt + Debug> Debug for BasicPostOrder<T, IdD> {
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
-    for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -75,7 +75,7 @@ where
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrderIterable<HAST, IdD>
-    for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -101,7 +101,7 @@ impl<'d, T, IdD: PrimInt> BasicPostOrder<T, IdD> {
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> super::DecompressedSubtree<HAST::IdN>
-    for Decompressible<HAST, BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -117,7 +117,7 @@ where
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Debug> types::DecompressedFrom<HAST>
-    for BasicPostOrder<HAST::IdN, IdD>
+for BasicPostOrder<HAST::IdN, IdD>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -129,7 +129,7 @@ where
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt>
-    Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
+Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
 {
     /// WARN oposite order than id_compressed
     pub fn compute_kr(&self) -> Box<[IdD]> {
@@ -239,7 +239,7 @@ impl<IdN, IdD: PrimInt> BasicPostOrder<IdN, IdD> {
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD>
-    for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -303,7 +303,7 @@ where
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedTreeStore<HAST, IdD>
-    for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -336,13 +336,13 @@ where
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> DecendantsLending<'a>
-    for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 {
     type Slice = BasicPOSlice<'a, HAST::IdN, IdD>;
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> ContiguousDescendants<HAST, IdD>
-    for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+for Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -360,7 +360,7 @@ where
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Eq>
-    Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
+Decompressible<HAST, &BasicPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -423,7 +423,7 @@ impl<'d, IdN, IdD: PrimInt> BasicPOSlice<'d, IdN, IdD> {
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
-    for Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
+for Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -437,7 +437,7 @@ where
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD>
-    for Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
+for Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
@@ -501,7 +501,7 @@ where
 }
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> DecompressedTreeStore<HAST, IdD>
-    for Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
+for Decompressible<HAST, BasicPOSlice<'a, HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
