@@ -42,12 +42,12 @@ where
     log::debug!("Starting LeavesMatcher");
     let now = Instant::now();
     let mapper = LeavesMatcher::<_, _, _, _>::match_it(mapper);
-    let subtree_matcher_t = now.elapsed().as_secs_f64();
-    let subtree_mappings_s = mapper.mappings().len();
+    let leaves_matcher_t = now.elapsed().as_secs_f64();
+    let leaves_mappings_s = mapper.mappings().len();
     log::debug!(
-        "Subtree matcher time: {}, Subtree mappings: {}",
-        subtree_matcher_t,
-        subtree_mappings_s
+        "LeavesMatcher time: {}, Leaves mappings: {}",
+        leaves_matcher_t,
+        leaves_mappings_s
     );
     log::debug!("Starting BottomUpMatcher");
     let now = Instant::now();
@@ -76,7 +76,7 @@ where
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
         mapping_durations: PreparedMappingDurations {
-            mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
+            mappings: MappingDurations([leaves_matcher_t, bottomup_matcher_t]),
             preparation: [subtree_prepare_t, 0.0],
         },
         mapper,
