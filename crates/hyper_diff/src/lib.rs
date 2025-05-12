@@ -1,4 +1,6 @@
 #![feature(test)]
+#![feature(let_chains)]
+
 pub mod actions;
 pub mod decompressed_tree_store;
 #[cfg(feature = "experimental")]

@@ -295,7 +295,7 @@ impl<IdN, IdD: PrimInt> SimplePostOrder<IdN, IdD> {
                 });
             } else {
                 let curr_idx = cast(id_compressed.len()).unwrap();
-                let value = if l.is_some() {
+                let value = if l.is_none() {
                     curr_idx
                 } else {
                     for x in children {
