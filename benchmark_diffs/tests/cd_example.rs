@@ -1,11 +1,7 @@
-use hyper_diff::{
-    actions::{Actions, action_vec::actions_vec_f},
-    algorithms,
-};
-use hyperast::{nodes::SyntaxSerializer, store::SimpleStores, types::NodeId};
+use hyper_diff::algorithms;
+use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
-
 use std::sync::Once;
 
 static INIT: Once = Once::new();
@@ -133,7 +129,7 @@ fn log_all_number_of_lines_of_codes() {
 #[test]
 fn test_cd_diff_first() {
     init_logger();
-    run_diff_test(&[TEST_CASES[0]]);
+    run_diff_test(&[TEST_CASES[2]]);
 }
 
 #[test]
