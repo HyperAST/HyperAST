@@ -1,9 +1,10 @@
 use crate::{
     actions::action_vec::ActionsVec,
-    matchers::{mapping_store::VecStore, Mapper},
+    matchers::{Mapper, mapping_store::VecStore},
 };
 
 pub mod change_distiller;
+pub mod change_distiller_lazy;
 pub mod gumtree;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
