@@ -31,51 +31,51 @@ const TEST_CASES: &[(&str, &str, &str)] = &[
         "before/Mockito/38/src_org_mockito_internal_verification_argumentmatching_ArgumentMatchingTool.java",
         "after/Mockito/38/src_org_mockito_internal_verification_argumentmatching_ArgumentMatchingTool.java",
     ),
-    // (
-    //     "Mockito_9",
-    //     "before/Mockito/9/src_org_mockito_internal_stubbing_answers_CallsRealMethods.java",
-    //     "after/Mockito/9/src_org_mockito_internal_stubbing_answers_CallsRealMethods.java",
-    // ),
-    // (
-    //     "Time_26",
-    //     "before/Time/26/src_main_java_org_joda_time_field_LenientDateTimeField.java",
-    //     "after/Time/26/src_main_java_org_joda_time_field_LenientDateTimeField.java",
-    // ),
-    // (
-    //     "Chart_10",
-    //     "before/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
-    //     "after/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
-    // ),
-    // (
-    //     "Cli_12",
-    //     "before/Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
-    //     "after/Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
-    // ),
-    // (
-    //     "Cli_13",
-    //     "before/Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
-    //     "after/Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
-    // ),
-    // (
-    //     "Cli_21",
-    //     "before/Cli/21/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
-    //     "after/Cli/21/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
-    // ),
-    // (
-    //     "Cli_29",
-    //     "before/Cli/29/src_java_org_apache_commons_cli_Util.java",
-    //     "after/Cli/29/src_java_org_apache_commons_cli_Util.java",
-    // ),
-    // (
-    //     "JxPath_7a",
-    //     "before/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThan.java",
-    //     "after/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThan.java",
-    // ),
-    // (
-    //     "JxPath_7b",
-    //     "before/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThanOrEqual.java",
-    //     "after/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThanOrEqual.java",
-    // ),
+    (
+        "Mockito_9",
+        "before/Mockito/9/src_org_mockito_internal_stubbing_answers_CallsRealMethods.java",
+        "after/Mockito/9/src_org_mockito_internal_stubbing_answers_CallsRealMethods.java",
+    ),
+    (
+        "Time_26",
+        "before/Time/26/src_main_java_org_joda_time_field_LenientDateTimeField.java",
+        "after/Time/26/src_main_java_org_joda_time_field_LenientDateTimeField.java",
+    ),
+    (
+        "Chart_10",
+        "before/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
+        "after/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
+    ),
+    (
+        "Cli_12",
+        "before/Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
+        "after/Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
+    ),
+    (
+        "Cli_13",
+        "before/Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+        "after/Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+    ),
+    (
+        "Cli_21",
+        "before/Cli/21/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+        "after/Cli/21/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+    ),
+    (
+        "Cli_29",
+        "before/Cli/29/src_java_org_apache_commons_cli_Util.java",
+        "after/Cli/29/src_java_org_apache_commons_cli_Util.java",
+    ),
+    (
+        "JxPath_7a",
+        "before/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThan.java",
+        "after/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThan.java",
+    ),
+    (
+        "JxPath_7b",
+        "before/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThanOrEqual.java",
+        "after/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThanOrEqual.java",
+    ),
 ];
 
 fn diff_benchmark(c: &mut Criterion) {
@@ -135,7 +135,7 @@ fn diff_benchmark(c: &mut Criterion) {
     group.bench_function("ChangeDistiller Lazy", |b| {
         b.iter(|| {
             for (_name, buggy, fixed) in &test_inputs {
-                run_diff(buggy, fixed, "change_distiller"); // TODO Update
+                run_diff(buggy, fixed, "change_distiller_lazy");
             }
         })
     });
@@ -164,11 +164,11 @@ fn run_diff(src: &str, dst: &str, algorithm: &str) {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         ),
-        // "change_distiller_lazy" => algorithms::change_distiller_lazy::diff(
-        //     &stores,
-        //     &src_tr.local.compressed_node,
-        //     &dst_tr.local.compressed_node,
-        // ),
+        "change_distiller_lazy" => algorithms::change_distiller_lazy::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
         _ => panic!("Unknown diff algorithm"),
     };
 
