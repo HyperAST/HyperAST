@@ -245,17 +245,13 @@ mod tests {
             HyperAST::resolve(&stores, &dst).children()
         );
 
-        let dst_c0 = HyperAST::resolve(&stores, &dst).child(&0).unwrap();
-        let dst_c1 = HyperAST::resolve(&stores, &dst).child(&1).unwrap();
-        let src_c0 = HyperAST::resolve(&stores, &src).child(&0).unwrap();
-        let src_c1 = HyperAST::resolve(&stores, &src).child(&1).unwrap();
+        use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+        let src = result.mapping.src_arena.root();
+        let src_cs = result.mapping.src_arena.children(&src);
+        let dst = result.mapping.dst_arena.root();
+        let dst_cs = result.mapping.dst_arena.children(&dst);
 
-        println!("dst_0: {:?}", dst_c0);
-        println!("dst_1: {:?}", dst_c1);
-        println!("src_0: {:?}", src_c0);
-        println!("src_1: {:?}", src_c1);
-
-        assert!(result.mappings.has(&src_c0, &dst_c1));
-        assert!(result.mappings.has(&src_c1, &dst_c0));
+        assert!(result.mapping.mappings.has(&src_cs[0], &dst_cs[1]));
+        assert!(result.mapping.mappings.has(&src_cs[1], &dst_cs[0]));
     }
 }
