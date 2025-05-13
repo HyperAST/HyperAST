@@ -22,16 +22,16 @@
 /// ```
 macro_rules! tree {
     ( $k:expr ) => {
-        SimpleTree::new($k, None, vec![])
+        hyperast::test_utils::simple_tree::SimpleTree::new($k, None, vec![])
     };
     ( $k:expr, $l:expr) => {
-        SimpleTree::new($k, Some($l), vec![])
+        hyperast::test_utils::simple_tree::SimpleTree::new($k, Some($l), vec![])
     };
     ( $k:expr, $l:expr; [$($x:expr),+ $(,)?]) => {
-        SimpleTree::new($k, Some($l), vec![$($x),+])
+        hyperast::test_utils::simple_tree::SimpleTree::new($k, Some($l), vec![$($x),+])
     };
     ( $k:expr; [$($x:expr),+ $(,)?]) => {
-        SimpleTree::new($k, None, vec![$($x),+])
+        hyperast::test_utils::simple_tree::SimpleTree::new($k, None, vec![$($x),+])
     };
 }
 pub(crate) use tree;
