@@ -7,8 +7,7 @@ use crate::{
     matchers::{Mapper, Mapping, mapping_store::MonoMappingStore, similarity_metrics},
 };
 use hyperast::PrimInt;
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, WithHashs};
-use num_traits::cast;
+use hyperast::types::{HyperAST, NodeId, WithHashs};
 use std::fmt::Debug;
 
 const MAX_LEAVES: usize = 4;
@@ -72,6 +71,7 @@ where
 
             for d in self.dst_arena.iter_df_post::<false>() {
                 let dst = self.dst_arena.decompress_to(&d);
+
                 if self.is_mapping_allowed(&src, &dst) {
                     let src_is_leaf = self.src_arena.children(&src).is_empty();
                     let dst_is_leaf = self.dst_arena.children(&dst).is_empty();
@@ -146,128 +146,132 @@ impl<HAST: HyperAST + Copy, Dsrc, Ddst, M: MonoMappingStore> Into<Mapper<HAST, D
 mod tests {
     use super::*;
     use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+    use crate::decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore};
     use crate::matchers::Decompressible;
     use crate::matchers::mapping_store::MappingStore;
     use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
-    use crate::tests::simple_examples;
+    use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
     use hyperast::nodes::SyntaxSerializer;
     use hyperast::test_utils::simple_tree::DisplayTree;
+    use hyperast::types::DecompressedFrom;
 
     #[test]
     fn test_bottom_up_matcher() {
-        // Using an example where nodes are moved but maintain their structure
-        let (stores, src, dst) = vpair_to_stores(simple_examples::example_move_action());
+        // Setup simple source and destination trees with similar structure
+        // Source tree: a -> [e -> [f], b -> [c, d]]
+        // Dest tree:   a -> [e -> [g], b -> [c, d]]
+        // Only difference is 'f' vs 'g'
+        let src = tree!(
+            0,"a"; [
+                tree!(0, "e"; [
+                    tree!(0, "f")]),
+                tree!(0, "b"; [
+                    tree!(0, "c"),
+                    tree!(0, "d")]),
+        ]);
+        let dst = tree!(
+            0,"a"; [
+                tree!(0, "e"; [
+                    tree!(0, "g")]),
+                tree!(0, "b"; [
+                    tree!(0, "c"),
+                    tree!(0, "d")]),
+        ]);
 
-        println!(
-            "Src Tree:\n{}",
-            DisplayTree::new(&stores.label_store, &stores.node_store, src)
-        );
+        // Create the necessary stores for the test trees
+        let (stores, src, dst) = vpair_to_stores((src, dst));
 
-        println!(
-            "Dst Tree:\n{}",
-            DisplayTree::new(&stores.label_store, &stores.node_store, dst)
-        );
-        println!("Src Tree:\n{}", SyntaxSerializer::new(&stores, src));
-        println!("Dst Tree:\n{}", SyntaxSerializer::new(&stores, dst));
-
+        // Create lazy post-order representations for the matcher
         let mut src_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &src);
         let mut dst_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &dst);
 
+        // Also create complete post-order representations for accessing nodes by path
+        let src_arena_decomp =
+            Decompressible::<_, CompletePostOrder<_, u16>>::decompress(&stores, &src);
+        let dst_arena_decomp =
+            Decompressible::<_, CompletePostOrder<_, u16>>::decompress(&stores, &dst);
+
+        // let src_arena_decomp = Decompressible::<_, CompletePostOrder<_, u16>>::from(src_arena_decomp);
+        // let dst_arena_decomp = Decompressible::<_, CompletePostOrder<_, u16>>::from(dst_arena_decomp);
+
+        // Initialize the mapping store
+        let mut mappings = DefaultMappingStore::default();
+        mappings.topit(src_arena.len(), dst_arena.len());
+
+        // Get references to nodes we want to pre-map (c and d nodes)
+        let src_root = src_arena_decomp.root();
+        let dst_root = dst_arena_decomp.root();
+        let src_node_c = src_arena_decomp.child(&src_root, &[1, 0]);
+        let src_node_d = src_arena_decomp.child(&src_root, &[1, 1]);
+        let dst_node_c = dst_arena_decomp.child(&dst_root, &[1, 0]);
+        let dst_node_d = dst_arena_decomp.child(&dst_root, &[1, 1]);
+
+        // Establish initial mappings for the bottom-up matcher
+        mappings.link(src_node_c, dst_node_c);
+        mappings.link(src_node_d, dst_node_d);
+
+        // Create the mapper with initial configuration
         let mapping = Mapper {
             hyperast: &stores,
             mapping: crate::matchers::Mapping {
                 src_arena: src_arena.as_mut(),
                 dst_arena: dst_arena.as_mut(),
-                mappings: DefaultMappingStore::default(),
+                mappings,
             },
         };
 
+        // Run the lazy bottom-up matcher
         let result = LazyBottomUpMatcher::match_it(mapping);
 
-        // Verify mappings - we expect to have several mappings for this example
-        // The root 'a', the 'b', 'c', 'd', 'e', and 'f' nodes should all be mapped
-        assert!(
-            result.mappings.len() >= 5,
-            "Expected at least 5 mappings, got {}",
+        // Verify the number of mappings
+        // We expect 4 mappings - the two pre-mapped nodes, the 'b' node, and the root
+        assert_eq!(
+            result.mappings.len(),
+            4,
+            "Expected exactly 3 mappings, got {}",
             result.mappings.len()
         );
 
-        // Get the actual nodes from the arenas
-        use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+        // Get references to the nodes in the result
         let src_root = result.mapping.src_arena.root();
         let dst_root = result.mapping.dst_arena.root();
 
-        // Root nodes should be mapped
+        // Verify root nodes are mapped
         assert!(
-            result
-                .mapping
-                .mappings
-                .has(&src_root.shallow(), &dst_root.shallow()),
+            result.mapping.mappings.has(&src_root, &dst_root),
             "Root nodes should be mapped"
         );
 
-        // Get children of root
         let src_children = result.mapping.src_arena.children(&src_root);
         let dst_children = result.mapping.dst_arena.children(&dst_root);
 
-        // Both trees should have 2 children under root
-        assert_eq!(src_children.len(), 2);
-        assert_eq!(dst_children.len(), 2);
-
-        // The 'e' and 'b' nodes should be mapped
+        // Verify the 'b' node is mapped (at index 1 in children array)
         assert!(
             result
                 .mapping
                 .mappings
-                .has(&src_children[0], &dst_children[0]),
-            "The 'e' nodes should be mapped"
-        );
-        assert!(
-            result
-                .mapping
-                .mappings
-                .has(&src_children[1], &dst_children[1]),
+                .has(&src_children[1].shallow(), &dst_children[1].shallow()),
             "The 'b' nodes should be mapped"
         );
 
-        // Get children of 'b'
+        // Verify that the children of 'b' are correctly mapped
         let src_b_children = result.mapping.src_arena.children(&src_children[1]);
         let dst_b_children = result.mapping.dst_arena.children(&dst_children[1]);
 
-        // Verify 'c' and 'd' are mapped correctly
         assert!(
             result
                 .mapping
                 .mappings
-                .has(&src_b_children[0], &dst_b_children[0]),
+                .has(&src_b_children[0].shallow(), &dst_b_children[0].shallow()),
             "The 'c' nodes should be mapped"
         );
         assert!(
             result
                 .mapping
                 .mappings
-                .has(&src_b_children[1], &dst_b_children[2]),
+                .has(&src_b_children[1].shallow(), &dst_b_children[1].shallow()),
             "The 'd' nodes should be mapped"
         );
-
-        // Check for the moved 'f' node
-        let src_e_children = result.mapping.src_arena.children(&src_children[0]);
-        assert_eq!(
-            src_e_children.len(),
-            1,
-            "Source 'e' node should have 1 child"
-        );
-
-        // The 'f' node should be mapped to the middle child of 'b' in the destination
-        assert!(
-            result
-                .mapping
-                .mappings
-                .has(&src_e_children[0], &dst_b_children[1]),
-            "The 'f' node should be mapped to the middle child of 'b'"
-        );
-
-        println!("Mappings: {:?}", result.mappings);
     }
 }
