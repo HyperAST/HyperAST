@@ -126,21 +126,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::iter::zip;
-
     use super::*;
     use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
-    use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
     use crate::matchers::Decompressible;
     use crate::matchers::mapping_store::MappingStore;
     use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
-    use crate::tests::simple_examples;
     use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
     use crate::{decompressed_tree_store::CompletePostOrder, tests::examples::example_simple};
-    use hyperast::nodes::SyntaxSerializer;
-    use hyperast::test_utils::simple_tree::DisplayTree;
-    use hyperast::test_utils::simple_tree::SimpleTree;
 
     fn init() {
         let _ = env_logger::builder()

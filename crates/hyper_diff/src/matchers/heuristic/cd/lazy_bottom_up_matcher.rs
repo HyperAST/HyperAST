@@ -152,8 +152,7 @@ mod tests {
     use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
     use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
-    use hyperast::nodes::SyntaxSerializer;
-    use hyperast::test_utils::simple_tree::DisplayTree;
+
     use hyperast::types::DecompressedFrom;
 
     #[test]
