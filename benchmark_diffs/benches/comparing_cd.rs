@@ -84,7 +84,7 @@ fn diff_benchmark(c: &mut Criterion) {
         .init();
     let mut group = c.benchmark_group("change_distiller_comparison");
 
-    group.sample_size(10);
+    group.sample_size(100);
 
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -116,13 +116,13 @@ fn diff_benchmark(c: &mut Criterion) {
         })
         .collect();
 
-    group.bench_function("HyperDiff Lazy", |b| {
-        b.iter(|| {
-            for (_name, buggy, fixed) in &test_inputs {
-                run_diff(buggy, fixed, "gumtree_lazy");
-            }
-        })
-    });
+    // group.bench_function("HyperDiff Lazy", |b| {
+    //     b.iter(|| {
+    //         for (_name, buggy, fixed) in &test_inputs {
+    //             run_diff(buggy, fixed, "gumtree_lazy");
+    //         }
+    //     })
+    // });
 
     group.bench_function("ChangeDistiller", |b| {
         b.iter(|| {
