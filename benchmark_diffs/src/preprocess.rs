@@ -71,6 +71,9 @@ impl JavaPreprocessFileSys {
         } else {
             "\n".as_bytes().to_vec()
         };
+        use hyperast::types::LLang;
+        dbg!(hyperast_gen_ts_java::types::Java::TE.len());
+        dbg!(hyperast_gen_ts_java::language().node_kind_count());
         let mut java_tree_gen = JavaTreeGen::new(&mut self.main_stores, &mut self.java_md_cache)
             .with_line_break(line_break);
         let full_node = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
@@ -78,6 +81,8 @@ impl JavaPreprocessFileSys {
                 Ok(java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk()))
             }
             Err(tree) => {
+                dbg!(&tree);
+                eprintln!("{}", tree.root_node().to_sexp());
                 Err(java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk()))
             }
         };

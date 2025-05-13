@@ -451,7 +451,7 @@ pub(crate) fn extract_updates<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,
@@ -501,7 +501,7 @@ pub(crate) fn extract_inserts<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,
@@ -564,7 +564,7 @@ pub(crate) fn extract_deletes<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,
@@ -622,7 +622,7 @@ pub(crate) fn extract_focuses<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,

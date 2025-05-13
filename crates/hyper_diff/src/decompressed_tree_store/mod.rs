@@ -6,8 +6,8 @@
 //! We need both post-order traversal and breadth-first.
 
 use hyperast::{
-    types::{self, HyperAST, LendN, NodeId, NodeStore, Stored, WithChildren, WithStats},
     PrimInt,
+    types::{self, HyperAST, LendN, NodeId, NodeStore, Stored, WithChildren, WithStats},
 };
 use std::fmt::Debug;
 
@@ -42,10 +42,8 @@ pub use hyperast::types::DecompressedSubtree;
 /// NOTE compared to Initializable this trait only adds WithStats bound on T.
 ///
 /// the WithStats bound helps a lot with lazy decompressions
-pub trait InitializableWithStats<IdN>: DecompressedSubtree<IdN>
-{
-    fn considering_stats(&self, root: &IdN) -> Self
-            ;
+pub trait InitializableWithStats<IdN>: DecompressedSubtree<IdN> {
+    fn considering_stats(&self, root: &IdN) -> Self;
 }
 
 /// create a lazy decompresed tree store
@@ -158,10 +156,7 @@ pub trait LazyPOSliceLending<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a S
 pub trait LazyPOBorrowSlice<HAST: HyperAST + Copy, IdD, IdS = IdD>:
     ContiguousDescendants<HAST, IdD, IdS> + for<'a> LazyPOSliceLending<'a, HAST, IdD>
 {
-    fn slice_po(
-        &mut self,
-        x: &IdD,
-    ) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo;
+    fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo;
 }
 
 pub(super) type CIdx<'a, S, IdN> = <<S as types::NLending<'a, IdN>>::N as WithChildren>::ChildIdx;
@@ -171,7 +166,6 @@ pub trait DecompressedParentsLending<'a, IdD, __ImplBound = &'a Self> {
 }
 
 pub trait DecompressedWithParent<HAST: HyperAST + Copy, IdD>:
-    // for<'a> types::NLending<'a, IdN> + 
     for<'a> DecompressedParentsLending<'a, IdD>
 {
     fn has_parent(&self, id: &IdD) -> bool;
@@ -223,7 +217,9 @@ pub trait PostOrder<HAST: HyperAST + Copy, IdD, IdS = IdD>:
     fn tree(&self, id: &IdD) -> HAST::IdN;
 }
 
-pub trait PostOrdKeyRoots<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self>: PostOrder<HAST, IdD> {
+pub trait PostOrdKeyRoots<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self>:
+    PostOrder<HAST, IdD>
+{
     type Iter: 'a + Iterator<Item = IdD>;
 }
 
@@ -236,6 +232,12 @@ pub trait PostOrderKeyRoots<HAST: HyperAST + Copy, IdD>:
 pub struct Iter<IdD> {
     current: IdD,
     len: IdD,
+}
+
+impl<IdD> Iter<IdD> {
+    pub(crate) fn new(current: IdD, len: IdD) -> Self {
+        Self { current, len }
+    }
 }
 
 impl<IdD: PrimInt> Iterator for Iter<IdD> {
