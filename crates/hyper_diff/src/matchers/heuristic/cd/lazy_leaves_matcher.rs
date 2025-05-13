@@ -172,101 +172,71 @@ where
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use hyperast::nodes::SyntaxSerializer;
-//     use hyperast::test_utils::simple_tree::DisplayTree;
-//     use hyperast::types::WithChildren;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+    use crate::matchers::Decompressible;
+    use crate::matchers::mapping_store::MappingStore;
+    use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
+    use crate::tree::simple_tree::vpair_to_stores;
+    use hyperast::nodes::SyntaxSerializer;
+    use hyperast::test_utils::simple_tree::DisplayTree;
+    use hyperast::types::WithChildren;
 
-//     use super::*;
-//     use crate::decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore};
-//     use crate::matchers::Decompressible;
-//     use crate::matchers::mapping_store::MappingStore;
-//     use crate::matchers::{Mapper, mapping_store::DefaultMappingStore};
-//     use crate::tree::simple_tree::vpair_to_stores;
+    #[test]
+    fn test_leaves_matcher() {
+        let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
 
-//     #[test]
-//     #[ignore]
-//     fn test_leaves_matcher_manual() {
-//         let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_gt_java_code());
+        println!(
+            "Src Tree:\n{}",
+            DisplayTree::new(&stores.label_store, &stores.node_store, src)
+        );
 
-//         let mapping = Mapper {
-//             hyperast: &stores,
-//             mapping: crate::matchers::Mapping {
-//                 src_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
-//                     &stores, &src,
-//                 ),
-//                 dst_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
-//                     &stores, &dst,
-//                 ),
-//                 mappings: DefaultMappingStore::default(),
-//             },
-//         };
+        println!(
+            "Dst Tree:\n{}",
+            DisplayTree::new(&stores.label_store, &stores.node_store, dst)
+        );
+        println!("Src Tree:\n{}", SyntaxSerializer::new(&stores, src));
+        println!("Dst Tree:\n{}", SyntaxSerializer::new(&stores, dst));
 
-//         let result = LeavesMatcher::match_it(mapping);
+        let mut src_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &src);
+        let mut dst_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &dst);
 
-//         let src_fmt = |src: u16| result.src_arena.original(&src).to_string();
-//         let dst_fmt = |dst: u16| result.dst_arena.original(&dst).to_string();
-//         let display_vec = result.mapping.mappings.display(&src_fmt, &dst_fmt);
-//         println!("Mappings:\n{}", display_vec);
+        let mapping = Mapper {
+            hyperast: &stores,
+            mapping: crate::matchers::Mapping {
+                src_arena: src_arena.as_mut(),
+                dst_arena: dst_arena.as_mut(),
+                mappings: DefaultMappingStore::default(),
+            },
+        };
 
-//         assert!(result.mapping.mappings.src_to_dst.len() > 0);
-//     }
+        let result = LazyLeavesMatcher::match_it(mapping);
 
-//     #[test]
-//     fn test_leaves_matcher() {
-//         let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
+        assert_eq!(2, result.mappings.len());
+        println!("Mappings: {:?}", result.mappings);
+        assert!(HyperAST::resolve(&stores, &dst).child(&0).is_some());
+        assert!(HyperAST::resolve(&stores, &dst).child(&1).is_some());
+        assert!(HyperAST::resolve(&stores, &src).child(&0).is_some());
+        assert!(HyperAST::resolve(&stores, &src).child(&1).is_some());
 
-//         println!(
-//             "Src Tree:\n{}",
-//             DisplayTree::new(&stores.label_store, &stores.node_store, src)
-//         );
+        println!(
+            "Src Children: {:?}",
+            HyperAST::resolve(&stores, &src).children()
+        );
+        println!(
+            "Dst Children: {:?}",
+            HyperAST::resolve(&stores, &dst).children()
+        );
 
-//         println!(
-//             "Dst Tree:\n{}",
-//             DisplayTree::new(&stores.label_store, &stores.node_store, dst)
-//         );
-//         println!("Src Tree:\n{}", SyntaxSerializer::new(&stores, src));
-//         println!("Dst Tree:\n{}", SyntaxSerializer::new(&stores, dst));
+        use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+        let src = result.mapping.src_arena.root();
+        let src_cs = result.mapping.src_arena.children(&src);
+        let dst = result.mapping.dst_arena.root();
+        let dst_cs = result.mapping.dst_arena.children(&dst);
 
-//         let mapping = Mapper {
-//             hyperast: &stores,
-//             mapping: crate::matchers::Mapping {
-//                 src_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
-//                     &stores, &src,
-//                 ),
-//                 dst_arena: Decompressible::<_, CompletePostOrder<_, u16>>::decompress(
-//                     &stores, &dst,
-//                 ),
-//                 mappings: DefaultMappingStore::default(),
-//             },
-//         };
-
-//         let result = LeavesMatcher::match_it(mapping);
-
-//         assert_eq!(2, result.mappings.len());
-//         println!("Mappings: {:?}", result.mappings);
-//         assert!(HyperAST::resolve(&stores, &dst).child(&0).is_some());
-//         assert!(HyperAST::resolve(&stores, &dst).child(&1).is_some());
-//         assert!(HyperAST::resolve(&stores, &src).child(&0).is_some());
-//         assert!(HyperAST::resolve(&stores, &src).child(&1).is_some());
-
-//         println!(
-//             "Src Children: {:?}",
-//             HyperAST::resolve(&stores, &src).children()
-//         );
-//         println!(
-//             "Dst Children: {:?}",
-//             HyperAST::resolve(&stores, &dst).children()
-//         );
-
-//         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
-//         let src = result.mapping.src_arena.root();
-//         let src_cs = result.mapping.src_arena.children(&src);
-//         let dst = result.mapping.dst_arena.root();
-//         let dst_cs = result.mapping.dst_arena.children(&dst);
-
-//         assert!(result.mapping.mappings.has(&src_cs[0], &dst_cs[1]));
-//         assert!(result.mapping.mappings.has(&src_cs[1], &dst_cs[0]));
-//     }
-// }
+        assert!(result.mapping.mappings.has(&src_cs[0], &dst_cs[1]));
+        assert!(result.mapping.mappings.has(&src_cs[1], &dst_cs[0]));
+    }
+}
