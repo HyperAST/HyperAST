@@ -677,7 +677,6 @@ impl crate::processing::erased::ParametrizedCommitProc2 for PomProcessorHolder {
         &mut self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &mut Self::Proc {
-        assert_eq!(0, parameters.0);
         self.0.as_mut().unwrap()
     }
 
@@ -685,7 +684,6 @@ impl crate::processing::erased::ParametrizedCommitProc2 for PomProcessorHolder {
         &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &Self::Proc {
-        assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }
 }
@@ -842,14 +840,5 @@ impl CacheHolding<crate::processing::caches::Maven> for MavenProc {
     }
     fn get_caches(&self) -> &crate::processing::caches::Maven {
         &self.cache
-    }
-}
-
-impl CacheHolding<crate::processing::caches::Maven> for MavenProcessorHolder {
-    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Maven {
-        &mut self.0[0].cache
-    }
-    fn get_caches(&self) -> &crate::processing::caches::Maven {
-        &self.0[0].cache
     }
 }

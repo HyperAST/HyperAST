@@ -264,6 +264,8 @@ pub(crate) mod caches {
     #[derive(Default)]
     pub struct Java {
         pub(crate) md_cache: hyperast_gen_ts_java::legion_with_refs::MDCache,
+        /// Passed to subtree builder when deriving different data (assumed to be incompatible).
+        pub(crate) dedup: hyperast::store::nodes::legion::DedupMap,
         pub object_map: NamedMap<(hyperast_gen_ts_java::legion_with_refs::Local, IsSkippedAna)>,
     }
 

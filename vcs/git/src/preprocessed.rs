@@ -16,13 +16,13 @@ use hyperast_gen_ts_java::legion_with_refs::PartialAnalysis;
 use log::info;
 
 use crate::{
+    Commit, DefaultMetrics, Processor,
     git::{all_commits_between, all_first_parents_between, retrieve_commit},
     make::MakeModuleAcc,
     make_processor::MakeProcessor,
     maven::MavenModuleAcc,
     maven_processor::MavenProcessor,
-    processing::{file_sys, ConfiguredRepo2},
-    Commit, DefaultMetrics, Processor, SimpleStores,
+    processing::{ConfiguredRepo2, file_sys},
 };
 // use hyperast_gen_ts_cpp::legion as cpp_tree_gen;
 
@@ -37,6 +37,8 @@ pub struct PreProcessedRepository {
 
     pub processor: RepositoryProcessor,
 }
+
+type SimpleStores = hyperast::store::SimpleStores<crate::TStore>;
 
 #[derive(Default)]
 pub struct RepositoryProcessor {
@@ -745,9 +747,15 @@ impl CommitProcessor<file_sys::Make> for RepositoryProcessor {
         name: &[u8],
         oid: git2::Oid,
     ) -> Self::Module {
-        let root_full_node =
-            MakeProcessor::<RMS, false, MakeModuleAcc>::new(repository, self, dir_path, name, oid, todo!("para"))
-                .process();
+        let root_full_node = MakeProcessor::<RMS, false, MakeModuleAcc>::new(
+            repository,
+            self,
+            dir_path,
+            name,
+            oid,
+            todo!("para"),
+        )
+        .process();
         // self.object_map_make
         //     .insert(commit_oid, root_full_node.clone());
         root_full_node

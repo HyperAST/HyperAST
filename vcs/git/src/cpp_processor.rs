@@ -1,20 +1,17 @@
 use crate::{
+    Processor, StackEle,
     cpp::CppAcc,
     git::BasicGitObject,
     make::MakeModuleAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{erased::{CommitProcExt, CommitProcessorHandle}, CacheHolding, InFiles, ObjectName, ParametrizedCommitProcessorHandle},
-    Processor, StackEle,
+    processing::{CacheHolding, InFiles, ObjectName},
 };
 use git2::{Oid, Repository};
 use hyperast::{
     store::nodes::legion::eq_node,
     types::{ETypeStore as _, LabelStore},
 };
-use hyperast_gen_ts_cpp::{
-    legion as cpp_gen,
-    types::{CppEnabledTypeStore as _, Type},
-};
+use hyperast_gen_ts_cpp::{legion as cpp_gen, types::Type};
 use hyperast_tsquery::ArrayStr;
 use std::{iter::Peekable, path::Components, sync::Arc};
 
@@ -199,7 +196,8 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
             .position(|x| &x.parameter == &t)
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
-                           // self.0.push(CppProc(t));
+                // self.0.push(CppProc(t));
+                // TODO enable multi configs for cpp, do the same as the one for Java
                 let query = if let Some(q) = &t.query {
                     Query::new(q.iter())
                 } else {

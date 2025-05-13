@@ -26,13 +26,16 @@ pub mod tests;
 
 use git::BasicGitObject;
 use git2::Oid;
-use hyperast::{store::defaults::LabelIdentifier, utils::Bytes};
+use hyperast::{store::{defaults::LabelIdentifier, nodes::legion::NodeStoreInner}, utils::Bytes};
 
 mod type_store;
 
 pub use type_store::TStore;
 
-pub type SimpleStores = hyperast::store::SimpleStores<TStore>;
+pub type NodeStore<'a, 'b> = hyperast::store::nodes::legion::NodeStore<&'a mut NodeStoreInner, &'b mut hyperast::store::nodes::legion::DedupMap>;
+
+// pub type SimpleStores<TS> = hyperast::store::SimpleStores<TS, NodeStoreInner>;
+pub type SimpleStores = hyperast::store::SimpleStores<crate::TStore>;
 
 // might also skip
 pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;

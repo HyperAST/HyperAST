@@ -1,16 +1,16 @@
+use crate::StackEle;
 use crate::processing::erased::{
     CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
 };
-use crate::StackEle;
 use crate::{
+    Processor,
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
-    make::{MakeModuleAcc, MakePartialAnalysis, MD},
+    make::{MD, MakeModuleAcc, MakePartialAnalysis},
     preprocessed::RepositoryProcessor,
     processing::{
-        erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName,
-        ParametrizedCommitProcessorHandle,
+        CacheHolding, InFiles, ObjectName, ParametrizedCommitProcessorHandle,
+        erased::ParametrizedCommitProc2,
     },
-    Processor,
 };
 use git2::{Oid, Repository};
 use hyperast::types::ETypeStore as _;
@@ -468,7 +468,8 @@ impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
             .position(|x| x.0.as_ref() == Some(&t))
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
-                           // self.0.push(MakefileProc(t));
+                // self.0.push(MakefileProc(t));
+                // TODO enable multi configs for cpp, do the same as the one for Java
                 self.0 = Some(MakefileProc(Some(t), Default::default()));
                 l
             });
@@ -555,7 +556,8 @@ impl crate::processing::erased::Parametrized for MakeProcessorHolder {
             .position(|x| &x.parameter == &t)
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
-                           // self.0.push(MakeProc(t));
+                // self.0.push(MakeProc(t));
+                // TODO enable multi configs for cpp, do the same as the one for Java
                 self.0 = Some(MakeProc {
                     parameter: t,
                     cache: Default::default(),
@@ -624,7 +626,7 @@ impl crate::processing::erased::CommitProc for MakeProc {
     }
 
     fn get_lang_handle(&self, lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
-        dbg!(self.parameter.cpp_handle.0 .0);
+        dbg!(self.parameter.cpp_handle.0.0);
         if lang.eq_ignore_ascii_case("cpp") {
             Some(ParametrizedCommitProcessorHandle(
                 CommitProcessorHandle(std::any::TypeId::of::<

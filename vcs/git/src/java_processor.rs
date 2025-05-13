@@ -404,88 +404,77 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
         &mut self,
         t: Self::T,
     ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
-        let l = self
-            .0
-            .iter()
-            .position(|x| &x.parameter == &t)
-            .unwrap_or_else(|| {
-                let l = self.0.len();
-                assert!(l <= 1);
-                let query = if let Some(q) = &t.query {
-                    use hyperast_tsquery::ArrayStr;
-                    Some(Query::new(q.iter()))
-                } else {
-                    None
-                };
-
-                #[cfg(feature = "tsg")]
-                let tsg = if let Some(q) = &t.tsg {
-                    let tsg = q.deref();
-                    type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
-                    type ExtQ<'hast, TS, Acc> = hyperast_tsquery::ExtendingStringQuery<
-                        M<'hast, TS, Acc>,
-                        tree_sitter::Language,
-                    >;
-
-                    let source: &str = tsg;
-                    let language = hyperast_gen_ts_java::language();
-
-                    let mut file = tree_sitter_graph::ast::File::<M<&SimpleStores, &Acc>>::new(
-                        language.clone(),
-                    );
-
-                    // let mty: &[_] = &[];
-                    // let query_source = ExtQ::new(language.clone(), Box::new(mty), source.len());
-                    let query_source = if let Some(p) = &t.query {
-                        ExtQ::new(language.clone(), Box::new(p.clone()), source.len())
-                    } else {
-                        let x: &[&str] = &[];
-                        ExtQ::new(language.clone(), Box::new(x), source.len())
-                    };
-                    tree_sitter_graph::parser::Parser::<ExtQ<_, _>>::with_ext(query_source, source)
-                        .parse_into_file(&mut file)
-                        .unwrap();
-                    use tree_sitter_graph::GenQuery;
-
-                    M::check(&mut file).unwrap();
-
-                    let mut functions = tree_sitter_graph::functions::Functions::<
-                        tree_sitter_graph::graph::Graph<
-                            hyperast_tsquery::stepped_query_imm::Node<
-                                hyperast::store::SimpleStores<
-                                    TStore,
-                                    &hyperast::store::nodes::legion::NodeStoreInner,
-                                    &hyperast::store::labels::LabelStore,
-                                >,
-                                &Acc,
-                            >,
-                        >,
-                    >::essentials();
-                    // TODO port those path functions to the generified variant in my fork
-                    // hyperast_tsquery::add_path_functions(&mut functions);
-                    let functions = functions.as_any();
-
-                    Some((file.as_any(), functions))
-                } else {
-                    // crate::java_processor::TSG
-                    None
-                };
-                let r = JavaProc {
-                    parameter: t,
-                    height_counts: vec![],
-                    query,
-                    #[cfg(feature = "tsg")]
-                    tsg,
-                    cache: Default::default(),
-                    commits: Default::default(),
-                };
-                self.0.push(r);
-
-                l
-            });
         use crate::processing::erased::{
             ConfigParametersHandle, ParametrizedCommitProc, ParametrizedCommitProcessorHandle,
         };
+        if let Some(l) = self.0.iter().position(|x| &x.parameter == &t) {
+            return ParametrizedCommitProcessorHandle(
+                self.erased_handle(),
+                ConfigParametersHandle(l),
+            );
+        }
+        let l = self.0.len();
+        let query = t.query.as_ref().map(|q| {
+            use hyperast_tsquery::ArrayStr;
+            Query::new(q.iter())
+        });
+
+        #[cfg(feature = "tsg")]
+        let tsg = if let Some(q) = &t.tsg {
+            let tsg = q.deref();
+            type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
+            type ExtQ<'hast, TS, Acc> =
+                hyperast_tsquery::ExtendingStringQuery<M<'hast, TS, Acc>, tree_sitter::Language>;
+
+            let source: &str = tsg;
+            let language = hyperast_gen_ts_java::language();
+
+            let mut file =
+                tree_sitter_graph::ast::File::<M<&SimpleStores, &Acc>>::new(language.clone());
+
+            let query_source = if let Some(p) = &t.query {
+                ExtQ::new(language.clone(), Box::new(p.clone()), source.len())
+            } else {
+                let x: &[&str] = &[];
+                ExtQ::new(language.clone(), Box::new(x), source.len())
+            };
+            tree_sitter_graph::parser::Parser::<ExtQ<_, _>>::with_ext(query_source, source)
+                .parse_into_file(&mut file)
+                .unwrap();
+            use tree_sitter_graph::GenQuery;
+
+            M::check(&mut file).unwrap();
+
+            let mut functions = tree_sitter_graph::functions::Functions::<
+                tree_sitter_graph::graph::Graph<
+                    hyperast_tsquery::stepped_query_imm::Node<
+                        hyperast::store::SimpleStores<
+                            TStore,
+                            &hyperast::store::nodes::legion::NodeStoreInner,
+                            &hyperast::store::labels::LabelStore,
+                        >,
+                        &Acc,
+                    >,
+                >,
+            >::essentials();
+            // TODO port those path functions to the generified variant in my fork
+            // hyperast_tsquery::add_path_functions(&mut functions);
+            let functions = functions.as_any();
+
+            Some((file.as_any(), functions))
+        } else {
+            None
+        };
+        let r = JavaProc {
+            parameter: t,
+            height_counts: vec![],
+            query,
+            #[cfg(feature = "tsg")]
+            tsg,
+            cache: Default::default(),
+            commits: Default::default(),
+        };
+        self.0.push(r);
         ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
     }
 }
@@ -556,7 +545,6 @@ impl crate::processing::erased::ParametrizedCommitProc2 for JavaProcessorHolder 
         &mut self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &mut Self::Proc {
-        assert_eq!(0, parameters.0);
         &mut self.0[parameters.0]
     }
 
@@ -564,7 +552,6 @@ impl crate::processing::erased::ParametrizedCommitProc2 for JavaProcessorHolder 
         &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &Self::Proc {
-        assert_eq!(0, parameters.0);
         &self.0[parameters.0]
     }
 }
@@ -714,6 +701,7 @@ impl RepositoryProcessor {
                 let holder = c.mut_or_default::<JavaProcessorHolder>();
                 let java_proc = holder.with_parameters_mut(parameters.0);
                 let md_cache = &mut java_proc.cache.md_cache;
+                let dedup = &mut java_proc.cache.dedup;
                 let stores = self
                     .main_stores
                     .mut_with_ts::<hyperast_gen_ts_java::types::TStore>();
@@ -742,8 +730,8 @@ impl RepositoryProcessor {
                             hyperast_gen_ts_java::types::TStore,
                             _,
                             _,
-                        >::with_preprocessing(
-                            stores, md_cache, more
+                        >::with_preprocessing_and_dedup(
+                            stores, dedup, md_cache, more
                         )
                         .with_line_break(line_break);
                         crate::java::handle_java_file(&mut java_tree_gen, n, t)
@@ -752,15 +740,19 @@ impl RepositoryProcessor {
                     let more = hyperast::scripting::Prepro::<_, _>::from_arc(precomp.clone());
                     // let mut java_tree_gen = java_tree_gen.with_more(more);
                     let mut java_tree_gen =
-                        java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
-                            .with_line_break(line_break);
+                        java_tree_gen::JavaTreeGen::with_preprocessing_and_dedup(
+                            stores, dedup, md_cache, more,
+                        )
+                        .with_line_break(line_break);
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
                     let more: hyperast_tsquery::PreparedQuerying<_, _, _> = more.into();
                     let mut java_tree_gen =
-                        java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
-                            .with_line_break(line_break);
+                        java_tree_gen::JavaTreeGen::with_preprocessing_and_dedup(
+                            stores, dedup, md_cache, more,
+                        )
+                        .with_line_break(line_break);
                     crate::java::handle_java_file::<_>(&mut java_tree_gen, n, t)
                 } else {
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(stores, md_cache)
