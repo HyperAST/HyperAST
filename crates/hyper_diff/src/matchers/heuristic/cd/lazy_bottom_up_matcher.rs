@@ -123,7 +123,7 @@ where
             &self.dst_arena.descendants_range(dst),
             &self.mappings,
         )
-        .dice()
+        .chawathe()
     }
 }
 
