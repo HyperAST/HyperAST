@@ -57,7 +57,7 @@ where
     let bottomup_prepare_t = 0.; // nothing to prepare
 
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = GreedyBottomUpMatcher::<_, _, _, _, M, 200>::match_it(mapper);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
     tr!(bottomup_matcher_t, bottomup_mappings_s);
