@@ -4,7 +4,7 @@ use super::{Position, StructuralPosition, TreePath};
 use crate::types::{
     Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, WithChildren, WithSerialization,
 };
-use crate::{types::WithStats, PrimInt};
+use crate::{PrimInt, types::WithStats};
 use num::ToPrimitive;
 use std::path::PathBuf;
 
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 pub fn compute_range<'store, It, HAST>(
     root: HAST::IdN,
     offsets: &mut It,
-    stores: &'store HAST,
+    stores: HAST,
 ) -> (usize, usize, HAST::IdN)
 where
     HAST: HyperAST,
@@ -47,10 +47,10 @@ where
     (offset, offset + len, x)
 }
 
-pub fn compute_position<'store, HAST, It>(
+pub fn compute_position<HAST, It>(
     root: HAST::IdN,
     offsets: &mut It,
-    stores: &'store HAST,
+    stores: HAST,
 ) -> (Position, HAST::IdN)
 where
     It::Item: Clone,

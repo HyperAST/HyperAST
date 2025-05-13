@@ -159,7 +159,7 @@ where
         let mut sib_sim = HashMap::<(M::Src, M::Dst), f64>::default();
         let mut psib_sim = HashMap::<(M::Src, M::Dst), f64>::default();
         let mut p_in_p_sim = HashMap::<(M::Src, M::Dst), f64>::default();
-        log::debug!("Ambiguous mappings: {}", ambiguous_mappings.len());
+        log::trace!("ambiguous_mappings.len: {}", &ambiguous_mappings.len());
         ambiguous_mappings.sort_by(|a, b| {
             let cached_coef_sib = |l: &(M::Src, M::Dst)| {
                 sib_sim

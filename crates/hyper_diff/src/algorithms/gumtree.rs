@@ -1,4 +1,5 @@
 use super::MappingDurations;
+use super::tr;
 use super::{DiffResult, PreparedMappingDurations};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
@@ -16,6 +17,7 @@ use crate::{
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
 
+#[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 pub fn diff<HAST: HyperAST + Copy>(
@@ -41,35 +43,42 @@ where
         check_oneshot_decompressed_against_lazy(hyperast, src, dst, &mapper);
     }
     let subtree_prepare_t = now.elapsed().as_secs_f64();
+    tr!(subtree_prepare_t);
+
     let now = Instant::now();
     let mapper =
         GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
-    dbg!(&subtree_matcher_t, &subtree_mappings_s);
+    tr!(subtree_matcher_t, subtree_mappings_s);
+
+    let bottomup_prepare_t = 0.; // nothing to prepare
+
     let now = Instant::now();
     let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
-    dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
-    dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
-    let now = Instant::now();
+    tr!(bottomup_matcher_t, bottomup_mappings_s);
+    let mapping_durations = PreparedMappingDurations {
+        mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
+        preparation: [subtree_prepare_t, bottomup_prepare_t],
+    };
 
+    let now = Instant::now();
     let mapper = mapper.map(
         |x| x,
+        // the dst side has to be traversed in bfs for chawathe
         |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
     );
     let prepare_gen_t = now.elapsed().as_secs_f64();
+    tr!(prepare_gen_t);
     let now = Instant::now();
     let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
     let gen_t = now.elapsed().as_secs_f64();
-    dbg!(gen_t);
+    tr!(gen_t);
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
-        mapping_durations: PreparedMappingDurations {
-            mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
-            preparation: [subtree_prepare_t, 0.0],
-        },
+        mapping_durations,
         mapper,
         actions,
         prepare_gen_t,
@@ -100,7 +109,10 @@ fn check_oneshot_decompressed_against_lazy<HAST: HyperAST + Copy>(
         "naive.ids:\t{:?}",
         &mapper.iter().take(20).collect::<Vec<_>>()
     );
-    log::trace!("naive:\t{:?}", &mapper.llds.iter().take(20).collect::<Vec<_>>());
+    log::trace!(
+        "naive:\t{:?}",
+        &mapper.llds.iter().take(20).collect::<Vec<_>>()
+    );
     type DS<HAST: HyperASTShared> = Decompressible<
         HAST,
         crate::decompressed_tree_store::lazy_post_order::LazyPostOrder<HAST::IdN, u32>,
@@ -130,7 +142,10 @@ fn check_oneshot_decompressed_against_lazy<HAST: HyperAST + Copy>(
     use std::ops::Deref;
     let _mapper = _mapper.src_arena.decomp.deref();
     let _mapper = _mapper.deref();
-    log::trace!("lazy:\t{:?}", &_mapper.llds.iter().take(20).collect::<Vec<_>>());
+    log::trace!(
+        "lazy:\t{:?}",
+        &_mapper.llds.iter().take(20).collect::<Vec<_>>()
+    );
     log::trace!(
         "lazy.ids:\t{:?}",
         &_mapper.iter().take(20).collect::<Vec<_>>()
