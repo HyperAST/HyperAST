@@ -65,11 +65,11 @@ where
     }
 
     fn execute(&mut self) {
-        for s in self.src_arena.iter_df_post::<false>() {
+        for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
             let number_of_leaves = self.count_leaves(&src);
 
-            for d in self.dst_arena.iter_df_post::<false>() {
+            for d in self.dst_arena.iter_df_post::<true>() {
                 let dst = self.dst_arena.decompress_to(&d);
 
                 if self.is_mapping_allowed(&src, &dst) {

@@ -9,6 +9,10 @@ use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, WithHashs};
 use std::fmt::Debug;
 
+const MAX_LEAVES: usize = 4;
+const SIM_THRESHOLD_LARGE_TREES: f64 = 0.6;
+const SIM_THRESHOLD_SMALL_TREES: f64 = 0.4;
+
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
@@ -66,10 +70,6 @@ where
     }
 
     pub fn execute(&mut self) {
-        let max_number_of_leaves = 4; // TODO: make configurable
-        let struct_sim_threshold1 = 0.6;
-        let struct_sim_threshold2 = 0.4;
-
         for s in self.src_arena.iter_df_post::<true>() {
             let src_tree = s;
             let number_of_leaves = self.number_of_leaves_src(&src_tree);
@@ -86,10 +86,9 @@ where
                         &self.mappings,
                     );
 
-                    if (number_of_leaves > max_number_of_leaves
-                        && similarity >= struct_sim_threshold1)
-                        || (number_of_leaves <= max_number_of_leaves
-                            && similarity >= struct_sim_threshold2)
+                    if (number_of_leaves > MAX_LEAVES && similarity >= SIM_THRESHOLD_LARGE_TREES)
+                        || (number_of_leaves <= MAX_LEAVES
+                            && similarity >= SIM_THRESHOLD_SMALL_TREES)
                     {
                         self.mappings.link(src_tree, dst_tree);
                         break;
@@ -111,10 +110,7 @@ where
     /// This function checks if a mapping between two nodes is allowed.
     /// It returns true if the nodes are of the same type, and are both unmapped.
     fn is_mapping_allowed(&self, src_tree: &M::Src, dst_tree: &M::Dst) -> bool {
-        let src_linked = self.mappings.get_src(dst_tree).is_some();
-        let dst_linked = self.mappings.get_dst(src_tree).is_some();
-
-        if src_linked || dst_linked {
+        if self.mappings.is_src(src_tree) || self.mappings.is_dst(dst_tree) {
             return false;
         }
 
