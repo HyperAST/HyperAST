@@ -1,7 +1,7 @@
 [package]
 name = "hyperast"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 description = "Temporal code analyses at scale"
 license = "GPL-3.0"
 
@@ -45,7 +45,11 @@ frunk = { version = "0.4.3", optional = true }
 
 ## scripting
 mlua = { version = "0.9", features = ["luau"], optional = true }
-rhai = { version = "1.12.0", features = ["sync", "serde", "internals"], optional = true }
+rhai = { version = "1.12.0", features = [
+    "sync",
+    "serde",
+    "internals",
+], optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.3"
@@ -57,10 +61,15 @@ jemalloc-ctl = { version = "0.5.0", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [features]
-default = ["jemalloc", "legion",
-# "bevy_ecs", 
-# "hecs", 
-"native", "ts", "scripting"]
+default = [
+    "jemalloc",
+    "legion",
+    # "bevy_ecs",
+    # "hecs",
+    "native",
+    "ts",
+    "scripting",
+]
 legion = ["dep:legion"]
 hecs = ["dep:hecs"]
 bevy_ecs = ["dep:bevy_ecs", "dep:frunk"]
@@ -70,5 +79,5 @@ jemalloc = ["jemallocator", "jemalloc-ctl"]
 ts = ["dep:tree-sitter"]
 serialize = ["serde"]
 scripting = ["dep:rhai", "dep:mlua"]
-subtree-stats=[]
-fetched=[]
+subtree-stats = []
+fetched = []

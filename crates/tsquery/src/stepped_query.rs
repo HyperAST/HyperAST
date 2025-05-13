@@ -8,11 +8,11 @@ use hyperast::types::{
 use std::{fmt::Debug, hash::Hash};
 #[cfg(feature = "tsg")]
 use tree_sitter_graph::{
-    graph::{NodeLender, NodeLending, NodesLending, NNN},
     MatchLender, MatchLending, QueryWithLang,
+    graph::{NNN, NodeLender, NodeLending, NodesLending},
 };
 
-use crate::{hyperast_cursor::NodeR, ArrayStr, CaptureId};
+use crate::{ArrayStr, CaptureId, hyperast_cursor::NodeR};
 
 impl<HAST: HyperASTShared, P: Clone> From<Node<'_, HAST, P>> for NodeR<P> {
     fn from(value: Node<'_, HAST, P>) -> Self {
@@ -48,7 +48,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     fn symbol(&self) -> crate::Symbol {
@@ -77,8 +76,8 @@ where
         self.0.has_child_with_field_id(field_id)
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        self.0.equal(&other.0)
+    fn equal(&self, other: &Self, text_provider: <Self as super::TextLending<'_>>::TP) -> bool {
+        self.0.equal(&other.0, text_provider)
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
@@ -88,7 +87,7 @@ where
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
-    ) -> super::BB<'s, 'l, str> {
+    ) -> super::BiCow<'s, 'l, str> {
         self.0.text(text_provider)
     }
 }
@@ -516,11 +515,7 @@ where
         Self: Sized,
     {
         let mut r = self.clone();
-        if r.0.goto_parent() {
-            Some(r)
-        } else {
-            None
-        }
+        if r.0.goto_parent() { Some(r) } else { None }
     }
 }
 
@@ -533,7 +528,6 @@ where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
-
     fn kind(&self) -> &'static str {
         use hyperast::position::position_accessors::SolvedPosition;
         let n = self.0.pos.node();
@@ -650,7 +644,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Copy + Hash,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
@@ -665,7 +658,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Copy + Hash,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
@@ -695,7 +687,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Copy + Hash,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
@@ -712,7 +703,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Copy + Hash,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
@@ -792,7 +782,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Copy + Hash,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
@@ -809,7 +798,6 @@ where
     HAST::TS: RoleStore,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles + WithPrecompQueries,
     HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
-
     HAST::IdN: Copy + Hash + Debug,
     HAST::Idx: Copy + Hash,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,

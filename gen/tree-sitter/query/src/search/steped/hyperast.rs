@@ -343,19 +343,22 @@ where
         }
         Equal
     }
-    fn text(&self, _tp: ()) -> std::borrow::Cow<str> {
+    fn text<'s, 'l>(
+        &'s self,
+        text_provider: <Self as super::TextLending<'l>>::TP,
+    ) -> super::BiCow<'s, 'l, str> {
         let id = self.pos.node().unwrap();
         use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(id);
         if n.has_children() {
             let r = hyperast::nodes::TextSerializer::new(self.stores, *id).to_string();
-            return r.into();
+            return super::BiCow::Owned(r.into());
         }
         if let Some(l) = n.try_get_label() {
             let l = self.stores.label_store().resolve(l);
-            return l.into();
+            return super::BiCow::A(l); // TODO use text_provider and ref label store in TP
         }
-        "".into()
+        super::BiCow::A("")
     }
 }
 

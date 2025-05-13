@@ -1,17 +1,17 @@
 use hyperast::{
     cyclomatic::Mcc,
     hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
-    store::{defaults::LabelIdentifier, SimpleStores},
+    store::{SimpleStores, defaults::LabelIdentifier},
     types::LabelStore as _,
 };
-use hyperast_vcs_git::java::JavaAcc;
 use hyperast_gen_ts_java::{
-    legion_with_refs::{self, FNode, JavaTreeGen, Local, MDCache, MD},
+    legion_with_refs::{self, FNode, JavaTreeGen, Local, MD, MDCache},
     types::{TStore, Type},
 };
+use hyperast_vcs_git::java::JavaAcc;
 use std::path::{Path, PathBuf};
 
-pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
+pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> + use<> {
     std::fs::read_dir(root_buggy)
         .expect(&format!("{:?} should be a dir", root_buggy))
         .into_iter()
@@ -54,7 +54,6 @@ pub struct JavaPreprocessFileSys {
 }
 
 impl JavaPreprocessFileSys {
-
     pub(crate) fn help_handle_java_file(
         &mut self,
         path: PathBuf,
@@ -72,6 +71,9 @@ impl JavaPreprocessFileSys {
         } else {
             "\n".as_bytes().to_vec()
         };
+        use hyperast::types::LLang;
+        dbg!(hyperast_gen_ts_java::types::Java::TE.len());
+        dbg!(hyperast_gen_ts_java::language().node_kind_count());
         let mut java_tree_gen = JavaTreeGen::new(&mut self.main_stores, &mut self.java_md_cache)
             .with_line_break(line_break);
         let full_node = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
@@ -79,6 +81,8 @@ impl JavaPreprocessFileSys {
                 Ok(java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk()))
             }
             Err(tree) => {
+                dbg!(&tree);
+                eprintln!("{}", tree.root_node().to_sexp());
                 Err(java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk()))
             }
         };
@@ -327,11 +331,8 @@ fn make(
         .primary
         .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
     let hashable = primary.metrics.hashs.most_discriminating();
-    let eq = hyperast::store::nodes::legion::eq_node(
-        &interned_kind,
-        Some(&label_id),
-        &primary.children,
-    );
+    let eq =
+        hyperast::store::nodes::legion::eq_node(&interned_kind, Some(&label_id), &primary.children);
     let insertion = node_store.prepare_insertion(&hashable, eq);
 
     if let Some(id) = insertion.occupied_id() {

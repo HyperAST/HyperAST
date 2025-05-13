@@ -1,11 +1,11 @@
 use std::time::Instant;
 
 use crate::java_processor::SimpleStores;
-use crate::{BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing};
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator,
-    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    Accumulator, PROPAGATE_ERROR_ON_BAD_CST_NODE, preprocessed::IsSkippedAna,
+    processing::ObjectName,
 };
+use crate::{BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing};
 
 use hyperast::store::defaults::NodeIdentifier;
 use hyperast::tree_gen;
@@ -29,7 +29,7 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> FileProcessingResult<java_tree_gen::FNode>
 where
-    More: tree_gen::Prepro<SimpleStores>
+    More: tree_gen::Prepro<SimpleStores, Scope = hyperast::scripting::Acc>
         + tree_gen::PreproTSG<SimpleStores, Acc = java_tree_gen::Acc>,
 {
     let time = Instant::now();

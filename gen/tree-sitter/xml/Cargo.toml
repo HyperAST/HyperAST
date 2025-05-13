@@ -1,7 +1,7 @@
 [package]
 name = "hyperast_gen_ts_xml"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 
 [dependencies]
 tree-sitter = { workspace = true, optional = true }

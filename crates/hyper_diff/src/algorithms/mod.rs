@@ -1,6 +1,7 @@
 use crate::{
     actions::action_vec::ActionsVec,
-    matchers::{mapping_store::VecStore, Mapper},
+    decompressed_tree_store::ShallowDecompressedTreeStore,
+    matchers::{Mapper, mapping_store::VecStore},
 };
 
 pub mod gumtree;
@@ -79,3 +80,51 @@ impl<'a, MD: ComputeTime> ComputeTime for ResultsSummary<MD> {
         self.gen_t + self.prepare_gen_t + self.mapping_durations.time()
     }
 }
+
+impl<'a, A, M, MD: ComputeTime> ComputeTime for DiffResult<A, M, MD> {
+    fn time(&self) -> f64 {
+        self.gen_t + self.prepare_gen_t + self.mapping_durations.time()
+    }
+}
+
+// WIP
+impl<HAST, Dsrc, Ddst, M, MD> std::fmt::Display
+    for DiffResult<
+        crate::actions::script_generator2::SimpleAction<
+            HAST::Label,
+            crate::tree::tree_path::CompressedTreePath<HAST::Idx>,
+            HAST::IdN,
+        >,
+        Mapper<HAST, Dsrc, Ddst, M>,
+        MD,
+    >
+where
+    Dsrc: ShallowDecompressedTreeStore<HAST, u32>,
+    HAST: hyperast::types::HyperAST + Copy,
+    MD: ComputeTime,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
+    HAST::IdN: Copy + hyperast::types::NodeId<IdN = HAST::IdN> + std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "structural diff {}s", self.time())?;
+        let ori = self
+            .mapper
+            .src_arena
+            .original(&self.mapper.src_arena.root());
+        let Some(actions) = &self.actions else {
+            return Ok(());
+        };
+        crate::actions::action_vec::actions_vec_f(f, actions, self.mapper.hyperast, ori)
+    }
+}
+
+// #[macro_use]
+macro_rules! tr {
+    ($($val:ident),*) => {
+        $(
+            log::trace!("{}={}", stringify!($val), $val);
+        )*
+    };
+}
+pub(self) use tr;

@@ -153,7 +153,9 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
+                &camel_case
+                    .clone()
+                    .unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             let mut sub_toks = quote! {};
@@ -223,7 +225,9 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
+                &camel_case
+                    .clone()
+                    .unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             let mut fields_toks = quote! {};
@@ -361,7 +365,9 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
+                &camel_case
+                    .clone()
+                    .unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             let mut cs_toks = quote! {};
@@ -442,7 +448,9 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
+                &camel_case
+                    .clone()
+                    .unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             if camel_case.is_none() {
@@ -742,13 +750,12 @@ struct HM {
 impl HM {
     fn fmt(&mut self, x: &str, f: impl Fn(&str) -> String) -> String {
         if let Some(v) = self.unamed.get(x) {
-            v
+            v.to_string()
         } else {
             let value = f(&self.esc_c.to_string());
             self.unamed.insert(x.to_string(), value);
             self.esc_c += 1;
-            &self.unamed.get(x).unwrap()
+            self.unamed.get(x).unwrap().to_string()
         }
-        .to_string()
     }
 }

@@ -1,8 +1,7 @@
 [package]
 name = "hyper_app"
-version = "0.2.0"
-edition = "2021"
-rust-version = "1.65"
+version = "0.3.0"
+edition = "2024"
 
 [dependencies]
 egui = { version = "0.29.0", default-features = false }
@@ -10,12 +9,19 @@ eframe = { version = "0.29.0", default-features = false, features = [
     # "accesskit",   # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     # "wgpu",        # Use the wgpu rendering backend. Alternative: "glow".
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    "persistence",   # Enable restoring app state when restarting the app.
+    "glow",        # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence", # Enable restoring app state when restarting the app.
 ] }
 epaint = { version = "0.29.0", default-features = false }
-egui_demo_lib = { version = "0.29.0", default-features = false, features = ["syntect"] }
-egui_extras = { version = "0.29.0", default-features = false, features = ["http", "file", "image", "svg"] }
+egui_demo_lib = { version = "0.29.0", default-features = false, features = [
+    "syntect",
+] }
+egui_extras = { version = "0.29.0", default-features = false, features = [
+    "http",
+    "file",
+    "image",
+    "svg",
+] }
 re_ui = "0.20.2"
 egui_tiles = "0.10.0"
 egui_commonmark = "0.18.0"
@@ -33,8 +39,8 @@ lazy_static = "1.4.0"
 
 ehttp = { version = "0.5.0", features = ["streaming"] }
 image = { version = "0.25.2", default-features = false, features = [
-  "jpeg",
-  "png",
+    "jpeg",
+    "png",
 ] }
 serde_json = "1.0.79" # Serde serializion/deserialization of JSON data.
 
@@ -58,7 +64,8 @@ egui_addon = { path = "../lib/egui_addon" }
 nohash-hasher = "0.2.0"
 
 enumset = "1.0.12"
-
+vec_extract_if_polyfill = "0.1.0"
+itertools = "0.10.3"
 
 # TODO put it behind a feature
 autosurgeon = "0.7.1"
@@ -76,7 +83,7 @@ http = "0.2.6" # Types for HTTP requests and responses.
 
 ## command palette stuff
 strum = "0.24"
-strum_macros = "0.24" # issue on later version with serialization of curly braces
+strum_macros = "0.24"   # issue on later version with serialization of curly braces
 sublime_fuzzy = "0.7.0"
 
 # native:
@@ -111,8 +118,13 @@ syntect = { version = "5", features = [
 web-sys = "^0.3.70"
 
 [target.'cfg(all(target_os = "macos", not(target_arch = "wasm32")))'.dependencies]
-cocoa = "0.25.0"
-objc = "0.2.7"
+objc2 = "0.5.2"
+objc2-foundation = { version = "0.2.2", features = ["NSUserDefaults"] }
+objc2-app-kit = { version = "0.2.2", features = [
+    "NSLayoutConstraint",
+    "NSColorSpace",
+    "objc2-quartz-core",
+] }
 
 [features]
 default = ["serde"]

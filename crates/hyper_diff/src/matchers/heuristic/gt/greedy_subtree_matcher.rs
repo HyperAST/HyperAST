@@ -4,13 +4,13 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::{MonoMappingStore, MultiMappingStore};
 use crate::matchers::similarity_metrics;
 use crate::utils::sequence_algorithms::longest_common_subsequence;
+use hyperast::PrimInt;
 use hyperast::compat::HashMap;
 use hyperast::types::{
     self, Childrn, DecompressedFrom, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree,
     WithChildren, WithHashs,
 };
-use hyperast::PrimInt;
-use num_traits::{one, zero, ToPrimitive};
+use num_traits::{ToPrimitive, one, zero};
 use std::hash::Hash;
 
 pub struct GreedySubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize = 1> {
@@ -18,18 +18,18 @@ pub struct GreedySubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize = 1
 }
 
 impl<
-        Dsrc: DecompressedTreeStore<HAST, M::Src>
-            + DecompressedWithParent<HAST, M::Src>
-            + DecompressedFrom<HAST, Out = Dsrc>
-            + ContiguousDescendants<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst>
-            + DecompressedWithParent<HAST, M::Dst>
-            + DecompressedFrom<HAST, Out = Ddst>
-            + ContiguousDescendants<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > GreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
+    Dsrc: DecompressedTreeStore<HAST, M::Src>
+        + DecompressedWithParent<HAST, M::Src>
+        + DecompressedFrom<HAST, Out = Dsrc>
+        + ContiguousDescendants<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst>
+        + DecompressedWithParent<HAST, M::Dst>
+        + DecompressedFrom<HAST, Out = Ddst>
+        + ContiguousDescendants<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> GreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
     M::Src: PrimInt + Hash,
     M::Dst: PrimInt + Hash,
@@ -159,7 +159,7 @@ where
         let mut sib_sim = HashMap::<(M::Src, M::Dst), f64>::default();
         let mut psib_sim = HashMap::<(M::Src, M::Dst), f64>::default();
         let mut p_in_p_sim = HashMap::<(M::Src, M::Dst), f64>::default();
-        dbg!(&ambiguous_mappings.len());
+        log::trace!("ambiguous_mappings.len: {}", &ambiguous_mappings.len());
         ambiguous_mappings.sort_by(|a, b| {
             let cached_coef_sib = |l: &(M::Src, M::Dst)| {
                 sib_sim
@@ -327,13 +327,13 @@ pub struct SubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize> {
 }
 
 impl<
-        'a,
-        Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
-        HAST,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize,
-    > SubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
+    'a,
+    Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
+    HAST,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize,
+> SubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
     HAST: HyperAST + Copy,
     M::Src: PrimInt,
@@ -577,13 +577,13 @@ struct PriorityTreeList<'b, D, IdD, HAST, const MIN_HEIGHT: usize> {
 }
 
 impl<
-        'a,
-        'b,
-        D: DecompressedTreeStore<HAST, IdD>,
-        IdD: PrimInt,
-        HAST: HyperAST + Copy,
-        const MIN_HEIGHT: usize,
-    > PriorityTreeList<'b, D, IdD, HAST, MIN_HEIGHT>
+    'a,
+    'b,
+    D: DecompressedTreeStore<HAST, IdD>,
+    IdD: PrimInt,
+    HAST: HyperAST + Copy,
+    const MIN_HEIGHT: usize,
+> PriorityTreeList<'b, D, IdD, HAST, MIN_HEIGHT>
 where
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {

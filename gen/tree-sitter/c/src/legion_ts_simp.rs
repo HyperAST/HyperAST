@@ -11,7 +11,7 @@ fn simple() {
         tree_gen::zipped_ts_simp::TsTreeGen<'store, 'b, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CGen::new(&mut stores, &mut md_cache);
+    let mut r#gen = CGen::new(&mut stores, &mut md_cache);
     let text = EX;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -19,7 +19,7 @@ fn simple() {
     };
     eprintln!("{}", tree.root_node().to_sexp());
     let name = b"";
-    let f = gen.generate_file(name, text.as_bytes(), tree.walk());
+    let f = r#gen.generate_file(name, text.as_bytes(), tree.walk());
     assert_eq!(f.local._ty, Type::TranslationUnit);
     dbg!(&f.local.metrics);
 }
@@ -29,7 +29,7 @@ fn simple0() {
         tree_gen::zipped_ts_simp::TsTreeGen<'store, 'store, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CGen::new(&mut stores, &mut md_cache);
+    let mut r#gen = CGen::new(&mut stores, &mut md_cache);
     let text = EX;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -37,7 +37,7 @@ fn simple0() {
     };
     eprintln!("{}", tree.root_node().to_sexp());
     let name = b"";
-    let f = gen.generate_file(name, text.as_bytes(), tree.walk());
+    let f = r#gen.generate_file(name, text.as_bytes(), tree.walk());
     assert_eq!(f.local._ty, Type::TranslationUnit);
     dbg!(&f.local.metrics);
     let id = f.local.compressed_node;
@@ -52,7 +52,7 @@ fn simple1() {
     type CGen<'store, 'b, More> = TsTreeGen<'store, 'store, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CGen::new(&mut stores, &mut md_cache);
+    let mut r#gen = CGen::new(&mut stores, &mut md_cache);
     let text = EX;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -60,7 +60,7 @@ fn simple1() {
     };
     eprintln!("{}", tree.root_node().to_sexp());
     let name = b"";
-    let f = gen.generate_file(name, text.as_bytes(), tree.walk());
+    let f = r#gen.generate_file(name, text.as_bytes(), tree.walk());
     assert_eq!(f.local._ty, Type::TranslationUnit);
     dbg!(&f.local.metrics);
     let id = f.local.compressed_node;
@@ -75,7 +75,7 @@ fn no_goto_parent() {
     type CGen<'store, 'b, More> = TsTreeGen<'store, 'store, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CGen::new(&mut stores, &mut md_cache);
+    let mut r#gen = CGen::new(&mut stores, &mut md_cache);
     let text = EX;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -83,7 +83,7 @@ fn no_goto_parent() {
     };
     eprintln!("{}", tree.root_node().to_sexp());
     let name = b"";
-    let f = gen.generate_file(name, text.as_bytes(), tree.walk());
+    let f = r#gen.generate_file(name, text.as_bytes(), tree.walk());
     assert_eq!(f.local._ty, Type::TranslationUnit);
     dbg!(&f.local.metrics);
     let id = f.local.compressed_node;
@@ -98,7 +98,7 @@ fn no_goto_parent_a() {
     type CGen<'store, 'b, More> = TsTreeGen<'store, 'store, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CGen::new(&mut stores, &mut md_cache);
+    let mut r#gen = CGen::new(&mut stores, &mut md_cache);
     let text = EX;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -106,7 +106,7 @@ fn no_goto_parent_a() {
     };
     eprintln!("{}", tree.root_node().to_sexp());
     let name = b"";
-    let f = gen.generate_file(name, text.as_bytes(), tree.walk());
+    let f = r#gen.generate_file(name, text.as_bytes(), tree.walk());
     assert_eq!(f.local._ty, Type::TranslationUnit);
     dbg!(&f.local.metrics);
     let id = f.local.compressed_node;
@@ -119,7 +119,7 @@ fn no_goto_parent_a() {
 fn not_simple() {
     let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
-    let mut gen = crate::legion::CTreeGen::new(&mut stores, &mut md_cache);
+    let mut r#gen = crate::legion::CTreeGen::new(&mut stores, &mut md_cache);
     let text = EX;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -127,7 +127,7 @@ fn not_simple() {
     };
     eprintln!("{}", tree.root_node().to_sexp());
     let name = b"";
-    let f = gen.generate_file(name, text.as_bytes(), tree.walk());
+    let f = r#gen.generate_file(name, text.as_bytes(), tree.walk());
     dbg!(&f.local.metrics);
     let id = f.local.compressed_node;
     println!("{}", SyntaxSerializer::new(&stores, id));

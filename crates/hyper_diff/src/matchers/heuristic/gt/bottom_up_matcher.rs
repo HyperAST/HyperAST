@@ -3,28 +3,28 @@ use crate::{
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyperast::types::{self, HashKind, HyperAST, NodeStore, TypeStore, WithHashs};
 use hyperast::PrimInt;
+use hyperast::types::{self, HashKind, HyperAST, NodeStore, TypeStore, WithHashs};
 use num_traits::{ToPrimitive, Zero};
 use std::{collections::HashMap, hash::Hash};
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
-    pub(super) stores: HAST,
+    pub(in crate::matchers) stores: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
 }
 
 impl<
-        Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-    > BottomUpMatcher<Dsrc, Ddst, HAST, M>
+    Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+> BottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
 {
-    pub(super) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
+    pub(in crate::matchers) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
         for c in self.src_arena.descendants(src) {
@@ -60,11 +60,11 @@ where
 }
 
 impl<
-        Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-    > BottomUpMatcher<Dsrc, Ddst, HAST, M>
+    Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+> BottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     <HAST::TS as TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt,
@@ -191,11 +191,11 @@ where
 }
 
 impl<
-        HAST: HyperAST + Copy,
-        Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
-        M: MonoMappingStore,
-    > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
+    HAST: HyperAST + Copy,
+    Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
+    M: MonoMappingStore,
+> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,

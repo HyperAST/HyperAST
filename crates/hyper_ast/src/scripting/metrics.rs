@@ -1,13 +1,11 @@
 use std::{
-    any::{Any, TypeId}, collections::HashMap, marker::PhantomData, ops::Deref
+    any::{Any, TypeId},
+    marker::PhantomData,
+    ops::Deref,
 };
 
-use crate::{
-    store::nodes::legion,
-    tree_gen::metric_definition::{self, MetricAcc, MetricComputing, Subtree, Ty},
-    types::{CompressedCompo, ErasedHolder},
-    utils::hash,
-};
+use crate::store::nodes::{CompressedCompo, ErasedHolder};
+use crate::tree_gen::metric_definition::{self, MetricAcc, MetricComputing, Subtree, Ty};
 use num::ToPrimitive;
 use rhai::*;
 
@@ -242,7 +240,7 @@ impl<S: Subtree + 'static> DynMetricComputer<S> {
         dbg!(ast.shared_lib());
         dbg!(ast.statements());
         // engine.run
-        
+
         let mut map = StaticVec::<(Ident, Expr)>::new();
         let mut template = Map::new();
         for stmt in ast.statements() {
@@ -386,10 +384,9 @@ impl<S: Subtree + 'static> MetricComputing for DynMetricComputer<S> {
     }
 
     fn acc(&self, acc: Self::Acc, c: &Self::S) -> Self::Acc {
-        let mut scope = Scope::new();
-
         let mut child = Map::new();
         child.insert(self.name.clone().into(), c.get::<Dynamic>().clone());
+        let mut scope = Scope::new();
         scope.push("a", acc.0);
         scope.push("child", Dynamic::from(child));
         let acc = self
@@ -561,14 +558,16 @@ export let finish = || mcc = if is try_statement {
 "#;
     let mut engine = Engine::new();
     engine.set_allow_shadowing(false);
-    engine.register_custom_syntax(["is", "$ident$"], false, |ctx, exprs| {
-        let ty: Ty = ctx.scope().get_value("ty").ok_or("no `ty` of type `Ty`")?;
-        // match ty {
-        let rhs = exprs[0].get_string_value().unwrap();
-        dbg!(rhs);
-        // }
-        Ok(true.into())
-    }).unwrap();
+    engine
+        .register_custom_syntax(["is", "$ident$"], false, |ctx, exprs| {
+            let ty: Ty = ctx.scope().get_value("ty").ok_or("no `ty` of type `Ty`")?;
+            // match ty {
+            let rhs = exprs[0].get_string_value().unwrap();
+            dbg!(rhs);
+            // }
+            Ok(true.into())
+        })
+        .unwrap();
     let ast = engine.compile(script).unwrap();
     let mut scope = Scope::new();
     dbg!(&ast);
@@ -595,7 +594,7 @@ fn mcc() {
     }
 }
 fn lossy() {
-    
+
 }
 "#;
     // rhai::Dynamic;
@@ -773,10 +772,7 @@ fn compute(child) {
         .get_script_fn("compute", 1)
         .unwrap()
         .body;
-    let body = AST::new(
-        body.iter().cloned(),
-        Module::new(),
-    );
+    let body = AST::new(body.iter().cloned(), Module::new());
     dbg!(&body);
     engine.set_allow_shadowing(false);
     let opt_ast = engine.optimize_ast(&mut scope, body, OptimizationLevel::Full);
@@ -1000,7 +996,7 @@ impl<T: ToPrimitive> DynHolder<T> {
 }
 impl<T: ToPrimitive> DynHolder<Neg<T>> {
     fn to_dyn(&self) -> Dynamic {
-        (-self.0 .0.to_i64().unwrap()).into()
+        (-self.0.0.to_i64().unwrap()).into()
     }
 }
 struct Neg<T>(T);

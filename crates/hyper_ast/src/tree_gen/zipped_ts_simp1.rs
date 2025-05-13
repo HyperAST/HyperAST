@@ -1,16 +1,17 @@
-use super::{parser::Visibility, utils_ts::*, P};
+use super::{P, parser::Visibility, utils_ts::*};
+use crate::store::nodes::compo;
 use crate::store::{
-    nodes::{
-        legion::{compo, dyn_builder, eq_node, NodeIdentifier},
-        DefaultNodeStore as NodeStore,
-    },
     SimpleStores,
+    nodes::{
+        DefaultNodeStore as NodeStore,
+        legion::{NodeIdentifier, dyn_builder, eq_node},
+    },
 };
 use crate::tree_gen::{
-    self, has_final_space,
-    parser::{Node as _, TreeCursor},
-    Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
+    self, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
     SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _, WithByteRange,
+    has_final_space,
+    parser::{Node as _, TreeCursor},
 };
 use crate::{
     filter::BloomSize,
@@ -203,7 +204,7 @@ where
 
     fn stores(&mut self) -> &mut Self::Stores;
 
-    fn gen(
+    fn r#gen(
         &mut self,
         text: &Self::Text,
         stack: &mut Parents<Self::Acc>,
@@ -231,7 +232,7 @@ where
     type Node<'b> = TNode<'b>;
     type TreeCursor<'b> = TTreeCursor<'b, HIDDEN_NODES>;
 
-    fn gen(
+    fn r#gen(
         &mut self,
         text: &Self::Text,
         stack: &mut Parents<Self::Acc>,
@@ -241,25 +242,25 @@ where
         let mut has = Has::Down;
         loop {
             dbg!(cursor.0.node().kind());
-            if has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
-            {
-                has = Has::Down;
-                self._pre(global, text, cursor, stack, &mut has, visibility);
-            } else {
-                if let Some(visibility) = cursor.goto_next_sibling_extended() {
-                    has = Has::Right;
-                    global.right();
-                    self._post(stack, global, text);
+            if has != Has::Up {
+                if let Some(visibility) = cursor.goto_first_child_extended() {
+                    has = Has::Down;
                     self._pre(global, text, cursor, stack, &mut has, visibility);
-                    dbg!()
-                } else if cursor.goto_parent() {
-                    has = Has::Up;
-                    self._post(stack, global, text);
-                } else {
-                    dbg!();
-                    break;
+                    continue;
                 }
+            }
+            if let Some(visibility) = cursor.goto_next_sibling_extended() {
+                has = Has::Right;
+                global.right();
+                self._post(stack, global, text);
+                self._pre(global, text, cursor, stack, &mut has, visibility);
+                dbg!()
+            } else if cursor.goto_parent() {
+                has = Has::Up;
+                self._post(stack, global, text);
+            } else {
+                dbg!();
+                break;
             }
         }
     }
@@ -465,7 +466,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 

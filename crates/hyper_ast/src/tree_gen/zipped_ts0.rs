@@ -1,17 +1,18 @@
 use super::utils_ts::*;
+use crate::store::nodes::compo;
 use crate::store::{
-    nodes::{
-        legion::{compo, dyn_builder, eq_node, NodeIdentifier},
-        DefaultNodeStore as NodeStore,
-    },
     SimpleStores,
+    nodes::{
+        DefaultNodeStore as NodeStore,
+        legion::{NodeIdentifier, dyn_builder, eq_node},
+    },
 };
 use crate::tree_gen::{
-    self, compute_indentation, get_spacing, has_final_space,
+    self, AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+    PreResult, RoleAcc, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData,
+    TotalBytesGlobalData as _, TreeGen, WithByteRange, ZippedTreeGen, compute_indentation,
+    get_spacing, has_final_space,
     parser::{Node as _, TreeCursor},
-    AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
-    RoleAcc, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _,
-    TreeGen, WithByteRange, ZippedTreeGen,
 };
 use crate::{
     filter::BloomSize,
@@ -153,16 +154,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
 }
 
 impl<'store, 'cache, 's, TS: TsEnableTS>
-    TsTreeGen<
-        'store,
-        'cache,
-        TS,
-        tree_gen::NoOpMore<
-            TS,
-            Acc<TS::Ty2>,
-        >,
-        true,
-    >
+    TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
 {
@@ -192,7 +184,7 @@ impl<'store, 'cache, TS, More> TsTreeGen<'store, 'cache, TS, More>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>,Acc=Acc<TS::Ty2>>,
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
 }
 
@@ -201,7 +193,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -346,7 +338,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local<TS::Ty2> {
         let kind = TS::Ty2::spaces();
@@ -432,7 +424,7 @@ where
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -462,7 +454,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc=Acc<TS::Ty2>>
+    More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {
     type Acc = Acc<TS::Ty2>;
     type Global = SpacedGlobalData<'store>;

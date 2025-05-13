@@ -1,5 +1,3 @@
-#![feature(iter_collect_into)]
-#![feature(extract_if)]
 pub mod generate_types;
 mod keywords;
 pub mod preprocess;

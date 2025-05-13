@@ -9,7 +9,7 @@ use tracing_subscriber::EnvFilter;
 /// supported languages:
 /// - Java
 /// - Cpp (soon)
-/// 
+///
 /// set the env variable RUST_LOG=debug to display logs during computation
 struct Cli {
     /// The owner of the repository, eg. INRIA
@@ -25,11 +25,11 @@ struct Cli {
     #[clap(short, long)]
     file: Option<std::path::PathBuf>,
     /// Examples scripts to compute:
-    ///  
+    ///
     /// * size: the number of nodes in the syntax tree,
-    /// 
+    ///
     /// * mcc: the McCabe cyclomatic complexity, or
-    /// 
+    ///
     /// * Loc: the number of lines of code ignoring blank lines and comments
     #[clap(short, long)]
     example: Option<String>,
@@ -38,7 +38,7 @@ struct Cli {
     interative: bool,
 }
 
-fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
@@ -62,6 +62,23 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             "size" => hyperast::scripting::lua_scripting::PREPRO_SIZE_WITH_FINISH,
             "mcc" => hyperast::scripting::lua_scripting::PREPRO_MCC_WITH_FINISH,
             "LoC" => hyperast::scripting::lua_scripting::PREPRO_LOC,
+            "none" => {
+                let state = backend::AppState::default();
+                state
+                    .repositories
+                    .write()
+                    .unwrap()
+                    .register_config(repo_spec.clone(), config);
+                let repo = state
+                    .repositories
+                    .read()
+                    .unwrap()
+                    .get_config(repo_spec)
+                    .ok_or_else(|| "missing config for repository".to_string())?;
+                let repository = repo.fetch();
+                log::debug!("done cloning {}", repository.spec);
+                return _scripting(state, &args.commit, args.depth, repository);
+            }
             x => {
                 eprintln!("{x} is not an available example. Try: size, mcc, LoC");
                 std::process::exit(1)
@@ -99,11 +116,6 @@ fn scripting(
         .write()
         .unwrap()
         .register_config_with_prepro(repo_spec.clone(), config, script.into());
-    // state
-    //     .repositories
-    //     .write()
-    //     .unwrap()
-    //     .register_config(repo_spec.clone(), config);
     let repo = state
         .repositories
         .read()
@@ -112,6 +124,15 @@ fn scripting(
         .ok_or_else(|| "missing config for repository".to_string())?;
     let repository = repo.fetch();
     log::debug!("done cloning {}", repository.spec);
+    _scripting(state, commit, depth, repository)
+}
+
+fn _scripting(
+    state: backend::AppState,
+    commit: &str,
+    depth: usize,
+    repository: hyperast_vcs_git::processing::ConfiguredRepo2,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut rw = hyperast_vcs_git::git::Builder::new(&repository.repo)
         .unwrap()
         .first_parents()
@@ -153,9 +174,16 @@ fn after_prepared(
     let commit = repositories.get_commit(&repository.config, &oid).unwrap();
     let store = &state.repositories.read().unwrap().processor.main_stores;
     let n = store.node_store.resolve(commit.ast_root);
-    let dd = n
-        .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
-        .unwrap();
     use hyperast::types::WithStats;
-    println!("{} {} {:?} {}", &oid, commit.processing_time(), &dd.0, n.size());
+    let Ok(dd) = n.get_component::<hyperast::scripting::DerivedData>() else {
+        println!("{} {} N/A {}", &oid, commit.processing_time(), n.size());
+        return;
+    };
+    println!(
+        "{} {} {:?} {}",
+        &oid,
+        commit.processing_time(),
+        &dd.0,
+        n.size()
+    );
 }
