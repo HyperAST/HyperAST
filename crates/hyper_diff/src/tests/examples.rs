@@ -4,7 +4,7 @@ use crate::tests::tree;
 
 type ST<K> = SimpleTree<K>;
 
-pub(crate) fn example_unstable() -> (ST<u8>, ST<u8>) {
+pub(crate) fn example_unstable() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -19,15 +19,157 @@ pub(crate) fn example_unstable() -> (ST<u8>, ST<u8>) {
     let dst = tree!(
         0, "t"; [
             tree!(0, "c"; [
-                tree!(0, "z"),
-                tree!(0, "y"),
-            ]),
-            tree!(0, "d"; [
                 tree!(0, "w"),
                 tree!(0, "x"),
+            ]),
+            tree!(0, "d"; [
+                tree!(0, "z"),
+                tree!(0, "y"),
             ])
     ]);
-    (src, dst)
+    let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+    let map_dst = vec![vec![1, 1], vec![0, 1], vec![0, 0], vec![1, 0]];
+    ((src, dst), map_src, map_dst)
+}
+
+pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let src = tree!(
+        0, "t"; [
+            tree!(0, "a"; [
+                tree!(0, "1"),
+                tree!(0, "2"),
+                tree!(0, "3"),
+            ]),
+            tree!(0, "b"; [
+                tree!(0, "4"),
+                tree!(0, "5"),
+                tree!(0, "6"),
+            ]),
+            tree!(0, "c"; [
+                tree!(0, "7"),
+                tree!(0, "8"),
+                tree!(0, "9"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "t"; [
+            tree!(0, "d"; [
+                tree!(0, "1"),
+                tree!(0, "4"),
+                tree!(0, "7"),
+            ]),
+            tree!(0, "e"; [
+                tree!(0, "2"),
+                tree!(0, "5"),
+                tree!(0, "8"),
+            ]),
+            tree!(0, "f"; [
+                tree!(0, "3"),
+                tree!(0, "6"),
+                tree!(0, "9"),
+            ])
+    ]);
+    let map_src = vec![
+        vec![0, 0],
+        vec![0, 1],
+        vec![0, 2],
+        vec![1, 0],
+        vec![1, 1],
+        vec![1, 2],
+        vec![2, 0],
+        vec![2, 1],
+        vec![2, 2],
+    ];
+    let map_dst = vec![
+        vec![0, 0],
+        vec![1, 0],
+        vec![2, 0],
+        vec![0, 1],
+        vec![1, 1],
+        vec![2, 1],
+        vec![0, 2],
+        vec![1, 2],
+        vec![2, 2],
+    ];
+    ((src, dst), map_src, map_dst)
+}
+
+pub(crate) fn example_unstable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let src = tree!(
+        0, "t"; [
+            tree!(0, "a"; [
+                tree!(0, "1"),
+                tree!(0, "2"),
+                tree!(0, "3"),
+                tree!(0, "4"),
+            ]),
+            tree!(0, "b"; [
+                tree!(0, "b2"; [
+                    tree!(0, "5"),
+                    tree!(0, "6"),
+                    tree!(0, "7"),
+                    tree!(0, "8"),
+                ])
+            ]),
+            tree!(0, "c"; [
+                tree!(0, "9"),
+                tree!(0, "10"),
+                tree!(0, "11"),
+                tree!(0, "12"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "t"; [
+            tree!(0, "d"; [
+                tree!(0, "5"),
+                tree!(0, "6"),
+                tree!(0, "11"),
+                tree!(0, "12"),
+            ]),
+            tree!(0, "e"; [
+                tree!(0, "1"),
+                tree!(0, "2"),
+                tree!(0, "7"),
+                tree!(0, "8"),
+            ]),
+            tree!(0, "f"; [
+                tree!(0, "f2"; [
+                    tree!(0, "3"),
+                    tree!(0, "4"),
+                    tree!(0, "9"),
+                    tree!(0, "10"),
+                ])
+            ]),
+    ]);
+    let map_src = vec![
+        vec![0, 0],
+        vec![0, 1],
+        vec![0, 2],
+        vec![0, 3],
+        vec![1, 0, 0],
+        vec![1, 0, 1],
+        vec![1, 0, 2],
+        vec![1, 0, 3],
+        vec![2, 0],
+        vec![2, 1],
+        vec![2, 2],
+        vec![2, 3],
+    ];
+    let map_dst = vec![
+        vec![1, 0],
+        vec![1, 1],
+        vec![2, 0, 0],
+        vec![2, 0, 1],
+        vec![0, 0],
+        vec![0, 1],
+        vec![1, 2],
+        vec![1, 3],
+        vec![2, 0, 2],
+        vec![2, 0, 3],
+        vec![0, 2],
+        vec![0, 3],
+    ];
+    ((src, dst), map_src, map_dst)
 }
 
 #[allow(unused)] // TODO make a test with this example

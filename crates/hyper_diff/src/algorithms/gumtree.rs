@@ -76,6 +76,7 @@ where
     let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
     let gen_t = now.elapsed().as_secs_f64();
     tr!(gen_t);
+    let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
         mapping_durations,
         mapper,

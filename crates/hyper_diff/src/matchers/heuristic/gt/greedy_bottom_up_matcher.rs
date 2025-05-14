@@ -4,11 +4,11 @@ use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
     PostOrderIterable, PostOrderKeyRoots,
 };
-use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Decompressible;
+use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
 use hyperast::PrimInt;
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
 use num_traits::{cast, one};
 use rand::prelude::*;
 use std::fmt::Debug;
@@ -33,14 +33,14 @@ pub struct GreedyBottomUpMatcher<
 const SLICE: bool = true;
 
 impl<
-        Dsrc,
-        Ddst,
-        HAST: HyperAST,
-        M: MonoMappingStore,
-        const SIZE_THRESHOLD: usize,  // = 1000,
-        const SIM_THRESHOLD_NUM: u64, // = 1,
-        const SIM_THRESHOLD_DEN: u64, // = 2,
-    > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
+    Dsrc,
+    Ddst,
+    HAST: HyperAST,
+    M: MonoMappingStore,
+    const SIZE_THRESHOLD: usize,  // = 1000,
+    const SIM_THRESHOLD_NUM: u64, // = 1,
+    const SIM_THRESHOLD_DEN: u64, // = 2,
+> Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
     for GreedyBottomUpMatcher<
         Dsrc,
         Ddst,
@@ -58,28 +58,27 @@ impl<
 
 /// TODO PostOrder might not be necessary
 impl<
-        'a,
-        Dsrc: DecompressedTreeStore<HAST, M::Src>
-            + DecompressedWithParent<HAST, M::Src>
-            + PostOrder<HAST, M::Src>
-            + PostOrderIterable<HAST, M::Src>
-            + DecompressedFrom<HAST, Out = Dsrc>
-            + ContiguousDescendants<HAST, M::Src>
-            + POBorrowSlice<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst>
-            + DecompressedWithParent<HAST, M::Dst>
-            + PostOrder<HAST, M::Dst>
-            + PostOrderIterable<HAST, M::Dst>
-            + DecompressedFrom<HAST, Out = Ddst>
-            + ContiguousDescendants<HAST, M::Dst>
-            + POBorrowSlice<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore + Default,
-        const SIZE_THRESHOLD: usize,
-        const SIM_THRESHOLD_NUM: u64,
-        const SIM_THRESHOLD_DEN: u64,
-    >
-    GreedyBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+    'a,
+    Dsrc: DecompressedTreeStore<HAST, M::Src>
+        + DecompressedWithParent<HAST, M::Src>
+        + PostOrder<HAST, M::Src>
+        + PostOrderIterable<HAST, M::Src>
+        + DecompressedFrom<HAST, Out = Dsrc>
+        + ContiguousDescendants<HAST, M::Src>
+        + POBorrowSlice<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst>
+        + DecompressedWithParent<HAST, M::Dst>
+        + PostOrder<HAST, M::Dst>
+        + PostOrderIterable<HAST, M::Dst>
+        + DecompressedFrom<HAST, Out = Ddst>
+        + ContiguousDescendants<HAST, M::Dst>
+        + POBorrowSlice<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore + Default,
+    const SIZE_THRESHOLD: usize,
+    const SIM_THRESHOLD_NUM: u64,
+    const SIM_THRESHOLD_DEN: u64,
+> GreedyBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -102,7 +101,6 @@ where
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
-        dbg!("match_it");
         let mut matcher = Self {
             internal: BottomUpMatcher {
                 stores: mapping.hyperast,
@@ -142,7 +140,6 @@ where
     }
 
     pub fn execute<'b>(&mut self) {
-        dbg!("execute");
         assert_eq!(
             // TODO move it inside the arena ...
             self.internal.src_arena.root(),
@@ -159,33 +156,28 @@ where
             }
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
                 let mut candidates = self.internal.get_dst_candidates(&a);
-                let orig_cand: Vec<_> = candidates
+                //let mut rng = rand::rng();
+                //candidates.shuffle(&mut rng);
+                let candidates_orig: Vec<_> = candidates
                     .iter()
                     .map(|cand| self.internal.dst_arena.original(cand))
                     .collect();
-                let b = self.internal.src_arena.original(&a);
-                print!("a: {:?}", &b);
+                let a_orig = self.internal.src_arena.original(&a);
+                println!("a: {:?} ", &a_orig);
                 // println!(
                 // "{}",
                 // hyperast::nodes::TextSerializer::new(&self.internal.stores, b)
                 // );
-                println!("candidates: {:?}", orig_cand);
-                let mut rng = rand::rng();
-                candidates.shuffle(&mut rng);
+                println!("candidates: {:?}", candidates_orig);
                 let mut best = None;
                 let mut max: f64 = -1.;
                 for cand in candidates {
-                    let s = self.internal.dst_arena.original(&cand);
-                    print!("s: {:?}", &s);
+                    let cand_orig = self.internal.dst_arena.original(&cand);
+                    println!("cand: {:?} ", &cand_orig);
                     // println!(
                     // "{}",
                     // hyperast::nodes::TextSerializer::new(&self.internal.stores, s)
                     // );
-                    println!(
-                        "descendants a: {:?}\ndescendants s: {:?}",
-                        &self.internal.src_arena.descendants_range(&a),
-                        &self.internal.dst_arena.descendants_range(&cand),
-                    );
                     let sim = similarity_metrics::SimilarityMeasure::range(
                         &self.internal.src_arena.descendants_range(&a),
                         &self.internal.dst_arena.descendants_range(&cand),
@@ -200,6 +192,8 @@ where
 
                 if let Some(best) = best {
                     self.last_chance_match_zs(a, best);
+                    let best_orig = self.internal.dst_arena.original(&best);
+                    println!("chosen link: {:?} -> {:?}", &a_orig, &best_orig);
                     self.internal.mappings.link(a, best);
                 }
             }
