@@ -1,9 +1,9 @@
 //! Declares interfaces for position builders,
-//! while offering statemachine traits to orchestrate them statisticaly.
+//! while offering statemachine traits to orchestrate them staticaly.
 //!
 //! Converting positions is a frequent operation, so performances is a major concern.
 //!
-//! The statemachines qre a "zero cost" abstraction, as they are completely monomorphised.
+//! The statemachines here are a "zero cost" abstraction, as they are completely monomorphised.
 //!
 //! With all these traits it is also easier to do multiple conversions with a single traversal,
 //! with no impact to performances of "mono" convertions.
@@ -218,15 +218,14 @@ pub mod bottom_up {
     }
 }
 
-pub struct CompoundPositionPreparer<A, B>(A, B);
+pub struct CompoundPositionPreparer<A, B>(pub A, pub B);
 
 mod impl_c_p_p_receivers2 {
 
-    use super::super::file_and_offset::Position;
-    use super::bottom_up;
-    use super::top_down;
     use super::CompoundPositionPreparer;
     use super::Transition;
+    use super::bottom_up;
+    use super::top_down;
     use crate::PrimInt;
 
     impl<A: top_down::CreateBuilder, B: top_down::CreateBuilder> top_down::CreateBuilder
@@ -240,19 +239,11 @@ mod impl_c_p_p_receivers2 {
         }
     }
 
-    // impl<IdN, A: top_down::ReceiveParent<IdN, A>, B: top_down::ReceiveParent<IdN, B>>
-    //     top_down::ReceiveParent<IdN, Self> for CompoundPositionPreparer<A, B>
-    // {
-    //     fn push(self, parent: IdN) -> Self {
-    //         Self(self.0.push(parent), self.1.push(parent))
-    //     }
-    // }
-
-    impl<IdN, IdO: PrimInt, B: top_down::ReceiveParent<IdN, B>> top_down::ReceiveParent<IdN, Self>
-        for CompoundPositionPreparer<Position<std::path::PathBuf, IdO>, B>
+    impl<IdN: Copy, A: top_down::ReceiveParent<IdN, A>, B: top_down::ReceiveParent<IdN, B>>
+        top_down::ReceiveParent<IdN, Self> for CompoundPositionPreparer<A, B>
     {
         fn push(self, parent: IdN) -> Self {
-            Self(self.0, self.1.push(parent))
+            Self(self.0.push(parent), self.1.push(parent))
         }
     }
 
@@ -295,10 +286,10 @@ mod impl_c_p_p_receivers2 {
     // }
 
     impl<
-            Idx: PrimInt,
-            A: top_down::ReceiveIdxNoSpace<Idx, A>,
-            B: top_down::ReceiveIdxNoSpace<Idx, B>,
-        > top_down::ReceiveIdxNoSpace<Idx, Self> for CompoundPositionPreparer<A, B>
+        Idx: PrimInt,
+        A: top_down::ReceiveIdxNoSpace<Idx, A>,
+        B: top_down::ReceiveIdxNoSpace<Idx, B>,
+    > top_down::ReceiveIdxNoSpace<Idx, Self> for CompoundPositionPreparer<A, B>
     {
         fn push(self, idx: Idx) -> Self {
             Self(self.0.push(idx), self.1.push(idx))
@@ -330,57 +321,12 @@ mod impl_c_p_p_receivers2 {
             Self(self.0.set(lines), self.1.set(lines))
         }
     }
-    // impl<IdN, A: top_down::SetNode<IdN, A>, B: top_down::SetNode<IdN, B>>
-    //     top_down::SetNode<IdN, Self> for CompoundPositionPreparer<A, B>
-    // {
-    //     fn set_node(self, node: IdN) -> Self {
-    //         Self(self.0.set(len), self.1.set(len))
-    //     }
-    // }
-    // impl<IdN, IdO: PrimInt, B: top_down::SetNode<IdN, BB>, BB>
-    //     top_down::SetNode<
-    //         IdN,
-    //         CompoundPositionPreparer<
-    //             super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
-    //             BB,
-    //         >,
-    //     >
-    //     for CompoundPositionPreparer<
-    //         super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
-    //         B,
-    //     >
-    // {
-    //     fn set_node(
-    //         self,
-    //         node: IdN,
-    //     ) -> CompoundPositionPreparer<
-    //         super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
-    //         BB,
-    //     > {
-    //         CompoundPositionPreparer(self.0, self.1.set_node(node))
-    //     }
-    // }
-    impl<IdN, IdO: PrimInt, B: top_down::SetNode<IdN, BB>, BB>
-        top_down::SetNode<
-            IdN,
-            (
-                super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
-                BB,
-            ),
-        >
-        for CompoundPositionPreparer<
-            super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
-            B,
-        >
+    impl<IdN: Copy, A: top_down::SetNode<IdN, A2>, B: top_down::SetNode<IdN, B2>, A2, B2>
+        top_down::SetNode<IdN, CompoundPositionPreparer<A2, B2>>
+        for CompoundPositionPreparer<A, B>
     {
-        fn set_node(
-            self,
-            node: IdN,
-        ) -> (
-            super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
-            BB,
-        ) {
-            (self.0, self.1.set_node(node))
+        fn set_node(self, node: IdN) -> CompoundPositionPreparer<A2, B2> {
+            CompoundPositionPreparer(self.0.set_node(node), self.1.set_node(node))
         }
     }
 

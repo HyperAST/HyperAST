@@ -155,7 +155,9 @@ impl Tag {
         } = Query::parse_query(input, cursor)?;
         // dbg!(&pattern);
         // dbg!(&variables);
-        let mut names = variables.extract_if(|x| x.0 == "name").collect::<Vec<_>>();
+        let mut names =
+            vec_extract_if_polyfill::MakeExtractIf::extract_if(&mut variables, |x| x.0 == "name")
+                .collect::<Vec<_>>();
         if names.len() == 0 {
             return Err("Missing name variable".into())?;
         }

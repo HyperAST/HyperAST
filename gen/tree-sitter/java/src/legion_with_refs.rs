@@ -1,26 +1,26 @@
 ///! fully compress all subtrees from a Java CST
 use crate::types::JavaEnabledTypeStore;
 use crate::{
-    types::{TStore, Type},
     TNode,
+    types::{TStore, Type},
 };
+use hyperast::store::nodes::compo;
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
-        legion::{dyn_builder, eq_node, HashedNodeRef},
         EntityBuilder,
+        legion::{HashedNodeRef, dyn_builder, eq_node},
     },
 };
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
-    self,
+    self, Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
     parser::{Node, TreeCursor},
-    Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
 };
-use hyperast::tree_gen::{add_md_precomp_queries, NoOpMore, RoleAcc};
 use hyperast::tree_gen::{
     GlobalData as _, StatsGlobalData, TextedGlobalData, TotalBytesGlobalData as _,
 };
+use hyperast::tree_gen::{NoOpMore, RoleAcc, add_md_precomp_queries};
 use hyperast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -31,10 +31,10 @@ use hyperast::{
     filter::BloomSize,
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::Space,
-    store::{nodes::legion::compo, nodes::DefaultNodeStore as NodeStore, SimpleStores},
+    store::{SimpleStores, nodes::DefaultNodeStore as NodeStore},
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, AccIndentation, Accumulator,
-        BasicAccumulator, Spaces, ZippedTreeGen,
+        AccIndentation, Accumulator, BasicAccumulator, Spaces, ZippedTreeGen, compute_indentation,
+        get_spacing, has_final_space,
     },
     types::LabelStore as LabelStoreTrait,
 };
@@ -136,7 +136,7 @@ pub struct Local {
 }
 
 impl Local {
-    fn acc(self, acc: &mut Acc) {
+    fn acc<Scope>(self, acc: &mut Acc<Scope>) {
         if self.metrics.size_no_spaces > 0 {
             acc.no_space.push(self.compressed_node)
         }
@@ -164,7 +164,7 @@ impl Local {
     }
 }
 
-pub struct Acc {
+pub struct Acc<Scope = hyperast::scripting::Acc> {
     simple: BasicAccumulator<Type, NodeIdentifier>,
     no_space: Vec<NodeIdentifier>,
     labeled: bool,
@@ -177,23 +177,23 @@ pub struct Acc {
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
     precomp_queries: PrecompQueries,
-    prepro: Option<hyperast::scripting::Acc>,
+    prepro: Option<Scope>,
 }
 
-impl Accumulator for Acc {
+impl<Scope> Accumulator for Acc<Scope> {
     type Node = FNode;
     fn push(&mut self, full_node: Self::Node) {
         full_node.local.acc(self);
     }
 }
 
-impl AccIndentation for Acc {
+impl<Scope> AccIndentation for Acc<Scope> {
     fn indentation(&self) -> &Spaces {
         &self.indentation
     }
 }
 
-impl WithByteRange for Acc {
+impl<Scope> WithByteRange for Acc<Scope> {
     fn has_children(&self) -> bool {
         !self.simple.children.is_empty()
     }
@@ -275,7 +275,8 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>>
+        + tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc<More::Scope>>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -428,9 +429,9 @@ where
         if let Some(p) = &mut parent.prepro {
             // SAFETY: this side should be fine, issue when unerasing
             let store = unsafe { self.stores.erase_ts_unchecked() };
-            let child: hyperast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
-                id.into();
-            p.acc(store, ty, child).unwrap();
+            let child: hyperast::scripting::SubtreeHandle<crate::types::TType> = id.into();
+            use hyperast::scripting::Accumulable;
+            p.acc(self.more.scripts(), store, ty, child).unwrap();
         }
     }
 
@@ -458,9 +459,10 @@ where
             if let Some(p) = &mut parent.prepro {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.stores.erase_ts_unchecked() };
-                let child: hyperast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
-                    id.into();
-                p.acc(store, parent.simple.kind, child).unwrap();
+                let child: hyperast::scripting::SubtreeHandle<crate::types::TType> = id.into();
+                use hyperast::scripting::Accumulable;
+                p.acc(self.more.scripts(), store, parent.simple.kind, child)
+                    .unwrap();
             }
         }
         let label = if acc.labeled {
@@ -518,7 +520,8 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
         cursor: tree_sitter::TreeCursor,
     ) -> FullNode<StatsGlobalData, Local>
     where
-        More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+        More: tree_gen::Prepro<SimpleStores<TS>, Scope = hyperast::scripting::Acc>
+            + tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc<More::Scope>>,
     {
         todo!()
     }
@@ -575,7 +578,8 @@ where
     TS: JavaEnabledTypeStore<Ty2 = Type>
         + 'static
         + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>>
+        + tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc<More::Scope>>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
@@ -627,8 +631,11 @@ where
             }
             if More::USING {
                 let prepro = self.more.preprocessing(Type::Spaces).unwrap();
-                let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
-                let ss = prepro.finish_with_label(&subtr, spacing).unwrap();
+                let subtr = hyperast::scripting::Subtr(kind, &dyn_builder);
+                use hyperast::scripting::Finishable;
+                let ss = prepro
+                    .finish_with_label(self.more.scripts(), &subtr, &spacing)
+                    .unwrap();
                 dyn_builder.add(ss);
             };
 
@@ -690,15 +697,16 @@ where
             if let Some(p) = &mut init.prepro {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.stores.erase_ts_unchecked() };
-                let child: hyperast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
-                    id.into();
-                p.acc(store, init.simple.kind, child).unwrap();
+                let child: hyperast::scripting::SubtreeHandle<crate::types::TType> = id.into();
+                use hyperast::scripting::Accumulable;
+                p.acc(self.more.scripts(), store, init.simple.kind, child)
+                    .unwrap();
             }
             global.right();
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -720,10 +728,10 @@ where
                 if let Some(p) = &mut acc.prepro {
                     // SAFETY: this side should be fine, issue when unerasing
                     let store = unsafe { self.stores.erase_ts_unchecked() };
-                    let child: hyperast::scripting::lua_scripting::SubtreeHandle<
-                        crate::types::TType,
-                    > = id.into();
-                    p.acc(store, acc.simple.kind, child).unwrap();
+                    let child: hyperast::scripting::SubtreeHandle<crate::types::TType> = id.into();
+                    use hyperast::scripting::Accumulable;
+                    p.acc(self.more.scripts(), store, acc.simple.kind, child)
+                        .unwrap();
                 }
             }
         }
@@ -775,9 +783,10 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-    More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
+    More: tree_gen::Prepro<SimpleStores<TS>>
+        + tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc<More::Scope>>,
 {
-    type Acc = Acc;
+    type Acc = Acc<More::Scope>;
     type Global = Global<'stores>;
     fn make(
         &mut self,
@@ -806,6 +815,7 @@ where
         self.stores
             .node_store
             .inner
+            .stats()
             .add_height_non_dedup(metrics.height);
         // &metrics.hashs.structt,
 
@@ -839,7 +849,7 @@ where
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let node_store: &_ = vacant.1 .1;
+            let node_store: &_ = vacant.1.1;
             let stores = SimpleStores {
                 type_store: self.stores.type_store.clone(),
                 label_store: &self.stores.label_store,
@@ -883,7 +893,8 @@ where
                 acc.ana.as_ref(),
             );
             #[cfg(feature = "subtree-stats")]
-            vacant.1 .1.add_height_dedup(metrics.height, metrics.hashs);
+            vacant.1.1.stats()
+                .add_height_dedup(metrics.height, metrics.hashs);
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
 
@@ -896,14 +907,18 @@ where
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
 
             if More::USING {
-                let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
-                let ss = if let Some(label) = label {
+                let subtr = hyperast::scripting::Subtr(kind, &dyn_builder);
+                use hyperast::scripting::Finishable;
+                let ss = if let Some(label) = &label {
                     acc.prepro
                         .unwrap()
-                        .finish_with_label(&subtr, label)
+                        .finish_with_label(self.more.scripts(), &subtr, label)
                         .unwrap()
                 } else {
-                    acc.prepro.unwrap().finish(&subtr).unwrap()
+                    acc.prepro
+                        .unwrap()
+                        .finish(self.more.scripts(), &subtr)
+                        .unwrap()
                 };
                 dyn_builder.add(ss);
             }
@@ -940,12 +955,13 @@ where
 }
 
 impl<
-        'stores,
-        'cache,
-        TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
-        More: tree_gen::Prepro<SimpleStores<TS>> + for<'s> tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc>,
-        const HIDDEN_NODES: bool,
-    > NodeStoreExt<HashedNode>
+    'stores,
+    'cache,
+    TS: JavaEnabledTypeStore + 'static + hyperast::types::RoleStore<Role = Role, IdF = u16>,
+    More: tree_gen::Prepro<SimpleStores<TS>, Scope = hyperast::scripting::Acc>
+        + tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc<More::Scope>>,
+    const HIDDEN_NODES: bool,
+> NodeStoreExt<HashedNode>
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS::Ty: TypeTrait,
@@ -1076,7 +1092,7 @@ where
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
 
                 let vacant = insertion.vacant();
-                let node_store: &_ = vacant.1 .1;
+                let node_store: &_ = vacant.1.1;
                 let stores = SimpleStores {
                     type_store: self.stores.type_store.clone(),
                     node_store,

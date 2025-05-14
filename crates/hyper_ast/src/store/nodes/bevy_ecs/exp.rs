@@ -1,9 +1,6 @@
-
-
+use super::*;
 use bevy_ecs::schedule::DynEq;
 use std::any::Any;
-use super::*;
-
 
 // what about using systems like ECSs for the compounding
 
@@ -21,20 +18,6 @@ fn compound_h_label((acc, size): (&HLabelAcc, Option<&TreeSize>)) -> HLabel {
 // systems.add_rec(rec_h_label)
 // systems.add_compound(compound_h_label)
 
-fn add_rec<A: hecs::Component, C: Clone + hecs::Component>(
-    e: &mut hecs::EntityBuilder,
-    child: &mut hecs::EntityRef,
-    f: impl Fn(&mut A, &C),
-) {
-    let c = child.get::<&C>().unwrap();
-    use std::ops::Deref;
-    let c = c.deref();
-    let a: &mut A = e.get_mut().unwrap();
-    f(a, c)
-}
-
-
-
 trait CompountMd<Compounds>: Sized {
     fn compound(c: Compounds) -> Self;
 }
@@ -49,17 +32,6 @@ where
 }
 
 struct CCC();
-
-fn f(e: &mut hecs::EntityBuilder) -> &CCC {
-    let a = e.get::<&CCC>().unwrap();
-    a
-}
-
-fn g<'a, 'b>(e: &'b mut hecs::EntityRef<'a>) -> hecs::Ref<'a, CCC> {
-    // e.query::<&CCC>().get().unwrap()
-    let a = e.get::<&CCC>().unwrap();
-    a
-}
 
 /// id -> Processor {cache, query, rec}
 struct Map;

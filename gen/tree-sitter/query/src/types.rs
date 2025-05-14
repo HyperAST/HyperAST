@@ -4,7 +4,8 @@ use hyperast::{
     store::defaults::NodeIdentifier,
     tree_gen::utils_ts::TsEnableTS,
     types::{
-        AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
+        AAAA, AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16,
+        TypedNodeId,
     },
 };
 
@@ -47,18 +48,6 @@ mod legion_impls {
 
     impl TypeStore for TStore {
         type Ty = TypeU16<TsQuery>;
-    }
-    impl TypeStore for _TStore {
-        type Ty = Type;
-        fn decompress_type(
-            erazed: &impl hyperast::types::ErasedHolder,
-            tid: std::any::TypeId,
-        ) -> Self::Ty {
-            erazed
-                .unerase_ref::<TypeU16<TsQuery>>(std::any::TypeId::of::<TypeU16<TsQuery>>())
-                .unwrap()
-                .e()
-        }
     }
 
     impl RoleStore for TStore {
@@ -152,9 +141,7 @@ impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
 #[derive(Clone, Copy)]
 pub struct TStore;
 
-pub struct _TStore;
-
-impl hyperast::store::TyDown<_TStore> for TStore {}
+impl hyperast::store::TyDown<TStore> for TStore {}
 
 impl Default for TStore {
     fn default() -> Self {

@@ -25,11 +25,16 @@ where
     HAST::TS: ETypeStore,
 {
     const USING: bool = false;
+    type Scope = hyperast::scripting::Acc;
 
     fn preprocessing(
         &self,
         _ty: <HAST::TS as ETypeStore>::Ty2,
-    ) -> Result<hyperast::scripting::Acc, String> {
+    ) -> Result<Self::Scope, <Self::Scope as hyperast::scripting::Scriptable>::Error> {
+        unimplemented!()
+    }
+
+    fn scripts(&self) -> &<Self::Scope as hyperast::scripting::Scriptable>::Scripts {
         unimplemented!()
     }
 }

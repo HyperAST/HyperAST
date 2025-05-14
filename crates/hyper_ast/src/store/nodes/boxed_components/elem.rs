@@ -184,7 +184,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+impl<'a, Id> crate::store::nodes::ErasedHolder for HashedNodeRef<'a, Id> {
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         todo!()
     }

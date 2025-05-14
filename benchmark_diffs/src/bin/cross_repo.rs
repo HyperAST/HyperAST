@@ -1,9 +1,12 @@
 // window of one is just consecutive commits
 
 use hyperast_vcs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
-use std::{io::Write, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
-use hyperast_benchmark_diffs::cross_repo::{windowed_commits_compare, CommitCompareParameters};
+use hyperast_benchmark_diffs::{
+    cross_repo::{CommitCompareParameters, windowed_commits_compare},
+    setup_env_logger,
+};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -13,42 +16,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
-        .format(|buf, record| {
-            if record.level().to_level_filter() > log::LevelFilter::Debug {
-                writeln!(buf, "{}", record.args())
-            } else {
-                writeln!(
-                    buf,
-                    "[{} {}] {}",
-                    buf.timestamp_millis(),
-                    record.level(),
-                    record.args()
-                )
-            }
-        })
-        .init();
-
-    // let params = vec![
-    //     CommitCompareParameters {
-    //         name: "apache/logging-log4j2",
-    //         before: "", //"7e745b42bda9bf6f8ea681d38992d18036fc021e",
-    //         after: "ebfc8945a5dd77b617f4667647ed4b740323acc8",
-    //         dir_path: "",
-    //     },
-    //     CommitCompareParameters {
-    //         name: "INRIA/spoon",
-    //         before: "", //"76ffd3353a535b0ce6edf0bf961a05236a40d3a1",
-    //         after: "74ee133f4fe25d8606e0775ade577cd8e8b5cbfd",
-    //         dir_path: "",
-    //     },
-    //     CommitCompareParameters {
-    //         name: "apache/spark",
-    //         before: "", //"14211a19f53bd0f413396582c8970e3e0a74281d",
-    //         after: "885f4733c413bdbb110946361247fbbd19f6bba9",
-    //         dir_path: "",
-    //     },
-    // ];
+    setup_env_logger();
 
     let args: Vec<String> = std::env::args().collect();
     log::warn!("args: {:?}", args);
@@ -87,11 +55,10 @@ fn main() {
             let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
             let configured_repo = preprocessed.register_config(repo, config);
             Some(CommitCompareParameters {
-                // name,
                 configured_repo,
                 before: "",
                 after,
-                // dir_path: "", // TODO reallow to specify dir_path
+                // dir_path: "", // TODO reenable custom dir_path
             })
         })
         .collect();

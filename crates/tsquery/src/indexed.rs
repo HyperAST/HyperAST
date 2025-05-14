@@ -500,10 +500,10 @@ impl Into<NegatedFields> for &crate::utils::Array<crate::ffi::TSFieldId> {
 pub struct Symbol(u16);
 
 impl Symbol {
-    pub(crate) const ERROR: Symbol = Symbol(u16::MAX - 1);
-    pub(crate) const NONE: Symbol = Symbol(u16::MAX);
-    pub(crate) const END: Symbol = Symbol(0);
-    pub(crate) const WILDCARD_SYMBOL: Symbol = Symbol(0);
+    pub const ERROR: Symbol = Symbol(u16::MAX - 1);
+    pub const NONE: Symbol = Symbol(u16::MAX);
+    pub const END: Symbol = Symbol(0);
+    pub const WILDCARD_SYMBOL: Symbol = Symbol(0);
     // const WILDCARD_SYMBOL: index::Symbol = index::Symbol(0);
 
     pub(crate) fn to_usize(&self) -> usize {

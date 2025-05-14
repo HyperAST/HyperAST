@@ -1,31 +1,28 @@
 ///! fully compress all subtrees from a tree-sitter query CST
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::{types::TIdN, TNode};
+use crate::{TNode, types::TIdN};
 use legion::world::EntryRef;
 
+use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
 use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::{
-            legion::{
-                compo::{self, NoSpacesCS, CS},
-                HashedNodeRef, NodeIdentifier,
-            },
-            DefaultNodeStore as NodeStore, EntityBuilder,
-        },
         SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore, EntityBuilder,
+            legion::{HashedNodeRef, NodeIdentifier},
+        },
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space,
-        parser::{Node as _, TreeCursor},
-        utils_ts::TTreeCursor,
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
         PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
-        WithByteRange, ZippedTreeGen,
+        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
+        utils_ts::TTreeCursor,
     },
     types::{ETypeStore as _, LabelStore as _},
 };
@@ -68,9 +65,7 @@ pub struct Local {
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
 }
 
-pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    hyperast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
-}
+pub use crate::tree_sitter_parse;
 
 impl Local {
     fn acc(self, acc: &mut Acc) {
@@ -195,7 +190,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
-        log::warn!("not retrieving roles");
+        log::trace!("not retrieving roles");
         PreResult::Ok(acc)
     }
     fn pre(
@@ -365,7 +360,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 
@@ -466,8 +461,7 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
         } else {
             let hashs = hbuilder.build();
 
-            let mut dyn_builder =
-                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(
@@ -612,8 +606,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         } else {
             let hashs = hbuilder.build();
 
-            let mut dyn_builder =
-                hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(
@@ -651,5 +644,81 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
             }
         };
         local.compressed_node
+    }
+
+    /// Try to build a node with the given type, label, and children.
+    /// Cannot be used to build a new node.
+    /// Only take self as shared ref and check if the would be created node would already exist
+    pub fn try_build(
+        stores: &'stores SimpleStores<crate::types::TStore>,
+        _i: <hashed::HashedNode as hyperast::types::Stored>::TreeId,
+        t: Type,
+        l: Option<LabelIdentifier>,
+        cs: Vec<NodeIdentifier>,
+    ) -> Option<NodeIdentifier> {
+        let mut acc: Acc = {
+            let kind = t;
+            Acc {
+                labeled: l.is_some(),
+                start_byte: 0,
+                end_byte: 0,
+                metrics: Default::default(),
+                indentation: vec![],
+                simple: BasicAccumulator {
+                    kind,
+                    children: vec![],
+                },
+                no_space: vec![],
+                padding_start: 0,
+            }
+        };
+        for c in cs {
+            let local = {
+                let metrics = {
+                    use hyperast::hashed::SyntaxNodeHashsKinds;
+                    use hyperast::types::WithHashs;
+                    let (_, node) = stores
+                        .node_store
+                        .resolve_with_type::<TIdN<NodeIdentifier>>(&c);
+                    let hashs = SyntaxNodeHashs {
+                        structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
+                        label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
+                        syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
+                    };
+                    use hyperast::types::WithStats;
+                    use num::ToPrimitive;
+                    let metrics = SubTreeMetrics {
+                        size: node.size().to_u32().unwrap(),
+                        height: node.height().to_u32().unwrap(),
+                        size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
+                        hashs,
+                        line_count: node.line_count().to_u16().unwrap(),
+                    };
+                    metrics
+                };
+                Local {
+                    compressed_node: c,
+                    metrics,
+                }
+            };
+            let global = BasicGlobalData::default();
+            let full_node = FullNode { global, local };
+            acc.push(full_node);
+        }
+        let node_store = &stores.node_store;
+        let label_store = &stores.label_store;
+        let interned_kind = crate::types::TStore::intern(acc.simple.kind);
+        let hashs = acc.metrics.hashs;
+        let size_no_spaces = acc.metrics.size_no_spaces + 1;
+
+        let label = l.map(|l| label_store.resolve(&l));
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
+
+        let label_id = l;
+        let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
+
+        node_store.get(&hashable, eq)
     }
 }

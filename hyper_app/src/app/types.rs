@@ -190,7 +190,7 @@ pub enum SelectedConfig {
 }
 
 impl SelectedConfig {
-    pub const fn title(&self) -> impl Into<String> + AsRef<str> {
+    pub const fn title(&self) -> impl Into<String> + AsRef<str> + use<> {
         match self {
             SelectedConfig::Single => "Stats",
             SelectedConfig::Querying => "Querying",
@@ -226,15 +226,21 @@ impl SelectedConfig {
         match self {
             SelectedConfig::Single => "Show code metrics over commits of a given repository",
             SelectedConfig::Querying => r#"Search code evolutions through pattern queries."#,
-            SelectedConfig::Smells => "Search for problematic code patterns, by focussing on code removals (specialization of the querying).",
+            SelectedConfig::Smells => {
+                "Search for problematic code patterns, by focussing on code removals (specialization of the querying)."
+            }
             SelectedConfig::Tsg => {
                 r#"Graph computed using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)."#
             }
             SelectedConfig::Multi => "Show code metrics over commits of a multiple repository.",
             SelectedConfig::Diff => "Tree diffs between a pair of commits.",
             SelectedConfig::Tracking => "Code tracking between a pair of commits.",
-            SelectedConfig::LongTracking => "Code tracking through a development history, handles moves and can stop on modifications to the tracked code but also to its parents.",
-            SelectedConfig::Aspects => "Explore how code can be rendered in this GUI. Once you save a render, you can configure other views with it.",
+            SelectedConfig::LongTracking => {
+                "Code tracking through a development history, handles moves and can stop on modifications to the tracked code but also to its parents."
+            }
+            SelectedConfig::Aspects => {
+                "Explore how code can be rendered in this GUI. Once you save a render, you can configure other views with it."
+            }
         }
     }
 }
@@ -283,8 +289,7 @@ impl egui_addon::Languages for Languages {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(PartialEq, Eq)]
+#[derive(serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub enum QueriedLang {
     Cpp,
     Java,

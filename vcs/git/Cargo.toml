@@ -1,7 +1,7 @@
 [package]
 name = "hyperast_vcs_git"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 
 [dependencies]
 git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
@@ -10,7 +10,7 @@ hyperast_gen_ts_cpp = { workspace = true, optional = true }
 hyperast_gen_ts_java = { workspace = true, optional = true }
 hyperast_gen_ts_xml = { workspace = true, optional = true }
 hyperast = { workspace = true }
-hyperast_tsquery =  { workspace = true }
+hyperast_tsquery = { workspace = true }
 log = { version = "0.4.6" }
 num = "0.4.0"
 tuples = "=1.4.1"
@@ -20,12 +20,13 @@ enumset = "1.0.12"
 serde = { version = "1.0.130" }
 
 tree-sitter-graph = { workspace = true, optional = true }
+vec_extract_if_polyfill = "0.1.0"
 
 [dev-dependencies]
 env_logger = "0.11.3"
 tree-sitter-graph = { workspace = true }
-hyperast_tsquery = { workspace = true, features = ["tsg"]}
-hyperast_gen_ts_java = { workspace = true }#, features = ["subtree-stats"]
+hyperast_tsquery = { workspace = true, features = ["tsg"] }
+hyperast_gen_ts_java = { workspace = true }                 #, features = ["subtree-stats"]
 
 [build-dependencies]
 
@@ -53,7 +54,4 @@ ts = []
 # cargo = []
 # rust = []
 impact = []
-subtree-stats = [
-    "hyperast/subtree-stats",
-    "hyperast_gen_ts_java/subtree-stats"
-]
+subtree-stats = ["hyperast/subtree-stats", "hyperast_gen_ts_java/subtree-stats"]

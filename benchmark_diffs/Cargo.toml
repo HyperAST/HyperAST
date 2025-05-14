@@ -1,9 +1,8 @@
-cargo-features = ["profile-rustflags"]
 
 [package]
 name = "hyperast_benchmark_diffs"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 autobins = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -35,6 +34,8 @@ bitvec = "1.0.1"
 md5 = "0.7.0"
 
 pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
+
+const-chunks = "0.3.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"

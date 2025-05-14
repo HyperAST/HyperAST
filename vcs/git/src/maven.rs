@@ -1,6 +1,6 @@
 use crate::{
-    processing::ObjectName, Accumulator, BasicDirAcc, DefaultMetrics, ParseErr, SimpleStores,
-    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    Accumulator, BasicDirAcc, DefaultMetrics, PROPAGATE_ERROR_ON_BAD_CST_NODE, ParseErr,
+    SimpleStores, processing::ObjectName,
 };
 use enumset::EnumSet;
 use hyperast::{
@@ -144,13 +144,8 @@ impl<'a> IterMavenModules2<'a> {
         self.offsets.push(0);
         self.remaining.push(None);
         if b.has_children() {
-            self.remaining.extend(
-                b.children()
-                    .unwrap()
-                    .iter_children()
-                    .rev()
-                    .map(|x| Some(x)),
-            );
+            self.remaining
+                .extend(b.children().unwrap().iter_children().rev().map(|x| Some(x)));
         }
 
         let contains_pom = b
@@ -198,7 +193,7 @@ pub struct MD {
     pub(crate) metrics: DefaultMetrics,
     #[allow(unused)] // TODO needed for scalable module level reference analysis
     pub(crate) ana: MavenPartialAnalysis,
-    pub(crate) status: EnumSet<SemFlags>,
+    pub(crate) status: EnumSet<SemFlag>,
 }
 
 pub struct MavenModuleAcc {
@@ -207,7 +202,7 @@ pub struct MavenModuleAcc {
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
-    pub(crate) status: EnumSet<SemFlags>,
+    pub(crate) status: EnumSet<SemFlag>,
     pub(crate) scripting_acc: std::option::Option<hyperast::scripting::Acc>,
 }
 
@@ -260,7 +255,7 @@ impl MavenModuleAcc {
 }
 
 #[derive(enumset::EnumSetType, Debug)]
-pub enum SemFlags {
+pub enum SemFlag {
     IsMavenModule,
     HoldMainFolder,
     HoldTestFolder,
@@ -269,7 +264,7 @@ pub enum SemFlags {
 
 impl MavenModuleAcc {
     pub(crate) fn push_pom(&mut self, name: LabelIdentifier, full_node: POM) {
-        self.status |= SemFlags::IsMavenModule;
+        self.status |= SemFlag::IsMavenModule;
         assert!(!self.primary.children_names.contains(&name));
         self.primary.children.push(full_node.compressed_node);
         self.primary.children_names.push(name);
@@ -285,10 +280,10 @@ impl MavenModuleAcc {
         self.primary.metrics.acc(full_node.metrics);
     }
     pub fn push_submodule(&mut self, name: LabelIdentifier, full_node: (NodeIdentifier, MD)) {
-        if full_node.1.status.contains(SemFlags::HoldMavenSubModule)
-            || full_node.1.status.contains(SemFlags::IsMavenModule)
+        if full_node.1.status.contains(SemFlag::HoldMavenSubModule)
+            || full_node.1.status.contains(SemFlag::IsMavenModule)
         {
-            self.status |= SemFlags::HoldMavenSubModule;
+            self.status |= SemFlag::HoldMavenSubModule;
         }
         self.primary.children.push(full_node.0);
         self.primary.children_names.push(name);
@@ -299,7 +294,7 @@ impl MavenModuleAcc {
         name: LabelIdentifier,
         full_node: java_tree_gen::Local,
     ) {
-        self.status |= SemFlags::HoldMainFolder;
+        self.status |= SemFlag::HoldMainFolder;
         self.primary.children.push(full_node.compressed_node);
         self.primary.children_names.push(name);
         self.primary.metrics.acc(SubTreeMetrics {
@@ -317,7 +312,7 @@ impl MavenModuleAcc {
         name: LabelIdentifier,
         full_node: java_tree_gen::Local,
     ) {
-        self.status |= SemFlags::HoldTestFolder;
+        self.status |= SemFlag::HoldTestFolder;
         self.primary.children.push(full_node.compressed_node);
         self.primary.children_names.push(name);
         self.primary.metrics.acc(SubTreeMetrics {
@@ -432,11 +427,8 @@ impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterM
 
                 if b.has_children() {
                     let children = b.children();
-                    self.stack.push((
-                        node,
-                        0,
-                        Some(children.unwrap().iter_children().collect()),
-                    ));
+                    self.stack
+                        .push((node, 0, Some(children.unwrap().iter_children().collect())));
                 }
 
                 if self.is_matching(&b) {
@@ -508,8 +500,8 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
 impl hyperast::tree_gen::Accumulator for MavenModuleAcc {
     type Node = (LabelIdentifier, (NodeIdentifier, MD));
     fn push(&mut self, (name, full_node): Self::Node) {
-        let s = full_node.1.status - SemFlags::IsMavenModule;
-        assert!(!s.contains(SemFlags::IsMavenModule));
+        let s = full_node.1.status - SemFlag::IsMavenModule;
+        assert!(!s.contains(SemFlag::IsMavenModule));
         self.status |= s;
         self.primary.children.push(full_node.0);
         self.primary.children_names.push(name);

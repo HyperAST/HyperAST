@@ -397,36 +397,31 @@ where
         slf.child_by_role(role).is_some()
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        &self.pos == &other.pos
+    fn equal(&self, other: &Self, _text_provider: <Self as super::TextLending<'_>>::TP) -> bool {
+        self.pos.node() == other.pos.node()
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
-        use std::cmp::Ordering::*;
-        let left = self;
-        let right = other;
-        if !left.equal(right) {
-            return self.pos.cmp(&other.pos);
-        }
-        Equal
+        self.pos.cmp(&other.pos)
     }
+    
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
-    ) -> super::BB<'s, 'l, str> {
+    ) -> super::BiCow<'s, 'l, str> {
         let id = self.pos.node().unwrap();
         use hyperast::types::NodeStore;
         let n = self.stores.node_store().resolve(id);
         if n.has_children() {
             let r = hyperast::nodes::TextSerializer::new(self.stores, *id).to_string();
-            return super::BB::O(r);
+            return super::BiCow::Owned(r);
         }
         if let Some(l) = n.try_get_label() {
             let l = self.stores.label_store().resolve(l);
             // todo!()
-            return super::BB::A(l);
+            return super::BiCow::A(l);
         }
-        super::BB::B("".into())
+        super::BiCow::B("".into()) // TODO check if it is the right behavior
     }
 }
 

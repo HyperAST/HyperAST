@@ -33,10 +33,13 @@ impl Display for LabelStore {
 }
 
 pub type DefaultLabelValue = str;
-pub type DefaultLabelIdentifier = DefaultSymbol;
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DefaultLabelIdentifier(pub(crate) DefaultSymbol);
 
 pub fn label_id_from_usize(x: usize) -> Option<DefaultLabelIdentifier> {
-    DefaultLabelIdentifier::try_from_usize(x)
+    DefaultSymbol::try_from_usize(x).map(DefaultLabelIdentifier)
 }
 
 impl crate::types::LStore for LabelStore {
@@ -51,14 +54,14 @@ impl crate::types::LabelStore<DefaultLabelValue> for LabelStore {
     type I = DefaultLabelIdentifier;
     fn get_or_insert<T: Borrow<DefaultLabelValue>>(&mut self, node: T) -> Self::I {
         self.count += 1;
-        self.internal.get_or_intern(node.borrow())
+        DefaultLabelIdentifier(self.internal.get_or_intern(node.borrow()))
     }
     fn get<T: Borrow<DefaultLabelValue>>(&self, node: T) -> Option<Self::I> {
-        self.internal.get(node.borrow())
+        self.internal.get(node.borrow()).map(DefaultLabelIdentifier)
     }
 
     fn resolve(&self, id: &Self::I) -> &DefaultLabelValue {
-        self.internal.resolve(*id).unwrap()
+        self.internal.resolve(id.0).unwrap()
     }
 }
 
@@ -68,11 +71,11 @@ impl crate::types::LabelStore<DefaultLabelValue> for &LabelStore {
         unimplemented!("&mut & does not allow to mutate in place :/")
     }
     fn get<T: Borrow<DefaultLabelValue>>(&self, node: T) -> Option<Self::I> {
-        self.internal.get(node.borrow())
+        self.internal.get(node.borrow()).map(DefaultLabelIdentifier)
     }
 
     fn resolve(&self, id: &Self::I) -> &DefaultLabelValue {
-        self.internal.resolve(*id).unwrap()
+        self.internal.resolve(id.0).unwrap()
     }
 }
 
