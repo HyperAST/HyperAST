@@ -8,7 +8,9 @@ use hyperast_vcs_git::{
     maven::MavenModuleAcc,
     maven_processor::MavenProcessorHolder,
     multi_preprocessed::PreProcessedRepositories,
-    processing::{CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait},
+    processing::{
+        CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait, erased::ParametrizedCommitProc2,
+    },
 };
 use num_traits::ToPrimitive;
 
@@ -135,6 +137,7 @@ pub fn windowed_commits_compare(
                         .processing_systems
                         .get::<MavenProcessorHolder>()
                         .unwrap()
+                        .with_parameters(repo.config.1)
                         .get_caches()
                         .object_map
                         .get(&oid)
@@ -163,6 +166,7 @@ pub fn windowed_commits_compare(
                         .processing_systems
                         .get::<MavenProcessorHolder>()
                         .unwrap()
+                        .with_parameters(repo.config.1)
                         .get_caches()
                         .object_map
                         // .get::<Caches>().unwrap().object_map//object_map_maven
@@ -361,7 +365,7 @@ pub fn windowed_commits_compare(
                         dst_s,
                         Into::<isize>::into(&src_mem),
                         Into::<isize>::into(&dst_mem),
-                        summarized_lazy.actions.map_or(-1,|x|x as isize),
+                        summarized_lazy.actions.map_or(-1, |x| x as isize),
                         gt_counts.actions,
                         valid.missing_mappings,
                         valid.additional_mappings,

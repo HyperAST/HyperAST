@@ -9,6 +9,7 @@ use bitvec::{order::Lsb0, view::BitViewSized};
 use self::default::{Pearson, VaryHasher};
 
 #[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::prelude::Component))]
 pub enum BloomSize {
     None,
     B16,
@@ -152,12 +153,12 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
 
 #[cfg(all(target_pointer_width = "64", feature = "native"))]
 mod bloom_64 {
-    use super::default::MyDefaultHasher;
+    use super::BF;
     use super::Bloom;
     use super::BloomResult;
     use super::BloomSize;
     use super::Pearson;
-    use super::BF;
+    use super::default::MyDefaultHasher;
 
     impl BF<[u8]> for Bloom<&'static [u8], u64> {
         type Result = BloomResult;

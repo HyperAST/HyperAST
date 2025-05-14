@@ -1,21 +1,19 @@
 [package]
 name = "backend"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 
 [dependencies]
 tree-sitter = { workspace = true }
 tree-sitter-cli = "0.23.0"
-hyperast = { workspace = true, default-features = false, features = [
-    "serialize", "fetched"
-] }
+hyperast = { workspace = true, features = ["serialize", "fetched"] }
 hyperast_gen_ts_cpp = { workspace = true }
 hyperast_gen_ts_java = { workspace = true }
 hyperast_gen_ts_xml = { workspace = true }
 hyper_diff = { workspace = true }
 hyperast_vcs_git = { workspace = true }
-hyperast_gen_ts_tsquery = { workspace = true }
-hyperast_tsquery =  { workspace = true }
+hyperast_gen_ts_tsquery = { workspace = true, features = ["synth_par"] }
+hyperast_tsquery = { workspace = true }
 polyglote = { workspace = true, optional = true }
 
 # env_logger = "0.9.0"
@@ -80,6 +78,7 @@ nohash-hasher = "0.2.0"
 serde-aux = "4.1.2"
 
 dashmap = { version = "5.4.0", features = ["raw-api"] }
+clashmap = { version = "1.2.0", features = ["raw-api"] }
 
 enumset = "1.0.12"
 num = "0.4.0"
@@ -92,7 +91,7 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 
 clap = { version = "3.0", features = ["derive"] }
 
-hashbrown = "0.14.5"
+hashbrown = "0.15.2"
 
 tree-sitter-graph = { workspace = true, optional = true }
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
@@ -100,7 +99,7 @@ tree-sitter-graph = { workspace = true, optional = true }
 # tree-sitter-stack-graphs = { version = "0.9.0", optional = true }
 # stack-graphs = { version = "0.14.0", optional = true }
 
-rerun = { version = "0.20.2", default-features = false, features = [
+rerun = { version = "0.22.1", default-features = false, features = [
     "log",
     "sdk",
 ], optional = true }
@@ -114,7 +113,12 @@ hyper-util = { version = "0.1", default-features = false, features = [
 ] }
 rustls = { version = "0.23" }
 http-body-util = "0.1.2"
+const-chunks = "0.3.0" # waiting for stabilization
+get-many-mut = "0.1.0" # waiting for stabilization
+lock_api = "0.4.1"
 
+# regex = "1.10.5"
+# glob = "0.3.2"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
@@ -124,8 +128,8 @@ reqwest = { version = "0.12.5", features = ["blocking"] }
 test-log = "0.2"
 
 [features]
-# default = ["rerun", "tsg"]
 default = ["tsg"]
+# default = ["rerun", "tsg"]
 tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",
@@ -134,7 +138,5 @@ tsg = [
     "hyperast_vcs_git/tsg",
 ]
 rerun = ["dep:rerun", "dep:polyglote"]
-subtree-stats = [
-    "hyperast_gen_ts_java/subtree-stats"
-]
+subtree-stats = ["hyperast_gen_ts_java/subtree-stats"]
 alt_grammar = ["hyperast_gen_ts_cpp/impl_alt_grammar"]

@@ -84,8 +84,7 @@ pub(crate) mod store {
                         hyperast_gen_ts_java::types::Lang::make(raw);
                     t.into()
                 }
-                "hyperast_gen_ts_cpp::types_alt::Lang" | 
-                "hyperast_gen_ts_cpp::types::Lang" => {
+                "hyperast_gen_ts_cpp::types_alt::Lang" | "hyperast_gen_ts_cpp::types::Lang" => {
                     let t: &'static dyn hyperast::types::HyperType =
                         hyperast_gen_ts_cpp::types::Lang::make(raw);
                     t.into()
@@ -119,7 +118,10 @@ pub(crate) mod store {
     }
 
     impl<'b> hyperast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        fn resolve(&self, id: &NodeIdentifier) -> <Self as hyperast::types::NLending<'_, NodeIdentifier>>::N {
+        fn resolve(
+            &self,
+            id: &NodeIdentifier,
+        ) -> <Self as hyperast::types::NLending<'_, NodeIdentifier>>::N {
             if let Some(r) = self.node_store.try_resolve(*id) {
                 r
             } else {
@@ -264,8 +266,7 @@ pub(crate) mod store {
                         hyperast_gen_ts_java::types::Lang::make(raw);
                     t.into()
                 }
-                "hyperast_gen_ts_cpp::types_alt::Lang" | 
-                "hyperast_gen_ts_cpp::types::Lang" => {
+                "hyperast_gen_ts_cpp::types_alt::Lang" | "hyperast_gen_ts_cpp::types::Lang" => {
                     let t: &'static dyn hyperast::types::HyperType =
                         hyperast_gen_ts_cpp::types::Lang::make(raw);
                     t.into()
@@ -1524,9 +1525,8 @@ impl<'a> FetchedViewImpl<'a> {
             // wasm_rs_dbg::dbg!(self.focus);
             return ControlFlow::Break(());
         }
-        let hightlights: Vec<_> = self
-            .hightlights
-            .extract_if(|handle| {
+        let hightlights: Vec<_> =
+            vec_extract_if_polyfill::MakeExtractIf::extract_if(&mut self.hightlights, |handle| {
                 !handle.path.is_empty() && handle.path[0] == i
                 // if x.is_empty() {
                 //     None
@@ -1918,9 +1918,7 @@ mod hyperast_layouter {
         });
     }
 
-    use hyperast::types::{
-        self, HyperAST, HyperASTShared, HyperType, Childrn,
-    };
+    use hyperast::types::{self, Childrn, HyperAST, HyperType};
 
     impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
     where
@@ -1987,7 +1985,7 @@ mod hyperast_layouter {
                     let format = syntax_highlighter::TokenType::Keyword;
                     make_section(self.theme, out, format, *offset, end);
                     *offset = end;
-                    return Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent);
                 }
                 (label, Some(children)) => {
                     if let Some(label) = label {
@@ -2011,7 +2009,7 @@ mod hyperast_layouter {
                             ind = self._compute(&id, &ind, out, offset).or_else(op)?;
                         }
                     }
-                    return Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent);
                 }
                 (Some(label), None) => {
                     let s = self.stores.label_store().resolve(label);
@@ -2021,7 +2019,7 @@ mod hyperast_layouter {
                     let format = syntax_highlighter::TokenType::Punctuation;
                     make_section(self.theme, out, format, *offset, end);
                     *offset = end;
-                    return Err(IndentedAlt::NoIndent)
+                    return Err(IndentedAlt::NoIndent);
                 }
             };
         }

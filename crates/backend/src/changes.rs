@@ -3,13 +3,16 @@ use serde::{Deserialize, Serialize};
 
 use std::fmt::Debug;
 
+use hyper_diff::{
+    decompressed_tree_store::ShallowDecompressedTreeStore,
+    matchers::{Decompressible, Mapper},
+};
 use hyperast::{
     store::defaults::NodeIdentifier,
-    types::{HyperAST, HyperType, Childrn, TypeStore, WithChildren, WithStats},
+    types::{Childrn, HyperAST, HyperType, WithChildren, WithStats},
 };
-use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers::{Decompressible, Mapper}};
 
-use crate::{matching, no_space, utils::get_pair_simp};
+use crate::{matching, no_space};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SrcChanges {
@@ -65,7 +68,7 @@ pub(crate) fn added_deleted(
         ));
     }
 
-    let pair = get_pair_simp(&state.partial_decomps, stores, &src_tr, &dst_tr);
+    let binding = crate::utils::bind_tree_pair(&state.partial_decomps, &src_tr, &dst_tr);
 
     let mapped = {
         let mappings_cache = &state.mappings_alone;
@@ -134,9 +137,16 @@ pub(crate) fn added_deleted(
             dashmap::mapref::entry::Entry::Vacant(entry) => {
                 // std::collections::hash_map::Entry::Vacant(entry) => {
                 let mappings = VecStore::default();
-                let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-                let src_arena = Decompressible{hyperast, decomp: src_arena};
-                let dst_arena = Decompressible{hyperast, decomp: dst_arena};
+                let mut locked = binding.lock();
+                let (src_arena, dst_arena) = locked.as_mut(stores);
+                let src_arena = Decompressible {
+                    hyperast,
+                    decomp: src_arena,
+                };
+                let dst_arena = Decompressible {
+                    hyperast,
+                    decomp: dst_arena,
+                };
                 dbg!(src_arena.len());
                 dbg!(dst_arena.len());
                 let src_size = stores.node_store.resolve(src_tr).size();

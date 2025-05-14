@@ -110,7 +110,8 @@ pub(crate) fn diff(
         });
     }
 
-    let pair = crate::utils::get_pair_simp(&state.partial_decomps, stores, &src_tr, &dst_tr);
+    let binding = crate::utils::bind_tree_pair(&state.partial_decomps, &src_tr, &dst_tr);
+
     use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
     use hyperast::types::WithStats;
     let mapped = {
@@ -127,7 +128,8 @@ pub(crate) fn diff(
             dashmap::mapref::entry::Entry::Vacant(entry) => {
                 // std::collections::hash_map::Entry::Vacant(entry) => {
                 let mappings = VecStore::default();
-                let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
+                let mut locked = binding.lock();
+                let (src_arena, dst_arena) = locked.as_mut(stores);
                 dbg!(src_arena.len());
                 dbg!(dst_arena.len());
                 let src_size = stores.node_store.resolve(src_tr).size();
@@ -137,8 +139,14 @@ pub(crate) fn diff(
                 let mut mapper = hyper_diff::matchers::Mapper {
                     hyperast,
                     mapping: Mapping {
-                        src_arena: Decompressible{hyperast, decomp: src_arena},
-                        dst_arena: Decompressible{hyperast, decomp: dst_arena},
+                        src_arena: Decompressible {
+                            hyperast,
+                            decomp: src_arena,
+                        },
+                        dst_arena: Decompressible {
+                            hyperast,
+                            decomp: dst_arena,
+                        },
                         mappings,
                     },
                 };
@@ -162,30 +170,34 @@ pub(crate) fn diff(
             }
         }
     };
-    let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
+    let mut locked = binding.lock();
+    let (src_arena, dst_arena) = locked.as_mut(stores);
     dbg!();
-    let mut src_arena = Decompressible{hyperast: stores, decomp: src_arena};
-    let mut dst_arena = Decompressible{hyperast: stores, decomp: dst_arena};
+    let mut src_arena = Decompressible {
+        hyperast: stores,
+        decomp: src_arena,
+    };
+    let mut dst_arena = Decompressible {
+        hyperast: stores,
+        decomp: dst_arena,
+    };
     src_arena.complete_subtree(&src_arena.root());
-    let src_arena =
-        complete_post_order_ref::CompletePostOrder::from(
-            &*src_arena.decomp,
-        );
+    let src_arena = complete_post_order_ref::CompletePostOrder::from(&*src_arena.decomp);
     dbg!();
     dst_arena.complete_subtree(&dst_arena.root());
-    let dst_arena =
-        complete_post_order_ref::CompletePostOrder::from(
-            &*dst_arena.decomp,
-        );
+    let dst_arena = complete_post_order_ref::CompletePostOrder::from(&*dst_arena.decomp);
     dbg!();
-    let dst_arena = Decompressible{hyperast: stores, decomp: dst_arena};
-    let dst_arena = SimpleBfsMapper::with_store(
-        stores,
-        dst_arena,
-    );
+    let dst_arena = Decompressible {
+        hyperast: stores,
+        decomp: dst_arena,
+    };
+    let dst_arena = SimpleBfsMapper::with_store(stores, dst_arena);
     dbg!();
     let ms = &mapped.1;
-    let src_arena = Decompressible{hyperast: stores, decomp: src_arena};
+    let src_arena = Decompressible {
+        hyperast: stores,
+        decomp: src_arena,
+    };
     let mapping = hyper_diff::matchers::Mapping {
         src_arena,
         dst_arena,
@@ -439,7 +451,7 @@ pub(crate) fn extract_updates<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,
@@ -489,7 +501,7 @@ pub(crate) fn extract_inserts<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,
@@ -552,7 +564,7 @@ pub(crate) fn extract_deletes<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,
@@ -610,7 +622,7 @@ pub(crate) fn extract_focuses<'a>(
 
     result
         .into_iter()
-        .map(|path| {
+        .map(move |path| {
             let tr = path.root();
             let path = hyperast::position::path_with_spaces(
                 tr,

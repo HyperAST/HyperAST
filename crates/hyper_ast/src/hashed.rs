@@ -1,13 +1,13 @@
 use std::{
     fmt::Debug,
-    hash::{Hash, Hasher}, ops::Deref,
+    hash::{Hash, Hasher},
 };
 
-use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use crate::{
-    types::{AnyType, HashKind, HyperType, NodeId},
     PrimInt,
+    types::{AnyType, HashKind, HyperType, NodeId},
 };
+use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use num::traits::WrappingAdd;
 
 use crate::nodes::{CompressedNode, HashSize};
@@ -38,6 +38,7 @@ pub trait ComputableNodeHashs: NodeHashs {
 }
 
 #[derive(Default, Clone, Copy, Eq)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
 pub struct SyntaxNodeHashs<T: PrimInt> {
     pub structt: T,
     pub label: T,
@@ -212,13 +213,8 @@ impl<U: NodeHashs + PartialEq, N: PartialEq, L: PartialEq, T: PartialEq> Partial
 
 impl<U: NodeHashs + PartialEq, N: Eq, L: Eq, T: Eq> Eq for HashedCompressedNode<U, N, L, T> {}
 
-impl<
-        H: Hash + PrimInt,
-        U: NodeHashs<Hash = H>,
-        N,
-        L,
-        T: HyperType + Copy + Hash + Eq + Sync + Send,
-    > crate::types::Typed for HashedCompressedNode<U, N, L, T>
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T: HyperType + Copy + Hash + Eq + Sync + Send>
+    crate::types::Typed for HashedCompressedNode<U, N, L, T>
 {
     type Type = T;
 
@@ -301,12 +297,12 @@ impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::ErasedHol
 }
 
 impl<
-        H: Hash + PrimInt,
-        U: NodeHashs<Hash = H>,
-        N: NodeId<IdN = N> + Copy + Eq,
-        L: Eq,
-        T: Copy + Hash + Eq + Sync + Send + HyperType,
-    > crate::types::Tree for HashedCompressedNode<U, N, L, T>
+    H: Hash + PrimInt,
+    U: NodeHashs<Hash = H>,
+    N: NodeId<IdN = N> + Copy + Eq,
+    L: Eq,
+    T: Copy + Hash + Eq + Sync + Send + HyperType,
+> crate::types::Tree for HashedCompressedNode<U, N, L, T>
 where
     N::IdN: Copy + Eq,
 {
@@ -334,7 +330,7 @@ impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::WithHashs
     type HK = U::Kind;
     type HP = H;
 
-    fn hash(&self, kind: impl std::ops::Deref<Target=Self::HK>) -> H {
+    fn hash(&self, kind: impl std::ops::Deref<Target = Self::HK>) -> H {
         self.hashs.hash(&kind)
     }
 }

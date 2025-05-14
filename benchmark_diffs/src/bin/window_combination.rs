@@ -1,9 +1,9 @@
 // window of one is just consecutive commits
 
 use hyperast_vcs_git::preprocessed::PreProcessedRepository;
-use std::{env, io::Write, path::PathBuf, str::FromStr};
+use std::{env, path::PathBuf, str::FromStr};
 
-use hyperast_benchmark_diffs::window_combination::windowed_commits_compare;
+use hyperast_benchmark_diffs::{setup_env_logger, window_combination::windowed_commits_compare};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -13,21 +13,8 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
-        .format(|buf, record| {
-            if record.level().to_level_filter() > log::LevelFilter::Debug {
-                writeln!(buf, "{}", record.args())
-            } else {
-                writeln!(
-                    buf,
-                    "[{} {}] {}",
-                    buf.timestamp_millis(),
-                    record.level(),
-                    record.args()
-                )
-            }
-        })
-        .init();
+    setup_env_logger();
+
     let args: Vec<String> = env::args().collect();
     log::warn!("args: {:?}", args);
     let repo_name = args
@@ -76,6 +63,7 @@ fn concecutive_commits() {
 fn issue_mappings_pomxml_spoon_pom() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
         .format(|buf, record| {
+            use std::io::Write;
             if record.level().to_level_filter() > log::LevelFilter::Debug {
                 writeln!(buf, "{}", record.args())
             } else {

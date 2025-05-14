@@ -1,7 +1,7 @@
 [package]
 name = "hyper_diff"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 autobenches = false
 
 [dependencies]
@@ -22,11 +22,12 @@ criterion = { version = "0.4", features = [
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    "real_blackbox",
+    "real_blackbox", # need nightly
 ] }
 env_logger = "0.11.3"
 hungarian = "1.1.1"
 hyperast_gen_ts_java = { workspace = true, features = ["impl"] }
+
 
 [lib]
 bench = false
@@ -34,3 +35,17 @@ bench = false
 [[bench]]
 name = "compressed_path_iter"
 harness = false
+
+[[bench]]
+name = "qgrams"
+harness = false
+
+[[bench]]
+name = "simple_tree"
+harness = false
+features = ["java"]
+
+[[bench]]
+name = "legion_tree"
+harness = false
+features = ["java"]

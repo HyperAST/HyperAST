@@ -12,6 +12,23 @@ impl<Idx, C> Into<Vec<Idx>> for Offsets<Idx, C> {
         self.offsets
     }
 }
+impl<Idx, C> Offsets<Idx, C> {
+    pub fn from_iterator(it: impl Iterator<Item = Idx>) -> Offsets<Idx, C> {
+        Self {
+            offsets: it.collect(),
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<Idx> Offsets<Idx> {
+    pub fn with_root<IdN>(self, root: IdN) -> RootedOffsets<IdN, Idx> {
+        RootedOffsets {
+            root,
+            offsets: self.offsets,
+        }
+    }
+}
 
 pub struct OffsetsRef<'a, Idx, Config = tags::TopDownFull> {
     /// offsets to go through a tree from top to bottom
@@ -120,8 +137,8 @@ impl<'a, IdN: Copy, Idx: PrimInt> RootedOffsetsRef<'a, IdN, Idx> {
 
 mod impl_receivers {
     use super::super::building;
-    use super::tags;
     use super::Offsets;
+    use super::tags;
     use crate::PrimInt;
     use building::top_down;
 

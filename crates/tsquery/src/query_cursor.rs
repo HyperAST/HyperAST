@@ -1,11 +1,11 @@
-use super::indexed::CaptureListId;
-use super::query::PatternEntry;
 use super::Capture;
 use super::Node;
+use super::indexed::CaptureListId;
+use super::query::PatternEntry;
 use super::{QueryCursor, QueryMatch, Status, TreeCursorStep};
+use crate::Depth;
 use crate::indexed::StepId;
 use crate::indexed::{CaptureId, PatternId};
-use crate::Depth;
 
 #[derive(Clone)]
 pub(crate) struct State {
@@ -273,13 +273,13 @@ where
             let is_named = node.is_named();
             let status = self.cursor.current_status();
             log::trace!(
-              "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
-              self.depth,
-              node.str_symbol(),
-              query.field_name(status.field_id().into()),
-              node.start_point().row,
-              self.states.len(),
-              self.finished_states.len()
+                "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
+                self.depth,
+                node.str_symbol(),
+                query.field_name(status.field_id().into()),
+                node.start_point().row,
+                self.states.len(),
+                self.finished_states.len()
             );
 
             let node_is_error = symbol.is_error();
@@ -614,7 +614,9 @@ where
                                 state!(_copy).step_index,
                                 state!(@step).alternative_index().unwrap_or(StepId::NONE),
                                 state!(@step).alternative_is_immediate(),
-                                self.capture_list_pool.get(state!(_copy).capture_list_id).len()
+                                self.capture_list_pool
+                                    .get(state!(_copy).capture_list_id)
+                                    .len()
                             );
                             end_index += 1;
                             copy_count += 1;
@@ -716,7 +718,9 @@ where
                         curr_state!().pattern_index,
                         curr_state!().start_depth,
                         curr_state!().step_index,
-                        self.capture_list_pool.get(curr_state!().capture_list_id).len()
+                        self.capture_list_pool
+                            .get(curr_state!().capture_list_id)
+                            .len()
                     );
                     let next_step = &query.steps[curr_state!().step_index];
                     if next_step.done() {
@@ -796,11 +800,9 @@ impl<'query, Cursor, Node> QueryCursor<'query, Cursor, Node> {
     pub fn _next_match(&mut self) -> Option<QueryMatch<Cursor>> {
         todo!()
     }
-
 }
 
 impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
-
     fn should_descend(&self, node_intersects_range: bool) -> bool {
         if node_intersects_range && self.depth < self.max_start_depth {
             if self.cursor.wont_match(self.query.used_precomputed) {
@@ -891,7 +893,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                 if right_captures.contains(j) {
                     let left = &left_captures[i];
                     let right = &right_captures[j];
-                    if left.node.equal(&right.node) && left.index == right.index {
+                    if left.node == right.node && left.index == right.index {
                         i.inc();
                         j.inc();
                     } else {
@@ -945,7 +947,9 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                 continue;
             }
 
-            todo!("code required for matching cartures in order instead of matches or to evict another match because we reached the max number of capture lists");
+            todo!(
+                "code required for matching cartures in order instead of matches or to evict another match because we reached the max number of capture lists"
+            );
 
             // // let node = captures[state.consumed_capture_count as usize].node;
             // // if node.end_byte() <= self.start_byte

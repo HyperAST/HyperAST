@@ -1,16 +1,17 @@
+use crate::StackEle;
+use crate::processing::ParametrizedCommitProcessorHandle;
 use crate::processing::erased::{
     CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
 };
-use crate::processing::ParametrizedCommitProcessorHandle;
-use crate::StackEle;
 use crate::{
-    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
-    maven::{MavenModuleAcc, MD},
-    preprocessed::RepositoryProcessor,
-    processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
     Processor,
+    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
+    maven::{MD, MavenModuleAcc},
+    preprocessed::RepositoryProcessor,
+    processing::{CacheHolding, InFiles, ObjectName, erased::ParametrizedCommitProc2},
 };
 use git2::{Oid, Repository};
+use hyperast::store::nodes::compo;
 use hyperast::store::nodes::legion::RawHAST;
 use hyperast::types::ETypeStore as _;
 use hyperast::{
@@ -19,7 +20,7 @@ use hyperast::{
     tree_gen::Accumulator,
     types::LabelStore,
 };
-use hyperast_gen_ts_xml::types::{Type, XmlEnabledTypeStore as _};
+use hyperast_gen_ts_xml::types::Type;
 use std::{
     iter::Peekable,
     marker::PhantomData,
@@ -126,7 +127,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             if full_node
                 .1
                 .status
-                .contains(crate::maven::SemFlags::IsMavenModule)
+                .contains(crate::maven::SemFlag::IsMavenModule)
             {
                 w.push_submodule(name, full_node);
             } else {
@@ -136,9 +137,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                let child: hyperast::scripting::lua_scripting::SubtreeHandle<
-                    hyperast_gen_ts_xml::types::TType,
-                > = id.into();
+                let child: hyperast::scripting::SubtreeHandle<hyperast_gen_ts_xml::types::TType> =
+                    id.into();
                 acc.acc(store, Type::Directory, child).unwrap();
             }
             None
@@ -201,7 +201,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if full_node
                 .1
                 .status
-                .contains(crate::maven::SemFlags::IsMavenModule)
+                .contains(crate::maven::SemFlag::IsMavenModule)
             {
                 w.push_submodule(name, full_node);
             } else {
@@ -394,7 +394,9 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
                 new_main_dirs,
                 new_test_dirs
             );
-            todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
+            todo!(
+                "also prepare search for modules and sources in parent, should also tell from which module it is required"
+            );
         }
         ana.resolve()
     };
@@ -417,7 +419,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
     let children_is_empty = primary.children.is_empty();
     if !acc.status.is_empty() {
-        dyn_builder.add(acc.status);
+        dyn_builder.add(compo::Flags(acc.status));
     }
     let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
     let metrics = metrics.map_hashs(|h| h.build());
@@ -425,7 +427,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     hashs.persist(&mut dyn_builder);
 
     if let Some(acc) = acc.scripting_acc {
-        let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+        let subtr = hyperast::scripting::Subtr(kind, &dyn_builder);
         let ss = acc.finish(&subtr).unwrap();
         log::error!("mm {:?}", ss.0);
         use hyperast::store::nodes::EntityBuilder;
@@ -502,7 +504,10 @@ impl From<(&mut MavenModuleAcc, &ObjectName)> for MavenModuleHelper {
     fn from((parent_acc, name): (&mut MavenModuleAcc, &ObjectName)) -> Self {
         let process = |mut v: &mut Option<Vec<PathBuf>>| {
             let mut v = drain_filter_strip(&mut v, name.as_bytes());
-            let c = v.extract_if(|x| x.components().next().is_none()).count();
+            let c = vec_extract_if_polyfill::MakeExtractIf::extract_if(&mut v, |x| {
+                x.components().next().is_none()
+            })
+            .count();
             (c > 0, v)
         };
         Self {
@@ -539,8 +544,7 @@ fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf>
     let mut new_sub_modules = vec![];
     let name = std::str::from_utf8(&name).unwrap();
     if let Some(sub_modules) = v {
-        sub_modules
-            .extract_if(|x| x.starts_with(name))
+        vec_extract_if_polyfill::MakeExtractIf::extract_if(sub_modules, |x| x.starts_with(name))
             .for_each(|x| {
                 let x = x.strip_prefix(name).unwrap().to_owned();
                 new_sub_modules.push(x);
@@ -635,7 +639,7 @@ impl crate::processing::erased::Parametrized for PomProcessorHolder {
             .position(|x| x.parameter.as_ref() == Some(&t))
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
-                           // self.0.push(PomProc(t));
+                // self.0.push(PomProc(t));
                 self.0 = Some(PomProc {
                     parameter: Some(t),
                     cache: Default::default(),

@@ -1,5 +1,3 @@
-#![feature(array_chunks)]
-#![feature(iter_array_chunks)]
 //! Benchmark of diff using the hyperAST, compared against https://github.com/GumTreeDiff/gumtree
 
 //! algorithm: gumtree zs changedistiller rted
@@ -64,4 +62,23 @@ pub fn with_profiling<F: Fn()>(out: &path::Path, f: F) {
         }
         Err(_) => {}
     };
+}
+
+pub fn setup_env_logger() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
+        .format(|buf, record| {
+            use std::io::Write;
+            if record.level().to_level_filter() > log::LevelFilter::Debug {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(
+                    buf,
+                    "[{} {}] {}",
+                    buf.timestamp_millis(),
+                    record.level(),
+                    record.args()
+                )
+            }
+        })
+        .init();
 }

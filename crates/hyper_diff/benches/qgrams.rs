@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use hyper_diff::matchers::optimal::zs::{self, str_distance_patched};
-use str_distance::{DistanceMetric};
+use str_distance::DistanceMetric;
 
 fn compare_qgrams_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("Qgram");

@@ -9,14 +9,14 @@ use hyperast::tree_gen::add_md_precomp_queries;
 use hyperast_gen_ts_java::legion_with_refs::{self, Acc};
 use hyperast_gen_ts_java::types::{TStore, Type};
 
-use crate::processing::erased::ParametrizedCommitProc2;
 use crate::StackEle;
+use crate::processing::erased::ParametrizedCommitProc2;
 use crate::{
+    Processor,
     git::BasicGitObject,
     java::JavaAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
     processing::{CacheHolding, InFiles, ObjectName},
-    Processor,
 };
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
@@ -204,7 +204,7 @@ fn prep_scripting(
 fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyperast_gen_ts_java::legion_with_refs::Local {
     use hyperast::{
         cyclomatic::Mcc,
-        store::nodes::legion::{eq_node, NodeStore},
+        store::nodes::legion::{NodeStore, eq_node},
         types::LabelStore,
     };
     let node_store = &mut stores.node_store;
@@ -312,7 +312,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyperast_gen_ts_java::legion
     hashs.persist(&mut dyn_builder);
 
     if let Some(acc) = acc.scripting_acc {
-        let subtr = hyperast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+        let subtr = hyperast::scripting::Subtr(kind, &dyn_builder);
         let ss = acc.finish(&subtr).unwrap();
         log::error!("dir {:?}", ss.0);
         use hyperast::store::nodes::EntityBuilder;
@@ -597,7 +597,7 @@ pub static SUB_QUERIES: &[&str] = &[
     (block)
     (catch_clause)
 )"#,
-    r#"(marker_annotation 
+    r#"(marker_annotation
     name: (identifier) (#EQ? "Test")
 )"#,
     "(constructor_declaration)",
@@ -649,7 +649,7 @@ impl RepositoryProcessor {
         text: &[u8],
     ) -> Result<java_tree_gen::FNode, ()> {
         todo!() // not used much anyway apart from  check_random_files_reserialization
-                // crate::java::handle_java_file(&mut self.java_generator(text), name, text)
+        // crate::java::handle_java_file(&mut self.java_generator(text), name, text)
     }
 
     fn java_generator(
@@ -785,7 +785,7 @@ impl RepositoryProcessor {
                 if let Ok(dd) = stores
                     .node_store
                     .resolve(r.local.compressed_node)
-                    .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
+                    .get_component::<hyperast::scripting::DerivedData>()
                 {
                     log::info!("native: {:?} {:?}", r.local.mcc, r.local.metrics);
                     log::info!("script: {:?}", dd.0);
@@ -841,9 +841,9 @@ impl RepositoryProcessor {
 mod experiments {
     use super::*;
     use crate::{
+        Accumulator,
         git::{NamedObject, ObjectType, TypedObject, UniqueObject},
         processing::InFiles,
-        Accumulator,
     };
 
     pub(crate) struct GitProcessorMiddleWare<'repo, 'prepro, 'd, 'c> {

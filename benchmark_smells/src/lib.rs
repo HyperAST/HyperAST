@@ -1,5 +1,3 @@
-#![feature(array_chunks)]
-#![feature(iter_array_chunks)]
 //! Benchmark of smells finder using the hyperAST.
 //!
 //! validity: baseline tree-sitter, same number of matches (tree-sitter and our query syntax have slightly diverged, so it can only be done on a subset)

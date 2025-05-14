@@ -1,8 +1,8 @@
 use super::{
-    basic_post_order::{BasicPOSlice, BasicPostOrder},
     ContiguousDescendants, DecendantsLending, DecompressedParentsLending, DecompressedTreeStore,
     DecompressedWithParent, DecompressedWithSiblings, FullyDecompressedTreeStore, PostOrder,
     ShallowDecompressedTreeStore,
+    basic_post_order::{BasicPOSlice, BasicPostOrder},
 };
 use crate::matchers::Decompressible;
 use hyperast::PrimInt;
@@ -13,7 +13,7 @@ use hyperast::{
         NodeStore, Stored, WithChildren, WithSerialization,
     },
 };
-use num_traits::{cast, one, zero, ToPrimitive, Zero};
+use num_traits::{ToPrimitive, Zero, cast, one, zero};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
 
 pub struct SimplePostOrder<IdN, IdD> {
@@ -490,11 +490,7 @@ where
             return None;
         }
         let sib = lld - num_traits::one();
-        if &sib < p_lld {
-            None
-        } else {
-            Some(sib)
-        }
+        if &sib < p_lld { None } else { Some(sib) }
     }
 }
 

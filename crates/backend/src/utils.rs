@@ -1,6 +1,4 @@
-use std::{collections::HashMap, usize};
-
-use dashmap::{RwLock, SharedValue};
+use dashmap::SharedValue;
 use hyper_diff::decompressed_tree_store::lazy_post_order;
 use hyperast::{
     store::defaults::NodeIdentifier,
@@ -12,105 +10,135 @@ type IdN = NodeIdentifier;
 
 /// CAUTION a cache should be used on a single HyperAST
 /// btw a given HyperAST can be used by multiple caches
-pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<IdN = IdN> + Copy>(
-    partial_comp_cache: &'a crate::PartialDecompCache,
-    hyperast: HAST,
-    src: &IdN,
-    dst: &IdN,
-) -> (&'a mut LPO<HAST::IdN>, &'a mut LPO<HAST::IdN>)
-where
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
-{
-    use hyperast::types::DecompressedFrom;
-    use lazy_post_order::LazyPostOrder;
-
-    let (shard1, shard2) = bi_sharding(partial_comp_cache, src, dst);
-
-    let (v1, v2) = if shard2.is_none() {
-        let shard1 = shard1.get_mut();
-        if !shard1.contains_key(src) {
-            shard1.insert(
-                src.clone(),
-                SharedValue::new({
-                    let src = LazyPostOrder::<_, u32>::decompress(hyperast, src);
-                    src
-                }),
-            );
-        }
-        if !shard1.contains_key(dst) {
-            shard1.insert(
-                dst.clone(),
-                SharedValue::new({
-                    let dst = LazyPostOrder::<_, u32>::decompress(hyperast, dst);
-                    dst
-                }),
-            );
-        }
-        let [v1, v2] = shard1.get_many_mut([src, dst]).unwrap();
-        (v1, v2)
-    } else {
-        let v1 = shard1.get_mut().entry(*src).or_insert_with(|| {
-            let src = LazyPostOrder::<_, u32>::decompress(hyperast, src);
-            SharedValue::new(src)
-        });
-        let v2 = shard2.unwrap().get_mut().entry(*dst).or_insert_with(|| {
-            let dst = LazyPostOrder::<_, u32>::decompress(hyperast, dst);
-            SharedValue::new(dst)
-        });
-        (v1, v2)
-    };
-
-    // SAFETY: should be the same hyperast TODO check if it is the case, store identifier along map ?
-    let res: (
-        &mut SharedValue<LazyPostOrder<HAST::IdN, u32>>,
-        &mut SharedValue<LazyPostOrder<HAST::IdN, u32>>,
-    ) = unsafe { std::mem::transmute((v1, v2)) };
-    res
-}
-
-fn bi_sharding<'a>(
+pub(crate) fn bind_tree_pair<'a>(
     partial_comp_cache: &'a crate::PartialDecompCache,
     src: &IdN,
     dst: &IdN,
-) -> (
-    &'a mut RwLock<
-        HashMap<
-            IdN,
-            SharedValue<
-                hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<IdN, u32>,
-            >,
-        >,
-    >,
-    Option<
-        &'a mut RwLock<
-            HashMap<
-                IdN,
-                SharedValue<
-                    hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<IdN, u32>,
-                >,
-            >,
-        >,
-    >,
-) {
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+) -> PairLock<
+    &'a clashmap::RwLock<hashbrown::HashTable<(IdN, lazy_post_order::LazyPostOrder<IdN, u32>)>>,
+> {
+    let hasher = partial_comp_cache.hasher().clone();
     let hash1 = partial_comp_cache.hash_usize(src);
     let hash2 = partial_comp_cache.hash_usize(dst);
     let index1 = partial_comp_cache.determine_shard(hash1);
     let index2 = partial_comp_cache.determine_shard(hash2);
-    let shards: &[_] = partial_comp_cache.shards();
-    let shards = shards as *const [_];
-    let shards = shards as *mut [RwLock<HashMap<IdN, SharedValue<LazyPostOrder<IdN, u32>>>>];
-    let shards = unsafe { shards.as_mut().unwrap() };
+    let shards = partial_comp_cache.shards();
     let (shard1, shard2) = if index1 == index2 {
-        (&mut shards[index1], None)
+        (&shards[index1], None)
     } else if index1 < index2 {
-        let (shards1, shards2) = shards.split_at_mut(index2);
-        (&mut shards1[index1], Some(&mut shards2[0]))
+        let (shards1, shards2) = shards.split_at(index2);
+        (&shards1[index1], Some(&shards2[0]))
     } else {
-        let (shards2, shards1) = shards.split_at_mut(index1);
-        (&mut shards1[0], Some(&mut shards2[index2]))
+        let (shards2, shards1) = shards.split_at(index1);
+        (&shards1[0], Some(&shards2[index2]))
     };
-    (shard1, shard2)
+    PairLock {
+        shard1: std::ops::Deref::deref(shard1),
+        shard2: shard2.map(std::ops::Deref::deref),
+        src: *src,
+        dst: *dst,
+        hasher,
+    }
+}
+
+pub(crate) struct PairLock<T> {
+    shard1: T,
+    shard2: Option<T>,
+    src: IdN,
+    dst: IdN,
+    hasher: std::hash::RandomState,
+}
+
+impl
+    PairLock<
+        &clashmap::RwLock<hashbrown::HashTable<(IdN, lazy_post_order::LazyPostOrder<IdN, u32>)>>,
+    >
+{
+    pub fn lock(
+        &self,
+    ) -> PairLock<
+        lock_api::RwLockWriteGuard<
+            '_,
+            clashmap::RawRwLock,
+            hashbrown::HashTable<(IdN, lazy_post_order::LazyPostOrder<IdN, u32>)>,
+        >,
+    > {
+        PairLock {
+            shard1: self.shard1.write(),
+            shard2: self.shard2.as_ref().map(|x| x.write()),
+            src: self.src,
+            dst: self.dst,
+            hasher: self.hasher.clone(),
+        }
+    }
+}
+
+impl
+    PairLock<
+        lock_api::RwLockWriteGuard<
+            '_,
+            clashmap::RawRwLock,
+            hashbrown::HashTable<(IdN, lazy_post_order::LazyPostOrder<IdN, u32>)>,
+        >,
+    >
+{
+    pub fn as_mut<HAST: HyperAST<IdN = IdN> + Copy>(
+        &mut self,
+        hyperast: HAST,
+    ) -> (
+        &mut lazy_post_order::LazyPostOrder<IdN, u32>,
+        &mut lazy_post_order::LazyPostOrder<IdN, u32>,
+    )
+    where
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
+    {
+        use hyperast::types::DecompressedFrom;
+        use hyperast::utils::make_hash;
+        use lazy_post_order::LazyPostOrder;
+        let src = self.src;
+        let dst = self.dst;
+        let h1 = make_hash(&self.hasher, &src);
+        let h2 = make_hash(&self.hasher, &dst);
+        let shard1 = &mut self.shard1;
+        let shard2 = &mut self.shard2;
+        if shard2.is_none() {
+            shard1
+                .entry(h1, |(k, _)| *k == src, |(k, _)| make_hash(&self.hasher, k))
+                .or_insert_with(|| {
+                    let _src = LazyPostOrder::<_, u32>::decompress(hyperast, &src);
+                    (src, _src)
+                });
+            shard1
+                .entry(h2, |(k, _)| *k == dst, |(k, _)| make_hash(&self.hasher, k))
+                .or_insert_with(|| {
+                    let _dst = LazyPostOrder::<_, u32>::decompress(hyperast, &dst);
+                    (dst, _dst)
+                });
+            assert_ne!(src, dst);
+            let [v1, v2] =
+                shard1.get_many_mut(
+                    [h1, h2],
+                    |i, (k, _)| if i == 0 { *k == src } else { *k == dst },
+                );
+            (&mut v1.unwrap().1, &mut v2.unwrap().1)
+        } else {
+            let v1 = shard1
+                .entry(h1, |(k, _)| *k == src, |(k, _)| make_hash(&self.hasher, k))
+                .or_insert_with(|| {
+                    let _src = LazyPostOrder::<_, u32>::decompress(hyperast, &src);
+                    (src, _src)
+                });
+            let v2 = shard2
+                .as_mut()
+                .unwrap()
+                .entry(h2, |(k, _)| *k == dst, |(k, _)| make_hash(&self.hasher, k))
+                .or_insert_with(|| {
+                    let _dst = LazyPostOrder::<_, u32>::decompress(hyperast, &dst);
+                    (dst, _dst)
+                });
+            (&mut v1.into_mut().1, &mut v2.into_mut().1)
+        }
+    }
 }
 
 /// Ensures the range is preprocessed --doing it if needed-- while avoiding to lock global state

@@ -1,13 +1,11 @@
-#![feature(min_specialization)]
-#![feature(let_chains)]
-// #![feature(generic_const_exprs)]
-#![feature(variant_count)]
 #![recursion_limit = "4096"]
 
+#[cfg(all(feature = "impl", feature = "bevy"))]
+pub mod bevy;
 #[cfg(feature = "impl")]
 pub mod compat;
 #[cfg(feature = "impl")]
-pub mod legion_with_refs;
+pub mod legion_with_refs; // TODO rename and move to a module for construction
 
 pub mod types;
 #[allow(unused)]
@@ -48,5 +46,3 @@ pub fn language() -> tree_sitter::Language {
 pub fn node_types() -> &'static str {
     tree_sitter_java::NODE_TYPES
 }
-
-

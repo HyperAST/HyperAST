@@ -21,6 +21,7 @@ pub mod parser;
 
 use std::fmt::Debug;
 
+use crate::store::nodes::EntityBuilder;
 use crate::types::{ETypeStore, HyperAST, HyperASTShared};
 use crate::{hashed::NodeHashs, nodes::Space};
 
@@ -68,7 +69,7 @@ pub struct BasicAccumulator<T, Id> {
     pub children: Vec<Id>,
 }
 
-impl<T, Id> BasicAccumulator<T, Id> {
+impl<T, IdN> BasicAccumulator<T, IdN> {
     pub fn new(kind: T) -> Self {
         Self {
             kind,
@@ -76,17 +77,19 @@ impl<T, Id> BasicAccumulator<T, Id> {
         }
     }
 
-    #[cfg(feature = "legion")]
-    pub fn add_primary<L, K>(
+    pub fn add_primary<L, K, EB: EntityBuilder>(
         self,
-        dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+        dyn_builder: &mut EB,
         interned_kind: K,
         label_id: Option<L>,
     ) where
-        K: 'static + std::marker::Send + std::marker::Sync,
-        L: 'static + std::marker::Send + std::marker::Sync,
-        Id: 'static + std::marker::Send + std::marker::Sync + Eq,
+        K: crate::store::nodes::Compo,
+        L: crate::store::nodes::Compo,
+        IdN: 'static + Send + Sync,
+        // NOTE bounds too verbose an open
+        // TODO use a less explicit formulation
     {
+        use crate::store::nodes::compo;
         // TODO better handle the interneds
         // TODO the "static" interning should be hanled more specifically
         dyn_builder.add(interned_kind);
@@ -99,27 +102,24 @@ impl<T, Id> BasicAccumulator<T, Id> {
             let Ok(cs) = children.try_into() else {
                 unreachable!();
             };
-            dyn_builder.add(crate::store::nodes::legion::compo::CS0::<_, 1>(cs));
+            dyn_builder.add(compo::CS0::<_, 1>(cs));
         } else if children.len() == 2 {
             let Ok(cs) = children.try_into() else {
                 unreachable!();
             };
-            dyn_builder.add(crate::store::nodes::legion::compo::CS0::<_, 2>(cs));
+            dyn_builder.add(compo::CS0::<_, 2>(cs));
         } else if !children.is_empty() {
             // TODO make global components, at least for primaries.
-            dyn_builder.add(crate::store::nodes::legion::compo::CS(
-                children.into_boxed_slice(),
-            ));
+            dyn_builder.add(compo::CS(children.into_boxed_slice()));
         }
     }
 }
 
-#[cfg(feature = "legion")]
-pub fn add_cs_no_spaces(
-    dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
-    children: Vec<crate::store::nodes::legion::NodeIdentifier>,
+pub fn add_cs_no_spaces<IdN: 'static + Send + Sync>(
+    dyn_builder: &mut impl EntityBuilder,
+    children: Vec<IdN>,
 ) {
-    use crate::store::nodes::legion::compo;
+    use crate::store::nodes::compo;
     if children.len() == 1 {
         let Ok(cs) = children.try_into() else {
             unreachable!();
@@ -190,13 +190,12 @@ impl<U> SubTreeMetrics<U> {
     }
 
     #[must_use]
-    #[cfg(feature = "legion")]
     pub fn add_md_metrics(
         self,
-        dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+        dyn_builder: &mut impl EntityBuilder,
         children_is_empty: bool,
     ) -> U {
-        use crate::store::nodes::legion::compo;
+        use crate::store::nodes::compo;
         if !children_is_empty {
             dyn_builder.add(compo::Size(self.size));
             dyn_builder.add(compo::SizeNoSpaces(self.size_no_spaces));
@@ -590,26 +589,24 @@ impl<R> RoleAcc<R> {
         }
     }
 
-    #[cfg(feature = "legion")]
-    pub fn add_md(self, dyn_builder: &mut impl crate::store::nodes::EntityBuilder)
+    pub fn add_md<EB: EntityBuilder>(self, dyn_builder: &mut EB)
     where
         R: 'static + std::marker::Send + std::marker::Sync,
     {
+        use crate::store::nodes::compo;
         debug_assert!(self.current.is_none());
         if self.roles.len() > 0 {
-            dyn_builder.add(self.roles.into_boxed_slice());
-            use crate::store::nodes::legion::compo;
+            dyn_builder.add(compo::Roles(self.roles.into_boxed_slice()));
             dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
         }
     }
 }
 
-#[cfg(feature = "legion")]
-pub fn add_md_precomp_queries(
-    dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+pub fn add_md_precomp_queries<EB: EntityBuilder>(
+    dyn_builder: &mut EB,
     precomp_queries: PrecompQueries,
 ) {
-    use crate::store::nodes::legion::compo;
+    use crate::store::nodes::compo;
     if precomp_queries > 0 {
         dyn_builder.add(compo::Precomp(precomp_queries));
     } else {
@@ -679,7 +676,7 @@ pub mod utils_ts {
         }
     }
 
-    extern "C" {
+    unsafe extern "C" {
         fn ts_tree_cursor_goto_first_child_internal(
             self_: *mut tree_sitter::ffi::TSTreeCursor,
         ) -> TreeCursorStep;
@@ -838,54 +835,52 @@ pub mod utils_ts {
                 return None;
             };
             let mut cursor = cursor.clone();
-            if self.has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
-            {
-                self.stack.push(cursor);
-                self.has = Has::Down;
-                self.vis.push(visibility == Visibility::Hidden);
-                Some(visibility)
-            } else {
-                use std::ops::Deref;
-                if let Some(visibility) = cursor.goto_next_sibling_extended() {
-                    let _ = self.stack.pop().unwrap();
-                    let c = self.stack.last_mut().unwrap();
-                    if c.node().end_byte() <= cursor.node().start_byte() {
-                        self.has = Has::Up;
-                        let vis = if *self.vis.last().unwrap().deref() {
-                            Visibility::Hidden
-                        } else {
-                            Visibility::Visible
-                        };
-                        return Some(vis);
-                    }
+            if self.has != Has::Up {
+                if let Some(visibility) = cursor.goto_first_child_extended() {
                     self.stack.push(cursor);
+                    self.has = Has::Down;
                     self.vis.push(visibility == Visibility::Hidden);
-                    self.has = Has::Right;
-                    Some(visibility)
-                } else if let Some(c) = self.stack.pop() {
-                    self.has = Has::Up;
-                    if self.stack.is_empty() {
-                        self.stack.push(c);
-                        None
-                        // depends on usage
-                        // let vis = if self.vis.pop().unwrap() {
-                        //     Visibility::Hidden
-                        // } else {
-                        //     Visibility::Visible
-                        // };
-                        // Some(vis)
-                    } else {
-                        let vis = if *self.vis.last().unwrap().deref() {
-                            Visibility::Hidden
-                        } else {
-                            Visibility::Visible
-                        };
-                        Some(vis)
-                    }
-                } else {
-                    None
+                    return Some(visibility);
                 }
+            }
+            if let Some(visibility) = cursor.goto_next_sibling_extended() {
+                let _ = self.stack.pop().unwrap();
+                let c = self.stack.last_mut().unwrap();
+                if c.node().end_byte() <= cursor.node().start_byte() {
+                    self.has = Has::Up;
+                    let vis = if *self.vis.last().unwrap() {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Visible
+                    };
+                    return Some(vis);
+                }
+                self.stack.push(cursor);
+                self.vis.push(visibility == Visibility::Hidden);
+                self.has = Has::Right;
+                Some(visibility)
+            } else if let Some(c) = self.stack.pop() {
+                self.has = Has::Up;
+                if self.stack.is_empty() {
+                    self.stack.push(c);
+                    None
+                    // depends on usage
+                    // let vis = if self.vis.pop().unwrap() {
+                    //     Visibility::Hidden
+                    // } else {
+                    //     Visibility::Visible
+                    // };
+                    // Some(vis)
+                } else {
+                    let vis = if *self.vis.last().unwrap() {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Visible
+                    };
+                    Some(vis)
+                }
+            } else {
+                None
             }
         }
     }
@@ -1036,10 +1031,16 @@ where
     HAST::TS: ETypeStore,
 {
     const USING: bool;
+    #[cfg(feature = "scripting")]
+    type Scope: crate::scripting::Accumulable + crate::scripting::Finishable;
+    #[cfg(not(feature = "scripting"))]
+    type Scope: crate::scripting::Scriptable;
     fn preprocessing(
         &self,
         ty: <HAST::TS as ETypeStore>::Ty2,
-    ) -> Result<crate::scripting::Acc, String>;
+    ) -> Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error>;
+
+    fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts;
 }
 
 impl<HAST: HyperAST, Acc> Prepro<HAST> for NoOpMore<HAST::TS, Acc>
@@ -1047,11 +1048,16 @@ where
     HAST::TS: ETypeStore,
 {
     const USING: bool = false;
+    type Scope = crate::scripting::Acc;
     fn preprocessing(
         &self,
         _t: <HAST::TS as ETypeStore>::Ty2,
-    ) -> Result<crate::scripting::Acc, String> {
-        Ok(todo!())
+    ) -> Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error> {
+        todo!()
+    }
+
+    fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts {
+        todo!()
     }
 }
 
@@ -1101,9 +1107,9 @@ where
     const GRAPHING: bool = false;
     fn compute_tsg(
         &self,
-        stores: <HAST as types::StoreRefAssoc>::S<'_>,
-        acc: &Self::Acc,
-        label: Option<&str>,
+        _stores: <HAST as types::StoreRefAssoc>::S<'_>,
+        _acc: &Self::Acc,
+        _label: Option<&str>,
     ) -> Result<usize, String> {
         Ok(0)
     }

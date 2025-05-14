@@ -4,33 +4,31 @@ use std::{fmt::Debug, vec};
 use legion::world::EntryRef;
 use tuples::CombinConcat;
 
+use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
 use hyperast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::{
-            legion::{
-                compo::{self, NoSpacesCS, CS}, eq_node, NodeIdentifier, PendingInsert
-            },
-            DefaultNodeStore as NodeStore,
-        },
         SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore,
+            legion::{NodeIdentifier, PendingInsert, eq_node},
+        },
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space,
-        parser::{Node as _, TreeCursor},
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
         PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
-        WithByteRange, ZippedTreeGen,
+        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
     },
     types::LabelStore as _,
 };
 
 use crate::{
-    types::{TStore, Type, XmlEnabledTypeStore},
     TNode,
+    types::{TStore, Type, XmlEnabledTypeStore},
 };
 
 pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
@@ -282,10 +280,7 @@ impl<'a, TS> XmlTreeGen<'a, TS> {
     }
 }
 impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
-    fn make_spacing(
-        &mut self,
-        spacing: Vec<u8>,
-    ) -> Local {
+    fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
         let interned_kind = TS::intern(kind);
         let bytes_len = spacing.len();
@@ -377,7 +372,7 @@ impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
         }
         let mut stack = init.into();
 
-        self.gen(text, &mut stack, &mut xx, &mut global);
+        self.r#gen(text, &mut stack, &mut xx, &mut global);
 
         let mut acc = stack.finalize();
 

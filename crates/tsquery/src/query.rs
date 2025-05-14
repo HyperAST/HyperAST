@@ -9,26 +9,26 @@ use std::ops::SubAssign;
 use num::ToPrimitive;
 use tree_sitter::QueryProperty;
 
-use super::indexed::CaptureId;
-use super::indexed::StepId;
+use super::MAX_STEP_CAPTURE_COUNT;
 use super::Query;
 use super::TextPredicateCapture;
-use super::MAX_STEP_CAPTURE_COUNT;
+use super::indexed::CaptureId;
+use super::indexed::StepId;
+use crate::CaptureQuantifier;
+use crate::Language;
+use crate::PATTERN_DONE_MARKER;
+use crate::PatternId;
+use crate::Precomps;
+use crate::QueryError;
+use crate::QueryErrorKind;
 use crate::ffi;
 use crate::indexed;
 use crate::indexed::PredStepId;
 use crate::predicate::PerPatternBuilder;
 use crate::predicate_error;
-use crate::utils::ArrayStr;
 use crate::utils::Array;
+use crate::utils::ArrayStr;
 use crate::utils::SafeUpcast;
-use crate::CaptureQuantifier;
-use crate::Language;
-use crate::PatternId;
-use crate::Precomps;
-use crate::QueryError;
-use crate::QueryErrorKind;
-use crate::PATTERN_DONE_MARKER;
 
 type SmallDepth = u16;
 
@@ -259,7 +259,7 @@ impl StepId {
 struct PosedQueryStep(StepId, QueryStep);
 impl std::hash::Hash for PosedQueryStep {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0 .0.hash(state);
+        self.0.0.hash(state);
         let s = &self.1;
         s.is_dead_end().hash(state);
     }
@@ -988,16 +988,19 @@ impl Query {
                             return Err(predicate_error(
                                 row,
                                 format!(
-                                "Wrong number of arguments to #eq? predicate. Expected 2, got {}.",
-                                p.len() - 1
-                            ),
+                                    "Wrong number of arguments to #eq? predicate. Expected 2, got {}.",
+                                    p.len() - 1
+                                ),
                             ));
                         }
                         if p[1].type_ != TYPE_CAPTURE {
-                            return Err(predicate_error(row, format!(
-                                "First argument to #eq? predicate must be a capture name. Got literal \"{}\".",
-                                string_values[p[1].value_id as usize],
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "First argument to #eq? predicate must be a capture name. Got literal \"{}\".",
+                                    string_values[p[1].value_id as usize],
+                                ),
+                            ));
                         }
 
                         let is_positive = operator_name == "eq?" || operator_name == "any-eq?";
@@ -1017,22 +1020,31 @@ impl Query {
                     }
                     "match?" | "not-match?" | "any-match?" | "any-not-match?" => {
                         if p.len() != 3 {
-                            return Err(predicate_error(row, format!(
-                                "Wrong number of arguments to #match? predicate. Expected 2, got {}.",
-                                p.len() - 1
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "Wrong number of arguments to #match? predicate. Expected 2, got {}.",
+                                    p.len() - 1
+                                ),
+                            ));
                         }
                         if p[1].type_ != TYPE_CAPTURE {
-                            return Err(predicate_error(row, format!(
-                                "First argument to #match? predicate must be a capture name. Got literal \"{}\".",
-                                string_values[p[1].value_id as usize],
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "First argument to #match? predicate must be a capture name. Got literal \"{}\".",
+                                    string_values[p[1].value_id as usize],
+                                ),
+                            ));
                         }
                         if p[2].type_ == TYPE_CAPTURE {
-                            return Err(predicate_error(row, format!(
-                                "Second argument to #match? predicate must be a literal. Got capture @{}.",
-                                capture_names[p[2].value_id as usize],
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "Second argument to #match? predicate must be a literal. Got capture @{}.",
+                                    capture_names[p[2].value_id as usize],
+                                ),
+                            ));
                         }
 
                         let is_positive =
@@ -1075,26 +1087,35 @@ impl Query {
 
                     "any-of?" | "not-any-of?" => {
                         if p.len() < 2 {
-                            return Err(predicate_error(row, format!(
-                                "Wrong number of arguments to #any-of? predicate. Expected at least 1, got {}.",
-                                p.len() - 1
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "Wrong number of arguments to #any-of? predicate. Expected at least 1, got {}.",
+                                    p.len() - 1
+                                ),
+                            ));
                         }
                         if p[1].type_ != TYPE_CAPTURE {
-                            return Err(predicate_error(row, format!(
-                                "First argument to #any-of? predicate must be a capture name. Got literal \"{}\".",
-                                string_values[p[1].value_id as usize],
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "First argument to #any-of? predicate must be a capture name. Got literal \"{}\".",
+                                    string_values[p[1].value_id as usize],
+                                ),
+                            ));
                         }
 
                         let is_positive = operator_name == "any-of?";
                         let mut values = Vec::new();
                         for arg in &p[2..] {
                             if arg.type_ == TYPE_CAPTURE {
-                                return Err(predicate_error(row, format!(
-                                    "Arguments to #any-of? predicate must be literals. Got capture @{}.",
-                                    capture_names[arg.value_id as usize],
-                                )));
+                                return Err(predicate_error(
+                                    row,
+                                    format!(
+                                        "Arguments to #any-of? predicate must be literals. Got capture @{}.",
+                                        capture_names[arg.value_id as usize],
+                                    ),
+                                ));
                             }
                             values.push(string_values[arg.value_id as usize]);
                         }
@@ -1552,11 +1573,12 @@ impl Query {
         pattern_count: usize,
     ) -> Result<(), QueryError> {
         let start_byte = unsafe { &(*query).patterns }[i].start_byte as usize;
+        let comment_line_removed = &comment_lines_removed(source);
         let re = regex::Regex::new("[(]#(EQ|NOT-EQ|MATCH|ANY)[?]").unwrap();
-        let haystack = &source[start_byte..max_pattern_byte];
+        let haystack = &comment_line_removed[start_byte..max_pattern_byte];
         let glob_caps = re.find_iter(haystack);
         let glob_caps_count = glob_caps.count();
-        assert_eq!(immediate_matches_calls.len(), glob_caps_count);
+        assert_eq!(immediate_matches_calls.len(), glob_caps_count); // Not compatible with comments
         let step_id = {
             let mut i = i;
             let mut step_id = unsafe { &(*query).patterns }[i].steps.offset;
@@ -1625,7 +1647,7 @@ impl Query {
             // dbg!(so.step_index as usize, stpid);
             // assert_eq!(so.step_index as usize, step_id);
             let re = regex::Regex::new("^[(]#(EQ|NOT-EQ|MATCH|ANY)[?]").unwrap();
-            let haystack = &source[so.byte_offset as usize..];
+            let haystack = &comment_line_removed[so.byte_offset as usize..];
             // if pattern_count > 10 {
             //     dbg!(stpid, so.step_index, &haystack[..10]);
             // }
@@ -1739,6 +1761,27 @@ impl Query {
         // assert_eq!(glob_caps_count, aaa);
         Ok(())
     }
+}
+
+fn comment_lines_removed(src: &str) -> String {
+    let r = src
+        .split_inclusive("\n")
+        .map(|line| {
+            if line.starts_with(';') {
+                if line.ends_with("\r\n") {
+                    " ".repeat(line.len() - 2) + "\r\n"
+                } else if line.ends_with("\n") {
+                    " ".repeat(line.len() - 1) + "\n"
+                } else {
+                    " ".repeat(line.len())
+                }
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<String>();
+    assert_eq!(r.len(), src.len());
+    r
 }
 
 fn find_precomputed_uses(query: &mut Query, precomputeds: impl ArrayStr) {

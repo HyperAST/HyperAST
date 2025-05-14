@@ -213,10 +213,12 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                         captures_with_predicates: captures
                             .into_iter()
                             .map(|cap| {
-                                let x = captures_with_predicates
-                                    .extract_if(|(c, _)| *c == cap)
-                                    .map(|(_x, pred)| pred.to_string())
-                                    .collect();
+                                let x = vec_extract_if_polyfill::MakeExtractIf::extract_if(
+                                    &mut captures_with_predicates,
+                                    |(c, _)| *c == cap,
+                                )
+                                .map(|(_x, pred)| pred.to_string())
+                                .collect();
                                 (cap, x)
                             })
                             .collect(),
