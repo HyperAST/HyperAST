@@ -4,6 +4,32 @@ use crate::tests::tree;
 
 type ST<K> = SimpleTree<K>;
 
+pub(crate) fn example_unstable() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "t"; [
+            tree!(0, "a"; [
+                tree!(0, "x"),
+                tree!(0, "y"),
+            ]),
+            tree!(0, "b"; [
+                tree!(0, "z"),
+                tree!(0, "w"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "t"; [
+            tree!(0, "c"; [
+                tree!(0, "z"),
+                tree!(0, "y"),
+            ]),
+            tree!(0, "d"; [
+                tree!(0, "w"),
+                tree!(0, "x"),
+            ])
+    ]);
+    (src, dst)
+}
+
 #[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_single() -> (ST<u8>, ST<u8>) {
     let src = tree!(0, "f");

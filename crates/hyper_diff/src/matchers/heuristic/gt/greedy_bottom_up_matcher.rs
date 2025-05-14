@@ -102,6 +102,7 @@ where
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+        dbg!("match_it");
         let mut matcher = Self {
             internal: BottomUpMatcher {
                 stores: mapping.hyperast,
@@ -141,6 +142,7 @@ where
     }
 
     pub fn execute<'b>(&mut self) {
+        dbg!("execute");
         assert_eq!(
             // TODO move it inside the arena ...
             self.internal.src_arena.root(),
@@ -151,16 +153,39 @@ where
         // // -1 as root is handled after forloop
         for a in self.internal.src_arena.iter_df_post::<true>() {
             if self.internal.src_arena.parent(&a).is_none() {
+                dbg!("is root");
                 // TODO remove and flip const param of iter_df_post
                 break;
             }
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
                 let mut candidates = self.internal.get_dst_candidates(&a);
+                let orig_cand: Vec<_> = candidates
+                    .iter()
+                    .map(|cand| self.internal.dst_arena.original(cand))
+                    .collect();
+                let b = self.internal.src_arena.original(&a);
+                print!("a: {:?}", &b);
+                // println!(
+                // "{}",
+                // hyperast::nodes::TextSerializer::new(&self.internal.stores, b)
+                // );
+                println!("candidates: {:?}", orig_cand);
                 let mut rng = rand::rng();
                 candidates.shuffle(&mut rng);
                 let mut best = None;
                 let mut max: f64 = -1.;
                 for cand in candidates {
+                    let s = self.internal.dst_arena.original(&cand);
+                    print!("s: {:?}", &s);
+                    // println!(
+                    // "{}",
+                    // hyperast::nodes::TextSerializer::new(&self.internal.stores, s)
+                    // );
+                    println!(
+                        "descendants a: {:?}\ndescendants s: {:?}",
+                        &self.internal.src_arena.descendants_range(&a),
+                        &self.internal.dst_arena.descendants_range(&cand),
+                    );
                     let sim = similarity_metrics::SimilarityMeasure::range(
                         &self.internal.src_arena.descendants_range(&a),
                         &self.internal.dst_arena.descendants_range(&cand),

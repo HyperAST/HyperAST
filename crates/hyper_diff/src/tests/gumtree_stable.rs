@@ -1,12 +1,12 @@
 use hyperast::{full::FullNode, store::SimpleStores, tree_gen::StatsGlobalData};
 use hyperast_gen_ts_java::{
-    legion_with_refs::{self, JavaTreeGen, Local},
+    legion_with_refs::{self, JavaTreeGen, Local, NodeIdentifier},
     types::TStore,
 };
 
 use crate::algorithms;
 
-const PAIRS: [(&[u8], &[u8]); 12] = [
+const PAIRS: [(&[u8], &[u8]); 13] = [
     ("class A {}".as_bytes(), "class B {}".as_bytes()),
     ("class A {}".as_bytes(), "class A { class B {} }".as_bytes()),
     (
@@ -105,11 +105,42 @@ const PAIRS: [(&[u8], &[u8]); 12] = [
     ),
     (
         b"class X {
-        void a() { int x = 1; }
+            void a() {
+                int e = 1;
+            }
+            void b() {
+                int f = 2;
+            }
+        }",
+        b"class X {
+            void c() {
+                int g = 3;
+            }
+            void d() {
+                int h = 4;
+            }
+        }",
+    ),
+    (
+        b"class X {
+        void a() {
+            int x = 1;
+            int y = 2;
+            int z = 3;
+        }
     }",
         b"class X {
-        void a() { int x = 1; }
-        void b() { int x = 1; }
+        void b() {
+            int z = 3;
+            int y = 2;
+            int x = 1;
+        }
+
+        void c() {
+            int x = 1;
+            int z = 3;
+            int y = 2;
+        }
     }",
     ),
 ];
@@ -117,11 +148,7 @@ const PAIRS: [(&[u8], &[u8]); 12] = [
 fn preprocess_diff(
     src: &[u8],
     dst: &[u8],
-) -> (
-    SimpleStores<TStore>,
-    FullNode<StatsGlobalData, Local>,
-    FullNode<StatsGlobalData, Local>,
-) {
+) -> (SimpleStores<TStore>, NodeIdentifier, NodeIdentifier) {
     let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default(); // [cite: 133, 139]
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
@@ -134,23 +161,16 @@ fn preprocess_diff(
         Ok(t) => t,
         Err(t) => t,
     };
+
     let dst = java_tree_gen.generate_file(b"", dst, tree.walk());
-    return (stores, src, dst);
+    return (stores, src.local.compressed_node, dst.local.compressed_node);
 }
 
 fn test_stability(src: &[u8], dst: &[u8]) {
     let (stores, src, dst) = preprocess_diff(src, dst);
 
-    let diff_result1 = algorithms::gumtree::diff(
-        &stores,
-        &src.local.compressed_node,
-        &dst.local.compressed_node,
-    );
-    let diff_result2 = algorithms::gumtree::diff(
-        &stores,
-        &dst.local.compressed_node,
-        &src.local.compressed_node,
-    );
+    let diff_result1 = algorithms::gumtree::diff(&stores, &src, &dst);
+    let diff_result2 = algorithms::gumtree::diff(&stores, &dst, &src);
     //dbg!(&diff_result1.mapper.mapping.dst_arena);
     assert_eq!(
         diff_result1.mapper.mappings.src_to_dst,
@@ -160,22 +180,64 @@ fn test_stability(src: &[u8], dst: &[u8]) {
         diff_result1.mapper.mappings.dst_to_src,
         diff_result2.mapper.mappings.src_to_dst
     );
+
+    println!(
+        "{}",
+        hyperast::nodes::SyntaxWithFieldsSerializer::<_, _>::new(&stores, src)
+    );
+    println!(
+        "{}",
+        hyperast::nodes::SyntaxWithFieldsSerializer::<_, _>::new(&stores, dst)
+    );
 }
 
 #[test]
 fn stability_test_1() {
-    if let Some((src, dst)) = PAIRS.get(11) {
+    if let Some((src, dst)) = PAIRS.get(12) {
         test_stability(src, dst);
     }
 }
 
 #[test]
+fn print_hast() {
+    if let Some((src, dst)) = PAIRS.get(11) {
+        let (stores, src, dst) = preprocess_diff(src, dst);
+        println!(
+            "{}",
+            hyperast::nodes::SyntaxWithFieldsSerializer::<_, _>::new(&stores, src)
+        );
+        println!(
+            "{}",
+            hyperast::nodes::SyntaxWithFieldsSerializer::<_, _>::new(&stores, dst)
+        );
+    }
+}
+
+#[test]
 fn unstable_pair_test() {
-    let src = b"class X { void a() { int x = 1; } }";
-    let dst = b"class X { void a() { int x = 1; } void b() { int x = 1; } }";
+    let src_dst = (
+        b"class X {
+            void bas() {
+                int x = 1;
+            }
+            void bat() {
+                int x = 1;
+            }
+        }",
+        b"class X {
+            void bar() {
+                int x = 2;
+            }
+            void baz() {
+                int x = 2;
+            }
+        }",
+    );
+    //let src = b"class X { void a() { int x = 1; } }";
+    //let dst = b"class X { void a() { int x = 1; } void b() { int x = 1; } }";
 
     for _ in 0..100 {
-        test_stability(src, dst);
+        test_stability(src_dst.0, src_dst.1);
     }
 }
 

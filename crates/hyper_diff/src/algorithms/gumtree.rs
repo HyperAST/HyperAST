@@ -39,12 +39,12 @@ where
         hyperast.decompress_pair(src, dst).into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
 
-    // let now = Instant::now();
-    // let mapper =
-    // GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
-    // let subtree_matcher_t = now.elapsed().as_secs_f64();
-    // let subtree_mappings_s = mapper.mappings().len();
-    // dbg!(&subtree_matcher_t, &subtree_mappings_s);
+    let now = Instant::now();
+    let mapper =
+        GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+    let subtree_matcher_t = now.elapsed().as_secs_f64();
+    let subtree_mappings_s = mapper.mappings().len();
+    dbg!(&subtree_matcher_t, &subtree_mappings_s);
 
     let now = Instant::now();
     let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
