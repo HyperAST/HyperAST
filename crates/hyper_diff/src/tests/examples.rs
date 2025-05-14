@@ -432,3 +432,29 @@ pub(crate) fn example_very_simple_post_order() -> (ST<u8>, ST<u8>) {
     ]);
     (src, dst)
 }
+
+pub(crate) fn example_unstable() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "r"; [
+            tree!(
+                0, "x"; [
+                    tree!(0, "a"),
+            ]),
+            tree!(
+                0, "y"; [
+                    tree!(0, "b"),
+                    tree!(0, "c"),
+            ]),
+    ]);
+    let dst = tree!(
+        0, "r"; [
+            tree!(0, "x"),
+            tree!(
+                0, "y"; [
+                    tree!(0, "a"),
+                    tree!(0, "b"),
+                    tree!(0, "c"),
+            ]),
+    ]);
+    (src, dst)
+}
