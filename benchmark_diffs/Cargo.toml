@@ -70,3 +70,10 @@ path = "benches/cd_memory.rs"
 name = "cd_memory_jemalloc"
 path = "benches/cd_memory_jemalloc.rs"
 
+[[bin]]
+name = "cd_memory_system"
+path = "benches/cd_memory_system.rs"
+
+[[bin]]
+name = "algorithm_runner"
+path = "benches/algorithm_runner.rs"
