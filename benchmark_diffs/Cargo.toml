@@ -64,3 +64,9 @@ harness = false
 [[bin]]
 name = "cd_memory"
 path = "benches/cd_memory.rs"
+
+
+[[bin]]
+name = "cd_memory_jemalloc"
+path = "benches/cd_memory_jemalloc.rs"
+

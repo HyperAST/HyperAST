@@ -62,10 +62,10 @@ fn measure_memory_usage(
         total_memory += memory_used;
 
         println!(
-            "Iteration {:2}: Memory allocated: {:10} bytes ({:6.2} MB)",
+            "Iteration {:2}: Memory allocated: {:10} bytes ({:6.2} KB)",
             i + 1,
             memory_used,
-            memory_used as f64 / 1_048_576.0
+            memory_used as f64 / 1_024.0
         );
     }
 
@@ -92,14 +92,14 @@ fn run_benchmark<'a>(
     println!("\n{} Memory Benchmark Results", title);
     println!("Duration: {:?}", duration);
     println!(
-        "Peak Memory Allocated: {:10} bytes ({:6.2} MB)",
+        "Peak Memory Allocated: {:10} bytes ({:6.2} KB)",
         peak_memory,
-        peak_memory as f64 / 1_048_576.0
+        peak_memory as f64 / 1_024.0
     );
     println!(
-        "Average Memory Allocated: {:10} bytes ({:6.2} MB)",
+        "Average Memory Allocated: {:10} bytes ({:6.2} KB)",
         average_memory,
-        average_memory as f64 / 1_048_576.0
+        average_memory as f64 / 1_024.0
     );
     (title, peak_memory, average_memory)
 }
@@ -150,10 +150,10 @@ fn main() {
 
     for (name, peak, avg) in results {
         println!(
-            "| {:21} | {:12.2} MB | {:12.2} MB |",
+            "| {:21} | {:12.2} KB | {:12.2} KB |",
             name,
-            peak as f64 / 1_048_576.0,
-            avg as f64 / 1_048_576.0
+            peak as f64 / 1_024.0,
+            avg as f64 / 1_024.0
         );
     }
     println!("+-----------------------+-----------------+-----------------+");
