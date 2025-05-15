@@ -59,6 +59,6 @@ criterion = { version = "0.4", features = [
 name = "cd_runtime"
 harness = false
 
-[[bench]]
+[[bin]]
 name = "cd_memory"
-harness = false
+path = "benches/cd_memory.rs"
