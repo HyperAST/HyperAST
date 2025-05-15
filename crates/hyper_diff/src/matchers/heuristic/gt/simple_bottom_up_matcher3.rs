@@ -150,21 +150,23 @@ where
 
     pub fn execute<'b>(&mut self) {
         for t in self.internal.src_arena.iter_df_post::<true>() {
-            if self.internal.src_arena.parent(&t).is_none() {
-                self.internal
-                    .mappings
-                    .link(t, self.internal.dst_arena.root());
-                self.last_chance_match(&t, &self.internal.dst_arena.root());
-                break;
-            }
+            let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
+            dbg!(path);
+            // if self.internal.src_arena.parent(&t).is_none() {
+            //     self.internal
+            //         .mappings
+            //         .link(t, self.internal.dst_arena.root());
+            //     self.last_chance_match(&t, &self.internal.dst_arena.root());
+            //     break;
+            // }
             if !(self.internal.mappings.is_src(&t) || !self.src_has_children(t)) {
                 let candidates = self.internal.get_dst_candidates(&t);
                 let mut best = None;
                 let mut max_sim = -1f64;
                 for candidate in candidates {
                     let sim = similarity_metrics::chawathe_similarity(
-                        &[t],
-                        &[candidate],
+                        &self.internal.src_arena.descendants(&t),
+                        &self.internal.dst_arena.descendants(&candidate),
                         &self.internal.mappings,
                     );
                     let threshold = SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
@@ -185,6 +187,15 @@ where
                 self.last_chance_match(&t, &dst);
             }
         }
+
+        self.internal.mappings.link(
+            self.internal.src_arena.root(),
+            self.internal.dst_arena.root(),
+        );
+        self.last_chance_match(
+            &self.internal.src_arena.root(),
+            &self.internal.dst_arena.root(),
+        );
     }
 
     fn last_chance_match(&mut self, src: &M::Src, dst: &M::Dst) {
