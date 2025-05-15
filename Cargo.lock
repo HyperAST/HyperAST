@@ -4199,6 +4199,7 @@ dependencies = [
  "jemallocator",
  "log",
  "md5",
+ "memory-stats",
  "num-traits",
  "pprof",
  "rayon",

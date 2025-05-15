@@ -36,6 +36,7 @@ md5 = "0.7.0"
 pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
 
 const-chunks = "0.3.0"
+memory-stats = "1.2.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
@@ -55,9 +56,9 @@ criterion = { version = "0.4", features = [
 
 
 [[bench]]
-name = "my_bench"
+name = "cd_runtime"
 harness = false
 
 [[bench]]
-name = "comparing_cd"
+name = "cd_memory"
 harness = false

@@ -1,8 +1,40 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::black_box;
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
+
+pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
+    // Initialize stores for each iteration
+    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut md_cache = Default::default();
+
+    // Parse the two Java files
+    let (src_tr, dst_tr) =
+        parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
+
+    // Perform the diff using specified algorithm
+    let diff_result = match algorithm {
+        "gumtree_lazy" => algorithms::gumtree_lazy::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        "change_distiller" => algorithms::change_distiller::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        "change_distiller_lazy" => algorithms::change_distiller_lazy::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        _ => panic!("Unknown diff algorithm"),
+    };
+
+    black_box(diff_result);
+}
 
 // Define the test cases with their paths relative to root/../datasets/defects4j
 const TEST_CASES: &[(&str, &str, &str)] = &[
@@ -78,15 +110,7 @@ const TEST_CASES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-fn diff_benchmark(c: &mut Criterion) {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
-        .is_test(true)
-        .init();
-    let mut group = c.benchmark_group("change_distiller_comparison");
-
-    group.sample_size(100);
-
-    // Get path to dataset
+pub fn get_test_data() -> Vec<(String, String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -112,68 +136,8 @@ fn diff_benchmark(c: &mut Criterion) {
                 buggy_content.lines().count()
             );
 
-            (name, buggy_content, fixed_content)
+            (name.to_string(), buggy_content, fixed_content)
         })
         .collect();
-
-    // group.bench_function("HyperDiff Lazy", |b| {
-    //     b.iter(|| {
-    //         for (_name, buggy, fixed) in &test_inputs {
-    //             run_diff(buggy, fixed, "gumtree_lazy");
-    //         }
-    //     })
-    // });
-
-    group.bench_function("ChangeDistiller", |b| {
-        b.iter(|| {
-            for (_name, buggy, fixed) in &test_inputs {
-                run_diff(buggy, fixed, "change_distiller");
-            }
-        })
-    });
-
-    group.bench_function("ChangeDistiller Lazy", |b| {
-        b.iter(|| {
-            for (_name, buggy, fixed) in &test_inputs {
-                run_diff(buggy, fixed, "change_distiller_lazy");
-            }
-        })
-    });
-
-    group.finish();
+    test_inputs
 }
-
-fn run_diff(src: &str, dst: &str, algorithm: &str) {
-    // Initialize stores for each iteration
-    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-    let mut md_cache = Default::default();
-
-    // Parse the two Java files
-    let (src_tr, dst_tr) =
-        parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-
-    // Perform the diff using specified algorithm
-    let diff_result = match algorithm {
-        "gumtree_lazy" => algorithms::gumtree_lazy::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "change_distiller" => algorithms::change_distiller::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "change_distiller_lazy" => algorithms::change_distiller_lazy::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        _ => panic!("Unknown diff algorithm"),
-    };
-
-    black_box(diff_result);
-}
-
-criterion_group!(benches, diff_benchmark);
-criterion_main!(benches);
