@@ -4,12 +4,12 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
+use hyperast::PrimInt;
 use hyperast::compat::HashMap;
 use hyperast::types::{
     Childrn, DecompressedFrom, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree, WithChildren,
     WithHashs, WithStats,
 };
-use hyperast::PrimInt;
 use logging_timer::time;
 use num_traits::ToPrimitive;
 use std::fmt::Debug;
@@ -19,16 +19,16 @@ pub struct LazyGreedySubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize
 }
 
 impl<
-        Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
-            + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
-            + LazyDecompressedTreeStore<HAST, M::Src>,
-        Ddst: DecompressedWithParent<HAST, Ddst::IdD>
-            + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
-            + LazyDecompressedTreeStore<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
+    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
+        + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
+        + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedWithParent<HAST, Ddst::IdD>
+        + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> LazyGreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats + Labeled,
     Dsrc::IdD: PrimInt + Hash,
@@ -110,16 +110,16 @@ where
 }
 
 impl<
-        Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
-            + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
-            + LazyDecompressedTreeStore<HAST, M::Src>,
-        Ddst: DecompressedWithParent<HAST, Ddst::IdD>
-            + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
-            + LazyDecompressedTreeStore<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
+    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
+        + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
+        + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedWithParent<HAST, Ddst::IdD>
+        + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> LazyGreedySubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     Dsrc::IdD: PrimInt + Hash,
@@ -150,7 +150,6 @@ where
         matcher
     }
 
-    #[time("warn")]
     pub fn filter_mappings<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
         &mut self,
         multi_mappings: &MM,
@@ -389,12 +388,12 @@ pub struct SubtreeMatcher<Dsrc, Ddst, HAST, M, const MIN_HEIGHT: usize> {
 }
 
 impl<
-        Dsrc: DecompressedWithParent<HAST, Dsrc::IdD> + LazyDecompressedTreeStore<HAST, M::Src>,
-        Ddst: DecompressedWithParent<HAST, Ddst::IdD> + LazyDecompressedTreeStore<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize,
-    > SubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
+    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD> + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedWithParent<HAST, Ddst::IdD> + LazyDecompressedTreeStore<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize,
+> SubtreeMatcher<Dsrc, Ddst, HAST, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     Dsrc::IdD: Clone,
@@ -415,7 +414,6 @@ where
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 
-    #[time("warn")]
     fn matchh_to_be_filtered<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
         &mut self,
         multi_mappings: &mut MM,
