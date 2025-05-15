@@ -4196,6 +4196,7 @@ dependencies = [
  "hyperast_gen_ts_java",
  "hyperast_gen_ts_xml",
  "hyperast_vcs_git",
+ "jemalloc-ctl",
  "jemallocator",
  "log",
  "md5",
