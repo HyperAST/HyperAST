@@ -17,8 +17,8 @@ use hyperast::{
 use crate::tree::tree_path::TreePath;
 
 use super::{
-    script_generator2::{Act, SimpleAction},
     Actions,
+    script_generator2::{Act, SimpleAction},
 };
 
 pub struct ActionsVec<A>(pub Vec<A>);
@@ -34,26 +34,34 @@ impl<A> Default for ActionsVec<A> {
     }
 }
 
-pub fn actions_vec_f<'store, P: TreePath<Item = HAST::Idx>, HAST>(
-    v: &ActionsVec<SimpleAction<LabelIdentifier, P, NodeIdentifier>>,
-    stores: &'store HAST,
-    ori: NodeIdentifier,
-) where
-    HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
-    // HAST::TS: TypeStore<Ty = AnyType>,
+pub fn actions_vec_f<P: TreePath<Item = HAST::Idx>, HAST: Copy>(
+    f: &mut std::fmt::Formatter<'_>,
+    v: &ActionsVec<SimpleAction<HAST::Label, P, HAST::IdN>>,
+    stores: HAST,
+    ori: HAST::IdN,
+) -> std::fmt::Result
+where
+    HAST: HyperAST,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
+    HAST::IdN: Copy + NodeId<IdN = HAST::IdN> + Debug,
 {
-    v.iter().for_each(|a| print_action(ori, stores, a));
+    for a in v.iter() {
+        print_action(f, ori, stores, a)?;
+    }
+    Ok(())
 }
 
 fn format_action_pos<'store, P: TreePath<Item = HAST::Idx>, HAST>(
-    ori: NodeIdentifier,
-    stores: &'store HAST,
-    a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
+    ori: HAST::IdN,
+    stores: HAST,
+    a: &SimpleAction<HAST::Label, P, HAST::IdN>,
 ) -> String
 where
-    HAST: for<'t> HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+    HAST: HyperAST,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    HAST::IdN: Copy,
+    HAST::IdN: NodeId<IdN = HAST::IdN> + Debug,
 {
     // TODO make whole thing more specific to a path in a tree
     let mut end = None;
@@ -109,32 +117,64 @@ where
     )
 }
 
-fn print_action<'store, P: TreePath<Item = HAST::Idx>, HAST>(
-    ori: NodeIdentifier,
-    stores: &'store HAST,
-    a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
-) where
-    HAST: HyperAST<IdN = NodeIdentifier, Label = LabelIdentifier>,
+fn print_action<P: TreePath<Item = HAST::Idx>, HAST: Copy>(
+    f: &mut std::fmt::Formatter<'_>,
+    ori: HAST::IdN,
+    stores: HAST,
+    a: &SimpleAction<HAST::Label, P, HAST::IdN>,
+) -> std::fmt::Result
+where
+    HAST: HyperAST,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
-    // <HAST::TS as TypeStore<AnyType>>::Ty: Eq,
-    // HAST::TS: TypeStore<Ty = AnyType>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
+    HAST::IdN: Copy + NodeId<IdN = HAST::IdN> + Debug,
 {
     match &a.action {
-        Act::Delete {} => println!(
-            "Del {:?}",
-            compute_range(ori, &mut a.path.ori.iter(), stores)
-        ),
-        Act::Update { new } => println!(
+        Act::Delete {} => {
+            let of = hyperast::position::Offsets::from_iterator(a.path.ori.iter()).with_root(ori);
+            type Pos = hyperast::position::file_and_range::Position<std::path::PathBuf, usize>;
+            type Pos2<IdN, Idx> =
+                hyperast::position::offsets_and_nodes::StructuralPosition<IdN, Idx>;
+            let p2 = hyperast::position::PositionConverter::new(&of)
+                .with_stores(&stores)
+                .compute_pos_pre_order::<_, Pos2<HAST::IdN, HAST::Idx>>();
+            let p = hyperast::position::PositionConverter::new(&of)
+                .with_stores(&stores)
+                .compute_pos_pre_order::<_, Pos>();
+            let p3 = hyperast::position::PositionConverter::new(&of)
+                .with_stores(&stores)
+                .compute_pos_pre_order::<_, hyperast::position::CompoundPositionPreparer<Pos, Pos2<HAST::IdN, HAST::Idx>>>();
+            use hyperast::position::position_accessors::SolvedPosition;
+            let i = p2.node();
+            let r = p.range();
+            let l = stores
+                .resolve(&i)
+                .try_get_label()
+                .map_or(Default::default(), |l| stores.label_store().resolve(l));
+            writeln!(
+                f,
+                "Del {} file=\"{}\" line {} to {} {:?}",
+                stores.resolve_type(&i).to_string(),
+                p.file().to_string_lossy(),
+                r.start,
+                r.end,
+                l,
+            )
+        }
+        Act::Update { new } => writeln!(
+            f,
             "Upd {:?} {:?}",
             stores.label_store().resolve(new),
             compute_range(ori, &mut a.path.ori.iter(), stores)
         ),
-        Act::Insert { sub } => println!(
+        Act::Insert { sub } => writeln!(
+            f,
             "Ins {:?} {}",
-            { stores.resolve_type(sub).to_string() },
+            stores.resolve_type(sub).to_string(),
             format_action_pos(ori, stores, a)
         ),
-        Act::Move { from } => println!(
+        Act::Move { from } => writeln!(
+            f,
             "Mov {:?} {:?} {}",
             {
                 let mut e = ori;
@@ -143,12 +183,13 @@ fn print_action<'store, P: TreePath<Item = HAST::Idx>, HAST>(
                     e = node.child(&x).unwrap();
                     node = stores.node_store().resolve(&e);
                 }
-                stores.resolve_type(&e)
+                stores.resolve_type(&e).to_string()
             },
             compute_range(ori, &mut from.ori.iter(), stores),
             format_action_pos(ori, stores, a)
         ),
-        Act::MovUpd { from, new } => println!(
+        Act::MovUpd { from, new } => writeln!(
+            f,
             "MovUpd {:?} {:?} {:?} {}",
             {
                 let mut e = ori;
@@ -157,7 +198,7 @@ fn print_action<'store, P: TreePath<Item = HAST::Idx>, HAST>(
                     e = node.child(&x).unwrap();
                     node = stores.node_store().resolve(&e);
                 }
-                stores.resolve_type(&e)
+                stores.resolve_type(&e).to_string()
             },
             stores.label_store().resolve(new),
             compute_range(ori, &mut from.ori.iter(), stores),

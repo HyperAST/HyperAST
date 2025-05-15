@@ -86,7 +86,7 @@
 //! ```
 
 use std::{
-    alloc::{alloc, dealloc, Layout},
+    alloc::{Layout, alloc, dealloc},
     any::TypeId,
     collections::HashMap,
     hash::{BuildHasher, BuildHasherDefault, Hasher},
@@ -94,12 +94,12 @@ use std::{
 };
 
 use legion::{
+    Entity,
     query::{FilterResult, LayoutFilter},
     storage::{
         ArchetypeSource, ArchetypeWriter, ComponentSource, ComponentTypeId, EntityLayout,
         UnknownComponentStorage,
     },
-    Entity,
 };
 
 use super::*;
@@ -109,11 +109,16 @@ pub struct BuiltEntity {
     inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
 }
 
+impl Debug for BuiltEntity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuiltEntity").finish()
+    }
+}
+
 #[derive(Default)]
 pub struct EntityBuilder {
     inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
 }
-
 
 impl EntityBuilder {
     pub fn new() -> Self {
@@ -122,14 +127,11 @@ impl EntityBuilder {
     pub fn build(self) -> BuiltEntity {
         BuiltEntity { inner: self.inner }
     }
-}
-
-impl super::super::EntityBuilder for EntityBuilder {
     /// Add `component` to the entity.
     ///
     /// If the bundle already contains a component of type `T`, it will be dropped and replaced with
     /// the most recently added one.
-    fn add<T: Component>(&mut self, mut component: T) -> &mut Self {
+    pub(crate) fn _add<T: legion::storage::Component>(&mut self, mut component: T) -> &mut Self {
         unsafe {
             self.inner.add(
                 (&mut component as *mut T).cast(),
@@ -142,8 +144,17 @@ impl super::super::EntityBuilder for EntityBuilder {
     }
 }
 
-impl IntoComponentSource for BuiltEntity
-{
+impl super::super::EntityBuilder for EntityBuilder {
+    /// Add `component` to the entity.
+    ///
+    /// If the bundle already contains a component of type `T`, it will be dropped and replaced with
+    /// the most recently added one.
+    fn add<T: Component>(&mut self, component: T) -> &mut Self {
+        self._add(component)
+    }
+}
+
+impl IntoComponentSource for BuiltEntity {
     type Source = BuiltEntity;
 
     fn into(self) -> Self::Source {
@@ -151,8 +162,7 @@ impl IntoComponentSource for BuiltEntity
     }
 }
 
-impl IntoComponentSource for EntityBuilder
-{
+impl IntoComponentSource for EntityBuilder {
     type Source = BuiltEntity;
 
     fn into(self) -> Self::Source {
@@ -563,11 +573,11 @@ fn example() {
     use crate::store::nodes::EntityBuilder as _;
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
-    components.add(42i32);
-    components.add(true);
-    components.add(vec![0, 1, 2, 3]);
-    components.add("hello");
-    components.add(0u64);
+    components._add(42i32);
+    components._add(true);
+    components._add(vec![0, 1, 2, 3]);
+    components._add("hello");
+    components._add(0u64);
     let components = components.build();
     let entity = world.extend(components)[0];
     assert_eq!(Ok(&42), world.entry(entity).unwrap().get_component::<i32>());
@@ -585,21 +595,21 @@ fn simple() {
     let mut comp0: (Box<[u32]>,) = (vec![0, 0, 0, 0, 0, 1, 4100177920].into_boxed_slice(),); //0, 14, 43, 10, 876, 7, 1065, 35
     let mut comp0_saved = comp0.clone();
     let comp0_ptr = (&mut comp0) as *mut (Box<[u32]>,);
-    components.add(comp0);
+    components._add(comp0);
     unsafe { (*comp0_ptr).0[4] = 42 };
     comp0_saved.0[4] = 42;
     let comp1: i32 = 0;
-    components.add(comp1);
+    components._add(comp1);
     let comp2: bool = true;
-    components.add(comp2);
+    components._add(comp2);
     let mut comp3: Vec<u64> = vec![0, 1, 2, 3];
     let comp3_saved = comp3.clone();
     let comp3_ptr = (&mut comp3) as *mut Vec<u64>;
-    components.add(comp3);
+    components._add(comp3);
     let comp4: String = "ewgwgwsegwesf".into();
-    components.add(comp4.clone());
+    components._add(comp4.clone());
     let comp5: u64 = 0;
-    components.add(comp5);
+    components._add(comp5);
     let components = components.build();
     dbg!(unsafe { comp0_ptr.as_ref() });
     let entity = world.extend(components)[0];

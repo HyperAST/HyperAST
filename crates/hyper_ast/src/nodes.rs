@@ -6,12 +6,12 @@ use std::{
 
 use num::ToPrimitive;
 
-use crate::types::Children;
-use crate::types::Childrn;
 use crate::{
     impact::serialize::{Keyed, MySerialize},
     types::{AstLending, HyperAST, HyperType, NodeId, RoleStore},
 };
+use crate::types::Children;
+use crate::types::Childrn;
 
 // pub type TypeIdentifier = Type;
 
@@ -181,7 +181,7 @@ impl<N, L: Eq, T> crate::types::Labeled for CompressedNode<N, L, T> {
 }
 
 impl<'a, N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::CLending<'a, u16, N>
-for CompressedNode<N, L, T>
+    for CompressedNode<N, L, T>
 {
     type Children = crate::types::ChildrenSlice<'a, N>;
 }
@@ -407,11 +407,7 @@ impl Space {
                 }
             })
             .collect();
-        if err {
-            None
-        } else {
-            Some(r)
-        }
+        if err { None } else { Some(r) }
     }
     /// TODO test with nssss, n -> n
     pub fn replace_indentation(indentation: &[Space], spaces: &[Space]) -> Vec<Space> {
@@ -689,7 +685,7 @@ where
 //         let kind = self.stores.resolve_type(id);
 //         let label = b.try_get_label();
 //         let children = b.children();
-
+// 
 //         if kind.is_spaces() {
 //             if SPC {
 //                 let s = self.stores.label_store().resolve(&label.unwrap());
@@ -698,13 +694,8 @@ where
 //                     .map(|x| x.to_string())
 //                     .collect();
 //                 write!(out, "(")?;
-//                 if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
-//                     if TY {
-//                         write!(out, "_",)
-//                     } else {
-//                         Ok(x)
-//                     }
-//                 })?;
+//                 if IDS { write!(out, "{:?}", id) } else { Ok(()) }
+//                     .and_then(|x| if TY { write!(out, "_",) } else { Ok(x) })?;
 //                 if LABELS {
 //                     write!(out, " {:?}", Space::format_indentation(b.as_bytes()))?;
 //                 }
@@ -712,7 +703,7 @@ where
 //             }
 //             return Ok(());
 //         }
-
+// 
 //         let w_kind = |out: &mut std::fmt::Formatter<'_>| {
 //             if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
 //                 if TY {
@@ -722,7 +713,7 @@ where
 //                 }
 //             })
 //         };
-
+// 
 //         match (label, children) {
 //             (None, None) => {
 //                 w_kind(out)?;
@@ -751,7 +742,11 @@ where
 //                 if LABELS {
 //                     let s = self.stores.label_store().resolve(label);
 //                     if s.len() > 20 {
-//                         write!(out, "='{}...'", &s[..20])?;
+//                         write!(
+//                             out,
+//                             "='{}...'",
+//                             &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i])
+//                         )?;
 //                     } else {
 //                         write!(out, "='{}'", s)?;
 //                     }
@@ -797,13 +792,8 @@ where
                     .map(|x| x.to_string())
                     .collect();
                 write!(out, "(")?;
-                if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
-                    if TY {
-                        write!(out, "_",)
-                    } else {
-                        Ok(x)
-                    }
-                })?;
+                if IDS { write!(out, "{:?}", id) } else { Ok(()) }
+                    .and_then(|x| if TY { write!(out, "_",) } else { Ok(x) })?;
                 if LABELS {
                     write!(out, " {:?}", Space::format_indentation(b.as_bytes()))?;
                 }

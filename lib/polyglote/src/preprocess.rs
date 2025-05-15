@@ -46,7 +46,9 @@ impl Helper for hecs::EntityRef<'_> {
             && !self.has::<Fields>()
     }
     fn is_concrete(&self) -> bool {
-        !self.has::<Hidden>() && !self.has::<SubTypes>() && self.has::<DChildren>()
+        !self.has::<Hidden>()
+            && !self.has::<SubTypes>()
+            && (self.has::<DChildren>() || self.has::<Fields>())
     }
     fn is_abstract(&self) -> bool {
         !self.has::<Hidden>()
@@ -118,12 +120,14 @@ impl TypeSys {
     }
 
     pub fn concrete_children(&self) -> impl Iterator<Item = (String, Vec<String>)> + '_ {
-        self.it_entities().filter(Helper::is_concrete).map(|v| {
-            (
-                v.t(),
-                v.get_map::<DChildren, _>(|e| self.types.entity(*e).unwrap().t()),
-            )
-        })
+        self.it_entities()
+            .filter(|v| v.is_concrete() && v.has::<DChildren>())
+            .map(|v| {
+                (
+                    v.t(),
+                    v.get_map::<DChildren, _>(|e| self.types.entity(*e).unwrap().t()),
+                )
+            })
     }
 
     pub fn r#abstract(&self) -> impl Iterator<Item = String> + '_ {
@@ -427,9 +431,7 @@ impl TypeSys {
             .query_mut::<(&mut SubTypes, &mut Vec<TsType>)>()
             .into_iter()
             .for_each(|(e, (s, v))| {
-                v.drain(..)
-                    .map(|x| names.get(x.ty()).unwrap().to_owned())
-                    .collect_into(&mut s.0);
+                s.0.extend(v.drain(..).map(|x| names.get(x.ty()).unwrap().to_owned()));
                 cmd.remove::<(Vec<TsType>,)>(e);
                 for e in &mut s.0 {
                     cmd.insert_one(*e, SubType);
@@ -440,11 +442,7 @@ impl TypeSys {
             .query_mut::<(&mut DChildren, &mut Vec<TsType>)>()
             .into_iter()
             .for_each(|(e, (s, v))| {
-                // dbg!(&v);
-                // dbg!(&names);
-                v.drain(..)
-                    .filter_map(|x| names.get(x.ty()).copied())
-                    .collect_into(&mut s.0);
+                s.0.extend(v.drain(..).filter_map(|x| names.get(x.ty()).copied()));
                 cmd.remove::<(Vec<TsType>,)>(e);
                 for e in &mut s.0 {
                     cmd.insert_one(*e, Child);

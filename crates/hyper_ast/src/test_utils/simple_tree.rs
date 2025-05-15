@@ -300,13 +300,19 @@ impl crate::types::Tree for Tree {
 
 impl crate::types::ErasedHolder for Tree {
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
-        todo!()
+        if tid == std::any::TypeId::of::<Ty>() {
+            let t = &self.t;
+            let t = unsafe { std::mem::transmute(t) };
+            Some(t)
+        } else {
+            None
+        }
     }
 }
 
-impl<'a, T> crate::types::ErasedHolder for TreeRef<'_, T> {
+impl<'a, T: crate::types::Tree> crate::types::ErasedHolder for TreeRef<'_, T> {
     fn unerase_ref<TT: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&TT> {
-        todo!()
+        self.0.unerase_ref(tid)
     }
 }
 
@@ -667,6 +673,7 @@ macro_rules! tree {
 pub struct TStore;
 
 #[derive(Clone, Copy, std::hash::Hash, PartialEq, Eq, Debug)]
+#[repr(transparent)]
 #[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::prelude::Component))] // todo only for bevy
 pub struct Ty(u8);
 

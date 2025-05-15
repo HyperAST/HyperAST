@@ -1,12 +1,12 @@
 use std::hash::{Hash, Hasher};
 
 use axum::Json;
+use const_chunks::IteratorConstChunks;
 use hyperast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{
-        self, Children, HyperAST, Childrn, LabelStore, Labeled, NodeStore, TypeStore,
-        WithChildren,
+        self, Children, Childrn, HyperAST, LabelStore, Labeled, NodeStore, TypeStore, WithChildren,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -191,7 +191,14 @@ where
     pub struct EntityHasher(u64);
     impl Hasher for EntityHasher {
         fn write(&mut self, a: &[u8]) {
-            self.0 = u64::from_be_bytes(a.array_chunks::<8>().next().unwrap().clone())
+            self.0 = u64::from_be_bytes(
+                a.into_iter()
+                    .cloned()
+                    .const_chunks::<8>()
+                    .next()
+                    .unwrap()
+                    .clone(),
+            )
         }
         fn finish(&self) -> u64 {
             self.0
@@ -269,7 +276,7 @@ where
     dbg!(&only_typed.ids.len());
     let label_list = label_list
         .into_iter()
-        .map(|l| stores.label_store().resolve( &l).to_string())
+        .map(|l| stores.label_store().resolve(&l).to_string())
         .collect();
     let view = View {
         label_list,

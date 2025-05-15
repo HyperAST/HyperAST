@@ -263,7 +263,8 @@ pub trait Status {
 pub trait TextLending<'a> {
     type TP: Copy;
 }
-pub trait Node: for<'a> TextLending<'a> {
+
+pub trait Node: for<'a> TextLending<'a> + Clone + PartialEq {
     type IdF;
 
     fn symbol(&self) -> Symbol;
@@ -275,9 +276,18 @@ pub trait Node: for<'a> TextLending<'a> {
 
     fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool;
 
-    fn equal(&self, other: &Self) -> bool;
+    /// Returns true when (the source code represented by) `self` is textually isomorphic to (the source code represented by) `other`, otherwise false.
+    /// Equivalent to:
+    /// ```rust,no_run
+    /// self.text_equal(text_provider, other.text(text_provider))
+    /// ```
+    /// In case subtrees are already deduplicated (based on their isomorphicity) then it is a simple reference comparison.
+    /// For example, this optimization applies to Git Objects because they are content addressed.
+    fn equal(&self, other: &Self, text_provider: <Self as TextLending<'_>>::TP) -> bool;
+
+    /// Natural ordering over the position of source code elements (represented by `self` and `other`)
     fn compare(&self, other: &Self) -> std::cmp::Ordering;
-    fn text<'s, 'l>(&'s self, text_provider: <Self as TextLending<'l>>::TP) -> BB<'s, 'l, str>;
+    fn text<'s, 'l>(&'s self, text_provider: <Self as TextLending<'l>>::TP) -> BiCow<'s, 'l, str>;
     fn text_equal<'s, 'l>(
         &'s self,
         text_provider: <Self as TextLending<'l>>::TP,
@@ -292,26 +302,37 @@ pub trait Node: for<'a> TextLending<'a> {
     }
 }
 
-pub enum BB<'a, 'b, B: ?Sized + 'a + 'b>
+pub enum BiCow<'a, 'b, T: ?Sized + 'a + 'b>
 where
-    B: ToOwned,
+    T: ToOwned,
 {
-    A(&'a B),
-    B(&'b B),
-    O(<B as ToOwned>::Owned),
+    A(&'a T),
+    B(&'b T),
+    Owned(<T as ToOwned>::Owned),
 }
 
-impl<'a, 'b, B: ?Sized + 'a + 'b> std::ops::Deref for BB<'a, 'b, B>
+impl<'a, 'b, T: ?Sized + 'a + 'b + Eq> Eq for BiCow<'a, 'b, T> where T: ToOwned {}
+
+impl<T: ?Sized + PartialEq> PartialEq for BiCow<'_, '_, T>
 where
-    B: ToOwned,
-    B::Owned: Borrow<B>,
+    T: ToOwned,
 {
-    type Target = B;
+    fn eq(&self, other: &Self) -> bool {
+        self.deref() == other.deref()
+    }
+}
+
+impl<'a, 'b, T: ?Sized + 'a + 'b> std::ops::Deref for BiCow<'a, 'b, T>
+where
+    T: ToOwned,
+    T::Owned: Borrow<T>,
+{
+    type Target = T;
     fn deref(&self) -> &Self::Target {
         match self {
-            BB::A(s) => s,
-            BB::B(s) => s,
-            BB::O(s) => s.borrow(),
+            BiCow::A(s) => s,
+            BiCow::B(s) => s,
+            BiCow::Owned(s) => s.borrow(),
         }
     }
 }
@@ -349,15 +370,15 @@ where
         (*self).has_child_with_field_id(field_id)
     }
 
-    fn equal(&self, other: &Self) -> bool {
-        (*self).equal(other)
+    fn equal(&self, other: &Self, text_provider: <Self as TextLending<'_>>::TP) -> bool {
+        (*self).equal(other, text_provider)
     }
 
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
         (*self).compare(other)
     }
 
-    fn text<'s, 'l>(&'s self, text_provider: <Self as TextLending<'l>>::TP) -> BB<'s, 'l, str> {
+    fn text<'s, 'l>(&'s self, text_provider: <Self as TextLending<'l>>::TP) -> BiCow<'s, 'l, str> {
         (*self).text(text_provider)
     }
 }
@@ -395,7 +416,7 @@ impl<Node: self::Node> QueryMatch<Node> {
                 let mut nodes_1 = self.nodes_for_capture_index(*left);
                 let mut nodes_2 = self.nodes_for_capture_index(*right);
                 while let (Some(node1), Some(node2)) = (nodes_1.next(), nodes_2.next()) {
-                    let comp = node1.equal(node2);
+                    let comp = node1.equal(node2, text_provider);
                     if comp != *is_positive && *match_all_nodes {
                         return false;
                     }

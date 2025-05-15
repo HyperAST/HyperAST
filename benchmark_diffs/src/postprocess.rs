@@ -7,22 +7,19 @@ use std::{
 
 use hyper_diff::{
     decompressed_tree_store::{
-        complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
-        pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
         DecompressedWithSiblings, FullyDecompressedTreeStore, PostOrder,
         ShallowDecompressedTreeStore,
+        complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
+        pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     },
-    matchers::{mapping_store::MonoMappingStore, Mapper},
+    matchers::{Mapper, mapping_store::MonoMappingStore},
     tree::tree_path::CompressedTreePath,
 };
 use hyper_diff::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
 use hyperast::{
-    position::Position,
-    types::{
-        self, HyperAST, HyperASTShared, HyperType, LabelStore, NodeStore, Stored, Tree,
-        WithChildren, WithSerialization,
-    },
     PrimInt,
+    position::Position,
+    types::{self, HyperAST, HyperASTShared, HyperType, LabelStore, NodeStore, WithSerialization},
 };
 use num_traits::ToPrimitive;
 use rayon::prelude::ParallelIterator;
@@ -236,13 +233,16 @@ pub mod compressed_bf_post_process {
                 hast_bf.set((x % bf_l as u32) as usize, true);
                 !gt_bf[(x % bf_l as u32) as usize]
             };
+            use const_chunks::IteratorConstChunks;
             assert!(!is_not_here(0));
             assert!(!is_not_here(42));
             let mut g = |h: &[u8; 16]| {
                 let [l1, l2, l3, l4] = h
-                    .array_chunks::<4>()
-                    .map(|x| u32::from_be_bytes(*x))
-                    .array_chunks::<4>()
+                    .into_iter()
+                    .cloned()
+                    .const_chunks::<4>()
+                    .map(|x| u32::from_be_bytes(x))
+                    .const_chunks::<4>()
                     .next()
                     .unwrap();
 
@@ -345,7 +345,7 @@ pub mod compressed_bf_post_process {
                 let f = |src: V<HAST::Idx>| {
                     if let Some(src) = src {
                         let mut c = md5::Context::new();
-                        c.consume(src.0 .0);
+                        c.consume(src.0.0);
                         c.consume(src.1.to_u32().unwrap().to_be_bytes());
                         c.compute().0
                     } else {
@@ -613,7 +613,6 @@ impl PathJsonPostProcess {
             + PostOrder<HAST, u32>
             + DecompressedWithSiblings<HAST, u32>,
     {
-        let hyperast = mapper.hyperast;
         let mapping = &mapper.mapping;
         let src_arena = &mapping.src_arena;
         let dst_arena = &mapping.dst_arena;
@@ -930,24 +929,21 @@ mod tests {
     use super::*;
     use crate::{
         other_tools,
-        preprocess::{parse_dir_pair, JavaPreprocessFileSys},
+        preprocess::{JavaPreprocessFileSys, parse_dir_pair},
     };
-    use hyperast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
+    use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
     // use hyperast_gen_ts_java::types::TStore;
     use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
-    use hyperast_vcs_git::TStore;
 
     #[test]
     fn test() {
+        println!("{:?}", std::env::current_dir());
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let data_root = root.parent().unwrap().join("gt_datasets/defects4j");
-        assert!(data_root.exists());
-        let data_root = data_root.as_path();
-        std::fs::read_dir(data_root).expect("should be a dir");
-        let root_buggy = data_root.join("buggy/Jsoup/92"); // /Jsoup/92
-        let root_fixed = data_root.join("fixed/Jsoup/92");
-        let src = root_buggy;
-        let dst = root_fixed;
+        let src_dst = crate::buggy_fixed::buggy_fixed_dataset_roots(root);
+        let [buggy_path, fixed_path] =
+            src_dst.map(|x| x.join("Jsoup/92"));
+        let src = buggy_path;
+        let dst = fixed_path;
 
         let stores = SimpleStores {
             label_store: LabelStore::new(),

@@ -133,28 +133,28 @@ impl crate::HyperApp {
                 }
             });
         if create_q {
-                self.data.queries.push(crate::app::QueryData {
-                    name: "precomp".to_string(),
-                    lang: self.data.queries[id as usize].lang.to_string(),
-                    query: egui_addon::code_editor::CodeEditor::new(
-                        egui_addon::code_editor::EditorInfo::default().copied(),
-                        r#"translation_unit"#.to_string(),
-                    ),
-                    ..Default::default()
-                });
-                let qid = self.data.queries.len() as u16 - 1;
-                let query = &mut self.data.queries[id as usize];
-                query.precomp = Some(qid);
-                let tid = self.tabs.len() as u16;
-                self.tabs.push(crate::app::Tab::LocalQuery(qid));
-                let child = self.tree.tiles.insert_pane(tid);
-                match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
-                    Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
-                    _ => todo!(),
-                };
-            }
+            self.data.queries.push(crate::app::QueryData {
+                name: "precomp".to_string(),
+                lang: self.data.queries[id as usize].lang.to_string(),
+                query: egui_addon::code_editor::CodeEditor::new(
+                    egui_addon::code_editor::EditorInfo::default().copied(),
+                    r#"translation_unit"#.to_string(),
+                ),
+                ..Default::default()
+            });
+            let qid = self.data.queries.len() as u16 - 1;
             let query = &mut self.data.queries[id as usize];
-            egui::Slider::new(&mut query.commits, 1..=100)
+            query.precomp = Some(qid);
+            let tid = self.tabs.len() as u16;
+            self.tabs.push(crate::app::Tab::LocalQuery(qid));
+            let child = self.tree.tiles.insert_pane(tid);
+            match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
+                Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
+                _ => todo!(),
+            };
+        }
+        let query = &mut self.data.queries[id as usize];
+        egui::Slider::new(&mut query.commits, 1..=100)
             .text("#commits")
             .clamping(egui::SliderClamping::Never)
             .ui(ui)
@@ -440,7 +440,10 @@ impl crate::HyperApp {
                 };
                 let max_matches = query_data.max_matches;
                 let timeout = query_data.timeout;
-                let precomp = query_data.precomp.clone().map(|id| &self.data.queries[id as usize]);
+                let precomp = query_data
+                    .precomp
+                    .clone()
+                    .map(|id| &self.data.queries[id as usize]);
                 let precomp = precomp.map(|p| p.query.as_ref().to_string());
                 let prom = querying::remote_compute_query_aux(
                     ui.ctx(),

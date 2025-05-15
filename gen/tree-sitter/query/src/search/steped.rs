@@ -9,7 +9,7 @@
 
 const PATTERN_DONE_MARKER: u16 = u16::MAX;
 const NONE: u16 = u16::MAX;
-const WILDCARD_SYMBOL: Symbol = Symbol(0);
+const WILDCARD_SYMBOL: Symbol = Symbol::WILDCARD_SYMBOL;
 
 // #define MAX_STEP_CAPTURE_COUNT 3
 const MAX_STEP_CAPTURE_COUNT: usize = 3;
@@ -23,24 +23,7 @@ struct StepId(usize);
 struct CaptureListId(usize);
 struct PatternId(usize);
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub struct Symbol(u16);
-
-impl Symbol {
-    const ERROR: Symbol = Symbol(u16::MAX - 1);
-    const NONE: Symbol = Symbol(u16::MAX);
-    const END: Symbol = Symbol(0);
-
-    fn to_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl From<u16> for Symbol {
-    fn from(value: u16) -> Self {
-        Symbol(value)
-    }
-}
+pub use hyperast_tsquery::Symbol;
 
 pub struct Query {
     q: *mut crate::search::steped::TSQuery,
@@ -286,16 +269,19 @@ impl Query {
                             return Err(predicate_error(
                                 row,
                                 format!(
-                                "Wrong number of arguments to #eq? predicate. Expected 2, got {}.",
-                                p.len() - 1
-                            ),
+                                    "Wrong number of arguments to #eq? predicate. Expected 2, got {}.",
+                                    p.len() - 1
+                                ),
                             ));
                         }
                         if p[1].type_ != TYPE_CAPTURE {
-                            return Err(predicate_error(row, format!(
-                                "First argument to #eq? predicate must be a capture name. Got literal \"{}\".",
-                                string_values[p[1].value_id as usize],
-                            )));
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                    "First argument to #eq? predicate must be a capture name. Got literal \"{}\".",
+                                    string_values[p[1].value_id as usize],
+                                ),
+                            ));
                         }
 
                         let is_positive = operator_name == "eq?" || operator_name == "any-eq?";
@@ -334,7 +320,7 @@ impl Query {
         }
 
         let text_predicates = text_predicates_vec.build();
-        log::trace!("{}", unsafe { &query.as_ref().unwrap() });
+        log::trace!("{}", &unsafe { query.as_ref() }.unwrap());
         let query = Query {
             q: query,
             capture_names,
@@ -368,9 +354,9 @@ impl Query {
 
         // On failure, build an error based on the error code and offset.
         if ptr.is_null() {
-            use tree_sitter::ffi;
             use tree_sitter::QueryError;
             use tree_sitter::QueryErrorKind;
+            use tree_sitter::ffi;
             if error_type == ffi::TSQueryErrorLanguage {
                 panic!();
             }
@@ -412,7 +398,9 @@ impl Query {
                 _ => {
                     message = line_containing_error.map_or_else(
                         || "Unexpected EOF".to_string(),
-                        |line| line.to_string() + "\n" + " ".repeat(offset - line_start).as_str() + "^",
+                        |line| {
+                            line.to_string() + "\n" + " ".repeat(offset - line_start).as_str() + "^"
+                        },
                     );
                     kind = match error_type {
                         ffi::TSQueryErrorStructure => QueryErrorKind::Structure,
@@ -678,7 +666,7 @@ impl<'a> Cursor for TSTreeCursor<'a> {
     type Node = tree_sitter::Node<'a>;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_goto_next_sibling_internal(
                 self_: *mut tree_sitter::ffi::TSTreeCursor,
             ) -> TreeCursorStep;
@@ -690,7 +678,7 @@ impl<'a> Cursor for TSTreeCursor<'a> {
     }
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_goto_first_child_internal(
                 self_: *mut tree_sitter::ffi::TSTreeCursor,
             ) -> TreeCursorStep;
@@ -710,7 +698,7 @@ impl<'a> Cursor for TSTreeCursor<'a> {
     }
 
     fn parent_node(&self) -> Option<Self::Node> {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_parent_node(
                 self_: *const tree_sitter::ffi::TSTreeCursor,
             ) -> tree_sitter::ffi::TSNode;
@@ -730,7 +718,7 @@ impl<'a> Cursor for TSTreeCursor<'a> {
 
     #[inline]
     fn current_status(&self) -> TSStatus {
-        extern "C" {
+        unsafe extern "C" {
             pub fn ts_tree_cursor_current_status(
                 self_: *const tree_sitter::ffi::TSTreeCursor,
                 field_id: *mut tree_sitter::ffi::TSFieldId,
@@ -831,96 +819,9 @@ impl Status for TSStatus {
     }
 }
 
-pub trait TextLending<'a> {
-    type TP: Copy;
-}
-pub trait Node: Clone + for<'a> TextLending<'a> {
-    type IdF;
-
-    fn symbol(&self) -> Symbol;
-
-    fn is_named(&self) -> bool;
-    fn str_symbol(&self) -> &str;
-
-    fn start_point(&self) -> tree_sitter::Point;
-
-    // fn child_by_field_id(&self, field_id: FieldId) -> Option<Self>;
-    fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool;
-
-    fn equal(&self, other: &Self) -> bool;
-    fn compare(&self, other: &Self) -> std::cmp::Ordering;
-    // fn id(&self) -> usize;
-    fn text(&self, text_provider: <Self as TextLending<'_>>::TP) -> std::borrow::Cow<str>;
-    fn text_equal(&self, text_provider: <Self as TextLending<'_>>::TP, other: impl Iterator<Item = u8>) -> bool {
-        self.text(text_provider)
-            .as_bytes()
-            .iter()
-            .copied()
-            .eq(other)
-    }
-}
-
-impl<'a, 'b> TextLending<'b> for tree_sitter::Node<'a> {
-    type TP = &'a [u8];
-}
-
-impl<'a> Node for tree_sitter::Node<'a> {
-    type IdF = tree_sitter::ffi::TSFieldId;
-    fn symbol(&self) -> Symbol {
-        self.kind_id().into()
-    }
-
-    fn is_named(&self) -> bool {
-        self.is_named()
-    }
-
-    fn str_symbol(&self) -> &str {
-        self.kind()
-    }
-
-    fn start_point(&self) -> tree_sitter::Point {
-        self.start_position()
-    }
-
-    fn has_child_with_field_id(&self, field_id: tree_sitter::ffi::TSFieldId) -> bool {
-        self.child_by_field_id(field_id).is_some()
-    }
-
-    fn equal(&self, other: &Self) -> bool {
-        self.id() == other.id()
-    }
-
-    fn compare(&self, other: &Self) -> std::cmp::Ordering {
-        use std::cmp::Ordering::*;
-        let left = self;
-        let right = other;
-        if !left.equal(right) {
-            let left_start = left.start_byte();
-            let right_start = right.start_byte();
-            if left_start < right_start {
-                return Less;
-            } else if left_start > right_start {
-                return Greater;
-            }
-            let left_node_count = left.end_byte();
-            let right_node_count = right.end_byte();
-            if left_node_count > right_node_count {
-                return Less;
-            } else if left_node_count < right_node_count {
-                return Greater;
-            }
-        }
-        Equal
-    }
-    // type TP<'b> = &'a [u8];
-    fn text(&self, text_provider: <Self as TextLending<'_>>::TP) -> std::borrow::Cow<str> {
-        self.utf8_text(text_provider).unwrap().into()
-    }
-
-    // fn id(&self) -> usize {
-    //     self.id()
-    // }
-}
+use hyperast_tsquery::BiCow;
+use hyperast_tsquery::Node;
+use hyperast_tsquery::TextLending;
 
 // mod analyze;
 
@@ -1064,7 +965,9 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                 continue;
             }
 
-            todo!("code required for matching cartures in order instead of matches or to evict another match because we reached the max number of capture lists");
+            todo!(
+                "code required for matching cartures in order instead of matches or to evict another match because we reached the max number of capture lists"
+            );
 
             // // let node = captures[state.consumed_capture_count as usize].node;
             // // if node.end_byte() <= self.start_byte

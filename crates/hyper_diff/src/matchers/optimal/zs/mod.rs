@@ -87,10 +87,11 @@ pub struct MatcherImpl<'b, 'c, SD, DD, HAST, M> {
 }
 
 
-mod qgrams;
+#[doc(hidden)]
+pub mod qgrams;
 
-#[cfg(test)]
-mod other_qgrams;
+#[doc(hidden)]
+pub mod other_qgrams;
 
 impl<
         'b: 'c,

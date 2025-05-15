@@ -1,4 +1,4 @@
-use crate::types::{CompoRegister, ErasedHolder, ErasedInserter, Compo};
+use crate::store::nodes::{CompoRegister, ErasedHolder, ErasedInserter, Compo};
 
 use super::ByteLen;
 use bevy_ecs::archetype::ArchetypeGeneration;

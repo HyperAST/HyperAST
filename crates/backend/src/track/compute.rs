@@ -98,9 +98,9 @@ where
         }
     }
     let stores = &no_space::as_nospaces2(with_spaces_stores);
-    let (src_tree, dst_tree) =
-        crate::utils::get_pair_simp(partial_decomps, stores, &current_tr, &other_tr);
-    let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
+    let binding = crate::utils::bind_tree_pair(partial_decomps, &current_tr, &other_tr);
+    let mut locked = binding.lock();
+    let (src_tree, dst_tree) = locked.as_mut(stores);
 
     let hyperast = stores;
     let mut mapper = Mapper {
@@ -184,10 +184,11 @@ where
                     assert_eq!(other_tr, dst_tree.original(&dst_tree.root()));
                     let path = dst_tree.path(&dst_tree.root(), &mapped_parent);
                     let mut path_ids = vec![dst_tree.original(&mapped_parent)];
-                    dst_tree
-                        .parents(mapped_parent)
-                        .map(|i| dst_tree.original(&i))
-                        .collect_into(&mut path_ids);
+                    path_ids.extend(
+                        dst_tree
+                            .parents(mapped_parent)
+                            .map(|i| dst_tree.original(&i)),
+                    );
                     path_ids.pop();
                     assert_eq!(path.len(), path_ids.len());
                     (
@@ -269,10 +270,7 @@ where
     let path_no_spaces = dst_tree.path_rooted(&mapped);
     let path_ids = {
         let mut path_ids = vec![dst_tree.original(&mapped)];
-        dst_tree
-            .parents(mapped)
-            .map(|i| dst_tree.original(&i))
-            .collect_into(&mut path_ids);
+        path_ids.extend(dst_tree.parents(mapped).map(|i| dst_tree.original(&i)));
         path_ids.pop();
         path_ids
     };

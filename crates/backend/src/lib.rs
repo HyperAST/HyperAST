@@ -1,6 +1,6 @@
-#![feature(array_chunks)]
-#![feature(map_many_mut)]
-#![feature(iter_collect_into)]
+// #![feature(array_chunks)]
+// #![feature(map_many_mut)]
+// #![feature(iter_collect_into)]
 use std::{
     net::SocketAddr,
     sync::{Arc, RwLock},
@@ -24,7 +24,7 @@ mod matching;
 mod pull_requests;
 mod querying;
 mod scriptingv1;
-mod smells;
+pub mod smells;
 pub mod track;
 #[cfg(feature = "tsg")]
 mod tsg;
@@ -74,7 +74,8 @@ impl Default for AppState {
     }
 }
 
-pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<NodeIdentifier>>;
+// pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<NodeIdentifier>>;
+pub(crate) type PartialDecompCache = clashmap::ClashMap<NodeIdentifier, DS<NodeIdentifier>>;
 pub(crate) type MappingAloneCache =
     DashMap<(NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
 pub(crate) type MappingAloneCacheRef<'a> =
@@ -99,9 +100,9 @@ pub mod log_languages {
     //! Log the grammar of corresponding language to rerun.
 
     use core::f32;
-    use std::ops::Mul;
+    use std::{ops::Mul, sync::Arc};
 
-    use rerun::external::{arrow2, re_types};
+    use rerun::external::{arrow, re_types};
     pub fn log_languages() -> Result<(), Box<dyn std::error::Error>> {
         let rec = rerun::RecordingStream::global(rerun::StoreKind::Recording).unwrap();
 
@@ -117,7 +118,8 @@ pub mod log_languages {
 
         eprintln!("{}", types);
 
-        log_language(&rec, lang, types)?;
+        log_3dgraph_language(&rec, &lang, &types)?;
+        log_2dgraph_language(&rec, &lang, &types)?;
 
         let lang = polyglote::Lang {
             language: hyperast_gen_ts_cpp::language(),
@@ -131,7 +133,8 @@ pub mod log_languages {
 
         eprintln!("{}", types);
 
-        log_language(&rec, lang, types)?;
+        log_3dgraph_language(&rec, &lang, &types)?;
+        log_2dgraph_language(&rec, &lang, &types)?;
 
         let lang = polyglote::Lang {
             language: hyperast_gen_ts_tsquery::language(),
@@ -145,81 +148,114 @@ pub mod log_languages {
 
         eprintln!("{}", types);
 
-        log_language(&rec, lang, types)?;
+        log_3dgraph_language(&rec, &lang, &types)?;
+        log_2dgraph_language(&rec, &lang, &types)?;
 
         Ok(())
     }
 
-    fn log_language(
+    fn log_2dgraph_language(
         rec: &rerun::RecordingStream,
-        lang: polyglote::Lang,
-        types: polyglote::preprocess::TypeSys,
+        lang: &polyglote::Lang,
+        types: &polyglote::preprocess::TypeSys,
+    ) -> rerun::RecordingStreamResult<()> {
+        let path = &["language", lang.name].map(|x| x.into())[..];
+        fn split_f(
+            mut acc: (Vec<String>, Vec<String>),
+            x: (String, bool),
+        ) -> (Vec<String>, Vec<String>) {
+            if x.1 { &mut acc.0 } else { &mut acc.1 }.push(x.0);
+            acc
+        }
+        let leafs = types.leafs().fold((vec![], vec![]), split_f);
+        let concrete = types.concrete().fold((vec![], vec![]), split_f);
+        let r#abstract = types.r#abstract().collect();
+
+        let triplet = make_triplet(&leafs.1, [80, 140, 255]); // unnamed
+        let triplet = chaining(triplet, make_triplet(&leafs.0, [140, 80, 255])); //named
+        let triplet = chaining(triplet, make_triplet(&concrete.0, [80, 255, 140])); //with_fields
+        let triplet = chaining(triplet, make_triplet(&concrete.1, [140, 255, 80])); //named
+        let triplet = chaining(triplet, make_triplet(&r#abstract, [255, 80, 80]));
+
+        let (node_ids, labels, colors) = triplet;
+        let graph_nodes = rerun::GraphNodes::new(node_ids)
+            .with_labels(labels)
+            .with_colors(colors);
+        rec.log(path, &graph_nodes)?;
+
+        let subtypes = types.r#abstract_subtypes();
+        let concrete_children = types.concrete_children();
+        let concrete_fields = types
+            .concrete_fields()
+            .map(|(x, v)| (x.clone(), v.iter().map(|x| x.1.clone()).collect::<Vec<_>>()));
+        let arr = subtypes.chain(concrete_children).chain(concrete_fields);
+        let graph_edges = rerun::GraphEdges::new(
+            arr.into_iter()
+                .map(|(t, cs)| cs.into_iter().map(|y| (t.clone(), y)).collect::<Vec<_>>())
+                .flatten()
+                .collect::<Vec<_>>(),
+        )
+        .with_directed_edges();
+        rec.log(path, &graph_edges)
+    }
+    fn log_3dgraph_language(
+        rec: &rerun::RecordingStream,
+        lang: &polyglote::Lang,
+        types: &polyglote::preprocess::TypeSys,
     ) -> rerun::RecordingStreamResult<()> {
         let mut map = Map {
             map: std::collections::HashMap::default(),
-            rec: rec,
+            rec: rec.clone(),
             name: lang.name,
         };
-        let leafs: (Vec<_>, Vec<_>) = types.leafs().fold((vec![], vec![]), |mut acc, x| {
-            if x.1 { &mut acc.0 } else { &mut acc.1 }.push(x.0);
-            acc
-        });
+        let r#abstract = types.r#abstract().collect();
+        dbg!(&r#abstract);
+        map.log(r#abstract, "abstract", "abstract", 20.0)?;
+        let leafs = types.leafs().fold((vec![], vec![]), split_f);
         map.log(leafs.1, "leaf", "unnamed", 0.0)?;
         map.log(leafs.0, "leaf", "named", 5.0)?;
-        let concrete: (Vec<_>, Vec<_>) = types.concrete().fold((vec![], vec![]), |mut acc, x| {
-            if x.1 { &mut acc.0 } else { &mut acc.1 }.push(x.0);
-            acc
-        });
+        let concrete = types.concrete().fold((vec![], vec![]), split_f);
         map.log(concrete.0, "concrete", "with_fields", 10.0)?;
         map.log(concrete.1, "concrete", "named", 15.0)?;
-        let r#abstract = types.r#abstract().collect();
-        map.log(r#abstract, "abstract", "", 20.0)?;
-        let r#abstract = types.r#abstract_subtypes();
-        rec.log(
+        let subtypes = types.r#abstract_subtypes();
+        rec.clone().log(
             format!("language/{}/subtyping", lang.name),
-            &map.arrows(r#abstract),
+            &map.arrows(subtypes),
         )?;
         let concrete_children = types.concrete_children();
-        rec.log(
+        rec.clone().log(
             format!("language/{}/children", lang.name),
             &map.arrows(concrete_children),
         )?;
         let concrete_fields: Vec<_> = types.concrete_fields().collect();
-        rec.log(
+        let labels = concrete_fields
+            .iter()
+            .flat_map(|x| x.1.iter().map(|x| x.0.clone()));
+        let concrete_fields = concrete_fields
+            .iter()
+            .map(|(x, v)| (x.clone(), v.iter().map(|x| x.1.clone()).collect::<Vec<_>>()));
+        rec.clone().log(
             format!("language/{}/fields", lang.name),
-            &map.arrows(
-                concrete_fields
-                    .iter()
-                    .map(|(x, v)| (x.clone(), v.iter().map(|x| x.1.clone()).collect::<Vec<_>>())),
-            )
-            .with_labels(
-                concrete_fields
-                    .iter()
-                    .map(|x| x.1.iter().map(|x| x.0.clone()))
-                    .flatten(),
-            ),
+            &map.arrows(concrete_fields).with_labels(labels),
         )?;
         Ok(())
     }
-    struct Map<'a, 'b> {
+
+    struct Map {
         map: std::collections::HashMap<String, [f32; 3]>,
-        rec: &'a rerun::RecordingStream,
-        name: &'b str,
+        rec: rerun::RecordingStream,
+        name: &'static str,
     }
-    impl<'a, 'b> Map<'a, 'b> {
-        fn points(&mut self, v: Vec<String>, n: impl AsRef<str>, o: f32) -> CustomPoints3D {
-            CustomPoints3D {
-                log: rerun::TextLog::new(n.as_ref()),
-                cat: n.as_ref().into(),
-                points3d: rerun::Points3D::new((0..v.len()).map(|i| {
-                    let rad = (i as f32 / v.len() as f32).mul(f32::consts::TAU);
-                    let l = (v.len() as f32) / f32::consts::TAU;
-                    let p = [rad.sin() * l, o, rad.cos() * l];
-                    self.map.insert(v[i].clone(), p.clone());
-                    p
-                }))
-                .with_labels(v.into_iter().map(|x| x)),
-            }
+    impl Map {
+        fn points(&mut self, v: Vec<String>, o: f32) -> rerun::Points3D {
+            let l = (v.len() as f32) / f32::consts::TAU;
+            rerun::Points3D::new((0..v.len()).map(|i| {
+                let rad = (i as f32 / v.len() as f32).mul(f32::consts::TAU);
+                let p = [rad.sin() * l, o, rad.cos() * l];
+                self.map.insert(v[i].clone(), p.clone());
+                p
+            }))
+            .with_labels(v.into_iter().map(|x| x))
         }
         fn arrows(&self, v: impl Iterator<Item = (String, Vec<String>)>) -> rerun::Arrows3D {
             let translate = |x: &[f32; 3], y: &[f32; 3]| [y[0] - x[0], y[1] - x[1], y[2] - x[2]];
@@ -243,88 +279,54 @@ pub mod log_languages {
             adj: &str,
             o: f32,
         ) -> rerun::RecordingStreamResult<()> {
-            let nn = format!("{adj} {t}");
             let path = ["language", self.name, t, adj].map(|x| x.into());
             let path = if adj.is_empty() {
                 &path[..path.len() - 1]
             } else {
                 &path[..]
             };
-            self.rec.log(path, &self.points(v, nn, o))
+            let points = self.points(v, o);
+            self.rec.log(path, &points)
         }
     }
 
-    struct CustomPoints3D {
-        points3d: rerun::Points3D,
-        log: rerun::TextLog,
-        cat: Cat,
+    fn split_f(
+        mut acc: (Vec<String>, Vec<String>),
+        x: (String, bool),
+    ) -> (Vec<String>, Vec<String>) {
+        if x.1 { &mut acc.0 } else { &mut acc.1 }.push(x.0);
+        acc
     }
 
-    impl rerun::AsComponents for CustomPoints3D {
-        fn as_component_batches(&self) -> Vec<rerun::MaybeOwnedComponentBatch<'_>> {
-            let indicator = rerun::NamedIndicatorComponent("user.CustomPoints3DIndicator".into());
-            self.log
-                .as_component_batches()
-                .into_iter()
-                .chain(self.points3d.as_component_batches().into_iter())
-                .chain(
-                    [
-                        Some(indicator.to_batch()),
-                        Some((&self.cat as &dyn rerun::ComponentBatch).into()),
-                    ]
-                    .into_iter()
-                    .flatten(),
-                )
-                .collect()
-        }
+    fn make_triplet(
+        v: &Vec<String>,
+        color: [u8; 3],
+    ) -> (
+        impl Iterator<Item = String> + '_,
+        impl Iterator<Item = String> + '_,
+        impl Iterator<Item = [u8; 3]> + '_,
+    ) {
+        let colors = (0..v.len()).map(move |_| color.clone());
+        let node_ids = v.iter().cloned();
+        let labels = v.iter().cloned();
+        (node_ids, labels, colors)
     }
-
-    #[derive(Debug, Clone)]
-    struct Cat(rerun::Text);
-
-    impl From<String> for Cat {
-        fn from(v: String) -> Self {
-            Self(rerun::Text(v.into()))
-        }
-    }
-    impl From<&str> for Cat {
-        fn from(v: &str) -> Self {
-            v.to_string().into()
-        }
-    }
-
-    impl rerun::SizeBytes for Cat {
-        #[inline]
-        fn heap_size_bytes(&self) -> u64 {
-            0
-        }
-    }
-
-    impl rerun::Loggable for Cat {
-        type Name = rerun::ComponentName;
-
-        #[inline]
-        fn name() -> Self::Name {
-            "lang.Cat".into()
-        }
-
-        #[inline]
-        fn arrow_datatype() -> arrow2::datatypes::DataType {
-            rerun::Text::arrow_datatype()
-        }
-
-        #[inline]
-        fn to_arrow_opt<'a>(
-            data: impl IntoIterator<Item = Option<impl Into<std::borrow::Cow<'a, Self>>>>,
-        ) -> re_types::SerializationResult<Box<dyn arrow2::array::Array>>
-        where
-            Self: 'a,
-        {
-            rerun::Text::to_arrow_opt(
-                data.into_iter()
-                    .map(|opt| opt.map(Into::into).map(|c| c.as_ref().0.clone())),
-            )
-        }
+    fn chaining<
+        It0: Iterator,
+        It1: Iterator,
+        It2: Iterator,
+        Itb0: Iterator<Item = It0::Item>,
+        Itb1: Iterator<Item = It1::Item>,
+        Itb2: Iterator<Item = It2::Item>,
+    >(
+        ta: (It0, It1, It2),
+        tb: (Itb0, Itb1, Itb2),
+    ) -> (
+        impl Iterator<Item = It0::Item>,
+        impl Iterator<Item = It1::Item>,
+        impl Iterator<Item = It2::Item>,
+    ) {
+        (ta.0.chain(tb.0), ta.1.chain(tb.1), ta.2.chain(tb.2))
     }
 }
 
@@ -420,7 +422,7 @@ fn run_scripting(
         let store = &state.repositories.read().unwrap().processor.main_stores;
         let n = store.node_store.resolve(commit.ast_root);
         let dd = n
-            .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
+            .get_component::<hyperast::scripting::DerivedData>()
             .unwrap();
         let s = dd.0.get(show);
         log::debug!("{show} ! {:?}", s);
@@ -444,7 +446,7 @@ fn run_scripting(
     let stores = &state.repositories.read().unwrap().processor.main_stores;
     let n = stores.node_store.resolve(commit.ast_root);
     let dd = n
-        .get_component::<hyperast::scripting::lua_scripting::DerivedData>()
+        .get_component::<hyperast::scripting::DerivedData>()
         .unwrap();
     let s = dd.0.get(show);
     log::debug!("{:?}", s);

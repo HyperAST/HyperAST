@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId, AAAA,
+    AAAA, AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId,
 };
 
 #[cfg(feature = "impl")]

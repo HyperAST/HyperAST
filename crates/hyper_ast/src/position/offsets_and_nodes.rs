@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use super::{tags, TreePath, TreePathMut};
-use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
+use super::{TreePath, TreePathMut, tags};
 use crate::PrimInt;
+use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
 
 /// BottomUp content
 #[derive(Clone)]
@@ -206,6 +206,14 @@ impl<IdN, Idx, C> From<SolvedStructuralPosition<IdN, Idx, C>> for StructuralPosi
 //     pub(super) offsets: Vec<Idx>,
 //     pub(super) root: IdN,
 // }
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::SolvedPosition<IdN>
+    for SolvedStructuralPosition<IdN, Idx>
+{
+    fn node(&self) -> IdN {
+        self.node
+    }
+}
 
 impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx> {
     fn node(&self) -> Option<&IdN> {
