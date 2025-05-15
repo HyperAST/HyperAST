@@ -36,7 +36,7 @@ pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
     black_box(diff_result);
 }
 
-// Define the test cases with their paths relative to root/../datasets/defects4j
+// Define the test cases with their paths relative to root/../datasets/defects4j/<before|after>/
 const TEST_CASES: &[&str] = &[
     "Mockito/31/src_org_mockito_internal_stubbing_defaultanswers_ReturnsSmartNulls.java",
     "Mockito/32/src_org_mockito_internal_configuration_SpyAnnotationEngine.java",
@@ -68,7 +68,6 @@ const TEST_CASES: &[&str] = &[
     "Math/21/src_main_java_org_apache_commons_math3_linear_RectangularCholeskyDecomposition.java",
     "Time/1/src_main_java_org_joda_time_field_UnsupportedDurationField.java",
     "Time/2/src_main_java_org_joda_time_field_UnsupportedDurationField.java",
-    "Chart/.DS_Store",
     "Chart/20/source_org_jfree_chart_plot_ValueMarker.java",
     "Chart/24/source_org_jfree_chart_renderer_GrayPaintScale.java",
     "Chart/6/source_org_jfree_chart_util_ShapeList.java",
@@ -96,6 +95,7 @@ pub fn get_test_data() -> Vec<(String, String)> {
 
     let test_inputs: Vec<_> = TEST_CASES
         .iter()
+        .take(14)
         .map(|path_rel| {
             let buggy_path = root.join("before").join(path_rel);
             let fixed_path = root.join("after").join(path_rel);

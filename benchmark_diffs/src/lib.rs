@@ -26,6 +26,7 @@ pub mod window_combination;
 // pub mod bin::window_combination;
 pub mod cross_repo;
 pub mod diff_output;
+pub mod memory_tracker;
 pub mod other_tools;
 pub mod postprocess;
 pub mod preprocess;

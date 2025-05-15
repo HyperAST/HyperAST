@@ -75,5 +75,9 @@ name = "cd_memory_system"
 path = "benches/cd_memory_system.rs"
 
 [[bin]]
+name = "cd_memory_custom"
+path = "benches/cd_memory_custom.rs"
+
+[[bin]]
 name = "algorithm_runner"
 path = "benches/algorithm_runner.rs"
