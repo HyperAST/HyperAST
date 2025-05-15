@@ -18,7 +18,7 @@ fn diff_benchmark(c: &mut Criterion) {
 
     // group.bench_function("HyperDiff Lazy", |b| {
     //     b.iter(|| {
-    //         for (_name, buggy, fixed) in &test_inputs {
+    //         for ( buggy, fixed) in &test_inputs {
     //             run_diff(buggy, fixed, "gumtree_lazy");
     //         }
     //     })
@@ -26,7 +26,7 @@ fn diff_benchmark(c: &mut Criterion) {
 
     group.bench_function("ChangeDistiller", |b| {
         b.iter(|| {
-            for (_name, buggy, fixed) in &test_inputs {
+            for (buggy, fixed) in &test_inputs {
                 run_diff(buggy, fixed, "change_distiller");
             }
         })
@@ -34,7 +34,7 @@ fn diff_benchmark(c: &mut Criterion) {
 
     group.bench_function("ChangeDistiller Lazy", |b| {
         b.iter(|| {
-            for (_name, buggy, fixed) in &test_inputs {
+            for (buggy, fixed) in &test_inputs {
                 run_diff(buggy, fixed, "change_distiller_lazy");
             }
         })

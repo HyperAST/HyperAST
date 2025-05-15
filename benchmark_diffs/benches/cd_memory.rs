@@ -15,7 +15,7 @@ fn measure_memory_usage(
     // Perform warmup iterations to stabilize JIT and memory usage
     println!("Warming up for {} iterations...", warmup_iterations);
     for _ in 0..warmup_iterations {
-        for (_name, buggy, fixed) in &test_inputs {
+        for (buggy, fixed) in &test_inputs {
             common::run_diff(buggy, fixed, algorithm);
         }
     }
@@ -42,7 +42,7 @@ fn measure_memory_usage(
         let before_physical = get_current_memory();
 
         // Run the algorithm
-        for (_name, buggy, fixed) in &test_inputs {
+        for (buggy, fixed) in &test_inputs {
             common::run_diff(buggy, fixed, algorithm);
         }
 

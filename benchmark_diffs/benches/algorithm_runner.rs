@@ -24,7 +24,7 @@ fn run_algorithm(algorithm: &str) {
     let test_inputs = get_test_data();
 
     // Run the algorithm once for each test case
-    for (_name, buggy, fixed) in &test_inputs {
+    for (buggy, fixed) in &test_inputs {
         run_diff(buggy, fixed, algorithm);
     }
 }
