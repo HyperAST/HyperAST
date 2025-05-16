@@ -4,7 +4,7 @@ use std::{
 };
 
 use hyperast::compat::HashMap;
-use num_traits::{cast, one, zero, PrimInt};
+use num_traits::{PrimInt, cast, one, zero};
 
 pub trait MappingStore {
     type Src;
@@ -92,6 +92,12 @@ impl<T: PrimInt + Debug> VecStore<T> {
         } else {
             false
         }
+    }
+}
+
+impl<T> VecStore<T> {
+    pub fn mirror(&mut self) {
+        std::mem::swap(&mut self.src_to_dst, &mut self.dst_to_src);
     }
 }
 
