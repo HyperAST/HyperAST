@@ -96,8 +96,9 @@ impl<T: PrimInt + Debug> VecStore<T> {
 }
 
 impl<T> VecStore<T> {
-    pub fn mirror(&mut self) {
+    pub fn mirror(mut self) -> Self {
         std::mem::swap(&mut self.src_to_dst, &mut self.dst_to_src);
+        self
     }
 }
 
