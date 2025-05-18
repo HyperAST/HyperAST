@@ -7,7 +7,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyperast::types::{HyperAST, Tree, WithHashs};
+use hyperast::types::{HyperAST, NodeId, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -35,6 +35,8 @@ impl<
     > SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
+    HAST::Label: Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     pub fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {

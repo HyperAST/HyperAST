@@ -221,19 +221,14 @@ fn test_cd_diff_single(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
     print_tree(&dst_tr);
 
     let actions = _diff_result.actions.expect("Expected a result");
-    actions_vec_f(
-        &actions,
-        &_diff_result.mapper.hyperast,
-        src_tr.local.compressed_node.as_id().clone(),
-    );
-    
+    // actions_vec_f(
+    //     &actions,
+    //     &_diff_result.mapper.hyperast,
+    //     src_tr.local.compressed_node.as_id().clone(),
+    // );
+
     dbg!(&_diff_result.mapper.mappings.src_to_dst);
     dbg!(&_diff_result.mapper.mappings.dst_to_src);
-
-    // print_mappings(&_diff_result.mapper.mappings, &src_tr, &dst_tr);
-    // for (let m in &_diff_result.mapper.mappings.src_to_dst) {
-    //     src_tr.local.
-    // }
 
     let hyperast_actions_len = actions.len();
     let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();

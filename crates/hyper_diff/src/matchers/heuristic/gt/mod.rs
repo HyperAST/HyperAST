@@ -13,6 +13,7 @@ pub mod lazy_bottom_up_matcher;
 pub mod lazy_greedy_bottom_up_matcher;
 pub mod lazy_greedy_subtree_matcher;
 pub mod simple_bottom_up_matcher3;
+pub mod hybrid_bottom_up_matcher;
 
 pub fn size<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where

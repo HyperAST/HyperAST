@@ -17,7 +17,7 @@ use std::fmt::Debug;
 ///
 /// it will allow to make use complex types as const generics
 /// ie. make the different threshold neater
-pub struct SimpleBottomUpMatcher3<
+pub struct HybridBottomUpMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -41,7 +41,7 @@ impl<
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
-    for SimpleBottomUpMatcher3<
+    for HybridBottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,
@@ -78,7 +78,7 @@ impl<
     const SIZE_THRESHOLD: usize,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
-> SimpleBottomUpMatcher3<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+> HybridBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -141,14 +141,14 @@ where
 
     pub fn execute<'b>(&mut self) {
         for t in self.internal.src_arena.iter_df_post::<true>() {
-            let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
-            dbg!(path);
+            // let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
+            // dbg!(path);
             if self.internal.src_arena.parent(&t).is_none() {
                 self.internal.mappings.link(
                     self.internal.src_arena.root(),
                     self.internal.dst_arena.root(),
                 );
-                self.last_chance_match(
+                self.last_chance_match_hybrid(
                     &self.internal.src_arena.root(),
                     &self.internal.dst_arena.root(),
                 );
@@ -158,36 +158,29 @@ where
                 let mut best = None;
                 let mut max_sim = -1f64;
                 for candidate in candidates {
-                    let t_descendents = &self.internal.src_arena.descendants(&t);
-                    let candidate_descendents = &self.internal.dst_arena.descendants(&candidate);
                     let sim = similarity_metrics::chawathe_similarity(
-                        t_descendents,
-                        candidate_descendents,
+                        &self.internal.src_arena.descendants(&t),
+                        &self.internal.dst_arena.descendants(&candidate),
                         &self.internal.mappings,
                     );
-                    let threshold = 1f64 / (1f64 + ((candidate_descendents.len() + t_descendents.len()) as f64).ln());
-                        // SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
+                    let threshold = SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
                     if sim > max_sim && sim >= threshold {
                         max_sim = sim;
                         best = Some(candidate);
                     }
                 }
                 if let Some(best) = best {
-                    self.last_chance_match(&t, &best);
+                    self.last_chance_match_hybrid(&t, &best);
                     self.internal.mappings.link(t, best);
                 }
-            } else if self.internal.mappings.is_src(&t) && self.internal.has_unmapped_src_children(&t) {
+            } else if self.internal.mappings.is_src(&t) && self.internal.are_srcs_unmapped(&t) {
                 if let Some(dst) = self.internal.mappings.get_dst(&t) {
-                    if self.internal.has_unmapped_dst_children(&dst) {
-                        self.last_chance_match(&t, &dst);
+                    if self.internal.are_dsts_unmapped(&dst) {
+                        self.last_chance_match_hybrid(&t, &dst);
                     }
                 }
             }
         }
-    }
-
-    fn last_chance_match(&mut self, src: &M::Src, dst: &M::Dst) {
-        self.internal.last_chance_match_histogram(src, dst);
     }
 
     fn last_chance_match_hybrid(&mut self, src: &M::Src, dst: &M::Dst) {

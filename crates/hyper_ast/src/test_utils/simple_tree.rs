@@ -248,7 +248,8 @@ impl crate::types::WithSerialization for Tree {
 
 impl<T> crate::types::WithSerialization for TreeRef<'_, T> {
     fn try_bytes_len(&self) -> Option<usize> {
-        todo!()
+        None
+        // todo!()
     }
 }
 impl<T> Clone for TreeRef<'_, T> {
@@ -679,7 +680,7 @@ pub struct Ty(u8);
 
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        write!(f, "{}", self.0)
     }
 }
 
@@ -708,7 +709,7 @@ impl HyperType for Ty {
     }
 
     fn is_file(&self) -> bool {
-        todo!()
+        false
     }
 
     fn is_directory(&self) -> bool {
