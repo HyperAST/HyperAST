@@ -7,23 +7,28 @@ use hyperast::types::{
     WithStats,
 };
 use hyperast_tsquery::{Cursor, Node as _};
+use num::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
+
+// use crate::legion as qgen; // includes identation, such as spaces and new lines
+use crate::no_fmt_legion as qgen; // ignores spaces, new lines,...
 
 type QStore = hyperast::store::SimpleStores<crate::types::TStore>;
 
 type IdN = NodeIdentifier;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum TR<E = IdN> {
-    // WARN different NodeIdentifier, this one is referring to the example
+pub enum TR<E = IdN, I = IdNQ> {
+    // WARN different NodeIdentifier, this one is referring to the provided examples
     Init(E),
-    RMs(E),
-    SimpEQ(E),
+    RMs(I),
+    SimpEQ(I),
 }
 
-impl<E: PartialEq> PartialOrd for TR<E> {
+impl<E: PartialEq, I: PartialEq> PartialOrd for TR<E, I> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (TR::Init(_), TR::Init(_)) => Some(Ordering::Equal),
@@ -32,19 +37,59 @@ impl<E: PartialEq> PartialOrd for TR<E> {
             (TR::RMs(_), _) => Some(Ordering::Less),
             (TR::SimpEQ(_), TR::SimpEQ(_)) => Some(Ordering::Equal),
             (TR::SimpEQ(_), _) => Some(Ordering::Less),
-            _ => self.eq(other).then(|| Ordering::Equal),
+            // _ => self.eq(other).then(|| Ordering::Equal),
         }
     }
 }
 
 pub struct QueryLattice<E> {
     query_store: QStore,
-    /// pairs of gen and source queries
-    pub relations: Vec<(IdN, E)>,
-    leaf_query_count: usize,
-    raw_rels: std::collections::HashMap<IdN, Vec<TR>>,
-    queries: Vec<(IdN, Vec<E>)>,
+    leaf_queries: Vec<IdNQ>,
+    raw_rels: std::collections::HashMap<IdNQ, Vec<TR<E>>>,
+    queries: Vec<(IdNQ, Vec<IdQ>)>,
+    sort_cache: Vec<u32>,
 }
+
+/// Might have collisions
+type DedupSimp = std::collections::HashMap<u32, Vec<(IdN, TR)>>;
+/// make the deduplication through raw entries, probably slower, is it marginal ?
+#[derive(Default)]
+pub struct DedupRawEntry(hashbrown::HashMap<IdNQ, Vec<(IdN, TR)>>);
+// type DedupRawEntry = hashbrown::HashMap<IdN, Vec<(IdN, TR)>>;
+// TODO directly handle this kind of dedup referentially in the HyperAST
+// i.e. putting all the spaces in a wrapper root.
+// It requires a special TreeGen that uses the global context, where it accumulates a topologically sorted list of spaces.
+impl Deref for DedupRawEntry {
+    type Target = hashbrown::HashMap<IdN, Vec<(IdN, TR)>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for DedupRawEntry {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+pub trait Ded {
+    fn queries(&self) -> Vec<IdNQ>;
+    fn sorted_queries<TS: TypeStore>(
+        &self,
+        stores: &hyperast::store::SimpleStores<TS>,
+    ) -> Vec<IdNQ> {
+        let mut v = self.queries();
+        v.sort_by_cached_key(|x| WithHashs::hash(&stores.resolve(x), &HashKind::label()));
+        v.dedup();
+        v
+    }
+}
+impl Ded for DedupRawEntry {
+    fn queries(&self) -> Vec<IdNQ> {
+        self.0.keys().copied().collect()
+    }
+}
+
+type IdNQ = IdN;
 
 impl QueryLattice<IdN> {
     pub fn with_examples<TS, TIdN>(
@@ -62,34 +107,71 @@ impl QueryLattice<IdN> {
         let b = Self::builder::<TS, TIdN, _>(stores, from, meta_gen, meta_simp, &|x| {
             x.local.metrics.hashs.label
         });
-        let mut b = b.modify(|from| {
-            from.into_iter().fold(
-                std::collections::HashMap::<u32, Vec<(IdN, TR)>>::new(),
-                |mut acc, x| {
+        let mut b = b.dedup_leaf_queries(|from| {
+            // from.into_iter().fold(DedupSimp::new(), |mut acc, x| {
+            //     let (from, (query, label_h)) = x;
+            //     let v = &mut acc.entry(label_h).or_default();
+            //     let x = (query, TR::Init(from));
+            //     if !v.contains(&x) {
+            //         v.push(x);
+            //         // v.sort_by(cmp_lat_entry(&s.query_store))
+            //     }
+            //     acc
+            // })
+            from.into_iter()
+                .fold(DedupRawEntry::default(), |mut acc, x| {
                     let (from, (query, label_h)) = x;
-                    let v = &mut acc.entry(label_h).or_default();
+                    let v = acc.raw_entry_mut().from_hash(label_h as u64, |x| true);
+                    let v = match v {
+                        hashbrown::hash_map::RawEntryMut::Occupied(occ) => occ.into_key_value().1,
+                        hashbrown::hash_map::RawEntryMut::Vacant(vacant) => {
+                            vacant
+                                .insert_with_hasher(label_h as u64, query, vec![], |query| {
+                                    WithHashs::hash(&stores.resolve(query), &HashKind::label())
+                                        as u64
+                                })
+                                .1
+                        }
+                    };
                     let x = (query, TR::Init(from));
                     if !v.contains(&x) {
                         v.push(x);
                         // v.sort_by(cmp_lat_entry(&s.query_store))
                     }
                     acc
-                },
-            )
+                })
         });
         b.rest0();
+
+        let dedup = &mut b.dedup;
+        dedup
+            .values_mut()
+            .for_each(|x| x.sort_by(cmp_lat_entry(&b.lattice.query_store)));
+        dbg!(dedup.len());
+        for v in dedup.values() {
+            b.lattice.add_raw_rels(v);
+        }
+        for v in b.dedup.values() {
+            b.lattice.queries.push(b.extract(v));
+        }
         b.build()
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (String, &'a [IdN])> {
-        self.queries.iter().filter_map(|(q, e)| {
-            let q = hyperast::nodes::TextSerializer::<_, _>::new(&self.query_store, *q)
-                .to_string()
-                .trim()
-                .lines()
-                .filter(|x| !x.trim().is_empty())
-                .map(|x| x.to_string() + "\n")
-                .collect::<String>();
+    pub fn count(&self) -> usize {
+        self.queries.len()
+    }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (IdNQ, &'a [IdQ])> {
+        self.sort_cache.iter().filter_map(|i| {
+            let (q, e) = &self.queries[*i as usize];
+            Some((*q, &e[..]))
+        })
+    }
+
+    pub fn iter_pretty<'a>(&'a self) -> impl Iterator<Item = (String, &'a [IdQ])> {
+        self.sort_cache.iter().filter_map(|i| {
+            let (q, e) = &self.queries[*i as usize];
+            let q = self.pretty(q);
             if q.is_empty() {
                 return None;
             }
@@ -97,25 +179,47 @@ impl QueryLattice<IdN> {
         })
     }
 
-    pub fn get_query(&self, index: usize) -> Option<(String, &[IdN])> {
-        self.queries.get(index).and_then(|(q, e)| {
-            let q = hyperast::nodes::TextSerializer::<_, _>::new(&self.query_store, *q)
-                .to_string()
-                .trim()
-                .lines()
-                .filter(|x| !x.trim().is_empty())
-                .map(|x| x.to_string() + "\n")
-                .collect::<String>();
-            if q.is_empty() {
-                None
-            } else {
-                Some((q, &e[..]))
-            }
-        })
+    pub fn pretty(&self, q: &IdNQ) -> String {
+        let q = qgen::PP::<_, _>::new(&self.query_store, *q)
+            // let q = hyperast::nodes::TextSerializer::<_, _>::new(&self.query_store, *q)
+            .to_string()
+            // .trim()
+            // .lines()
+            // .filter(|x| !x.trim().is_empty())
+            // .map(|x| x.to_string() + "\n---\n")
+            // .collect::<String>()
+        ;
+        q
+    }
+
+    pub fn get_query(&self, index: usize) -> Option<(String, &[IdQ])> {
+        self.queries
+            .get(self.sort_cache[index] as usize)
+            .and_then(|(q, e)| {
+                let q = hyperast::nodes::TextSerializer::<_, _>::new(&self.query_store, *q)
+                    .to_string()
+                    .trim()
+                    .lines()
+                    .filter(|x| !x.trim().is_empty())
+                    .map(|x| x.to_string() + "\n")
+                    .collect::<String>();
+                if q.is_empty() {
+                    None
+                } else {
+                    Some((q, &e[..]))
+                }
+            })
     }
 
     pub fn sort_by_size(&mut self) {
-        self.queries.sort_by(|a, b| a.1.len().cmp(&b.1.len()));
+        if self.sort_cache.is_empty() && !self.queries.is_empty() {
+            self.sort_cache = (0..self.queries.len())
+                .map(|x| x.to_u32().unwrap())
+                .collect();
+        }
+        self.sort_cache.sort_by(|a, b| {
+            (self.queries[*a as usize].1.len()).cmp(&self.queries[*b as usize].1.len())
+        });
     }
 
     pub fn builder<'q, TS, TIdN, T>(
@@ -123,8 +227,8 @@ impl QueryLattice<IdN> {
         from: impl Iterator<Item = IdN>,
         meta_gen: &'q hyperast_tsquery::Query,
         meta_simp: &'q hyperast_tsquery::Query,
-        f: &impl Fn(crate::legion::FNode) -> T,
-    ) -> Builder<'q, IdN, Vec<(IdN, (IdN, T))>>
+        f: &impl Fn(qgen::FNode) -> T,
+    ) -> Builder<'q, IdN, Vec<(IdN, (IdNQ, T))>>
     where
         TS: TypeStore + RoleStore,
         TIdN: TypedNodeId<IdN = IdN>,
@@ -149,11 +253,9 @@ impl QueryLattice<IdN> {
                 if !simp_search_need(&s.query_store, x.0, meta_simp) {
                     return None;
                 }
-                s.relations.push((x.0, from));
                 Some((from, x))
             })
             .collect();
-        s.leaf_query_count = s.relations.len();
         Builder {
             lattice: s,
             dedup,
@@ -181,7 +283,7 @@ impl QueryLattice<IdN> {
             // TODO use size ignoring spaces
             (x.local.metrics.size, x.local.metrics.hashs.label)
         });
-        let mut b = b.modify(|from: Vec<(_, (_, (u32, u32)))>| group_by_size(from));
+        let mut b = b.dedup_leaf_queries(|from: Vec<(_, (_, (u32, u32)))>| group_by_size(from));
         b.loop_par();
         b.post();
         b.build()
@@ -207,50 +309,75 @@ impl QueryLattice<IdN> {
             // TODO use size ignoring spaces
             (x.local.metrics.size, x.local.metrics.hashs.label)
         });
-        let mut b = b.modify(|from: Vec<(_, (_, (u32, u32)))>| group_by_size(from));
+        let mut b = b.dedup_leaf_queries(|from: Vec<(_, (_, (u32, u32)))>| group_by_size(from));
         b.loop_par_par();
         b.post();
         b.build()
     }
 }
 
-#[cfg(feature = "synth_par")]
-pub fn group_by_size(
-    from: Vec<(IdN, (IdN, (u32, u32)))>,
-) -> Vec<std::collections::HashMap<u32, Vec<(IdN, TR)>>> {
-    use rayon::iter::{IntoParallelIterator, ParallelIterator};
-    from.into_iter()
-        // grouping on size of queries (i.e. number of nodes)
-        .fold(Vec::<Vec<(_, (_, u32))>>::new(), |mut acc, x| {
-            let (from, (query, (size, label_h))) = x;
-            let size = size as usize;
-            if size >= acc.len() {
-                acc.resize(size + 1, Default::default());
-            }
-            acc[size].push((from, (query, label_h)));
-            acc
-        })
-        .into_par_iter()
-        .map(|acc| {
-            // grouping by hash ignoring indentation and spaces (i.e., label hash)
-            acc.into_iter().fold(
-                std::collections::HashMap::<u32, Vec<(_, TR)>>::new(),
-                |mut acc, x| {
-                    let (from, (query, label_h)) = x;
-                    let v = &mut acc.entry(label_h).or_default();
-                    let x = (query, TR::Init(from));
-                    if !v.contains(&x) {
-                        v.push(x);
-                        // v.sort_by(cmp_lat_entry(&s.query_store))
-                    }
-                    acc
-                },
-            )
-        })
-        .collect::<Vec<_>>()
+#[derive(Default)]
+pub struct DedupBySize(Vec<std::collections::HashMap<u32, Vec<(IdNQ, TR)>>>);
+
+impl Deref for DedupBySize {
+    type Target = Vec<std::collections::HashMap<u32, Vec<(IdNQ, TR)>>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for DedupBySize {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+impl Ded for DedupBySize {
+    fn queries(&self) -> Vec<IdNQ> {
+        self.0
+            .iter()
+            .flat_map(|x| x.values().flat_map(|v| v.iter().map(|x| x.0)))
+            .collect()
+    }
 }
 
-pub struct Builder<'q, E, D = Vec<std::collections::HashMap<u32, Vec<(E, TR)>>>> {
+#[cfg(feature = "synth_par")]
+pub fn group_by_size(from: Vec<(IdN, (IdNQ, (u32, u32)))>) -> DedupBySize {
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
+    DedupBySize(
+        from.into_iter()
+            // grouping on size of queries (i.e. number of nodes)
+            .fold(Vec::<Vec<(IdN, (IdNQ, u32))>>::new(), |mut acc, x| {
+                let (fr, (query, (size, label_h))) = x;
+                let size = size as usize;
+                if size >= acc.len() {
+                    acc.resize(size + 1, Default::default());
+                }
+                acc[size].push((fr, (query, label_h)));
+                acc
+            })
+            .into_par_iter()
+            .map(|acc| {
+                // grouping by hash ignoring indentation and spaces (i.e., label hash)
+                acc.into_iter().fold(
+                    std::collections::HashMap::<u32, Vec<(IdNQ, TR)>>::new(),
+                    |mut acc, x| {
+                        let (from, (query, label_h)) = x;
+                        let v = &mut acc.entry(label_h).or_default();
+                        let x = (query, TR::Init(from));
+                        if !v.contains(&x) {
+                            v.push(x);
+                            // v.sort_by(cmp_lat_entry(&s.query_store))
+                        }
+                        acc
+                    },
+                )
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
+type IdQ = u32;
+
+pub struct Builder<'q, E, D = DedupBySize> {
     pub lattice: QueryLattice<E>,
     pub dedup: D,
     pub meta_simp: &'q hyperast_tsquery::Query,
@@ -260,16 +387,18 @@ impl<'q, E, D> Builder<'q, E, D> {
     pub fn build(self) -> QueryLattice<E> {
         self.lattice
     }
-    pub fn modify<D2>(self, f: impl Fn(D) -> D2) -> Builder<'q, E, D2> {
-        Builder {
+    pub fn dedup_leaf_queries<D2: Ded>(self, f: impl Fn(D) -> D2) -> Builder<'q, E, D2> {
+        let mut b = Builder {
             lattice: self.lattice,
             dedup: f(self.dedup),
             meta_simp: self.meta_simp,
-        }
+        };
+        b.lattice.leaf_queries = (&b.dedup).sorted_queries(&b.lattice.query_store);
+        b
     }
 }
 
-impl Builder<'_, IdN, std::collections::HashMap<u32, Vec<(IdN, TR)>>> {
+impl Builder<'_, IdN, DedupSimp> {
     fn rest0(&mut self) {
         let s = &mut self.lattice;
         let dedup = &mut self.dedup;
@@ -321,6 +450,7 @@ impl Builder<'_, IdN, std::collections::HashMap<u32, Vec<(IdN, TR)>>> {
                 Some((label_h, (new_q, TR::RMs(query))))
             })
             .collect::<Vec<_>>();
+
         for (label_h, x) in simp_eq {
             let v = dedup.entry(label_h).or_default();
             if !v.contains(&x) {
@@ -328,16 +458,104 @@ impl Builder<'_, IdN, std::collections::HashMap<u32, Vec<(IdN, TR)>>> {
             }
         }
         dbg!(dedup.len());
-        dedup
-            .values_mut()
-            .for_each(|x| x.sort_by(cmp_lat_entry(&s.query_store)));
-        dbg!(dedup.len());
-        for v in dedup.values() {
-            self.lattice.add_raw_rels(v);
+    }
+}
+
+impl Builder<'_, IdN, DedupRawEntry> {
+    fn rest0(&mut self) {
+        let s = &mut self.lattice;
+        let dedup = &mut self.dedup;
+        let meta_simp = self.meta_simp;
+        let mut active: Vec<IdNQ> = dedup
+            .keys()
+            .copied()
+            .filter(|x| {
+                simp_search_need(
+                    &s.query_store,
+                    dedup
+                        .raw_entry()
+                        .from_hash(
+                            WithHashs::hash(&s.query_store.resolve(x), &HashKind::label()) as u64,
+                            |y| true,
+                        )
+                        .unwrap()
+                        .1[0]
+                        .0,
+                    meta_simp,
+                )
+            })
+            .collect();
+
+        for _ in 0..4 {
+            dbg!(active.len());
+            let rms = std::mem::take(&mut active)
+                .into_iter()
+                .flat_map(|x| {
+                    let Some((_, x)) = dedup.raw_entry().from_hash(
+                        WithHashs::hash(&s.query_store.resolve(&x), &HashKind::label()) as u64,
+                        |x| true,
+                    ) else {
+                        return vec![];
+                    };
+                    let query = x[0].0;
+                    simp_rms2(&mut s.query_store, query, meta_simp)
+                        .map(|(new_q, label_h)| (label_h, (new_q, TR::RMs(query))))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            dbg!(rms.len());
+            for (label_h, x) in rms {
+                let v = dedup.raw_entry_mut().from_hash(label_h as u64, |x| true);
+                let v = match v {
+                    hashbrown::hash_map::RawEntryMut::Occupied(occ) => occ.into_key_value().1,
+                    hashbrown::hash_map::RawEntryMut::Vacant(vacant) => {
+                        active.push(x.0);
+                        vacant
+                            .insert_with_hasher(label_h as u64, x.0, vec![], |query| {
+                                WithHashs::hash(&s.query_store.resolve(query), &HashKind::label())
+                                    as u64
+                            })
+                            .1
+                    }
+                };
+                if !v.contains(&x) {
+                    v.push(x);
+                } else {
+                    dbg!()
+                }
+            }
+            // TODO add pass to replace some symbols with a wildcard
         }
-        for v in self.dedup.values() {
-            self.lattice.queries.push(self.extract(v));
+        dbg!(dedup.0.len());
+        let simp_eq = dedup
+            .0
+            .values()
+            .filter_map(|x| {
+                let query = x[0].0;
+                let (new_q, label_h) = simp_imm_eq(&mut s.query_store, query, meta_simp)?;
+                Some((label_h, (new_q, TR::RMs(query))))
+            })
+            .collect::<Vec<_>>();
+
+        for (label_h, x) in simp_eq {
+            let v = dedup.0.raw_entry_mut().from_hash(label_h as u64, |x| true);
+            let v = match v {
+                hashbrown::hash_map::RawEntryMut::Occupied(occ) => occ.into_key_value().1,
+                hashbrown::hash_map::RawEntryMut::Vacant(vacant) => {
+                    active.push(x.0);
+                    vacant
+                        .insert_with_hasher(label_h as u64, x.0, vec![], |query| {
+                            WithHashs::hash(&s.query_store.resolve(query), &HashKind::label())
+                                as u64
+                        })
+                        .1
+                }
+            };
+            if !v.contains(&x) {
+                v.push(x);
+            }
         }
+        dbg!(dedup.0.len());
     }
 }
 
@@ -345,14 +563,14 @@ impl Builder<'_, IdN, std::collections::HashMap<u32, Vec<(IdN, TR)>>> {
 impl Builder<'_, IdN> {
     #[cfg(feature = "synth_par")]
     fn loop_par(&mut self) {
-        let mut active_size = self.dedup.len() - 1;
-        eprintln!("{active_size}: {}", pp_dedup(&self.dedup, active_size));
+        let mut active_size = self.dedup.0.len() - 1;
+        eprintln!("{active_size}: {}", pp_dedup(&self.dedup.0, active_size));
         let mut active: Vec<_> = self.actives(active_size);
 
         loop {
             dbg!(active_size);
             dbg!(active.len());
-            eprintln!("{}", pp_dedup(&self.dedup, active_size));
+            eprintln!("{}", pp_dedup(&self.dedup.0, active_size));
             // TODO add pass to replace some symbols with a wildcard
             let rms = self.removes_par(active_size, &mut active);
             dbg!(rms.len());
@@ -373,7 +591,7 @@ impl Builder<'_, IdN> {
         let rms = std::mem::take(active).into_iter();
         let rms = rms
             .flat_map(|x| {
-                let Some(x) = dedup[active_size].get(&x) else {
+                let Some(x) = dedup.0[active_size].get(&x) else {
                     return vec![];
                 };
                 let query = x[0].0;
@@ -424,7 +642,7 @@ impl Builder<'_, IdN> {
                 acc
             });
         let act: Vec<_> = ParallelIterator::flat_map(
-            dedup[..active_size].par_iter_mut().enumerate(),
+            dedup.0[..active_size].par_iter_mut().enumerate(),
             |(i, dedup)| {
                 let mut r = vec![];
                 for (label_h, x) in &aaa[i] {
@@ -439,7 +657,6 @@ impl Builder<'_, IdN> {
                     if !v.contains(x) {
                         v.push(*x);
                     } else {
-                        dbg!()
                     }
                 }
                 r
@@ -452,8 +669,7 @@ impl Builder<'_, IdN> {
     #[cfg(feature = "synth_par")]
     pub fn post(&mut self) {
         use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
-        Self::simp_eq();
-        self.dedup.par_iter_mut().for_each(|x| {
+        self.dedup.0.par_iter_mut().for_each(|x| {
             let qstores = &self.lattice.query_store;
             for y in x.values_mut() {
                 y.sort_by(cmp_lat_entry(&qstores))
@@ -594,28 +810,33 @@ impl Builder<'_, IdN> {
     }
 }
 
-impl<E> QueryLattice<E> {
-    fn add_raw_rels(&mut self, v: &Vec<(IdN, TR)>) {
+impl<E: Copy> QueryLattice<E> {
+    fn add_raw_rels(&mut self, v: &Vec<(IdN, TR<E>)>) {
         for v in v {
             self.raw_rels.entry(v.0).or_default().push(v.1);
         }
     }
+
+    pub fn leaf(&self, id: IdQ) -> IdNQ {
+        self.leaf_queries[id as usize]
+    }
 }
 
 impl<'q, D> Builder<'q, IdN, D> {
-    fn extract(&self, v: &[(IdN, TR)]) -> (IdN, Vec<IdN>) {
+    fn extract(&self, v: &[(IdNQ, TR)]) -> (IdNQ, Vec<IdQ>) {
         fn extract<'a>(
-            map: &'a std::collections::HashMap<IdN, Vec<TR>>,
-            v: impl Iterator<Item = &'a TR>,
-            already: &mut HashSet<IdN>,
-            r: &mut Vec<IdN>,
+            map: &'a std::collections::HashMap<IdNQ, Vec<TR>>,
+            curr: IdNQ,
+            downs: impl Iterator<Item = &'a TR>,
+            already: &mut HashSet<IdNQ>,
+            r: &mut Vec<IdNQ>,
         ) {
-            for s in v {
+            for s in downs {
                 match s {
-                    TR::Init(x) if !r.contains(x) => r.push(*x),
+                    TR::Init(_) if !r.contains(&curr) => r.push(curr),
                     TR::RMs(v) | TR::SimpEQ(v) if !already.contains(v) => {
                         already.insert(*v);
-                        extract(map, map.get(v).unwrap().iter(), already, r)
+                        extract(map, *v, map.get(v).unwrap().iter(), already, r)
                     }
                     _ => (),
                 }
@@ -625,10 +846,27 @@ impl<'q, D> Builder<'q, IdN, D> {
         let mut r = vec![];
         extract(
             &self.lattice.raw_rels,
+            v[0].0,
             v.into_iter().map(|x| &x.1),
             &mut already,
             &mut r,
         );
+        let r = r
+            .into_iter()
+            .map(|x| {
+                dbg!(x);
+                dbg!(&self.lattice.leaf_queries);
+                dbg!(
+                    (self.lattice.raw_rels.get(&x).unwrap().iter())
+                        .position(|x| matches!(x, TR::Init(_)))
+                );
+                self.lattice
+                    .leaf_queries
+                    .iter()
+                    .position(|y| x == *y)
+                    .unwrap() as u32
+            })
+            .collect();
         (v[0].0, r)
     }
 }
@@ -656,8 +894,8 @@ fn cmp_lat_entry<TS: TypeStore + RoleStore, T: PartialOrd>(
     }
 }
 
-pub fn pp_dedup(
-    dedup: &Vec<std::collections::HashMap<u32, Vec<(legion::Entity, TR)>>>,
+pub fn pp_dedup<E, E2>(
+    dedup: &Vec<std::collections::HashMap<u32, Vec<(E, TR<E2>)>>>,
     active_size: usize,
 ) -> String {
     dedup[..active_size + 1]
@@ -695,10 +933,10 @@ impl<E> QueryLattice<E> {
     pub fn new() -> Self {
         Self {
             query_store: crate::search::ts_query_store(),
-            relations: vec![],
-            leaf_query_count: 0,
+            leaf_queries: vec![],
             queries: vec![],
             raw_rels: Default::default(),
+            sort_cache: Default::default(),
         }
     }
 }
@@ -875,11 +1113,11 @@ fn try_simp_rms2<'a>(
 
 fn generate_query_aux<TS: TypeStore + RoleStore, TIdN: TypedNodeId<IdN = NodeIdentifier>, T>(
     query_store: &mut QStore,
-    md_cache: &mut crate::legion::MDCache,
+    md_cache: &mut qgen::MDCache,
     stores: &hyperast::store::SimpleStores<TS>,
     from: NodeIdentifier,
     meta_gen: &hyperast_tsquery::Query,
-    f: &impl Fn(crate::legion::FNode) -> T,
+    f: &impl Fn(qgen::FNode) -> T,
 ) -> Option<(NodeIdentifier, T)>
 where
     TIdN::Ty: types::TypeTrait,
@@ -889,7 +1127,7 @@ where
     let query = TreeToQuery::<_, TIdN>::new(stores, from, meta_gen.clone());
     let query = format!("{} @_root", query);
     let text = query.as_bytes();
-    let mut query_tree_gen = crate::legion::TsQueryTreeGen::new(query_store, md_cache);
+    let mut query_tree_gen = qgen::TsQueryTreeGen::new(query_store, md_cache);
     let tree = match crate::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => {

@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-use crate::store::nodes::compo::{self, NoSpacesCS, CS};
+use crate::store::nodes::compo::{self, CS, NoSpacesCS};
 
 pub type NodeIdentifier = legion::Entity;
 pub type EntryRef<'a> = legion::world::EntryRef<'a>;
@@ -655,8 +655,8 @@ impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> crate::types::WithRoles
         &self,
         at: Self::ChildIdx,
     ) -> Option<Role> {
+        let r = &self.0.get_component::<compo::Roles<Role>>().ok()?.0;
         let ro = self.0.get_component::<compo::RoleOffsets>().ok()?;
-        let r = self.0.get_component::<Box<[Role]>>().ok()?;
         let mut i = 0;
         for &ro in ro.0.as_ref() {
             if ro as u16 > at {
