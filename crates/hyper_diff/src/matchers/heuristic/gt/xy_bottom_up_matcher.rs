@@ -221,8 +221,8 @@ where
             let resolved = self.internal.stores.node_store().resolve(&original);
             let label = resolved.try_get_label();
             if let Some(label) = label {
-                let src_type = self.internal.stores.label_store().resolve(label).to_string();
-                dst_types.entry(src_type).or_default().push(dst_child);
+                let dst_type = self.internal.stores.label_store().resolve(label).to_string();
+                dst_types.entry(dst_type).or_default().push(dst_child);
             }
         }
 
