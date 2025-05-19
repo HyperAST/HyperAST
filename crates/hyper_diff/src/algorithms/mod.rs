@@ -7,6 +7,8 @@ use crate::{
 pub mod gumtree;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
+pub mod gumtree_hybrid;
+pub mod gumtree_simple;
 
 #[derive(Debug, Clone)]
 pub struct MappingDurations<const N: usize>(pub [f64; N]);

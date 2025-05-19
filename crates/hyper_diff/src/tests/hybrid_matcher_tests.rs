@@ -1,3 +1,5 @@
+use std::path::Path;
+use criterion::black_box;
 use crate::tree::simple_tree::SimpleTree;
 use crate::algorithms;
 use crate::actions::Actions;
@@ -5,11 +7,14 @@ use hyperast::{
     full::FullNode, nodes::SyntaxSerializer, store::SimpleStores, tree_gen::StatsGlobalData, types::NodeId
 };
 use hyperast::test_utils::simple_tree::vpair_to_stores;
+use hyperast::tree_gen::zipped_ts_simp::FNode;
 use hyperast_gen_ts_java::{
     legion_with_refs::{self, JavaTreeGen, Local},
     types::TStore,
 };
-use crate::tests::simple_matcher_examples::*;
+use crate::tests::hybrid_matcher_examples::*;
+
+const DEFAULT_SIZE_THRESHOLD: usize = 1000;
 
 fn prepare_tree_print<'a>(
     stores: &'a SimpleStores<TStore>,
@@ -26,11 +31,11 @@ fn prepare_tree_print<'a>(
 
 
 #[test]
-fn test_gumtree_simple_java_simple() {
+fn test_gumtree_hybrid_java_simple() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_simple());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree::diff(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
         &stores,
         &src,
         &dst,
@@ -49,11 +54,11 @@ fn test_gumtree_simple_java_simple() {
 
 
 #[test]
-fn test_gumtree_simple_java_method() {
+fn test_gumtree_hybrid_java_method() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree::diff(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
         &stores,
         &src,
         &dst,
@@ -71,11 +76,11 @@ fn test_gumtree_simple_java_method() {
 }
 
 #[test]
-fn test_gumtree_simple_reorder_children() {
+fn test_gumtree_hybrid_reorder_children() {
     let (stores, src, dst) = vpair_to_stores(example_reorder_children());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree::diff(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
         &stores,
         &src,
         &dst,
@@ -93,11 +98,11 @@ fn test_gumtree_simple_reorder_children() {
 }
 
 #[test]
-fn test_gumtree_simple_move_method() {
+fn test_gumtree_hybrid_move_method() {
     let (stores, src, dst) = vpair_to_stores(example_move_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree::diff(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
         &stores,
         &src,
         &dst,
@@ -110,6 +115,6 @@ fn test_gumtree_simple_move_method() {
     let hyperast_actions_len = actions.len();
     let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
 
-    assert_eq!(hyperast_matches_len, 35);
-    assert_eq!(hyperast_actions_len, 4);
+    assert_eq!(hyperast_matches_len, 31);
+    assert_eq!(hyperast_actions_len, 7);
 }

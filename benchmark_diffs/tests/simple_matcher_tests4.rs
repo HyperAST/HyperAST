@@ -22,32 +22,104 @@ const TEMP_FOLDER: &str = "../gumtree/dist/";
 
 const DATASET_PATH: &str = "../datasets/defects4j/";
 
-const TEST_CASES: [(&str, &str, &str, usize, usize); 3] = [
-// Define test case paths relative to root/../datasets/defects4j
-    // "Jsoup_17",
-    // "before/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
-    // "after/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
+// const TEST_CASES: [(&str, &str, &str, usize, usize); 3] = [
+// // Define test case paths relative to root/../datasets/defects4j
+//     // "Jsoup_17",
+//     // "before/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
+//     // "after/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
+//     (
+//         "Chart10",
+//         "before/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
+//         "after/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
+//         45, // Number of mappings when running java gumtree
+//         2,
+//     ),
+//     (
+//         "Csv1",
+//         "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java",
+//         "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java",
+//         414,
+//         8,
+//     ),
+//     (
+//         "Jsoup1",
+//         "before/Jsoup/1/src_main_java_org_jsoup_nodes_Document.java",
+//         "after/Jsoup/1/src_main_java_org_jsoup_nodes_Document.java",
+//         566,
+//         3,
+//     )
+// ];
+const TEST_CASES: &[(&str, &str, &str)] = &[
     (
-        "Chart10",
+        "Mockito_31",
+        "before/Mockito/31/src_org_mockito_internal_stubbing_defaultanswers_ReturnsSmartNulls.java",
+        "after/Mockito/31/src_org_mockito_internal_stubbing_defaultanswers_ReturnsSmartNulls.java",
+    ),
+    (
+        "Mockito_32",
+        "before/Mockito/32/src_org_mockito_internal_configuration_SpyAnnotationEngine.java",
+        "after/Mockito/32/src_org_mockito_internal_configuration_SpyAnnotationEngine.java",
+    ),
+    (
+        "Mockito_34",
+        "before/Mockito/34/src_org_mockito_internal_invocation_InvocationMatcher.java",
+        "after/Mockito/34/src_org_mockito_internal_invocation_InvocationMatcher.java",
+    ),
+    (
+        "Mockito_37",
+        "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java",
+        "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java",
+    ),
+    (
+        "Mockito_38",
+        "before/Mockito/38/src_org_mockito_internal_verification_argumentmatching_ArgumentMatchingTool.java",
+        "after/Mockito/38/src_org_mockito_internal_verification_argumentmatching_ArgumentMatchingTool.java",
+    ),
+    (
+        "Mockito_9",
+        "before/Mockito/9/src_org_mockito_internal_stubbing_answers_CallsRealMethods.java",
+        "after/Mockito/9/src_org_mockito_internal_stubbing_answers_CallsRealMethods.java",
+    ),
+    (
+        "Time_26",
+        "before/Time/26/src_main_java_org_joda_time_field_LenientDateTimeField.java",
+        "after/Time/26/src_main_java_org_joda_time_field_LenientDateTimeField.java",
+    ),
+    (
+        "Chart_10",
         "before/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
         "after/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
-        45, // Number of mappings when running java gumtree
-        2,
     ),
     (
-        "Csv1",
-        "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java",
-        "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java",
-        414,
-        8,
+        "Cli_12",
+        "before/Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
+        "after/Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
     ),
     (
-        "Jsoup1",
-        "before/Jsoup/1/src_main_java_org_jsoup_nodes_Document.java",
-        "after/Jsoup/1/src_main_java_org_jsoup_nodes_Document.java",
-        566,
-        3,
-    )
+        "Cli_13",
+        "before/Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+        "after/Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+    ),
+    (
+        "Cli_21",
+        "before/Cli/21/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+        "after/Cli/21/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+    ),
+    (
+        "Cli_29",
+        "before/Cli/29/src_java_org_apache_commons_cli_Util.java",
+        "after/Cli/29/src_java_org_apache_commons_cli_Util.java",
+    ),
+    (
+        "JxPath_7a",
+        "before/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThan.java",
+        "after/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThan.java",
+    ),
+    (
+        "JxPath_7b",
+        "before/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThanOrEqual.java",
+        "after/JxPath/7/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationLessThanOrEqual.java",
+    ),
 ];
 
 #[derive(Deserialize)]
@@ -126,7 +198,7 @@ fn prepare_tree_print<'a>(
 //     // );
 // 
 //     // Perform the diff using gumtree lazy
-//     let _diff_result = algorithms::gumtree::diff(
+//     let _diff_result = algorithms::gumtree_hybrid::diff_hybrid(
 //         &stores,
 //         &src_tr.local.compressed_node,
 //         &dst_tr.local.compressed_node,
@@ -156,7 +228,7 @@ fn prepare_tree_print<'a>(
 //     assert_eq!(hyperast_matches_len, gumtree_matches_len);
 // }
 
-fn test_cd_diff_single(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
+fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -167,31 +239,31 @@ fn test_cd_diff_single(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
     let fixed_path = root.join(fixed_rel_path);
 
     // Call gumtree java to get number of mappings and edit script length
-    let gumtree_path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join(GUMTREE_JAVA_PATH);
-    let mut temp_path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join(TEMP_FOLDER).join(name);
-    temp_path.set_extension("json");
-    let output = Command::new(gumtree_path)
-        .args(&[
-            "textdiff",
-            buggy_path.to_str().unwrap(),
-            fixed_path.to_str().unwrap(),
-            "-m", "gumtree-simple",
-            "-g", "java-treesitter",
-            "-d", "chawathe",
-            "-f", "json",
-            "-o", temp_path.to_str().expect("Failed to get temp path")
-        ])
-        .output()
-        .expect("Failed to execute gumtree command");
-
-    if !output.status.success() {
-        panic!("Gumtree command failed: {}", String::from_utf8_lossy(&output.stderr));
-    }
-
-    dbg!(String::from_utf8_lossy(&output.stdout));
-    dbg!(String::from_utf8_lossy(&output.stderr));
-    // Parse the GumTree output
-    let (gumtree_matches_len, gumtree_actions_len) = parse_gumtree_output(&temp_path);
+    // let gumtree_path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join(GUMTREE_JAVA_PATH);
+    // let mut temp_path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join(TEMP_FOLDER).join(name);
+    // temp_path.set_extension("json");
+    // let output = Command::new(gumtree_path)
+    //     .args(&[
+    //         "textdiff",
+    //         buggy_path.to_str().unwrap(),
+    //         fixed_path.to_str().unwrap(),
+    //         "-m", "gumtree-simple",
+    //         "-g", "java-treesitter",
+    //         "-d", "chawathe",
+    //         "-f", "json",
+    //         "-o", temp_path.to_str().expect("Failed to get temp path")
+    //     ])
+    //     .output()
+    //     .expect("Failed to execute gumtree command");
+    // 
+    // if !output.status.success() {
+    //     panic!("Gumtree command failed: {}", String::from_utf8_lossy(&output.stderr));
+    // }
+    // 
+    // dbg!(String::from_utf8_lossy(&output.stdout));
+    // dbg!(String::from_utf8_lossy(&output.stderr));
+    // // Parse the GumTree output
+    // let (gumtree_matches_len, gumtree_actions_len) = parse_gumtree_output(&temp_path);
 
 
     // Read file contents
@@ -209,7 +281,7 @@ fn test_cd_diff_single(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
         parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree::diff(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD>(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
@@ -232,35 +304,67 @@ fn test_cd_diff_single(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
 
     let hyperast_actions_len = actions.len();
     let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
+    
+    dbg!(hyperast_actions_len);
+    dbg!(hyperast_matches_len);
 
-    assert_eq!(hyperast_actions_len, gumtree_actions_len);
-    assert_eq!(hyperast_matches_len, gumtree_matches_len);
+    todo!()
+    //assert_eq!(hyperast_actions_len, gumtree_actions_len);
+    //assert_eq!(hyperast_matches_len, gumtree_matches_len);
 }
 
 #[test]
 fn test_cd_diff_0() {
-    let (name, buggy_rel_path, fixed_rel_path,_,_) = TEST_CASES[0];
+    let (name, buggy_rel_path, fixed_rel_path) = TEST_CASES[3];
 
-    test_cd_diff_single(name, buggy_rel_path, fixed_rel_path);
+    test_cd_diff_single::<100>(name, buggy_rel_path, fixed_rel_path);
 }
 
 #[test]
 fn test_cd_diff_1() {
-    let (name, buggy_rel_path, fixed_rel_path,_,_) = TEST_CASES[1];
+    let (name, buggy_rel_path, fixed_rel_path) = TEST_CASES[1];
 
-    test_cd_diff_single(name, buggy_rel_path, fixed_rel_path);
+    test_cd_diff_single::<100>(name, buggy_rel_path, fixed_rel_path);
 }
 
 #[test]
 fn test_cd_diff_2() {
-    let (name, buggy_rel_path, fixed_rel_path,_,_) = TEST_CASES[2];
+    let (name, buggy_rel_path, fixed_rel_path) = TEST_CASES[2];
 
-    test_cd_diff_single(name, buggy_rel_path, fixed_rel_path);
+    test_cd_diff_single::<100>(name, buggy_rel_path, fixed_rel_path);
+}
+
+#[test]
+fn test_csv1_100() {
+    let buggy_rel_path = "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    let fixed_rel_path = "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    test_cd_diff_single::<100>("csv1", buggy_rel_path, fixed_rel_path);
+}
+
+#[test]
+fn test_csv1_1000() {
+    let buggy_rel_path = "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    let fixed_rel_path = "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    test_cd_diff_single::<1000>("csv1", buggy_rel_path, fixed_rel_path);
+}
+
+#[test]
+fn test_mockito_37_100() {
+    let buggy_rel_path = "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    let fixed_rel_path = "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    test_cd_diff_single::<100>("mockito_37", buggy_rel_path, fixed_rel_path);
+}
+
+#[test]
+fn test_mockito_37_1000() {
+    let buggy_rel_path = "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    let fixed_rel_path = "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    test_cd_diff_single::<1000>("mockito_37", buggy_rel_path, fixed_rel_path);
 }
 
 #[test]
 fn test_cd_diff_3() {
-    test_cd_diff_single(
+    test_cd_diff_single::<100>(
         "simple_class",
         "../custom/before/simple_class.java",
         "../custom/after/simple_class.java",
@@ -301,6 +405,6 @@ fn test_all() {
         let name = rel_path.replace("/", "-");
         let before_path = format!("before/{}", rel_path);
         let after_path = format!("after/{}", rel_path);
-        test_cd_diff_single(&name, &before_path, &after_path);
+        test_cd_diff_single::<100>(&name, &before_path, &after_path);
     }
 }

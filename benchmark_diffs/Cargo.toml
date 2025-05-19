@@ -37,6 +37,8 @@ pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
 
 const-chunks = "0.3.0"
 
+winit = { version="0.30.10" , features = ["wayland-backend"] }
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
 
@@ -54,5 +56,13 @@ criterion = { version = "0.4", features = [
 
 
 [[bench]]
-name = "my_bench"
+name = "gumtree_hybrid_basic"
+harness = false
+
+[[bench]]
+name = "gumtree_comparison"
+harness = false
+
+[[bench]]
+name = "gumtree_hybrid_hyperparameters"
 harness = false

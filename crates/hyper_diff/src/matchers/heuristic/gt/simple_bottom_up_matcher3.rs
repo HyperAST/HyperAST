@@ -141,8 +141,8 @@ where
 
     pub fn execute<'b>(&mut self) {
         for t in self.internal.src_arena.iter_df_post::<true>() {
-            let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
-            dbg!(path);
+            // let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
+            // dbg!(path);
             if self.internal.src_arena.parent(&t).is_none() {
                 self.internal.mappings.link(
                     self.internal.src_arena.root(),
