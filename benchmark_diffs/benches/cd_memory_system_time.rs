@@ -1,15 +1,44 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use tabled::settings::{Reverse, Rotate};
+use tabled::{
+    Table, Tabled,
+    settings::{Alignment, Modify, Padding, Style, object::Columns},
+};
 
 fn main() {
     println!("Memory Benchmark using macOS time command");
     println!("=========================================\n");
 
+    #[derive(Tabled)]
+    struct BenchmarkResult {
+        #[tabled(rename = "Algorithm")]
+        algorithm: String,
+        #[tabled(rename = "Avg Peak Memory (MB)")]
+        peak_avg: String,
+        #[tabled(rename = "Min Peak Memory (MB)")]
+        peak_min: String,
+        #[tabled(rename = "Max Peak Memory (MB)")]
+        peak_max: String,
+        #[tabled(rename = "Avg Resident Memory (MB)")]
+        resident_avg: String,
+        #[tabled(rename = "Min Resident Memory (MB)")]
+        resident_min: String,
+        #[tabled(rename = "Max Resident Memory (MB)")]
+        resident_max: String,
+        #[tabled(rename = "Avg Duration")]
+        duration_avg: String,
+        #[tabled(rename = "Min Duration")]
+        duration_min: String,
+        #[tabled(rename = "Max Duration")]
+        duration_max: String,
+    }
+
     // Define algorithms to test
     let algorithms = vec!["change_distiller", "change_distiller_lazy", "gumtree_lazy"];
 
     // Number of iterations for each algorithm
-    let iterations = 40;
+    let iterations = 2;
 
     println!("Running {} iterations for each algorithm\n", iterations);
 
@@ -90,45 +119,38 @@ fn main() {
             max_duration,
         ));
 
-        // Print summary statistics for this algorithm
+        // Create an algorithm summary table with tabled
+        let summary_data = vec![BenchmarkResult {
+            algorithm: algorithm.to_string(),
+            peak_avg: format!("{:.2}", avg_peak as f64 / 1_048_576.0),
+            peak_min: format!("{:.2}", min_peak as f64 / 1_048_576.0),
+            peak_max: format!("{:.2}", max_peak as f64 / 1_048_576.0),
+            resident_avg: format!("{:.2}", avg_resident as f64 / 1_048_576.0),
+            resident_min: format!("{:.2}", min_resident as f64 / 1_048_576.0),
+            resident_max: format!("{:.2}", max_resident as f64 / 1_048_576.0),
+            duration_avg: format!("{:.2?}", avg_duration),
+            duration_min: format!("{:.2?}", min_duration),
+            duration_max: format!("{:.2?}", max_duration),
+        }];
+
+        let mut summary_table = Table::new(summary_data);
+        summary_table
+            .with(Rotate::Left)
+            .with(Style::rounded())
+            .with(Padding::new(1, 1, 0, 0))
+            .with(Modify::new(Columns::new(2..)).with(Alignment::right()));
+
         println!("\n{} Summary (over {} iterations):", algorithm, iterations);
-        println!(
-            "  Peak Memory (MB): Avg: {:.2}, Min: {:.2}, Max: {:.2}",
-            avg_peak as f64 / 1_048_576.0,
-            min_peak as f64 / 1_048_576.0,
-            max_peak as f64 / 1_048_576.0
-        );
-        println!(
-            "  Resident Memory (MB): Avg: {:.2}, Min: {:.2}, Max: {:.2}",
-            avg_resident as f64 / 1_048_576.0,
-            min_resident as f64 / 1_048_576.0,
-            max_resident as f64 / 1_048_576.0
-        );
-        println!(
-            "  Duration: Avg: {:.2?}, Min: {:.2?}, Max: {:.2?}",
-            avg_duration, min_duration, max_duration
-        );
+        println!("{}", summary_table);
     }
 
-    // Print comparison table
+    // Create table with tabled
     println!(
         "\n=== Memory Usage Comparison (macOS time command, {} iterations) ===",
         iterations
     );
-    println!(
-        "+------------------------+--------------------------------+---------------------------------------+-------------------------+",
-    );
-    println!(
-        "| {:22} | {:30} | {:37} | {:23} |",
-        "Algorithm", "Peak Memory (MB)", "Resident Memory (MB)", "Duration"
-    );
-    println!(
-        "| {:22} | {:8} | {:8} | {:8} | {:11} | {:11} | {:11} | {:7} | {:7} | {:7} |",
-        "", "Avg", "Min", "Max", "Avg", "Min", "Max", "Avg", "Min", "Max"
-    );
-    println!(
-        "+------------------------+--------------------------------+---------------------------------------+-------------------------+"
-    );
+
+    let mut table_data = Vec::new();
 
     for (
         name,
@@ -143,23 +165,29 @@ fn main() {
         max_duration,
     ) in &results
     {
-        println!(
-            "| {:22} | {:8.2} | {:8.2} | {:8.2} | {:11.2} | {:11.2} | {:11.2} | {:7.2?} | {:7.2?} | {:7.2?} |",
-            name,
-            *avg_peak as f64 / 1_048_576.0,
-            *min_peak as f64 / 1_048_576.0,
-            *max_peak as f64 / 1_048_576.0,
-            *avg_resident as f64 / 1_048_576.0,
-            *min_resident as f64 / 1_048_576.0,
-            *max_resident as f64 / 1_048_576.0,
-            avg_duration,
-            min_duration,
-            max_duration
-        );
+        table_data.push(BenchmarkResult {
+            algorithm: name.to_string(),
+            peak_avg: format!("{:.2}", *avg_peak as f64 / 1_048_576.0),
+            peak_min: format!("{:.2}", *min_peak as f64 / 1_048_576.0),
+            peak_max: format!("{:.2}", *max_peak as f64 / 1_048_576.0),
+            resident_avg: format!("{:.2}", *avg_resident as f64 / 1_048_576.0),
+            resident_min: format!("{:.2}", *min_resident as f64 / 1_048_576.0),
+            resident_max: format!("{:.2}", *max_resident as f64 / 1_048_576.0),
+            duration_avg: format!("{:.2?}", avg_duration),
+            duration_min: format!("{:.2?}", min_duration),
+            duration_max: format!("{:.2?}", max_duration),
+        });
     }
-    println!(
-        "+------------------------+--------------------------------+---------------------------------------+-------------------------+"
-    );
+
+    let mut table = Table::new(table_data);
+    table
+        .with(Rotate::Right)
+        .with(Style::modern())
+        .with(Reverse::columns(0))
+        .with(Padding::new(1, 1, 0, 0))
+        .with(Modify::new(Columns::new(2..)).with(Alignment::right()));
+
+    println!("{}", table);
 }
 
 fn calculate_average(values: &[u64]) -> u64 {
@@ -195,12 +223,12 @@ fn run_benchmark_with_time(algorithm: &str) -> (u64, u64, Duration) {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Extract peak memory (maximum resident set size)
-    let peak_memory = extract_memory_stat(&stderr, "maximum resident set size");
+    let resident_size = extract_memory_stat(&stderr, "maximum resident set size");
 
     // Extract resident memory
-    let resident_memory = extract_memory_stat(&stderr, "average resident set size");
+    let peak_memory_footprint = extract_memory_stat(&stderr, "peak memory footprint");
 
-    (peak_memory, resident_memory, duration)
+    (peak_memory_footprint, resident_size, duration)
 }
 
 fn extract_memory_stat(time_output: &str, stat_name: &str) -> u64 {
