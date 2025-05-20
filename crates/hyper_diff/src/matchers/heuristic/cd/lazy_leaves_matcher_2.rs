@@ -1,20 +1,15 @@
 use crate::{
     decompressed_tree_store::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
-        LazyDecompressedTreeStore, LazyPOBorrowSlice, POBorrowSlice, PostOrder, PostOrderIterable,
-        Shallow, ShallowDecompressedTreeStore,
+        LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
+        ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::MonoMappingStore,
 };
 use hyperast::PrimInt;
-use hyperast::types::{
-    DecompressedFrom, HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs,
-};
+use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs};
 use std::fmt::Debug;
-use std::{
-    cmp::{Ordering, Reverse},
-    collections::BinaryHeap,
-};
+use std::{cmp::Ordering, collections::BinaryHeap};
 use str_distance::DistanceMetric;
 
 struct MappingWithSimilarity<M: MonoMappingStore> {
@@ -273,29 +268,6 @@ where
 
         similarity
     }
-
-    // Keep the original method for backward compatibility
-    fn compute_label_similarity(&self, src_tree: &Dsrc::IdD, dst_tree: &Ddst::IdD) -> f64 {
-        let original_src = self.src_arena.original(src_tree);
-        let original_dst = self.dst_arena.original(dst_tree);
-
-        let src_node = self.stores.node_store().resolve(&original_src);
-        let dst_node = self.stores.node_store().resolve(&original_dst);
-
-        let src_label_id = src_node.try_get_label();
-        let dst_label_id = dst_node.try_get_label();
-
-        match (src_label_id, dst_label_id) {
-            (Some(src_label_id), Some(dst_label_id)) => {
-                let src_label = self.stores.label_store().resolve(&src_label_id);
-                let dst_label = self.stores.label_store().resolve(&dst_label_id);
-                let dist =
-                    str_distance::QGram::new(3).normalized(src_label.chars(), dst_label.chars());
-                1.0 - dist
-            }
-            _ => 0.0,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -308,7 +280,7 @@ mod tests {
     use crate::tree::simple_tree::vpair_to_stores;
     use hyperast::nodes::SyntaxSerializer;
     use hyperast::test_utils::simple_tree::DisplayTree;
-    use hyperast::types::WithChildren;
+    use hyperast::types::{DecompressedFrom, WithChildren};
 
     #[test]
     fn test_leaves_matcher() {

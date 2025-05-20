@@ -73,13 +73,40 @@ where
         // Cache leaf counts for source nodes
         let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
 
+        // Pre-compute all leaf counts in a single traversal
+        let mut node_to_leaf_count: HashMap<M::Src, usize> = HashMap::new();
+        // Process nodes in post-order so children are processed before parents
+        for s in self.src_arena.iter_df_post::<true>() {
+            let src = self.src_arena.decompress_to(&s);
+            let is_leaf = self.src_arena.children(&src).is_empty();
+
+            let leaf_count = if is_leaf {
+                1 // Leaf nodes have a count of 1
+            } else {
+                // Sum the leaf counts of all children
+                self.src_arena
+                    .children(&src)
+                    .iter()
+                    .map(|child| {
+                        let child = self.src_arena.decompress_to(child);
+                        node_to_leaf_count
+                            .get(child.shallow())
+                            .copied()
+                            .unwrap_or(0)
+                    })
+                    .sum()
+            };
+
+            node_to_leaf_count.insert(*src.shallow(), leaf_count);
+        }
+
         // Index source nodes by their type
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
             let src_type = self.hyperast.resolve_type(&self.src_arena.original(&src));
 
-            // Cache leaf count
-            let number_of_leaves = self.count_leaves(&src);
+            // Get pre-computed leaf count
+            let number_of_leaves = *node_to_leaf_count.get(src.shallow()).unwrap_or(&0);
             leaf_counts.insert(*src.shallow(), number_of_leaves);
 
             // Only add unmapped nodes to the index
@@ -128,28 +155,6 @@ where
                 }
             }
         }
-    }
-
-    fn count_leaves(&mut self, src: &Dsrc::IdD) -> usize {
-        self.src_arena
-            .descendants(src)
-            .iter()
-            .filter(|t| {
-                let id = self.src_arena.decompress_to(&t);
-                self.src_arena.children(&id).is_empty()
-            })
-            .count()
-    }
-
-    fn is_mapping_allowed(&self, src: &Dsrc::IdD, dst: &Ddst::IdD) -> bool {
-        if self.mappings.is_src(src.shallow()) || self.mappings.is_dst(dst.shallow()) {
-            return false;
-        }
-
-        let src_type = self.hyperast.resolve_type(&self.src_arena.original(src));
-        let dst_type = self.hyperast.resolve_type(&self.dst_arena.original(dst));
-
-        src_type == dst_type
     }
 
     fn compute_similarity(&self, src: &Dsrc::IdD, dst: &Ddst::IdD) -> f64 {

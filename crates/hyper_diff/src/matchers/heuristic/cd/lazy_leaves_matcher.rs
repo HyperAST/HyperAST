@@ -1,15 +1,13 @@
 use crate::{
     decompressed_tree_store::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
-        LazyDecompressedTreeStore, LazyPOBorrowSlice, POBorrowSlice, PostOrder, PostOrderIterable,
-        Shallow, ShallowDecompressedTreeStore,
+        LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
+        ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::MonoMappingStore,
 };
 use hyperast::PrimInt;
-use hyperast::types::{
-    DecompressedFrom, HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs,
-};
+use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs};
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use str_distance::DistanceMetric;
@@ -182,7 +180,7 @@ mod tests {
     use crate::tree::simple_tree::vpair_to_stores;
     use hyperast::nodes::SyntaxSerializer;
     use hyperast::test_utils::simple_tree::DisplayTree;
-    use hyperast::types::WithChildren;
+    use hyperast::types::{DecompressedFrom, WithChildren};
 
     #[test]
     fn test_leaves_matcher() {
