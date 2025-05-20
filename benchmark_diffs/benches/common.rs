@@ -143,18 +143,67 @@ const TEST_CASES_M: &[&str] = &[
     "Math/1/src_main_java_org_apache_commons_math3_fraction_Fraction.java",
 ];
 
+const TEST_CASES_L: &[&str] = &[
+    "Math/16/src_main_java_org_apache_commons_math3_util_FastMath.java",
+    "JacksonDatabind/17/src_main_java_com_fasterxml_jackson_databind_ObjectMapper.java",
+    "Math/15/src_main_java_org_apache_commons_math3_util_FastMath.java",
+    "Math/16/src_main_java_org_apache_commons_math3_util_FastMath.java",
+    "JacksonCore/12/src_main_java_com_fasterxml_jackson_core_json_UTF8StreamJsonParser.java",
+    "JacksonCore/9/src_main_java_com_fasterxml_jackson_core_json_UTF8StreamJsonParser.java",
+    "JacksonCore/12/src_main_java_com_fasterxml_jackson_core_json_UTF8StreamJsonParser.java",
+    "JacksonCore/9/src_main_java_com_fasterxml_jackson_core_json_UTF8StreamJsonParser.java",
+    "JacksonCore/19/src_main_java_com_fasterxml_jackson_core_json_UTF8StreamJsonParser.java",
+    "JacksonCore/19/src_main_java_com_fasterxml_jackson_core_json_UTF8StreamJsonParser.java",
+    "Chart/19/source_org_jfree_chart_plot_CategoryPlot.java",
+    "Chart/19/source_org_jfree_chart_plot_CategoryPlot.java",
+    "Chart/14/source_org_jfree_chart_plot_CategoryPlot.java",
+    "Chart/14/source_org_jfree_chart_plot_CategoryPlot.java",
+    "JacksonDatabind/30/src_main_java_com_fasterxml_jackson_databind_ObjectMapper.java",
+    "JacksonDatabind/61/src_main_java_com_fasterxml_jackson_databind_ObjectMapper.java",
+    "JacksonDatabind/30/src_main_java_com_fasterxml_jackson_databind_ObjectMapper.java",
+    "JacksonDatabind/61/src_main_java_com_fasterxml_jackson_databind_ObjectMapper.java",
+    "Lang/37/src_java_org_apache_commons_lang3_ArrayUtils.java",
+    "Lang/37/src_java_org_apache_commons_lang3_ArrayUtils.java",
+    "Chart/14/source_org_jfree_chart_plot_XYPlot.java",
+    "Lang/35/src_main_java_org_apache_commons_lang3_ArrayUtils.java",
+    "Chart/14/source_org_jfree_chart_plot_XYPlot.java",
+    "Lang/35/src_main_java_org_apache_commons_lang3_ArrayUtils.java",
+    "Chart/4/source_org_jfree_chart_plot_XYPlot.java",
+    "Chart/4/source_org_jfree_chart_plot_XYPlot.java",
+    "Lang/40/src_java_org_apache_commons_lang_StringUtils.java",
+    "Lang/40/src_java_org_apache_commons_lang_StringUtils.java",
+    "Lang/39/src_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/39/src_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/31/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/30/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/31/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/30/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/20/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/20/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/14/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Lang/14/src_main_java_org_apache_commons_lang3_StringUtils.java",
+    "Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
+    "Cli/12/src_java_org_apache_commons_cli_GnuParser.java",
+    "Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
+];
+
 pub fn get_test_data_small() -> Vec<(String, String)> {
     get_test_data(&TEST_CASES_S[0..14])
 }
 
 pub fn get_test_data_medium() -> Vec<(String, String)> {
-    get_test_data(&TEST_CASES_M[0..2])
+    get_test_data(&TEST_CASES_M[0..4])
+}
+
+pub fn get_test_data_large() -> Vec<(String, String)> {
+    get_test_data(&TEST_CASES_L[0..4])
 }
 
 pub fn get_test_data_mixed() -> Vec<(String, String)> {
-    let mixed = TEST_CASES_S[0..14]
+    let mixed = TEST_CASES_S[0..20]
         .iter()
-        .chain(TEST_CASES_M[0..2].iter())
+        .chain(TEST_CASES_M[0..7].iter())
+        .chain(TEST_CASES_L[0..4].iter())
         .cloned()
         .collect::<Vec<_>>();
     get_test_data(&mixed)
