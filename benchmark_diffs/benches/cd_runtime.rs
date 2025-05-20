@@ -1,8 +1,5 @@
-use common::{get_test_data_small, run_diff};
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use hyper_diff::algorithms;
-use hyperast::store::SimpleStores;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
+use common::run_diff;
+use criterion::{Criterion, criterion_group, criterion_main};
 
 mod common;
 
@@ -11,10 +8,10 @@ fn diff_benchmark(c: &mut Criterion) {
         .is_test(true)
         .init();
 
-    let test_inputs = get_test_data_small();
+    let test_inputs = common::get_test_data_small();
 
     let mut group = c.benchmark_group("change_distiller_comparison");
-    group.sample_size(100);
+    group.sample_size(10);
 
     // group.bench_function("HyperDiff Lazy", |b| {
     //     b.iter(|| {
@@ -24,18 +21,25 @@ fn diff_benchmark(c: &mut Criterion) {
     //     })
     // });
 
-    group.bench_function("ChangeDistiller", |b| {
-        b.iter(|| {
-            for (buggy, fixed) in &test_inputs {
-                run_diff(buggy, fixed, "change_distiller");
-            }
-        })
-    });
+    // group.bench_function("ChangeDistiller", |b| {
+    //     b.iter(|| {
+    //         for (buggy, fixed) in &test_inputs {
+    //             run_diff(buggy, fixed, "change_distiller");
+    //         }
+    //     })
+    // });
 
     group.bench_function("ChangeDistiller Lazy", |b| {
         b.iter(|| {
             for (buggy, fixed) in &test_inputs {
                 run_diff(buggy, fixed, "change_distiller_lazy");
+            }
+        })
+    });
+    group.bench_function("ChangeDistiller Lazy 2", |b| {
+        b.iter(|| {
+            for (buggy, fixed) in &test_inputs {
+                run_diff(buggy, fixed, "change_distiller_lazy_2");
             }
         })
     });

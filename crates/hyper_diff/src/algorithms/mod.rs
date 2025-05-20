@@ -6,6 +6,7 @@ use crate::{
 
 pub mod change_distiller;
 pub mod change_distiller_lazy;
+pub mod change_distiller_lazy_2;
 pub mod gumtree;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;

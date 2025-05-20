@@ -16,8 +16,14 @@ pub mod types;
 pub mod usage;
 pub mod utils;
 
-pub trait PrimInt: num::PrimInt + num::traits::NumAssign + std::fmt::Debug {}
-impl<T> PrimInt for T where T: num::PrimInt + num::traits::NumAssign + std::fmt::Debug {}
+pub trait PrimInt:
+    num::PrimInt + num::traits::NumAssign + std::fmt::Debug + std::hash::Hash
+{
+}
+impl<T> PrimInt for T where
+    T: num::PrimInt + num::traits::NumAssign + std::fmt::Debug + std::hash::Hash
+{
+}
 
 mod slice_interning;
 

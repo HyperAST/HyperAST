@@ -30,6 +30,11 @@ pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         ),
+        "change_distiller_lazy_2" => algorithms::change_distiller_lazy_2::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
         _ => panic!("Unknown diff algorithm"),
     };
 
@@ -144,6 +149,15 @@ pub fn get_test_data_small() -> Vec<(String, String)> {
 
 pub fn get_test_data_medium() -> Vec<(String, String)> {
     get_test_data(&TEST_CASES_M[0..2])
+}
+
+pub fn get_test_data_mixed() -> Vec<(String, String)> {
+    let mixed = TEST_CASES_S[0..14]
+        .iter()
+        .chain(TEST_CASES_M[0..2].iter())
+        .cloned()
+        .collect::<Vec<_>>();
+    get_test_data(&mixed)
 }
 
 fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
