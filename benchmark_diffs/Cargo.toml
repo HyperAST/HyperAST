@@ -39,6 +39,7 @@ const-chunks = "0.3.0"
 memory-stats = "1.2.0"
 jemallocator = "0.5.0"
 jemalloc-ctl = "0.5.4"
+regex = "1.11.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
@@ -71,8 +72,8 @@ name = "cd_memory_jemalloc"
 path = "benches/cd_memory_jemalloc.rs"
 
 [[bin]]
-name = "cd_memory_system"
-path = "benches/cd_memory_system.rs"
+name = "cd_memory_system_time"
+path = "benches/cd_memory_system_time.rs"
 
 [[bin]]
 name = "cd_memory_custom"
@@ -81,3 +82,6 @@ path = "benches/cd_memory_custom.rs"
 [[bin]]
 name = "algorithm_runner"
 path = "benches/algorithm_runner.rs"
+
+[profile.release]
+debug = true

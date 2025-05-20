@@ -4204,6 +4204,7 @@ dependencies = [
  "num-traits",
  "pprof",
  "rayon",
+ "regex",
  "serde",
  "serde_json",
  "tree-sitter",
