@@ -1,12 +1,12 @@
+use hyperast_benchmark_diffs::stats_utils;
+use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
 use tabled::settings::{Reverse, Rotate};
 use tabled::{
     Table, Tabled,
     settings::{Alignment, Modify, Padding, Style, object::Columns},
 };
-use hyperast_benchmark_diffs::stats_utils;
 
 fn main() {
     println!("Memory Benchmark using macOS time command");
@@ -45,10 +45,15 @@ fn main() {
     }
 
     // Define algorithms to test
-    let algorithms = vec!["change_distiller", "change_distiller_lazy", "gumtree_lazy"];
+    let algorithms = vec![
+        "change_distiller_lazy_2",
+        "change_distiller_lazy",
+        "change_distiller",
+        "gumtree_lazy",
+    ];
 
     // Number of iterations for each algorithm
-    let iterations = 5;
+    let iterations = 1;
 
     println!("Running {} iterations for each algorithm\n", iterations);
 
@@ -94,7 +99,8 @@ fn main() {
 
         // Convert to usize for stats_utils compatibility
         let peak_memories_usize: Vec<usize> = peak_memories.iter().map(|&x| x as usize).collect();
-        let resident_memories_usize: Vec<usize> = resident_memories.iter().map(|&x| x as usize).collect();
+        let resident_memories_usize: Vec<usize> =
+            resident_memories.iter().map(|&x| x as usize).collect();
 
         // Calculate comprehensive statistics for peak memory
         let peak_stats = stats_utils::summarize_statistics(&peak_memories_usize);
@@ -141,8 +147,8 @@ fn main() {
             avg_duration,
             min_duration,
             max_duration,
-            peak_memories_usize.clone(),   // Store raw measurements for later statistical comparison
-            resident_memories_usize.clone()
+            peak_memories_usize.clone(), // Store raw measurements for later statistical comparison
+            resident_memories_usize.clone(),
         ));
 
         // Create an algorithm summary table with tabled
@@ -198,8 +204,9 @@ fn main() {
         min_duration,
         max_duration,
         peak_memories_raw,
-        resident_memories_raw
-    ) in &results {
+        resident_memories_raw,
+    ) in &results
+    {
         table_data.push(BenchmarkResult {
             algorithm: name.to_string(),
             peak_avg: format!("{:.2}", *avg_peak as f64 / 1_048_576.0),
@@ -236,9 +243,11 @@ fn main() {
         let alpha = 0.05; // 5% significance level
 
         for i in 0..results.len() {
-            for j in i+1..results.len() {
-                let (alg1_name, _, _, _, _, _, _, _, _, _, _, _, _, _, peak1, resident1) = &results[i];
-                let (alg2_name, _, _, _, _, _, _, _, _, _, _, _, _, _, peak2, resident2) = &results[j];
+            for j in i + 1..results.len() {
+                let (alg1_name, _, _, _, _, _, _, _, _, _, _, _, _, _, peak1, resident1) =
+                    &results[i];
+                let (alg2_name, _, _, _, _, _, _, _, _, _, _, _, _, _, peak2, resident2) =
+                    &results[j];
 
                 // Compare peak memory
                 let (p_value, significant, percent_diff) =
@@ -247,7 +256,10 @@ fn main() {
                 println!("\n{} vs {} (Peak Memory):", alg1_name, alg2_name);
                 println!("  Difference: {:.2}%", percent_diff);
                 println!("  p-value: {:.4}", p_value);
-                println!("  Statistically significant: {}", if significant { "YES" } else { "NO" });
+                println!(
+                    "  Statistically significant: {}",
+                    if significant { "YES" } else { "NO" }
+                );
 
                 // Compare resident memory
                 let (p_value, significant, percent_diff) =
@@ -256,7 +268,10 @@ fn main() {
                 println!("\n{} vs {} (Resident Memory):", alg1_name, alg2_name);
                 println!("  Difference: {:.2}%", percent_diff);
                 println!("  p-value: {:.4}", p_value);
-                println!("  Statistically significant: {}", if significant { "YES" } else { "NO" });
+                println!(
+                    "  Statistically significant: {}",
+                    if significant { "YES" } else { "NO" }
+                );
             }
         }
     }
