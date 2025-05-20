@@ -106,6 +106,13 @@ where
     }
 
     fn execute(&mut self) {
+        // Pre-compute and cache label info for all nodes
+        let mut label_cache: std::collections::HashMap<(HAST::IdN, HAST::IdN), f64> =
+            std::collections::HashMap::new();
+
+        // Create a QGram object once to reuse
+        let qgram = str_distance::QGram::new(3);
+
         let dst_leaves: Vec<M::Dst> = self
             .dst_arena
             .iter_df_post::<true>()
@@ -130,28 +137,54 @@ where
         let mut dst_leaves_by_type: std::collections::HashMap<_, Vec<M::Dst>> =
             std::collections::HashMap::new();
 
+        // Cache for labels to avoid repeated resolving
+        let mut src_label_cache: std::collections::HashMap<M::Src, Option<(HAST::IdN, String)>> =
+            std::collections::HashMap::with_capacity(src_leaves.len());
+        let mut dst_label_cache: std::collections::HashMap<M::Dst, Option<(HAST::IdN, String)>> =
+            std::collections::HashMap::with_capacity(dst_leaves.len());
+
         // Collect src leaves and index by type
-        for src_leaf in src_leaves {
-            let src = self.src_arena.decompress_to(&src_leaf);
+        for src_leaf in &src_leaves {
+            let src = self.src_arena.decompress_to(src_leaf);
             let original_src = self.src_arena.original(&src);
             let src_type = self.stores.resolve_type(&original_src);
+
+            // Cache the label for later use
+            let src_node = self.stores.node_store().resolve(&original_src);
+            let src_label_entry = if let Some(src_label_id) = src_node.try_get_label() {
+                let src_label = self.stores.label_store().resolve(&src_label_id).to_string();
+                Some((original_src.clone(), src_label))
+            } else {
+                None
+            };
+            src_label_cache.insert(*src_leaf, src_label_entry);
 
             src_leaves_by_type
                 .entry(src_type)
                 .or_insert_with(Vec::new)
-                .push(src_leaf);
+                .push(*src_leaf);
         }
 
         // Collect dst leaves and index by type
-        for dst_leaf in dst_leaves {
-            let dst = self.dst_arena.decompress_to(&dst_leaf);
+        for dst_leaf in &dst_leaves {
+            let dst = self.dst_arena.decompress_to(dst_leaf);
             let original_dst = self.dst_arena.original(&dst);
             let dst_type = self.stores.resolve_type(&original_dst);
+
+            // Cache the label for later use
+            let dst_node = self.stores.node_store().resolve(&original_dst);
+            let dst_label_entry = if let Some(dst_label_id) = dst_node.try_get_label() {
+                let dst_label = self.stores.label_store().resolve(&dst_label_id).to_string();
+                Some((original_dst.clone(), dst_label))
+            } else {
+                None
+            };
+            dst_label_cache.insert(*dst_leaf, dst_label_entry);
 
             dst_leaves_by_type
                 .entry(dst_type)
                 .or_insert_with(Vec::new)
-                .push(dst_leaf);
+                .push(*dst_leaf);
         }
 
         // Use binary heap to keep track of best mappings
@@ -170,7 +203,18 @@ where
                         if !self.mappings.is_src(src.shallow())
                             && !self.mappings.is_dst(dst.shallow())
                         {
-                            let sim = self.compute_label_similarity(&src, &dst);
+                            // Get similarity from cache or compute it
+                            let sim = self.compute_cached_label_similarity(
+                                &src_leaf,
+                                &dst_leaf,
+                                &src,
+                                &dst,
+                                &mut label_cache,
+                                &src_label_cache,
+                                &dst_label_cache,
+                                &qgram,
+                            );
+
                             if sim > self.label_sim_threshold {
                                 best_mappings.push(MappingWithSimilarity::<M> {
                                     src: src_leaf,
@@ -191,6 +235,46 @@ where
         }
     }
 
+    fn compute_cached_label_similarity(
+        &self,
+        src_leaf: &M::Src,
+        dst_leaf: &M::Dst,
+        src_tree: &Dsrc::IdD,
+        dst_tree: &Ddst::IdD,
+        label_cache: &mut std::collections::HashMap<(HAST::IdN, HAST::IdN), f64>,
+        src_label_cache: &std::collections::HashMap<M::Src, Option<(HAST::IdN, String)>>,
+        dst_label_cache: &std::collections::HashMap<M::Dst, Option<(HAST::IdN, String)>>,
+        qgram: &str_distance::QGram,
+    ) -> f64 {
+        // Get the original node IDs
+        let original_src = self.src_arena.original(src_tree);
+        let original_dst = self.dst_arena.original(dst_tree);
+
+        // Check if similarity is already cached
+        if let Some(sim) = label_cache.get(&(original_src.clone(), original_dst.clone())) {
+            return *sim;
+        }
+
+        // Get cached label data
+        let src_label_data = src_label_cache.get(src_leaf);
+        let dst_label_data = dst_label_cache.get(dst_leaf);
+
+        let similarity = match (src_label_data, dst_label_data) {
+            (Some(Some((_, src_label))), Some(Some((_, dst_label)))) => {
+                // Use the pre-computed QGram object
+                let dist = qgram.normalized(src_label.chars(), dst_label.chars());
+                1.0 - dist
+            }
+            _ => 0.0,
+        };
+
+        // Cache the result
+        label_cache.insert((original_src, original_dst), similarity);
+
+        similarity
+    }
+
+    // Keep the original method for backward compatibility
     fn compute_label_similarity(&self, src_tree: &Dsrc::IdD, dst_tree: &Ddst::IdD) -> f64 {
         let original_src = self.src_arena.original(src_tree);
         let original_dst = self.dst_arena.original(dst_tree);
