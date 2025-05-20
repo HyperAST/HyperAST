@@ -965,8 +965,8 @@ pub trait NodeStoreLife<'store, IdN> {
     fn resolve(&'store self, id: &IdN) -> Self::R<'store>;
 }
 
-pub trait NodeId: Eq + Clone + 'static {
-    type IdN: Eq + AAAA;
+pub trait NodeId: Eq + Clone + 'static + std::hash::Hash {
+    type IdN: Eq + AAAA + Hash;
     fn as_id(&self) -> &Self::IdN;
     // fn as_ty(&self) -> &Self::Ty;
     unsafe fn from_id(id: Self::IdN) -> Self;
@@ -989,7 +989,7 @@ impl NodeId for u16 {
     }
 }
 
-pub trait AAAA: NodeId<IdN = Self> {}
+pub trait AAAA: NodeId<IdN = Self> + std::hash::Hash {}
 
 pub trait TypedNodeId: NodeId {
     type Ty: HyperType + Hash + Copy + Eq + Send + Sync;

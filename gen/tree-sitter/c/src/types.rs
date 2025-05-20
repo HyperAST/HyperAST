@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 #[cfg(feature = "impl")]
@@ -102,10 +102,10 @@ impl Type {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + hyperast::types::AAAA> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + hyperast::types::AAAA + std::hash::Hash> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -121,7 +121,7 @@ impl<IdN: Clone + Eq + hyperast::types::AAAA> NodeId for TIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA + std::hash::Hash> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
     type TyErazed = TType;
     fn unerase(ty: Self::TyErazed) -> Self::Ty {

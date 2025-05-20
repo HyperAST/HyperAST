@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 #[cfg(feature = "legion")]
@@ -46,9 +46,7 @@ mod legion_impls {
     }
 }
 
-pub trait TsEnabledTypeStore:
-    hyperast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
-{
+pub trait TsEnabledTypeStore: hyperast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS {
     fn resolve(t: Self::Ty) -> Type;
 }
 
@@ -59,10 +57,10 @@ impl Type {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + AAAA> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA + std::hash::Hash> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {

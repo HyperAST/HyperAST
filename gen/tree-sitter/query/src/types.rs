@@ -111,10 +111,10 @@ impl Type {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + AAAA> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA + std::hash::Hash> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
