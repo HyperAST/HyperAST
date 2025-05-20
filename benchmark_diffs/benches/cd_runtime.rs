@@ -1,4 +1,4 @@
-use common::{get_test_data, run_diff};
+use common::{get_test_data_small, run_diff};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
@@ -11,7 +11,7 @@ fn diff_benchmark(c: &mut Criterion) {
         .is_test(true)
         .init();
 
-    let test_inputs = get_test_data();
+    let test_inputs = get_test_data_small();
 
     let mut group = c.benchmark_group("change_distiller_comparison");
     group.sample_size(100);

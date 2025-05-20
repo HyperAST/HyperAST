@@ -36,8 +36,9 @@ pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
     black_box(diff_result);
 }
 
-// Define the test cases with their paths relative to root/../datasets/defects4j/<before|after>/
-const TEST_CASES: &[&str] = &[
+/// Define the test cases with their paths relative to root/../datasets/defects4j/<before|after>/
+/// ~100 loc
+const TEST_CASES_S: &[&str] = &[
     "Mockito/31/src_org_mockito_internal_stubbing_defaultanswers_ReturnsSmartNulls.java",
     "Mockito/32/src_org_mockito_internal_configuration_SpyAnnotationEngine.java",
     "Mockito/34/src_org_mockito_internal_invocation_InvocationMatcher.java",
@@ -85,7 +86,67 @@ const TEST_CASES: &[&str] = &[
     "JacksonDatabind/110/src_main_java_com_fasterxml_jackson_databind_deser_impl_JavaUtilCollectionsDeserializers.java",
 ];
 
-pub fn get_test_data() -> Vec<(String, String)> {
+const TEST_CASES_M: &[&str] = &[
+    "Math/55/src_main_java_org_apache_commons_math_geometry_Vector3D.java",
+    "Math/7/src_main_java_org_apache_commons_math3_ode_AbstractIntegrator.java",
+    "Math/75/src_main_java_org_apache_commons_math_stat_Frequency.java",
+    "Math/87/src_java_org_apache_commons_math_optimization_linear_SimplexTableau.java",
+    "Math/88/src_java_org_apache_commons_math_optimization_linear_SimplexTableau.java",
+    "Math/91/src_java_org_apache_commons_math_fraction_Fraction.java",
+    "Time/24/src_main_java_org_joda_time_format_DateTimeParserBucket.java",
+    "Chart/12/source_org_jfree_chart_plot_MultiplePiePlot.java",
+    "Chart/13/source_org_jfree_chart_block_BorderArrangement.java",
+    "Chart/25/source_org_jfree_chart_renderer_category_StatisticalBarRenderer.java",
+    "Chart/8/source_org_jfree_data_time_Week.java",
+    "Cli/30/src_main_java_org_apache_commons_cli_DefaultParser.java",
+    "Cli/37/src_main_java_org_apache_commons_cli_DefaultParser.java",
+    "Cli/38/src_main_java_org_apache_commons_cli_DefaultParser.java",
+    "Closure/106/src_com_google_javascript_rhino_JSDocInfoBuilder.java",
+    "Closure/108/src_com_google_javascript_jscomp_ScopedAliases.java",
+    "Closure/110/src_com_google_javascript_jscomp_ScopedAliases.java",
+    "Closure/67/src_com_google_javascript_jscomp_AnalyzePrototypeProperties.java",
+    "Closure/7/src_com_google_javascript_jscomp_type_ChainableReverseAbstractInterpreter.java",
+    "Closure/71/src_com_google_javascript_jscomp_CheckAccessControls.java",
+    "Closure/83/src_com_google_javascript_jscomp_CommandLineRunner.java",
+    "Codec/14/src_main_java_org_apache_commons_codec_language_bm_PhoneticEngine.java",
+    "Collections/27/src_main_java_org_apache_commons_collections4_map_MultiValueMap.java",
+    "Compress/13/src_main_java_org_apache_commons_compress_archivers_zip_ZipArchiveEntry.java",
+    "Compress/15/src_main_java_org_apache_commons_compress_archivers_zip_ZipArchiveEntry.java",
+    "Compress/17/src_main_java_org_apache_commons_compress_archivers_tar_TarUtils.java",
+    "Compress/35/src_main_java_org_apache_commons_compress_archivers_tar_TarUtils.java",
+    "Compress/45/src_main_java_org_apache_commons_compress_archivers_tar_TarUtils.java",
+    "Compress/46/src_main_java_org_apache_commons_compress_archivers_zip_X5455_ExtendedTimestamp.java",
+    "Csv/16/src_main_java_org_apache_commons_csv_CSVParser.java",
+    "Gson/14/gson_src_main_java_com_google_gson_internal_$Gson$Types.java",
+    "Gson/16/gson_src_main_java_com_google_gson_internal_$Gson$Types.java",
+    "Gson/18/gson_src_main_java_com_google_gson_internal_$Gson$Types.java",
+    "JacksonCore/1/src_main_java_com_fasterxml_jackson_core_util_TextBuffer.java",
+    "JacksonCore/4/src_main_java_com_fasterxml_jackson_core_util_TextBuffer.java",
+    "JacksonCore/8/src_main_java_com_fasterxml_jackson_core_util_TextBuffer.java",
+    "JacksonDatabind/1/src_main_java_com_fasterxml_jackson_databind_ser_BeanPropertyWriter.java",
+    "JacksonDatabind/103/src_main_java_com_fasterxml_jackson_databind_ser_DefaultSerializerProvider.java",
+    "JacksonDatabind/20/src_main_java_com_fasterxml_jackson_databind_node_ObjectNode.java",
+    "JacksonDatabind/65/src_main_java_com_fasterxml_jackson_databind_introspect_BasicBeanDescription.java",
+    "JacksonDatabind/87/src_main_java_com_fasterxml_jackson_databind_util_StdDateFormat.java",
+    "Jsoup/33/src_main_java_org_jsoup_parser_HtmlTreeBuilder.java",
+    "Jsoup/49/src_main_java_org_jsoup_nodes_Node.java",
+    "Jsoup/71/src_main_java_org_jsoup_select_Evaluator.java",
+    "JxPath/12/src_java_org_apache_commons_jxpath_ri_model_dom_DOMNodePointer.java",
+    "JxPath/5/src_java_org_apache_commons_jxpath_ri_model_NodePointer.java",
+    "Lang/44/src_java_org_apache_commons_lang_NumberUtils.java",
+    "Lang/63/src_java_org_apache_commons_lang_time_DurationFormatUtils.java",
+    "Math/1/src_main_java_org_apache_commons_math3_fraction_Fraction.java",
+];
+
+pub fn get_test_data_small() -> Vec<(String, String)> {
+    get_test_data(&TEST_CASES_S[0..14])
+}
+
+pub fn get_test_data_medium() -> Vec<(String, String)> {
+    get_test_data(&TEST_CASES_M[0..2])
+}
+
+fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -93,7 +154,7 @@ pub fn get_test_data() -> Vec<(String, String)> {
         .unwrap()
         .join("datasets/defects4j");
 
-    let test_inputs: Vec<_> = TEST_CASES
+    let test_inputs: Vec<_> = data
         .iter()
         .take(14)
         .map(|path_rel| {

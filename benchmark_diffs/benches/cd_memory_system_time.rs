@@ -1,10 +1,12 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use std::collections::HashMap;
 use tabled::settings::{Reverse, Rotate};
 use tabled::{
     Table, Tabled,
     settings::{Alignment, Modify, Padding, Style, object::Columns},
 };
+use hyperast_benchmark_diffs::stats_utils;
 
 fn main() {
     println!("Memory Benchmark using macOS time command");
@@ -16,12 +18,20 @@ fn main() {
         algorithm: String,
         #[tabled(rename = "Avg Peak Memory (MB)")]
         peak_avg: String,
+        #[tabled(rename = "Median Peak Memory (MB)")]
+        peak_median: String,
+        #[tabled(rename = "StdDev Peak Memory (MB)")]
+        peak_stddev: String,
         #[tabled(rename = "Min Peak Memory (MB)")]
         peak_min: String,
         #[tabled(rename = "Max Peak Memory (MB)")]
         peak_max: String,
         #[tabled(rename = "Avg Resident Memory (MB)")]
         resident_avg: String,
+        #[tabled(rename = "Median Resident Memory (MB)")]
+        resident_median: String,
+        #[tabled(rename = "StdDev Resident Memory (MB)")]
+        resident_stddev: String,
         #[tabled(rename = "Min Resident Memory (MB)")]
         resident_min: String,
         #[tabled(rename = "Max Resident Memory (MB)")]
@@ -38,7 +48,7 @@ fn main() {
     let algorithms = vec!["change_distiller", "change_distiller_lazy", "gumtree_lazy"];
 
     // Number of iterations for each algorithm
-    let iterations = 2;
+    let iterations = 5;
 
     println!("Running {} iterations for each algorithm\n", iterations);
 
@@ -82,15 +92,25 @@ fn main() {
             println!("    Duration: {:.2?}", duration);
         }
 
-        // Calculate statistics for peak memory
-        let avg_peak = calculate_average(&peak_memories);
-        let min_peak = *peak_memories.iter().min().unwrap_or(&0);
-        let max_peak = *peak_memories.iter().max().unwrap_or(&0);
+        // Convert to usize for stats_utils compatibility
+        let peak_memories_usize: Vec<usize> = peak_memories.iter().map(|&x| x as usize).collect();
+        let resident_memories_usize: Vec<usize> = resident_memories.iter().map(|&x| x as usize).collect();
 
-        // Calculate statistics for resident memory
-        let avg_resident = calculate_average(&resident_memories);
-        let min_resident = *resident_memories.iter().min().unwrap_or(&0);
-        let max_resident = *resident_memories.iter().max().unwrap_or(&0);
+        // Calculate comprehensive statistics for peak memory
+        let peak_stats = stats_utils::summarize_statistics(&peak_memories_usize);
+        let avg_peak = *peak_stats.get("mean").unwrap_or(&0.0) as u64;
+        let median_peak = *peak_stats.get("median").unwrap_or(&0.0) as u64;
+        let stddev_peak = *peak_stats.get("std_dev").unwrap_or(&0.0) as u64;
+        let min_peak = *peak_stats.get("min").unwrap_or(&0.0) as u64;
+        let max_peak = *peak_stats.get("max").unwrap_or(&0.0) as u64;
+
+        // Calculate comprehensive statistics for resident memory
+        let resident_stats = stats_utils::summarize_statistics(&resident_memories_usize);
+        let avg_resident = *resident_stats.get("mean").unwrap_or(&0.0) as u64;
+        let median_resident = *resident_stats.get("median").unwrap_or(&0.0) as u64;
+        let stddev_resident = *resident_stats.get("std_dev").unwrap_or(&0.0) as u64;
+        let min_resident = *resident_stats.get("min").unwrap_or(&0.0) as u64;
+        let max_resident = *resident_stats.get("max").unwrap_or(&0.0) as u64;
 
         // Calculate statistics for duration
         let avg_duration = calculate_average_duration(&durations);
@@ -105,27 +125,37 @@ fn main() {
             .cloned()
             .unwrap_or(Duration::from_secs(0));
 
-        // Store results
+        // Store results along with raw measurement data for later statistical comparison
         results.push((
             algorithm,
             avg_peak,
+            median_peak,
+            stddev_peak,
             min_peak,
             max_peak,
             avg_resident,
+            median_resident,
+            stddev_resident,
             min_resident,
             max_resident,
             avg_duration,
             min_duration,
             max_duration,
+            peak_memories_usize.clone(),   // Store raw measurements for later statistical comparison
+            resident_memories_usize.clone()
         ));
 
         // Create an algorithm summary table with tabled
         let summary_data = vec![BenchmarkResult {
             algorithm: algorithm.to_string(),
             peak_avg: format!("{:.2}", avg_peak as f64 / 1_048_576.0),
+            peak_median: format!("{:.2}", median_peak as f64 / 1_048_576.0),
+            peak_stddev: format!("{:.2}", stddev_peak as f64 / 1_048_576.0),
             peak_min: format!("{:.2}", min_peak as f64 / 1_048_576.0),
             peak_max: format!("{:.2}", max_peak as f64 / 1_048_576.0),
             resident_avg: format!("{:.2}", avg_resident as f64 / 1_048_576.0),
+            resident_median: format!("{:.2}", median_resident as f64 / 1_048_576.0),
+            resident_stddev: format!("{:.2}", stddev_resident as f64 / 1_048_576.0),
             resident_min: format!("{:.2}", min_resident as f64 / 1_048_576.0),
             resident_max: format!("{:.2}", max_resident as f64 / 1_048_576.0),
             duration_avg: format!("{:.2?}", avg_duration),
@@ -155,22 +185,31 @@ fn main() {
     for (
         name,
         avg_peak,
+        median_peak,
+        stddev_peak,
         min_peak,
         max_peak,
         avg_resident,
+        median_resident,
+        stddev_resident,
         min_resident,
         max_resident,
         avg_duration,
         min_duration,
         max_duration,
-    ) in &results
-    {
+        peak_memories_raw,
+        resident_memories_raw
+    ) in &results {
         table_data.push(BenchmarkResult {
             algorithm: name.to_string(),
             peak_avg: format!("{:.2}", *avg_peak as f64 / 1_048_576.0),
+            peak_median: format!("{:.2}", *median_peak as f64 / 1_048_576.0),
+            peak_stddev: format!("{:.2}", *stddev_peak as f64 / 1_048_576.0),
             peak_min: format!("{:.2}", *min_peak as f64 / 1_048_576.0),
             peak_max: format!("{:.2}", *max_peak as f64 / 1_048_576.0),
             resident_avg: format!("{:.2}", *avg_resident as f64 / 1_048_576.0),
+            resident_median: format!("{:.2}", *median_resident as f64 / 1_048_576.0),
+            resident_stddev: format!("{:.2}", *stddev_resident as f64 / 1_048_576.0),
             resident_min: format!("{:.2}", *min_resident as f64 / 1_048_576.0),
             resident_max: format!("{:.2}", *max_resident as f64 / 1_048_576.0),
             duration_avg: format!("{:.2?}", avg_duration),
@@ -188,6 +227,39 @@ fn main() {
         .with(Modify::new(Columns::new(2..)).with(Alignment::right()));
 
     println!("{}", table);
+
+    // Statistical comparison between algorithms using the already collected measurements
+    if results.len() > 1 {
+        println!("\n=== Statistical Comparison ===");
+
+        // Compare all algorithm pairs
+        let alpha = 0.05; // 5% significance level
+
+        for i in 0..results.len() {
+            for j in i+1..results.len() {
+                let (alg1_name, _, _, _, _, _, _, _, _, _, _, _, _, _, peak1, resident1) = &results[i];
+                let (alg2_name, _, _, _, _, _, _, _, _, _, _, _, _, _, peak2, resident2) = &results[j];
+
+                // Compare peak memory
+                let (p_value, significant, percent_diff) =
+                    stats_utils::compare_measurements(peak1, peak2, alpha);
+
+                println!("\n{} vs {} (Peak Memory):", alg1_name, alg2_name);
+                println!("  Difference: {:.2}%", percent_diff);
+                println!("  p-value: {:.4}", p_value);
+                println!("  Statistically significant: {}", if significant { "YES" } else { "NO" });
+
+                // Compare resident memory
+                let (p_value, significant, percent_diff) =
+                    stats_utils::compare_measurements(resident1, resident2, alpha);
+
+                println!("\n{} vs {} (Resident Memory):", alg1_name, alg2_name);
+                println!("  Difference: {:.2}%", percent_diff);
+                println!("  p-value: {:.4}", p_value);
+                println!("  Statistically significant: {}", if significant { "YES" } else { "NO" });
+            }
+        }
+    }
 }
 
 fn calculate_average(values: &[u64]) -> u64 {

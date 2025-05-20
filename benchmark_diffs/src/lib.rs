@@ -31,6 +31,17 @@ pub mod other_tools;
 pub mod postprocess;
 pub mod preprocess;
 
+// HyperAST Statistical Utilities
+//
+// This crate provides various statistical utilities for analyzing
+// and comparing performance metrics in the HyperAST project.
+
+/// Utilities for statistical analysis of benchmark results
+pub mod stats_utils;
+
+// Re-export all public items from stats_utils for convenience
+pub use stats_utils::*;
+
 use std::{env, fs, io, path, time};
 
 pub fn tempfile() -> io::Result<(path::PathBuf, fs::File)> {

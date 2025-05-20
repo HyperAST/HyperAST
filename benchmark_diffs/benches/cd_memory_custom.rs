@@ -1,10 +1,10 @@
-use common::get_test_data;
+use common::get_test_data_small;
 use std::time::Instant;
 
 // Import the memory tracker
 use hyperast_benchmark_diffs::memory_tracker::{
-    self, get_allocated, get_peak_allocated, reset_all, reset_peak, get_allocation_count,
-    mark, get_peak_net_allocated, get_allocations_since_mark
+    self, get_allocated, get_allocation_count, get_allocations_since_mark, get_peak_allocated,
+    get_peak_net_allocated, mark, reset_all, reset_peak,
 };
 
 // Use our custom memory tracker as the global allocator
@@ -19,7 +19,7 @@ fn measure_memory_usage(
     warmup_iterations: usize,
 ) -> (usize, usize, usize, usize) {
     // (peak_net, peak_absolute, average_net, allocation_count)
-    let test_inputs = get_test_data();
+    let test_inputs = get_test_data_small();
 
     // Perform warmup iterations to stabilize JIT and memory usage
     println!("Warming up for {} iterations...", warmup_iterations);
@@ -39,7 +39,7 @@ fn measure_memory_usage(
         // Reset memory tracking before each iteration
         reset_all();
         reset_peak();
-        
+
         // Mark this point to measure changes from here
         mark();
 
@@ -82,7 +82,12 @@ fn measure_memory_usage(
         0
     };
 
-    (peak_net_memory, peak_absolute_memory, average_net_memory, average_allocation_count)
+    (
+        peak_net_memory,
+        peak_absolute_memory,
+        average_net_memory,
+        average_allocation_count,
+    )
 }
 
 /// This function runs the benchmark and prints its stats and returns detailed memory usage metrics
@@ -114,11 +119,14 @@ fn run_benchmark<'a>(
         average_net,
         average_net as f64 / 1_024.0
     );
-    println!(
-        "Average Allocation Count: {} operations",
-        allocation_count
-    );
-    (title, peak_net, peak_absolute, average_net, allocation_count)
+    println!("Average Allocation Count: {} operations", allocation_count);
+    (
+        title,
+        peak_net,
+        peak_absolute,
+        average_net,
+        allocation_count,
+    )
 }
 
 fn main() {
@@ -131,8 +139,7 @@ fn main() {
 
     println!(
         "\n=== Memory Allocation Benchmark (Custom Tracker): Running {} iterations per algorithm (with {} warmup iterations) ===\n",
-        iterations
-, warmup_iterations
+        iterations, warmup_iterations
     );
 
     // Reset memory tracking at the start
@@ -162,12 +169,16 @@ fn main() {
 
     // Print comparison with aligned columns
     println!("\n=== Memory Allocation Comparison ===");
-    println!("+-----------------------+-----------------+-----------------+-----------------+-------------------+");
+    println!(
+        "+-----------------------+-----------------+-----------------+-----------------+-------------------+"
+    );
     println!(
         "| {:21} | {:15} | {:15} | {:15} | {:17} |",
         "Algorithm", "Peak Net", "Peak Absolute", "Avg Net", "Avg Allocations"
     );
-    println!("+-----------------------+-----------------+-----------------+-----------------+-------------------+");
+    println!(
+        "+-----------------------+-----------------+-----------------+-----------------+-------------------+"
+    );
 
     for (name, peak_net, peak_abs, avg_net, alloc_count) in results {
         println!(
@@ -179,5 +190,7 @@ fn main() {
             alloc_count
         );
     }
-    println!("+-----------------------+-----------------+-----------------+-----------------+-------------------+");
+    println!(
+        "+-----------------------+-----------------+-----------------+-----------------+-------------------+"
+    );
 }

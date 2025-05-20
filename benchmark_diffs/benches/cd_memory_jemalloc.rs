@@ -1,4 +1,4 @@
-use common::get_test_data;
+use common::get_test_data_small;
 use std::time::Instant;
 
 use jemalloc_ctl::{epoch, stats};
@@ -17,7 +17,7 @@ fn measure_memory_usage(
     warmup_iterations: usize,
 ) -> (usize, usize) {
     // (peak, average)
-    let test_inputs = get_test_data();
+    let test_inputs = get_test_data_small();
 
     // Perform warmup iterations to stabilize JIT and memory usage
     println!("Warming up for {} iterations...", warmup_iterations);

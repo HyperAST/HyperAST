@@ -1,4 +1,4 @@
-use common::get_test_data;
+use common::{get_test_data_medium, get_test_data_small};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
@@ -21,7 +21,7 @@ fn main() {
 }
 
 fn run_algorithm(algorithm: &str) {
-    let test_inputs = get_test_data();
+    let test_inputs = get_test_data_medium();
 
     // Run the algorithm once for each test case
     for (buggy, fixed) in &test_inputs {
