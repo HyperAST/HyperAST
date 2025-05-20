@@ -3,21 +3,20 @@ use crate::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice,
         PostOrder, PostOrderIterable,
     },
-    matchers::{mapping_store::MonoMappingStore, similarity_metrics},
+    matchers::{Mapper, Mapping, mapping_store::MonoMappingStore, similarity_metrics},
 };
 use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, WithHashs};
 use std::fmt::Debug;
 
-const MAX_LEAVES: usize = 4;
-const SIM_THRESHOLD_LARGE_TREES: f64 = 0.6;
-const SIM_THRESHOLD_SMALL_TREES: f64 = 0.4;
+use super::BottomUpMatcherConfig;
 
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
+    pub config: BottomUpMatcherConfig,
 }
 
 impl<
@@ -46,27 +45,26 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn match_it(
-        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
-    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+    pub fn with_config(
+        mapping: Mapper<HAST, Dsrc, Ddst, M>,
+        config: BottomUpMatcherConfig,
+    ) -> Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             stores: mapping.hyperast,
+            mappings: mapping.mapping.mappings,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
-            mappings: mapping.mapping.mappings,
+            config,
         };
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
-        Self::execute(&mut matcher);
-        crate::matchers::Mapper {
-            hyperast: mapping.hyperast,
-            mapping: crate::matchers::Mapping {
-                src_arena: matcher.src_arena,
-                dst_arena: matcher.dst_arena,
-                mappings: matcher.mappings,
-            },
-        }
+        matcher.execute();
+        matcher.into()
+    }
+
+    pub fn match_it(mapping: Mapper<HAST, Dsrc, Ddst, M>) -> Mapper<HAST, Dsrc, Ddst, M> {
+        Self::with_config(mapping, BottomUpMatcherConfig::default())
     }
 
     pub fn execute(&mut self) {
@@ -86,9 +84,10 @@ where
                         &self.mappings,
                     );
 
-                    if (number_of_leaves > MAX_LEAVES && similarity >= SIM_THRESHOLD_LARGE_TREES)
-                        || (number_of_leaves <= MAX_LEAVES
-                            && similarity >= SIM_THRESHOLD_SMALL_TREES)
+                    if (number_of_leaves > self.config.max_leaves
+                        && similarity >= self.config.sim_threshold_large_trees)
+                        || (number_of_leaves <= self.config.max_leaves
+                            && similarity >= self.config.sim_threshold_small_trees)
                     {
                         self.mappings.link(src_tree, dst_tree);
                         break;
@@ -121,6 +120,21 @@ where
         let dst_type = self.stores.resolve_type(&original_dst);
 
         src_type == dst_type
+    }
+}
+
+impl<HAST: HyperAST + Copy, Dsrc, Ddst, M: MonoMappingStore> Into<Mapper<HAST, Dsrc, Ddst, M>>
+    for BottomUpMatcher<Dsrc, Ddst, HAST, M>
+{
+    fn into(self) -> Mapper<HAST, Dsrc, Ddst, M> {
+        Mapper {
+            hyperast: self.stores,
+            mapping: Mapping {
+                src_arena: self.src_arena,
+                dst_arena: self.dst_arena,
+                mappings: self.mappings,
+            },
+        }
     }
 }
 

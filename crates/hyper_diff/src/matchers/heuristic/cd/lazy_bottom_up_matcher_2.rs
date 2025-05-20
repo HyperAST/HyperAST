@@ -11,15 +11,14 @@ use hyperast::types::{HyperAST, NodeId, WithHashs};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-const MAX_LEAVES: usize = 4;
-const SIM_THRESHOLD_LARGE_TREES: f64 = 0.6;
-const SIM_THRESHOLD_SMALL_TREES: f64 = 0.4;
+use super::BottomUpMatcherConfig;
 
 pub struct LazyBottomUpMatcher<Dsrc, Ddst, HAST, M: MonoMappingStore> {
     pub hyperast: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
+    pub config: BottomUpMatcherConfig,
 }
 
 impl<
@@ -51,18 +50,26 @@ where
         + ShallowDecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
         + LazyDecompressedTreeStore<HAST, M::Dst>,
 {
-    pub fn match_it(mapping: Mapper<HAST, Dsrc, Ddst, M>) -> Mapper<HAST, Dsrc, Ddst, M> {
+    pub fn with_config(
+        mapping: Mapper<HAST, Dsrc, Ddst, M>,
+        config: BottomUpMatcherConfig,
+    ) -> Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             hyperast: mapping.hyperast,
             mappings: mapping.mapping.mappings,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
+            config,
         };
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
         matcher.execute();
         matcher.into()
+    }
+
+    pub fn match_it(mapping: Mapper<HAST, Dsrc, Ddst, M>) -> Mapper<HAST, Dsrc, Ddst, M> {
+        Self::with_config(mapping, BottomUpMatcherConfig::default())
     }
 
     fn execute(&mut self) {
@@ -133,10 +140,10 @@ where
                     }
 
                     let number_of_leaves = *leaf_counts.get(src.shallow()).unwrap_or(&0);
-                    let threshold = if number_of_leaves > MAX_LEAVES {
-                        SIM_THRESHOLD_LARGE_TREES
+                    let threshold = if number_of_leaves > self.config.max_leaves {
+                        self.config.sim_threshold_large_trees
                     } else {
-                        SIM_THRESHOLD_SMALL_TREES
+                        self.config.sim_threshold_small_trees
                     };
 
                     for dst in dst_nodes {

@@ -3,6 +3,7 @@ use super::{DiffResult, PreparedMappingDurations};
 use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 use crate::matchers::heuristic::cd::lazy_bottom_up_matcher_2::LazyBottomUpMatcher;
 use crate::matchers::heuristic::cd::lazy_leaves_matcher_2::LazyLeavesMatcher;
+use crate::matchers::heuristic::cd::{BottomUpMatcherConfig, LeavesMatcherConfig};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
@@ -22,6 +23,33 @@ pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
+) -> DiffResult<
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
+    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
+    PreparedMappingDurations<2>,
+>
+where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
+    HAST::Idx: hyperast::PrimInt,
+    HAST::Label: Debug + Copy + Eq,
+    for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
+{
+    diff_with_config(
+        hyperast,
+        src,
+        dst,
+        BottomUpMatcherConfig::default(),
+        LeavesMatcherConfig::default(),
+    )
+}
+
+pub fn diff_with_config<HAST: HyperAST + Copy>(
+    hyperast: HAST,
+    src: &HAST::IdN,
+    dst: &HAST::IdN,
+    bottom_up_config: BottomUpMatcherConfig,
+    leaves_config: LeavesMatcherConfig,
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
@@ -54,7 +82,7 @@ where
     log::debug!("Subtree prepare time: {}", subtree_prepare_t);
     log::debug!("Starting LazyLeavesMatcher");
     let now = Instant::now();
-    let mapper = LazyLeavesMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = LazyLeavesMatcher::<_, _, _, _>::with_config(mapper, leaves_config);
     let leaves_matcher_t = now.elapsed().as_secs_f64();
     let leaves_mappings_s = mapper.mappings().len();
     log::debug!(
@@ -64,7 +92,7 @@ where
     );
     log::debug!("Starting LazyBottomUpMatcher");
     let now = Instant::now();
-    let mapper = LazyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = LazyBottomUpMatcher::<_, _, _, _>::with_config(mapper, bottom_up_config);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
     log::debug!(

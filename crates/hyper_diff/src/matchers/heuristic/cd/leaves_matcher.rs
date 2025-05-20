@@ -13,6 +13,8 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use str_distance::DistanceMetric;
 
+use super::LeavesMatcherConfig;
+
 struct MappingWithSimilarity<M: MonoMappingStore> {
     src: M::Src,
     dst: M::Dst,
@@ -24,7 +26,7 @@ pub struct LeavesMatcher<Dsrc, Ddst, HAST, M> {
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
-    pub label_sim_threshold: f64,
+    pub config: LeavesMatcherConfig,
 }
 
 impl<
@@ -53,20 +55,23 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn match_it(
+    pub fn with_config(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        config: LeavesMatcherConfig,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             stores: mapping.hyperast,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
             mappings: mapping.mapping.mappings,
-            label_sim_threshold: 0.5, // Default threshold
+            config,
         };
+        // Rest of the code remains the same
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
         matcher.execute();
+        // Return the mapper
         crate::matchers::Mapper {
             hyperast: mapping.hyperast,
             mapping: crate::matchers::Mapping {
@@ -75,6 +80,12 @@ where
                 mappings: matcher.mappings,
             },
         }
+    }
+
+    pub fn match_it(
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+        Self::with_config(mapping, LeavesMatcherConfig::default())
     }
 
     fn execute(&mut self) {
@@ -96,7 +107,7 @@ where
             for &dst_leaf in &dst_leaves {
                 if self.is_mapping_allowed(&src_leaf, &dst_leaf) {
                     let sim = self.compute_label_similarity(&src_leaf, &dst_leaf);
-                    if sim > self.label_sim_threshold {
+                    if sim > self.config.label_sim_threshold {
                         leaves_mappings.push(MappingWithSimilarity {
                             src: src_leaf,
                             dst: dst_leaf,
