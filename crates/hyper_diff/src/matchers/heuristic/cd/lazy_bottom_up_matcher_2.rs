@@ -70,11 +70,8 @@ where
         let mut src_nodes_by_type: HashMap<_, Vec<_>> = HashMap::new();
         let mut dst_nodes_by_type: HashMap<_, Vec<_>> = HashMap::new();
 
-        // Cache leaf counts for source nodes
-        let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
-
         // Pre-compute all leaf counts in a single traversal
-        let mut node_to_leaf_count: HashMap<M::Src, usize> = HashMap::new();
+        let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
         // Process nodes in post-order so children are processed before parents
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
@@ -89,25 +86,18 @@ where
                     .iter()
                     .map(|child| {
                         let child = self.src_arena.decompress_to(child);
-                        node_to_leaf_count
-                            .get(child.shallow())
-                            .copied()
-                            .unwrap_or(0)
+                        leaf_counts.get(child.shallow()).copied().unwrap_or(0)
                     })
                     .sum()
             };
 
-            node_to_leaf_count.insert(*src.shallow(), leaf_count);
+            leaf_counts.insert(*src.shallow(), leaf_count);
         }
 
         // Index source nodes by their type
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
             let src_type = self.hyperast.resolve_type(&self.src_arena.original(&src));
-
-            // Get pre-computed leaf count
-            let number_of_leaves = *node_to_leaf_count.get(src.shallow()).unwrap_or(&0);
-            leaf_counts.insert(*src.shallow(), number_of_leaves);
 
             // Only add unmapped nodes to the index
             if !self.mappings.is_src(src.shallow()) {
