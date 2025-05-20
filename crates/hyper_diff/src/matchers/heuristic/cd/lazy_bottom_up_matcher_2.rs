@@ -99,8 +99,11 @@ where
             let src = self.src_arena.decompress_to(&s);
             let src_type = self.hyperast.resolve_type(&self.src_arena.original(&src));
 
-            // Only add unmapped nodes to the index
-            if !self.mappings.is_src(src.shallow()) {
+            let is_leaf = self.src_arena.children(&src).is_empty();
+            let is_mapped = self.mappings.is_src(src.shallow());
+
+            // Only add unmapped non-leaf nodes to the index
+            if !is_mapped && !is_leaf {
                 src_nodes_by_type.entry(src_type).or_default().push(src);
             }
         }
@@ -110,36 +113,44 @@ where
             let dst = self.dst_arena.decompress_to(&d);
             let dst_type = self.hyperast.resolve_type(&self.dst_arena.original(&dst));
 
-            // Only add unmapped nodes to the index
-            if !self.mappings.is_dst(dst.shallow()) {
+            let is_leaf = self.dst_arena.children(&dst).is_empty();
+            let is_mapped = self.mappings.is_dst(dst.shallow());
+
+            // Only add unmapped non-leaf nodes to the index
+            if !is_mapped && !is_leaf {
                 dst_nodes_by_type.entry(dst_type).or_default().push(dst);
             }
         }
 
-        // Process nodes by type, comparing only nodes with matching types
+        // Process nodes by type, comparing only nodes with matching types. Leaf nodes are not considered.
         for (node_type, src_nodes) in src_nodes_by_type.iter() {
             // Skip if there are no destination nodes of this type
             if let Some(dst_nodes) = dst_nodes_by_type.get(node_type) {
                 for src in src_nodes {
+                    // Skip if the source node is already mapped. This is required since the inner loop will add the mappings and we need to skip it here after it being mapped.
+                    if self.mappings.is_src(src.shallow()) {
+                        continue;
+                    }
+
                     let number_of_leaves = *leaf_counts.get(src.shallow()).unwrap_or(&0);
-                    let src_is_leaf = self.src_arena.children(src).is_empty();
+                    let threshold = if number_of_leaves > MAX_LEAVES {
+                        SIM_THRESHOLD_LARGE_TREES
+                    } else {
+                        SIM_THRESHOLD_SMALL_TREES
+                    };
 
                     for dst in dst_nodes {
-                        let dst_is_leaf = self.dst_arena.children(dst).is_empty();
+                        // Skip if the destination node is already mapped
+                        if self.mappings.is_dst(dst.shallow()) {
+                            continue;
+                        }
 
                         // Skip leaf-to-leaf comparisons
-                        if !(src_is_leaf || dst_is_leaf) && !self.mappings.is_dst(dst.shallow()) {
-                            let similarity = self.compute_similarity(src, dst);
-                            let threshold = if number_of_leaves > MAX_LEAVES {
-                                SIM_THRESHOLD_LARGE_TREES
-                            } else {
-                                SIM_THRESHOLD_SMALL_TREES
-                            };
+                        let similarity = self.compute_similarity(src, dst);
 
-                            if similarity >= threshold {
-                                self.mappings.link(*src.shallow(), *dst.shallow());
-                                break;
-                            }
+                        if similarity >= threshold {
+                            self.mappings.link(*src.shallow(), *dst.shallow());
+                            break;
                         }
                     }
                 }
