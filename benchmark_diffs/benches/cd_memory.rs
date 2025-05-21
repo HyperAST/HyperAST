@@ -1,10 +1,8 @@
 use common::get_test_data_small;
-use hyperast_benchmark_diffs::stats_utils;
+use hyperast_benchmark_diffs::{common, stats_utils};
 use memory_stats::memory_stats;
 use std::collections::HashMap;
 use std::time::Instant;
-
-mod common;
 
 fn measure_memory_usage(
     algorithm: &str,

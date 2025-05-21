@@ -1,17 +1,15 @@
-use common::get_test_data_small;
+use hyperast_benchmark_diffs::common::{self, get_test_data_small};
 use std::time::Instant;
 
 // Import the memory tracker
 use hyperast_benchmark_diffs::memory_tracker::{
-    self, get_allocated, get_allocation_count, get_allocations_since_mark, get_peak_allocated,
-    get_peak_net_allocated, mark, reset_all, reset_peak,
+    self, get_allocations_since_mark, get_peak_allocated, get_peak_net_allocated, mark, reset_all,
+    reset_peak,
 };
 
 // Use our custom memory tracker as the global allocator
 #[global_allocator]
 static GLOBAL: memory_tracker::MemoryTracker = memory_tracker::MemoryTracker;
-
-mod common;
 
 fn measure_memory_usage(
     algorithm: &str,
@@ -25,7 +23,7 @@ fn measure_memory_usage(
     println!("Warming up for {} iterations...", warmup_iterations);
     for _ in 0..warmup_iterations {
         for (buggy, fixed) in &test_inputs {
-            common::run_diff(buggy, fixed, algorithm);
+            hyperast_benchmark_diffs::common::run_diff(buggy, fixed, algorithm);
         }
     }
 

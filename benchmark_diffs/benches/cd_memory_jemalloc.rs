@@ -1,4 +1,4 @@
-use common::get_test_data_small;
+use hyperast_benchmark_diffs::common::get_test_data_small;
 use std::time::Instant;
 
 use jemalloc_ctl::{epoch, stats};
@@ -8,8 +8,6 @@ use jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
-
-mod common;
 
 fn measure_memory_usage(
     algorithm: &str,
@@ -23,7 +21,7 @@ fn measure_memory_usage(
     println!("Warming up for {} iterations...", warmup_iterations);
     for _ in 0..warmup_iterations {
         for (buggy, fixed) in &test_inputs {
-            common::run_diff(buggy, fixed, algorithm);
+            hyperast_benchmark_diffs::common::run_diff(buggy, fixed, algorithm);
         }
     }
 
@@ -47,7 +45,7 @@ fn measure_memory_usage(
 
         // Run the algorithm
         for (buggy, fixed) in &test_inputs {
-            common::run_diff(buggy, fixed, algorithm);
+            hyperast_benchmark_diffs::common::run_diff(buggy, fixed, algorithm);
         }
 
         // Get memory after algorithm

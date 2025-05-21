@@ -1,8 +1,9 @@
 use criterion::black_box;
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
+
+use crate::preprocess::parse_string_pair;
 
 pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
     // Initialize stores for each iteration

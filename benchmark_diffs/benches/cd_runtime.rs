@@ -1,14 +1,12 @@
-use common::run_diff;
 use criterion::{Criterion, criterion_group, criterion_main};
-
-mod common;
+use hyperast_benchmark_diffs::common::run_diff;
 
 fn diff_benchmark(c: &mut Criterion) {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .is_test(true)
         .init();
 
-    let test_inputs = common::get_test_data_small();
+    let test_inputs = hyperast_benchmark_diffs::common::get_test_data_small();
 
     println!(
         "Running benchmarks with {} test cases...",
@@ -18,12 +16,12 @@ fn diff_benchmark(c: &mut Criterion) {
         "Total lines of code in src: {}",
         test_inputs
             .iter()
-            .map(|(buggy, fixed)| buggy.lines().count())
+            .map(|(buggy, _)| buggy.lines().count())
             .sum::<usize>()
     );
 
     let mut group = c.benchmark_group("change_distiller_comparison");
-    group.sample_size(10);
+    group.sample_size(30);
 
     // group.bench_function("HyperDiff Lazy", |b| {
     //     b.iter(|| {

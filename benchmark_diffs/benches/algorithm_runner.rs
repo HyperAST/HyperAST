@@ -1,10 +1,5 @@
-use common::{get_test_data_medium, get_test_data_mixed, get_test_data_small, run_diff};
-use hyper_diff::algorithms;
-use hyperast::store::SimpleStores;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
+use hyperast_benchmark_diffs::common::{get_test_data_mixed, run_diff};
 use std::env;
-
-mod common;
 
 fn main() {
     // Get algorithm name from command line args

@@ -24,6 +24,7 @@ pub mod buggy_fixed;
 pub mod window_combination;
 // #[cfg(test)]
 // pub mod bin::window_combination;
+pub mod common;
 pub mod cross_repo;
 pub mod diff_output;
 pub mod memory_tracker;
