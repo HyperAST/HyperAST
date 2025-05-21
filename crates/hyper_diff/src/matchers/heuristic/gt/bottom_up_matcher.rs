@@ -108,21 +108,7 @@ where
     pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
-        if !src.is_zero() && !dst.is_zero() {
-            self.histogram_matching(src, dst);
-        } else if !(src.is_zero() || dst.is_zero()) {
-            if self.stores.resolve_type(
-                &self
-                    .src_arena
-                    .original(&self.src_arena.parent(src).unwrap()),
-            ) == self.stores.resolve_type(
-                &self
-                    .dst_arena
-                    .original(&self.dst_arena.parent(dst).unwrap()),
-            ) {
-                self.histogram_matching(src, dst)
-            }
-        }
+        self.histogram_matching(src, dst);
     }
 
     pub(super) fn are_srcs_unmapped(&self, src: &M::Src) -> bool {
@@ -193,6 +179,9 @@ where
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
         let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(src) {
+            if self.mappings.is_src(&c) {
+                continue;
+            }
             let t = &self.stores.resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
@@ -202,6 +191,9 @@ where
 
         let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(dst) {
+            if self.mappings.is_dst(&c) {
+                continue;
+            }
             let t = &self.stores.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);
@@ -215,12 +207,10 @@ where
             {
                 let t1 = src_histogram[t][0];
                 let t2 = dst_histogram[t][0];
-                if self.mappings.link_if_both_unmapped(t1, t2) {
-                    self.last_chance_match_histogram(&t1, &t2);
-                }
+                self.mappings.link(t1, t2);
+                self.last_chance_match_histogram(&t1, &t2);
             }
         }
-        todo!()
     }
 }
 
@@ -284,21 +274,7 @@ where
     pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
-        if !src.is_zero() && !dst.is_zero() {
-            self.histogram_matching(src, dst); //self.histogramMaking(src, dst),
-        } else if !(src.is_zero() || dst.is_zero()) {
-            if self.hyperast.resolve_type(
-                &self
-                    .src_arena
-                    .original(&self.src_arena.parent(src).unwrap()),
-            ) == self.hyperast.resolve_type(
-                &self
-                    .dst_arena
-                    .original(&self.dst_arena.parent(dst).unwrap()),
-            ) {
-                self.histogram_matching(src, dst) //self.histogramMaking(src, dst),
-            }
-        }
+        self.histogram_matching(src, dst);
     }
 
     pub(super) fn are_srcs_unmapped(&self, src: &M::Src) -> bool {
@@ -365,8 +341,10 @@ where
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
         let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
-        let children2: Vec<M::Src> = self.src_arena.children(src);
-        for c in children2 {
+        for c in self.src_arena.children(src) {
+            if self.mappings.is_src(&c) {
+                continue;
+            }
             let t = &self.hyperast.resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
@@ -376,6 +354,9 @@ where
 
         let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(dst) {
+            if self.mappings.is_dst(&c) {
+                continue;
+            }
             let t = &self.hyperast.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);
@@ -389,9 +370,8 @@ where
             {
                 let t1 = src_histogram[t][0];
                 let t2 = dst_histogram[t][0];
-                if self.mappings.link_if_both_unmapped(t1, t2) {
-                    self.last_chance_match_histogram(&t1, &t2);
-                }
+                self.mappings.link(t1, t2);
+                self.last_chance_match_histogram(&t1, &t2);
             }
         }
         todo!()

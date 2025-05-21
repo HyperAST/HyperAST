@@ -163,7 +163,8 @@ where
             } else if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
                 if let Some(best_dst) = self.best_dst_candidate(&a) {
                     if self.best_src_candidate(&best_dst) == Some(a) {
-                        self.last_chance_match_zs(a, best_dst);
+                        //println!("chosen link: {:?} -> {:?}", &a_orig, &best_dst_orig);
+                        self.internal.last_chance_match_histogram(&a, &best_dst);
                         self.internal.mappings.link(a, best_dst);
                     }
                 }
@@ -178,7 +179,7 @@ where
                 )
             {
                 if let Some(dst) = self.internal.mappings.get_dst(&a) {
-                    self.last_chance_match_zs(a, dst)
+                    self.internal.last_chance_match_histogram(&a, &dst);
                 }
             }
         }
@@ -187,9 +188,9 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-        self.last_chance_match_zs(
-            self.internal.src_arena.root(),
-            self.internal.dst_arena.root(),
+        self.internal.last_chance_match_histogram(
+            &self.internal.src_arena.root(),
+            &self.internal.dst_arena.root(),
         );
     }
 
@@ -265,89 +266,5 @@ where
             src.to_usize()
         );
         r
-    }
-
-    pub(crate) fn last_chance_match_zs(&mut self, src: M::Src, dst: M::Dst) {
-        // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
-        let src_s = self.internal.src_arena.descendants_count(&src);
-        let dst_s = self.internal.dst_arena.descendants_count(&dst);
-        if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
-            return;
-        }
-        let stores = self.internal.stores;
-        let src_offset;
-        use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
-        let mappings: M = if SLICE {
-            let src_arena = self.internal.src_arena.slice_po(&src);
-            src_offset = src - src_arena.root();
-            let dst_arena = self.internal.dst_arena.slice_po(&dst);
-            ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
-        } else {
-            let o_src = self.internal.src_arena.original(&src);
-            let o_dst = self.internal.dst_arena.original(&dst);
-            let src_arena = ZsTree::<HAST::IdN, M::Src>::decompress(stores, &o_src);
-            let src_arena = Decompressible {
-                hyperast: stores,
-                decomp: src_arena,
-            };
-            src_offset = src - src_arena.root();
-            if cfg!(debug_assertions) {
-                let src_arena_z = self.internal.src_arena.slice_po(&src);
-                for i in src_arena.iter_df_post::<true>() {
-                    assert_eq!(src_arena.tree(&i), src_arena_z.tree(&i));
-                    assert_eq!(src_arena.lld(&i), src_arena_z.lld(&i));
-                }
-                use num_traits::ToPrimitive;
-                let mut last = src_arena_z.root();
-                for k in src_arena_z.iter_kr() {
-                    assert!(src_arena.kr[k.to_usize().unwrap()]);
-                    last = k;
-                }
-                assert!(src_arena.kr[src_arena.kr.len() - 1]);
-                dbg!(last == src_arena_z.root());
-            }
-            let dst_arena = ZsTree::<HAST::IdN, M::Dst>::decompress(stores, &o_dst);
-            let dst_arena = Decompressible {
-                hyperast: stores,
-                decomp: dst_arena,
-            };
-            if cfg!(debug_assertions) {
-                let dst_arena_z = self.internal.dst_arena.slice_po(&dst);
-                for i in dst_arena.iter_df_post::<true>() {
-                    assert_eq!(dst_arena.tree(&i), dst_arena_z.tree(&i));
-                    assert_eq!(dst_arena.lld(&i), dst_arena_z.lld(&i));
-                }
-                use num_traits::ToPrimitive;
-                let mut last = dst_arena_z.root();
-                for k in dst_arena_z.iter_kr() {
-                    assert!(dst_arena.kr[k.to_usize().unwrap()]);
-                    last = k;
-                }
-                assert!(dst_arena.kr[dst_arena.kr.len() - 1]);
-                dbg!(last == dst_arena_z.root());
-            }
-            ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
-        };
-        let dst_offset = self.internal.dst_arena.first_descendant(&dst);
-        assert_eq!(self.internal.src_arena.first_descendant(&src), src_offset);
-        for (i, t) in mappings.iter() {
-            //remapping
-            let src: M::Src = src_offset + cast(i).unwrap();
-            let dst: M::Dst = dst_offset + cast(t).unwrap();
-            // use it
-            if !self.internal.mappings.is_src(&src) && !self.internal.mappings.is_dst(&dst) {
-                let tsrc = self
-                    .internal
-                    .stores
-                    .resolve_type(&self.internal.src_arena.original(&src));
-                let tdst = self
-                    .internal
-                    .stores
-                    .resolve_type(&self.internal.dst_arena.original(&dst));
-                if tsrc == tdst {
-                    self.internal.mappings.link(src, dst);
-                }
-            }
-        }
     }
 }
