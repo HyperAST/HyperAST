@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
@@ -41,7 +41,7 @@ fn diff_benchmark(c: &mut Criterion) {
             black_box(diff_result);
         })
     });
-    return;
+    //return;
     group.bench_function("hyperdiff_gumtree_bottom_up_A1_A2", |b| {
         // Setup (none)
         b.iter(|| {

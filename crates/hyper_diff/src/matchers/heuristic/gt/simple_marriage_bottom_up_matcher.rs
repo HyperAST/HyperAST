@@ -4,11 +4,11 @@ use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
     PostOrderIterable, PostOrderKeyRoots,
 };
-use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Decompressible;
-use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
+use crate::matchers::mapping_store::MonoMappingStore;
+use crate::matchers::similarity_metrics;
 use hyperast::PrimInt;
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
 use num_traits::{cast, one};
 use std::fmt::Debug;
 
@@ -32,14 +32,14 @@ pub struct SimpleMarriageBottomUpMatcher<
 const SLICE: bool = true;
 
 impl<
-        Dsrc,
-        Ddst,
-        HAST: HyperAST,
-        M: MonoMappingStore,
-        const SIZE_THRESHOLD: usize,  // = 1000,
-        const SIM_THRESHOLD_NUM: u64, // = 1,
-        const SIM_THRESHOLD_DEN: u64, // = 2,
-    > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
+    Dsrc,
+    Ddst,
+    HAST: HyperAST,
+    M: MonoMappingStore,
+    const SIZE_THRESHOLD: usize,  // = 1000,
+    const SIM_THRESHOLD_NUM: u64, // = 1,
+    const SIM_THRESHOLD_DEN: u64, // = 2,
+> Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
     for SimpleMarriageBottomUpMatcher<
         Dsrc,
         Ddst,
@@ -57,27 +57,27 @@ impl<
 
 /// TODO PostOrder might not be necessary
 impl<
-        'a,
-        Dsrc: DecompressedTreeStore<HAST, M::Src>
-            + DecompressedWithParent<HAST, M::Src>
-            + PostOrder<HAST, M::Src>
-            + PostOrderIterable<HAST, M::Src>
-            + DecompressedFrom<HAST, Out = Dsrc>
-            + ContiguousDescendants<HAST, M::Src>
-            + POBorrowSlice<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, M::Dst>
-            + DecompressedWithParent<HAST, M::Dst>
-            + PostOrder<HAST, M::Dst>
-            + PostOrderIterable<HAST, M::Dst>
-            + DecompressedFrom<HAST, Out = Ddst>
-            + ContiguousDescendants<HAST, M::Dst>
-            + POBorrowSlice<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore + Default,
-        const SIZE_THRESHOLD: usize,
-        const SIM_THRESHOLD_NUM: u64,
-        const SIM_THRESHOLD_DEN: u64,
-    >
+    'a,
+    Dsrc: DecompressedTreeStore<HAST, M::Src>
+        + DecompressedWithParent<HAST, M::Src>
+        + PostOrder<HAST, M::Src>
+        + PostOrderIterable<HAST, M::Src>
+        + DecompressedFrom<HAST, Out = Dsrc>
+        + ContiguousDescendants<HAST, M::Src>
+        + POBorrowSlice<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst>
+        + DecompressedWithParent<HAST, M::Dst>
+        + PostOrder<HAST, M::Dst>
+        + PostOrderIterable<HAST, M::Dst>
+        + DecompressedFrom<HAST, Out = Ddst>
+        + ContiguousDescendants<HAST, M::Dst>
+        + POBorrowSlice<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore + Default,
+    const SIZE_THRESHOLD: usize,
+    const SIM_THRESHOLD_NUM: u64,
+    const SIM_THRESHOLD_DEN: u64,
+>
     SimpleMarriageBottomUpMatcher<
         Dsrc,
         Ddst,
@@ -158,15 +158,29 @@ where
         // // -1 as root is handled after forloop
         for a in self.internal.src_arena.iter_df_post::<true>() {
             if self.internal.src_arena.parent(&a).is_none() {
+                //dbg!("is root");
                 // TODO remove and flip const param of iter_df_post
                 break;
             } else if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
+                let a_orig = self.internal.src_arena.original(&a);
+                //println!("a: {:?} ", &a_orig);
                 if let Some(best_dst) = self.best_dst_candidate(&a) {
+                    let best_dst_orig = self.internal.dst_arena.original(&best_dst);
+                    //println!("best dst: {:?} ", &best_dst_orig);
                     if self.best_src_candidate(&best_dst) == Some(a) {
                         //println!("chosen link: {:?} -> {:?}", &a_orig, &best_dst_orig);
                         self.internal.last_chance_match_histogram(&a, &best_dst);
                         self.internal.mappings.link(a, best_dst);
+                    } else {
+                        if let Some(best_src) = self.best_src_candidate(&best_dst) {
+                            let best_src_orig = self.internal.src_arena.original(&best_src);
+                            //println!("no link made, better src candidate: {:?}", &best_src_orig);
+                        } else {
+                            //println!("no link made, no src candidate found for bst dst");
+                        }
                     }
+                } else {
+                    //println!("no candidate found");
                 }
             } else if self.internal.mappings.is_src(&a)
                 && self.has_unmapped_src_children(&a)
@@ -213,7 +227,14 @@ where
     }
 
     fn best_dst_candidate(&self, src: &M::Src) -> Option<M::Dst> {
+        let src_orig = self.internal.src_arena.original(&src);
+        //println!("getting best dst candidate for {:?}", &src_orig);
         let candidates = self.internal.get_dst_candidates(src);
+        let candidates_orig: Vec<_> = candidates
+            .iter()
+            .map(|cand| self.internal.dst_arena.original(cand))
+            .collect();
+        //println!("candidates: {:?}", candidates_orig);
         let mut best = None;
         let mut max: f64 = -1.;
         for cand in candidates {
@@ -232,7 +253,14 @@ where
     }
 
     fn best_src_candidate(&self, dst: &M::Dst) -> Option<M::Src> {
+        let dst_orig = self.internal.dst_arena.original(&dst);
+        //println!("getting best src candidate for {:?}", &dst_orig);
         let candidates = self.internal.get_src_candidates(dst);
+        let candidates_orig: Vec<_> = candidates
+            .iter()
+            .map(|cand| self.internal.src_arena.original(cand))
+            .collect();
+        //println!("candidates: {:?}", candidates_orig);
         let mut best = None;
         let mut max: f64 = -1.;
         for cand in candidates {

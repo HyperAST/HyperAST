@@ -19,8 +19,6 @@ pub mod action_generator2_tests;
 pub mod action_generator_tests;
 #[cfg(test)]
 pub mod examples;
-#[cfg(test)]
-pub mod gumtree_stable;
 pub mod hungarian_tests;
 #[cfg(test)]
 pub mod lazy_decompression_tests;

@@ -1328,10 +1328,9 @@ where
     }
 }
 
-pub use crate::store::nodes::ErasedHolder;
 pub use crate::store::nodes::Compo;
 pub use crate::store::nodes::CompressedCompo;
-
+pub use crate::store::nodes::ErasedHolder;
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore {}
 

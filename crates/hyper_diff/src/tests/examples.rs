@@ -4,27 +4,27 @@ use crate::tests::tree;
 
 type ST<K> = SimpleTree<K>;
 
-pub(crate) fn example_unstable() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable_test1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
-                tree!(0, "x"),
-                tree!(0, "y"),
+                tree!(0, "1"),
+                tree!(0, "2"),
             ]),
             tree!(0, "b"; [
-                tree!(0, "z"),
-                tree!(0, "w"),
+                tree!(0, "3"),
+                tree!(0, "4"),
             ])
     ]);
     let dst = tree!(
         0, "t"; [
             tree!(0, "c"; [
-                tree!(0, "w"),
-                tree!(0, "x"),
+                tree!(0, "3"),
+                tree!(0, "2"),
             ]),
             tree!(0, "d"; [
-                tree!(0, "z"),
-                tree!(0, "y"),
+                tree!(0, "4"),
+                tree!(0, "1"),
             ])
     ]);
     let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
@@ -32,7 +32,65 @@ pub(crate) fn example_unstable() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>
     ((src, dst), map_src, map_dst)
 }
 
-pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+// This is a variation of the previous test: gumtree stable succeeds, but it doesn't map
+// anything because there is a cycle of 'best' mappings (but all have the same weight)
+pub(crate) fn example_stable_test2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let src = tree!(
+        0, "t"; [
+            tree!(0, "a"; [
+                tree!(0, "1"),
+                tree!(0, "2"),
+            ]),
+            tree!(0, "b"; [
+                tree!(0, "3"),
+                tree!(0, "4"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "t"; [
+            tree!(0, "c"; [
+                tree!(0, "2"),
+                tree!(0, "3"),
+            ]),
+            tree!(0, "d"; [
+                tree!(0, "4"),
+                tree!(0, "1"),
+            ])
+    ]);
+    let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+    let map_dst = vec![vec![1, 1], vec![0, 0], vec![0, 1], vec![1, 0]];
+    ((src, dst), map_src, map_dst)
+}
+
+pub(crate) fn example_stable1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let src = tree!(
+        0, "t"; [
+            tree!(0, "a"; [
+                tree!(0, "1"),
+                tree!(0, "2"),
+            ]),
+            tree!(0, "b"; [
+                tree!(0, "3"),
+                tree!(0, "4"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "t"; [
+            tree!(0, "c"; [
+                tree!(0, "4"),
+                tree!(0, "1"),
+            ]),
+            tree!(0, "d"; [
+                tree!(0, "3"),
+                tree!(0, "2"),
+            ])
+    ]);
+    let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+    let map_dst = vec![vec![0, 1], vec![1, 1], vec![1, 0], vec![0, 0]];
+    ((src, dst), map_src, map_dst)
+}
+
+pub(crate) fn example_stable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -94,7 +152,7 @@ pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8
     ((src, dst), map_src, map_dst)
 }
 
-pub(crate) fn example_unstable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -125,12 +183,14 @@ pub(crate) fn example_unstable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8
                 tree!(0, "6"),
                 tree!(0, "11"),
                 tree!(0, "12"),
+                tree!(0, "14")
             ]),
             tree!(0, "e"; [
                 tree!(0, "1"),
                 tree!(0, "2"),
                 tree!(0, "7"),
                 tree!(0, "8"),
+                tree!(0, "13")
             ]),
             tree!(0, "f"; [
                 tree!(0, "f2"; [
@@ -169,6 +229,57 @@ pub(crate) fn example_unstable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8
         vec![0, 2],
         vec![0, 3],
     ];
+    ((src, dst), map_src, map_dst)
+}
+
+pub(crate) fn example_unstable1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let src = tree!(
+        0, "t"; [
+            tree!(0, "a"; [
+                tree!(0, "1"),
+                tree!(0, "3"),
+            ]),
+            tree!(0, "b"; [
+                tree!(0, "2"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "t"; [
+            tree!(0, "c"; [
+                tree!(0, "1"),
+                tree!(0, "2"),
+            ])
+    ]);
+    let map_src = vec![vec![0, 0], vec![1, 0]];
+    let map_dst = vec![vec![0, 0], vec![0, 1]];
+    ((src, dst), map_src, map_dst)
+}
+
+pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    let src = tree!(
+        0, "r"; [
+            tree!(
+                0, "x"; [
+                    tree!(0, "a"),
+            ]),
+            tree!(
+                0, "y"; [
+                    tree!(0, "b"),
+                    tree!(0, "c"),
+            ]),
+    ]);
+    let dst = tree!(
+        0, "r"; [
+            tree!(0, "x"),
+            tree!(
+                0, "y"; [
+                    tree!(0, "a"),
+                    tree!(0, "b"),
+                    tree!(0, "c"),
+            ]),
+    ]);
+    let map_src = vec![vec![0, 0], vec![1, 0], vec![1, 1]];
+    let map_dst = vec![vec![1, 0], vec![1, 1], vec![1, 2]];
     ((src, dst), map_src, map_dst)
 }
 

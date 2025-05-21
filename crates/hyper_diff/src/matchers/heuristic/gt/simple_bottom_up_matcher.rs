@@ -7,7 +7,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyperast::types::{HyperAST, Tree, WithHashs};
+use hyperast::types::{HyperAST, HyperASTShared, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -23,20 +23,23 @@ where
 }
 
 impl<
-        'a,
-        Dsrc: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstContiguousSiblings<HAST, IdD>,
-        Ddst: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstContiguousSiblings<HAST, IdD>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
+    'a,
+    Dsrc: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstContiguousSiblings<HAST, IdD>,
+    Ddst: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstContiguousSiblings<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore<Src = IdD, Dst = IdD>,
+> SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
 {
-    pub fn execute(&mut self) {
+    pub fn execute(&mut self)
+    where
+        <HAST as HyperASTShared>::IdN: std::fmt::Debug,
+    {
         for i in (0..self.internal.src_arena.len()).rev() {
             let a: IdD = num_traits::cast(i).unwrap();
             if !(self.internal.mappings.is_src(&a) || !self.internal.src_arena.has_children(&a)) {

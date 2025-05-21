@@ -3,8 +3,8 @@ use crate::{
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyperast::PrimInt;
 use hyperast::types::{self, HashKind, HyperAST, NodeStore, TypeStore, WithHashs};
+use hyperast::{PrimInt, types::HyperASTShared};
 use num_traits::{ToPrimitive, Zero};
 use std::{collections::HashMap, hash::Hash};
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
@@ -24,7 +24,10 @@ where
     M::Src: PrimInt,
     M::Dst: PrimInt,
 {
-    pub(in crate::matchers) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
+    pub(in crate::matchers) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst>
+    where
+        <HAST as HyperASTShared>::IdN: std::fmt::Debug,
+    {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
         for c in self.src_arena.descendants(src) {
@@ -35,6 +38,12 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;self.dst_arena.len()];
+
+        let seeds_orig: Vec<_> = seeds
+            .iter()
+            .map(|seed| self.dst_arena.original(seed))
+            .collect();
+        //println!("seeds: {:?}", seeds_orig);
 
         let t = self.stores.resolve_type(s);
         for mut seed in seeds {
@@ -58,7 +67,10 @@ where
         candidates
     }
 
-    pub(super) fn get_src_candidates(&self, dst: &M::Dst) -> Vec<M::Src> {
+    pub(super) fn get_src_candidates(&self, dst: &M::Dst) -> Vec<M::Src>
+    where
+        <HAST as HyperASTShared>::IdN: std::fmt::Debug,
+    {
         let mut seeds = vec![];
         let s = &self.dst_arena.original(dst);
         for c in self.dst_arena.descendants(dst) {
@@ -69,6 +81,12 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;self.src_arena.len()];
+
+        let seeds_orig: Vec<_> = seeds
+            .iter()
+            .map(|seed| self.src_arena.original(seed))
+            .collect();
+        //println!("seeds: {:?}", seeds_orig);
 
         let t = self.stores.resolve_type(s);
         for mut seed in seeds {

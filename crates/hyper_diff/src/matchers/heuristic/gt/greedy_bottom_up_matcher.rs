@@ -150,30 +150,28 @@ where
         // // -1 as root is handled after forloop
         for a in self.internal.src_arena.iter_df_post::<true>() {
             if self.internal.src_arena.parent(&a).is_none() {
-                dbg!("is root");
+                //dbg!("is root");
                 // TODO remove and flip const param of iter_df_post
                 break;
             }
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
-                let mut candidates = self.internal.get_dst_candidates(&a);
-                //let mut rng = rand::rng();
-                //candidates.shuffle(&mut rng);
+                let candidates = self.internal.get_dst_candidates(&a);
                 let candidates_orig: Vec<_> = candidates
                     .iter()
                     .map(|cand| self.internal.dst_arena.original(cand))
                     .collect();
                 let a_orig = self.internal.src_arena.original(&a);
-                println!("a: {:?} ", &a_orig);
+                //println!("a: {:?} ", &a_orig);
                 // println!(
                 // "{}",
                 // hyperast::nodes::TextSerializer::new(&self.internal.stores, b)
                 // );
-                println!("candidates: {:?}", candidates_orig);
+                //println!("candidates: {:?}", candidates_orig);
                 let mut best = None;
                 let mut max: f64 = -1.;
                 for cand in candidates {
                     let cand_orig = self.internal.dst_arena.original(&cand);
-                    println!("cand: {:?} ", &cand_orig);
+                    //println!("cand: {:?} ", &cand_orig);
                     // println!(
                     // "{}",
                     // hyperast::nodes::TextSerializer::new(&self.internal.stores, s)
@@ -193,7 +191,7 @@ where
                 if let Some(best) = best {
                     self.last_chance_match_zs(a, best);
                     let best_orig = self.internal.dst_arena.original(&best);
-                    println!("chosen link: {:?} -> {:?}", &a_orig, &best_orig);
+                    //println!("chosen link: {:?} -> {:?}", &a_orig, &best_orig);
                     self.internal.mappings.link(a, best);
                 }
             }
