@@ -39,6 +39,7 @@ where
         hyperast,
         src,
         dst,
+        false,
         BottomUpMatcherConfig::default(),
         LeavesMatcherConfig::default(),
     )
@@ -48,6 +49,7 @@ pub fn diff_with_config<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
+    calculate_script: bool,
     bottom_up_config: BottomUpMatcherConfig,
     leaves_config: LeavesMatcherConfig,
 ) -> DiffResult<
@@ -100,45 +102,75 @@ where
         bottomup_matcher_t,
         bottomup_mappings_s
     );
-    log::debug!("Starting script generation");
 
-    let now = Instant::now();
+    let (actions, prepare_gen_t, gen_t, mapper) = if calculate_script {
+        log::debug!("Starting script generation");
+        let now = Instant::now();
 
-    let mapper = mapper.map(
-        |x| x,
-        |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
-    );
-    let prepare_gen_t = now.elapsed().as_secs_f64();
-    let now = Instant::now();
-    let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
-    let gen_t = now.elapsed().as_secs_f64();
-    log::debug!("Script generator time: {}", gen_t);
-    log::debug!("Prepare generator time: {}", prepare_gen_t);
+        let mapper = mapper.map(
+            |x| x,
+            |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
+        );
+        let prepare_gen_t = now.elapsed().as_secs_f64();
+        let now = Instant::now();
+        let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
+        let gen_t = now.elapsed().as_secs_f64();
+        log::debug!("Script generator time: {}", gen_t);
+        log::debug!("Prepare generator time: {}", prepare_gen_t);
 
-    // TODO find better way, at least make a shorthand
-    let mapper = Mapper {
-        hyperast,
-        mapping: crate::matchers::Mapping {
-            mappings: mapper.mapping.mappings,
-            src_arena: mapper_owned.mapping.src_arena,
-            dst_arena: mapper_owned.mapping.dst_arena,
-        },
+        // TODO find better way, at least make a shorthand
+        let mapper = Mapper {
+            hyperast,
+            mapping: crate::matchers::Mapping {
+                mappings: mapper.mapping.mappings,
+                src_arena: mapper_owned.mapping.src_arena,
+                dst_arena: mapper_owned.mapping.dst_arena,
+            },
+        };
+        let mapper = mapper.map(
+            |src_arena| {
+                Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
+                    src_arena.map(|x| x.complete(hyperast)),
+                )
+            },
+            |dst_arena| {
+                let complete = Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
+                    dst_arena.map(|x| x.complete(hyperast)),
+                );
+                SimpleBfsMapper::with_store(hyperast, complete)
+            },
+        );
+
+        let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
+        (actions, prepare_gen_t, gen_t, mapper)
+    } else {
+        // Skip script generation if not requested
+        let mapper = Mapper {
+            hyperast,
+            mapping: crate::matchers::Mapping {
+                mappings: mapper.mapping.mappings,
+                src_arena: mapper_owned.mapping.src_arena,
+                dst_arena: mapper_owned.mapping.dst_arena,
+            },
+        };
+        let mapper = mapper.map(
+            |src_arena| {
+                Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
+                    src_arena.map(|x| x.complete(hyperast)),
+                )
+            },
+            |dst_arena| {
+                let complete = Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
+                    dst_arena.map(|x| x.complete(hyperast)),
+                );
+                SimpleBfsMapper::with_store(hyperast, complete)
+            },
+        );
+
+        let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
+        (None, 0.0, 0.0, mapper)
     };
-    let mapper = mapper.map(
-        |src_arena| {
-            Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
-                src_arena.map(|x| x.complete(hyperast)),
-            )
-        },
-        |dst_arena| {
-            let complete = Decompressible::<HAST, CompletePostOrder<HAST::IdN, _>>::from(
-                dst_arena.map(|x| x.complete(hyperast)),
-            );
-            SimpleBfsMapper::with_store(hyperast, complete)
-        },
-    );
 
-    let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
         mapping_durations: PreparedMappingDurations {
             mappings: MappingDurations([leaves_matcher_t, bottomup_matcher_t]),
