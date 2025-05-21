@@ -90,5 +90,9 @@ path = "benches/cd_memory_custom.rs"
 name = "algorithm_runner"
 path = "benches/algorithm_runner.rs"
 
+[[bin]]
+name = "cd_hyperparameter_tuner"
+path = "src/bin/cd_hyperparameter_tuner.rs"
+
 [profile.release]
 debug = true
