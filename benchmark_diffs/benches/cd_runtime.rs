@@ -1,10 +1,14 @@
-use criterion::{Criterion, SamplingMode, black_box, criterion_group, criterion_main};
+use std::cmp::max;
+
+use criterion::{BenchmarkId, Criterion, SamplingMode, black_box, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyper_diff::matchers::heuristic::cd::{BottomUpMatcherConfig, LeavesMatcherConfig};
 use hyper_diff::{
     OptimizedBottomUpMatcherConfig, OptimizedDiffConfig, OptimizedLeavesMatcherConfig,
 };
 use hyperast::store::SimpleStores;
+use hyperast::types::HyperAST;
+use hyperast_benchmark_diffs::common;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 
 /// Configuration for different optimization combinations to benchmark
@@ -45,106 +49,111 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
         ),
         // All optimizations enabled
         OptimizationConfig::new("All Optimizations", OptimizedDiffConfig::default()),
-        // All except for ranged optimisation
-        OptimizationConfig::new(
-            "All Optimizations except Ranged",
-            OptimizedDiffConfig {
-                use_lazy_decompression: true,
-                use_ranged_similarity: false,
-                calculate_script: false,
-                leaves_matcher: OptimizedLeavesMatcherConfig::default(),
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig::default(),
-            },
-        ),
-        // Only lazy decompression and ranged similarity
-        OptimizationConfig::new(
-            "Lazy + Ranged Similarity",
-            OptimizedDiffConfig {
-                use_lazy_decompression: true,
-                use_ranged_similarity: true,
-                calculate_script: true,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: false,
-                    enable_type_grouping: false,
-                    use_binary_heap: false,
-                    reuse_qgram_object: false,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    enable_type_grouping: false,
-                    enable_leaf_count_precomputation: false,
-                },
-            },
-        ),
-        // Only type grouping optimizations
-        OptimizationConfig::new(
-            "Type Grouping Only",
-            OptimizedDiffConfig {
-                use_lazy_decompression: true,
-                use_ranged_similarity: true,
-                calculate_script: true,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: false,
-                    enable_type_grouping: true,
-                    use_binary_heap: false,
-                    reuse_qgram_object: false,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    enable_type_grouping: true,
-                    enable_leaf_count_precomputation: false,
-                },
-            },
-        ),
-        // Only caching optimizations
-        OptimizationConfig::new(
-            "Caching Only",
-            OptimizedDiffConfig {
-                use_lazy_decompression: true,
-                use_ranged_similarity: true,
-                calculate_script: true,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: true,
-                    enable_type_grouping: false,
-                    use_binary_heap: true,
-                    reuse_qgram_object: true,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    enable_type_grouping: false,
-                    enable_leaf_count_precomputation: true,
-                },
-            },
-        ),
+        // // All except for ranged optimisation
+        // OptimizationConfig::new(
+        //     "All Optimizations except Ranged",
+        //     OptimizedDiffConfig {
+        //         use_lazy_decompression: true,
+        //         use_ranged_similarity: false,
+        //         calculate_script: false,
+        //         leaves_matcher: OptimizedLeavesMatcherConfig::default(),
+        //         bottom_up_matcher: OptimizedBottomUpMatcherConfig::default(),
+        //     },
+        // ),
+        // // Only lazy decompression and ranged similarity
+        // OptimizationConfig::new(
+        //     "Lazy + Ranged Similarity",
+        //     OptimizedDiffConfig {
+        //         use_lazy_decompression: true,
+        //         use_ranged_similarity: true,
+        //         calculate_script: true,
+        //         leaves_matcher: OptimizedLeavesMatcherConfig {
+        //             base_config: LeavesMatcherConfig::default(),
+        //             enable_label_caching: false,
+        //             enable_type_grouping: false,
+        //             use_binary_heap: false,
+        //             reuse_qgram_object: false,
+        //         },
+        //         bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+        //             base_config: BottomUpMatcherConfig::default(),
+        //             enable_type_grouping: false,
+        //             enable_leaf_count_precomputation: false,
+        //         },
+        //     },
+        // ),
+        // // Only type grouping optimizations
+        // OptimizationConfig::new(
+        //     "Type Grouping Only",
+        //     OptimizedDiffConfig {
+        //         use_lazy_decompression: true,
+        //         use_ranged_similarity: true,
+        //         calculate_script: true,
+        //         leaves_matcher: OptimizedLeavesMatcherConfig {
+        //             base_config: LeavesMatcherConfig::default(),
+        //             enable_label_caching: false,
+        //             enable_type_grouping: true,
+        //             use_binary_heap: false,
+        //             reuse_qgram_object: false,
+        //         },
+        //         bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+        //             base_config: BottomUpMatcherConfig::default(),
+        //             enable_type_grouping: true,
+        //             enable_leaf_count_precomputation: false,
+        //         },
+        //     },
+        // ),
+        // // Only caching optimizations
+        // OptimizationConfig::new(
+        //     "Caching Only",
+        //     OptimizedDiffConfig {
+        //         use_lazy_decompression: true,
+        //         use_ranged_similarity: true,
+        //         calculate_script: true,
+        //         leaves_matcher: OptimizedLeavesMatcherConfig {
+        //             base_config: LeavesMatcherConfig::default(),
+        //             enable_label_caching: true,
+        //             enable_type_grouping: false,
+        //             use_binary_heap: true,
+        //             reuse_qgram_object: true,
+        //         },
+        //         bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+        //             base_config: BottomUpMatcherConfig::default(),
+        //             enable_type_grouping: false,
+        //             enable_leaf_count_precomputation: true,
+        //         },
+        //     },
+        // ),
     ]
 }
 
-/// Precomputed test data for fair benchmarking
-type PrecomputedTestData = Vec<(
-    SimpleStores<hyperast_gen_ts_java::types::TStore>,
-    hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
-    hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
-)>;
+struct Input {
+    stores: SimpleStores<hyperast_gen_ts_java::types::TStore>,
+    src: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
+    dst: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
+    loc: usize,
+    node_count: usize,
+}
 
-/// Preprocess all test inputs to avoid parsing overhead during benchmarking
-fn preprocess_test_inputs(test_inputs: &[(String, String)]) -> PrecomputedTestData {
-    test_inputs
-        .iter()
-        .map(|(src, dst)| {
-            let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-            let mut md_cache = Default::default();
-            let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, src, dst);
+/// Preprocesses all test inputs to avoid parsing overhead during benchmarking.
+fn preprocess_test_inputs(test_inputs: &[(String, String)]) -> Vec<Input> {
+    test_inputs.iter().map(|input| preprocess(input)).collect()
+}
 
-            (
-                stores,
-                src_tr.local.compressed_node,
-                dst_tr.local.compressed_node,
-            )
-        })
-        .collect()
+fn preprocess(input: &(String, String)) -> Input {
+    let (src, dst) = input;
+    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut md_cache = Default::default();
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, src, dst);
+    let loc = max(src.lines().count(), dst.lines().count());
+    let node_count = stores.node_store().len();
+
+    Input {
+        stores,
+        src: src_tr.local.compressed_node,
+        dst: dst_tr.local.compressed_node,
+        loc,
+        node_count,
+    }
 }
 
 fn benchmark_optimized_change_distiller(c: &mut Criterion) {
@@ -153,7 +162,9 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
         .is_test(true)
         .try_init();
 
-    let test_inputs = hyperast_benchmark_diffs::common::get_test_data_small();
+    let test_inputs = common::get_test_data_mixed();
+    let input_count = test_inputs.len();
+    common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()
         .map(|(buggy, _)| buggy.lines().count())
@@ -165,115 +176,32 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("optimized_change_distiller");
     group.sample_size(10);
-    group.sampling_mode(SamplingMode::Flat);
+    // group.sampling_mode(SamplingMode::Flat);
 
-    // Preprocess test inputs once for all benchmarks
-    let precomputed_inputs = preprocess_test_inputs(&test_inputs);
     let optimization_configs = create_optimization_configs();
 
-    // Benchmark each optimization configuration
-    for opt_config in &optimization_configs {
-        let bench_name = format!("Optimized CD - {}", opt_config.name);
-        let config = opt_config.config.clone();
-
-        group.bench_function(&bench_name, |b| {
-            b.iter(|| {
-                for (stores, src_tr, dst_tr) in &precomputed_inputs {
-                    let result = algorithms::change_distiller_optimized::diff_optimized(
-                        stores,
-                        src_tr,
-                        dst_tr,
-                        config.clone(),
-                    );
-                    black_box(result);
-                }
-            })
-        });
+    for input in &test_inputs {
+        let input = preprocess(input);
+        for opt_config in &optimization_configs {
+            group.bench_with_input(
+                format!(
+                    "CD Single - {} - {} loc {} nodes",
+                    opt_config.name, input.loc, input.node_count,
+                ),
+                &input,
+                |b, input| {
+                    b.iter(|| {
+                        algorithms::change_distiller_optimized::diff_optimized(
+                            &input.stores,
+                            &input.src,
+                            &input.dst,
+                            opt_config.config.clone(),
+                        )
+                    });
+                },
+            );
+        }
     }
-
-    // Add comparison with existing lazy_2 implementation
-    group.bench_function("ChangeDistiller Lazy 2 (Reference)", |b| {
-        b.iter(|| {
-            for (stores, src_tr, dst_tr) in &precomputed_inputs {
-                let result = algorithms::change_distiller_lazy_2::diff(stores, src_tr, dst_tr);
-                black_box(result);
-            }
-        })
-    });
-
-    // Benchmark convenience functions
-    group.bench_function("Optimized CD - All Optimizations (convenience)", |b| {
-        b.iter(|| {
-            for (stores, src_tr, dst_tr) in &precomputed_inputs {
-                let result = algorithms::change_distiller_optimized::diff_with_all_optimizations(
-                    stores, src_tr, dst_tr,
-                );
-                black_box(result);
-            }
-        })
-    });
-
-    group.bench_function("Optimized CD - Baseline (convenience)", |b| {
-        b.iter(|| {
-            for (stores, src_tr, dst_tr) in &precomputed_inputs {
-                let result =
-                    algorithms::change_distiller_optimized::diff_baseline(stores, src_tr, dst_tr);
-                black_box(result);
-            }
-        })
-    });
-
-    group.finish();
-}
-
-/// Benchmark script generation performance separately
-fn benchmark_script_generation_impact(c: &mut Criterion) {
-    let test_inputs = hyperast_benchmark_diffs::common::get_test_data_small();
-    let precomputed_inputs = preprocess_test_inputs(&test_inputs);
-
-    let mut group = c.benchmark_group("script_generation_impact");
-    group.sample_size(10);
-    group.sampling_mode(SamplingMode::Flat);
-
-    // Test with script generation enabled
-    let config_with_script = OptimizedDiffConfig {
-        calculate_script: true,
-        ..OptimizedDiffConfig::default()
-    };
-
-    group.bench_function("With Script Generation", |b| {
-        b.iter(|| {
-            for (stores, src_tr, dst_tr) in &precomputed_inputs {
-                let result = algorithms::change_distiller_optimized::diff_optimized(
-                    stores,
-                    src_tr,
-                    dst_tr,
-                    config_with_script.clone(),
-                );
-                black_box(result);
-            }
-        })
-    });
-
-    // Test with script generation disabled
-    let config_without_script = OptimizedDiffConfig {
-        calculate_script: false,
-        ..OptimizedDiffConfig::default()
-    };
-
-    group.bench_function("Without Script Generation", |b| {
-        b.iter(|| {
-            for (stores, src_tr, dst_tr) in &precomputed_inputs {
-                let result = algorithms::change_distiller_optimized::diff_optimized(
-                    stores,
-                    src_tr,
-                    dst_tr,
-                    config_without_script.clone(),
-                );
-                black_box(result);
-            }
-        })
-    });
 
     group.finish();
 }
@@ -281,7 +209,7 @@ fn benchmark_script_generation_impact(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = Criterion::default().configure_from_args();
-    targets = benchmark_optimized_change_distiller, benchmark_script_generation_impact
+    targets = benchmark_optimized_change_distiller,
 }
 
 criterion_main!(benches);
