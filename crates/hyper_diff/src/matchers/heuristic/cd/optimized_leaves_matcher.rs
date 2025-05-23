@@ -45,7 +45,6 @@ impl<M: MonoMappingStore> Ord for MappingWithSimilarity<M> {
     }
 }
 
-/// Optimized leaves matcher with configurable optimizations
 pub struct OptimizedLeavesMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
@@ -131,74 +130,181 @@ where
 
     /// Execute with type grouping optimization - only compare leaves of same type
     fn execute_with_type_grouping(&mut self) {
-        let dst_leaves = self.collect_leaves_dst();
-        let src_leaves = self.collect_leaves_src();
+        // Pre-compute and cache label info (always when using type grouping for best performance)
+        let mut label_cache: HashMap<(HAST::IdN, HAST::IdN), f64> = HashMap::new();
 
-        // Group leaves by type when optimization is enabled
+        // Create QGram object once if reuse is enabled
+        let qgram = if self.config.reuse_qgram_object {
+            str_distance::QGram::new(3)
+        } else {
+            str_distance::QGram::new(3) // Always create for consistency
+        };
+
+        // Collect leaves
+        let dst_leaves: Vec<M::Dst> = self
+            .dst_arena
+            .iter_df_post::<true>()
+            .filter(|t| {
+                let id = self.dst_arena.decompress_to(&t);
+                self.dst_arena.children(&id).is_empty()
+            })
+            .collect();
+
+        let src_leaves: Vec<M::Src> = self
+            .src_arena
+            .iter_df_post::<true>()
+            .filter(|t| {
+                let id = self.src_arena.decompress_to(&t);
+                self.src_arena.children(&id).is_empty()
+            })
+            .collect();
+
+        // Group leaves by type and build label cache in single pass for optimal performance
         let mut src_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> =
             HashMap::new();
         let mut dst_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> =
             HashMap::new();
+        let mut src_label_cache: HashMap<M::Src, Option<(HAST::IdN, String)>> =
+            HashMap::with_capacity(src_leaves.len());
+        let mut dst_label_cache: HashMap<M::Dst, Option<(HAST::IdN, String)>> =
+            HashMap::with_capacity(dst_leaves.len());
 
-        // Pre-compute label cache if enabled
-        let mut src_label_cache: HashMap<M::Src, Option<(HAST::IdN, String)>> = HashMap::new();
-        let mut dst_label_cache: HashMap<M::Dst, Option<(HAST::IdN, String)>> = HashMap::new();
-
-        if self.config.enable_label_caching {
-            self.build_label_caches(
-                &src_leaves,
-                &dst_leaves,
-                &mut src_label_cache,
-                &mut dst_label_cache,
-            );
-        }
-
-        // Group source leaves by type
+        // Process source leaves: group by type and cache labels in single pass
         for src_leaf in &src_leaves {
             let src = self.src_arena.decompress_to(src_leaf);
             let original_src = self.src_arena.original(&src);
             let src_type = self.stores.resolve_type(&original_src);
+
+            // Always cache labels when using type grouping for optimal performance
+            let src_node = self.stores.node_store().resolve(&original_src);
+            let src_label_entry = if let Some(src_label_id) = src_node.try_get_label() {
+                let src_label = self.stores.label_store().resolve(&src_label_id).to_string();
+                Some((original_src.clone(), src_label))
+            } else {
+                None
+            };
+            src_label_cache.insert(*src_leaf, src_label_entry);
+
             src_leaves_by_type
                 .entry(src_type)
-                .or_default()
+                .or_insert_with(Vec::new)
                 .push(*src_leaf);
         }
 
-        // Group destination leaves by type
+        // Process destination leaves: group by type and cache labels in single pass
         for dst_leaf in &dst_leaves {
             let dst = self.dst_arena.decompress_to(dst_leaf);
             let original_dst = self.dst_arena.original(&dst);
             let dst_type = self.stores.resolve_type(&original_dst);
+
+            // Always cache labels when using type grouping for optimal performance
+            let dst_node = self.stores.node_store().resolve(&original_dst);
+            let dst_label_entry = if let Some(dst_label_id) = dst_node.try_get_label() {
+                let dst_label = self.stores.label_store().resolve(&dst_label_id).to_string();
+                Some((original_dst.clone(), dst_label))
+            } else {
+                None
+            };
+            dst_label_cache.insert(*dst_leaf, dst_label_entry);
+
             dst_leaves_by_type
                 .entry(dst_type)
-                .or_default()
+                .or_insert_with(Vec::new)
                 .push(*dst_leaf);
         }
 
-        // Create QGram object once if reuse is enabled
-        let qgram = if self.config.reuse_qgram_object {
-            Some(str_distance::QGram::new(3))
-        } else {
-            None
-        };
-
-        // Process mappings using appropriate collection type
+        // Use appropriate collection type for mappings
         if self.config.use_binary_heap {
-            self.process_with_binary_heap(
-                &src_leaves_by_type,
-                &dst_leaves_by_type,
-                &src_label_cache,
-                &dst_label_cache,
-                qgram.as_ref(),
-            );
+            let mut best_mappings = BinaryHeap::new();
+
+            // Only compare leaves of the same type
+            for (node_type, src_leaves) in src_leaves_by_type.iter() {
+                if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
+                    for &src_leaf in src_leaves {
+                        let src = self.src_arena.decompress_to(&src_leaf);
+
+                        for &dst_leaf in dst_leaves {
+                            let dst = self.dst_arena.decompress_to(&dst_leaf);
+
+                            if !self.mappings.is_src(src.shallow())
+                                && !self.mappings.is_dst(dst.shallow())
+                            {
+                                let sim = self.compute_cached_label_similarity_lazy_2(
+                                    &src_leaf,
+                                    &dst_leaf,
+                                    &src,
+                                    &dst,
+                                    &mut label_cache,
+                                    &src_label_cache,
+                                    &dst_label_cache,
+                                    &qgram,
+                                );
+
+                                if sim > self.config.base_config.label_sim_threshold {
+                                    best_mappings.push(MappingWithSimilarity::<M> {
+                                        src: src_leaf,
+                                        dst: dst_leaf,
+                                        sim,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Process mappings in order
+            while let Some(mapping) = best_mappings.pop() {
+                self.mappings
+                    .link_if_both_unmapped(mapping.src, mapping.dst);
+            }
         } else {
-            self.process_with_vector(
-                &src_leaves_by_type,
-                &dst_leaves_by_type,
-                &src_label_cache,
-                &dst_label_cache,
-                qgram.as_ref(),
-            );
+            let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+
+            // Only compare leaves of the same type
+            for (node_type, src_leaves) in src_leaves_by_type.iter() {
+                if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
+                    for &src_leaf in src_leaves {
+                        let src = self.src_arena.decompress_to(&src_leaf);
+
+                        for &dst_leaf in dst_leaves {
+                            let dst = self.dst_arena.decompress_to(&dst_leaf);
+
+                            if !self.mappings.is_src(src.shallow())
+                                && !self.mappings.is_dst(dst.shallow())
+                            {
+                                let sim = self.compute_cached_label_similarity_lazy_2(
+                                    &src_leaf,
+                                    &dst_leaf,
+                                    &src,
+                                    &dst,
+                                    &mut label_cache,
+                                    &src_label_cache,
+                                    &dst_label_cache,
+                                    &qgram,
+                                );
+
+                                if sim > self.config.base_config.label_sim_threshold {
+                                    leaves_mappings.push(MappingWithSimilarity {
+                                        src: src_leaf,
+                                        dst: dst_leaf,
+                                        sim,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort mappings by similarity
+            leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+
+            // Process mappings in order
+            for mapping in leaves_mappings {
+                self.mappings
+                    .link_if_both_unmapped(mapping.src, mapping.dst);
+            }
         }
     }
 
@@ -260,164 +366,6 @@ where
             .collect()
     }
 
-    /// Build label caches for source and destination leaves
-    fn build_label_caches(
-        &mut self,
-        src_leaves: &[M::Src],
-        dst_leaves: &[M::Dst],
-        src_label_cache: &mut HashMap<M::Src, Option<(HAST::IdN, String)>>,
-        dst_label_cache: &mut HashMap<M::Dst, Option<(HAST::IdN, String)>>,
-    ) {
-        // Cache source labels
-        for &src_leaf in src_leaves {
-            let src = self.src_arena.decompress_to(&src_leaf);
-            let original_src = self.src_arena.original(&src);
-            let src_node = self.stores.node_store().resolve(&original_src);
-
-            let src_label_entry = if let Some(src_label_id) = src_node.try_get_label() {
-                let src_label = self.stores.label_store().resolve(&src_label_id).to_string();
-                Some((original_src.clone(), src_label))
-            } else {
-                None
-            };
-            src_label_cache.insert(src_leaf, src_label_entry);
-        }
-
-        // Cache destination labels
-        for &dst_leaf in dst_leaves {
-            let dst = self.dst_arena.decompress_to(&dst_leaf);
-            let original_dst = self.dst_arena.original(&dst);
-            let dst_node = self.stores.node_store().resolve(&original_dst);
-
-            let dst_label_entry = if let Some(dst_label_id) = dst_node.try_get_label() {
-                let dst_label = self.stores.label_store().resolve(&dst_label_id).to_string();
-                Some((original_dst.clone(), dst_label))
-            } else {
-                None
-            };
-            dst_label_cache.insert(dst_leaf, dst_label_entry);
-        }
-    }
-
-    /// Process mappings using binary heap for optimal ordering
-    fn process_with_binary_heap(
-        &mut self,
-        src_leaves_by_type: &HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>>,
-        dst_leaves_by_type: &HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>>,
-        src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>>,
-        dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>>,
-        qgram: Option<&str_distance::QGram>,
-    ) {
-        let mut best_mappings = BinaryHeap::new();
-
-        // Only compare leaves of the same type
-        for (node_type, src_leaves) in src_leaves_by_type.iter() {
-            if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
-                for &src_leaf in src_leaves {
-                    let src = self.src_arena.decompress_to(&src_leaf);
-
-                    for &dst_leaf in dst_leaves {
-                        let dst = self.dst_arena.decompress_to(&dst_leaf);
-
-                        // Since we're already comparing same types, just check if both are unmapped
-                        if !self.mappings.is_src(src.shallow())
-                            && !self.mappings.is_dst(dst.shallow())
-                        {
-                            let sim = if self.config.enable_label_caching {
-                                self.compute_cached_label_similarity(
-                                    &src_leaf,
-                                    &dst_leaf,
-                                    &src,
-                                    &dst,
-                                    src_label_cache,
-                                    dst_label_cache,
-                                    qgram,
-                                )
-                            } else {
-                                self.compute_label_similarity_simple(&src, &dst)
-                            };
-
-                            if sim > self.config.base_config.label_sim_threshold {
-                                best_mappings.push(MappingWithSimilarity::<M> {
-                                    src: src_leaf,
-                                    dst: dst_leaf,
-                                    sim,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Process mappings in order
-        while let Some(mapping) = best_mappings.pop() {
-            self.mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst);
-        }
-    }
-
-    /// Process mappings using vector with sorting
-    fn process_with_vector(
-        &mut self,
-        src_leaves_by_type: &HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>>,
-        dst_leaves_by_type: &HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>>,
-        src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>>,
-        dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>>,
-        qgram: Option<&str_distance::QGram>,
-    ) {
-        let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
-
-        // Only compare leaves of the same type
-        for (node_type, src_leaves) in src_leaves_by_type.iter() {
-            if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
-                for &src_leaf in src_leaves {
-                    let src = self.src_arena.decompress_to(&src_leaf);
-
-                    for &dst_leaf in dst_leaves {
-                        let dst = self.dst_arena.decompress_to(&dst_leaf);
-
-                        // Since we're already comparing same types, just check if both are unmapped
-                        if !self.mappings.is_src(src.shallow())
-                            && !self.mappings.is_dst(dst.shallow())
-                        {
-                            let sim = if self.config.enable_label_caching {
-                                self.compute_cached_label_similarity(
-                                    &src_leaf,
-                                    &dst_leaf,
-                                    &src,
-                                    &dst,
-                                    src_label_cache,
-                                    dst_label_cache,
-                                    qgram,
-                                )
-                            } else {
-                                self.compute_label_similarity_simple(&src, &dst)
-                            };
-
-                            if sim > self.config.base_config.label_sim_threshold {
-                                leaves_mappings.push(MappingWithSimilarity {
-                                    src: src_leaf,
-                                    dst: dst_leaf,
-                                    sim,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Sort mappings by similarity
-        leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
-
-        // Process mappings in order
-        for mapping in leaves_mappings {
-            self.mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst);
-        }
-    }
-
     /// Check if mapping between two nodes is allowed (same type, both unmapped)
     fn is_mapping_allowed(&self, src_tree: &Dsrc::IdD, dst_tree: &Ddst::IdD) -> bool {
         if self.mappings.is_src(src_tree.shallow()) || self.mappings.is_dst(dst_tree.shallow()) {
@@ -431,37 +379,6 @@ where
         let dst_type = self.stores.resolve_type(&original_dst);
 
         src_type == dst_type
-    }
-
-    /// Compute label similarity using cached data
-    fn compute_cached_label_similarity(
-        &self,
-        src_leaf: &M::Src,
-        dst_leaf: &M::Dst,
-        _src_tree: &Dsrc::IdD,
-        _dst_tree: &Ddst::IdD,
-        src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>>,
-        dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>>,
-        qgram: Option<&str_distance::QGram>,
-    ) -> f64 {
-        let src_label_data = src_label_cache.get(src_leaf);
-        let dst_label_data = dst_label_cache.get(dst_leaf);
-
-        match (src_label_data, dst_label_data) {
-            (Some(Some((_, src_label))), Some(Some((_, dst_label)))) => {
-                if let Some(qgram) = qgram {
-                    // Use the pre-computed QGram object
-                    let dist = qgram.normalized(src_label.chars(), dst_label.chars());
-                    1.0 - dist
-                } else {
-                    // Create QGram object for this computation
-                    let dist = str_distance::QGram::new(3)
-                        .normalized(src_label.chars(), dst_label.chars());
-                    1.0 - dist
-                }
-            }
-            _ => 0.0,
-        }
     }
 
     /// Compute label similarity without caching (fallback method)
@@ -485,6 +402,46 @@ where
             }
             _ => 0.0,
         }
+    }
+
+    /// Exact implementation of lazy_2 cached label similarity computation
+    fn compute_cached_label_similarity_lazy_2(
+        &self,
+        src_leaf: &M::Src,
+        dst_leaf: &M::Dst,
+        src_tree: &Dsrc::IdD,
+        dst_tree: &Ddst::IdD,
+        label_cache: &mut HashMap<(HAST::IdN, HAST::IdN), f64>,
+        src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>>,
+        dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>>,
+        qgram: &str_distance::QGram,
+    ) -> f64 {
+        // Get the original node IDs
+        let original_src = self.src_arena.original(src_tree);
+        let original_dst = self.dst_arena.original(dst_tree);
+
+        // Check if similarity is already cached
+        if let Some(sim) = label_cache.get(&(original_src.clone(), original_dst.clone())) {
+            return *sim;
+        }
+
+        // Get cached label data
+        let src_label_data = src_label_cache.get(src_leaf);
+        let dst_label_data = dst_label_cache.get(dst_leaf);
+
+        let similarity = match (src_label_data, dst_label_data) {
+            (Some(Some((_, src_label))), Some(Some((_, dst_label)))) => {
+                // Use the pre-computed QGram object
+                let dist = qgram.normalized(src_label.chars(), dst_label.chars());
+                1.0 - dist
+            }
+            _ => 0.0,
+        };
+
+        // Cache the result
+        label_cache.insert((original_src, original_dst), similarity);
+
+        similarity
     }
 }
 

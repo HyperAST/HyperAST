@@ -53,11 +53,12 @@ pub struct OptimizedDiffConfig {
 }
 
 impl Default for OptimizedDiffConfig {
+    /// Create a default configuration with all optimizations enabled except script calculation
     fn default() -> Self {
         Self {
             use_lazy_decompression: true,
             use_ranged_similarity: true,
-            calculate_script: true,
+            calculate_script: false,
             leaves_matcher: OptimizedLeavesMatcherConfig::default(),
             bottom_up_matcher: OptimizedBottomUpMatcherConfig::default(),
         }
@@ -69,9 +70,9 @@ impl Default for OptimizedDiffConfig {
 pub struct OptimizedLeavesMatcherConfig {
     /// Base configuration (label similarity threshold)
     pub base_config: LeavesMatcherConfig,
-    /// Cache label strings to avoid repeated resolution
+    /// Cache label strings to avoid repeated resolution. This is automatically enabled when using type grouping.
     pub enable_label_caching: bool,
-    /// Group leaves by type before comparison
+    /// Group leaves by type before comparison. This automatically enables label caching.
     pub enable_type_grouping: bool,
     /// Use binary heap instead of vector + sort for mappings
     pub use_binary_heap: bool,
@@ -80,6 +81,7 @@ pub struct OptimizedLeavesMatcherConfig {
 }
 
 impl Default for OptimizedLeavesMatcherConfig {
+    /// Create a default configuration with all optimizations enabled
     fn default() -> Self {
         Self {
             base_config: LeavesMatcherConfig::default(),
@@ -103,6 +105,7 @@ pub struct OptimizedBottomUpMatcherConfig {
 }
 
 impl Default for OptimizedBottomUpMatcherConfig {
+    /// Create a default configuration with all optimizations enabled
     fn default() -> Self {
         Self {
             base_config: BottomUpMatcherConfig::default(),

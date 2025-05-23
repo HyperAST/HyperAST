@@ -86,18 +86,35 @@ where
 
     /// Execute with type grouping and leaf count pre-computation optimizations
     fn execute_with_type_grouping(&mut self) {
-        // Pre-compute leaf counts if enabled
-        let leaf_counts = if self.config.enable_leaf_count_precomputation {
-            Some(self.precompute_leaf_counts())
-        } else {
-            None
-        };
+        // Always pre-compute leaf counts when using type grouping for optimal performance
+        let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
 
-        // Create indexes to group nodes by type
+        // Process nodes in post-order so children are processed before parents
+        for s in self.src_arena.iter_df_post::<true>() {
+            let src = self.src_arena.decompress_to(&s);
+            let is_leaf = self.src_arena.children(&src).is_empty();
+
+            let leaf_count = if is_leaf {
+                1 // Leaf nodes have a count of 1
+            } else {
+                // Sum the leaf counts of all children
+                self.src_arena
+                    .children(&src)
+                    .iter()
+                    .map(|child| {
+                        let child = self.src_arena.decompress_to(child);
+                        leaf_counts.get(child.shallow()).copied().unwrap_or(0)
+                    })
+                    .sum()
+            };
+
+            leaf_counts.insert(*src.shallow(), leaf_count);
+        }
+
         let mut src_nodes_by_type: HashMap<_, Vec<_>> = HashMap::new();
         let mut dst_nodes_by_type: HashMap<_, Vec<_>> = HashMap::new();
 
-        // Index source nodes by their type
+        // Index source nodes by their type (only unmapped non-leaf nodes)
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
             let src_type = self.hyperast.resolve_type(&self.src_arena.original(&src));
@@ -105,13 +122,12 @@ where
             let is_leaf = self.src_arena.children(&src).is_empty();
             let is_mapped = self.mappings.is_src(src.shallow());
 
-            // Only add unmapped non-leaf nodes to the index
             if !is_mapped && !is_leaf {
                 src_nodes_by_type.entry(src_type).or_default().push(src);
             }
         }
 
-        // Index destination nodes by their type
+        // Index destination nodes by their type (only unmapped non-leaf nodes)
         for d in self.dst_arena.iter_df_post::<true>() {
             let dst = self.dst_arena.decompress_to(&d);
             let dst_type = self.hyperast.resolve_type(&self.dst_arena.original(&dst));
@@ -119,7 +135,6 @@ where
             let is_leaf = self.dst_arena.children(&dst).is_empty();
             let is_mapped = self.mappings.is_dst(dst.shallow());
 
-            // Only add unmapped non-leaf nodes to the index
             if !is_mapped && !is_leaf {
                 dst_nodes_by_type.entry(dst_type).or_default().push(dst);
             }
@@ -134,12 +149,7 @@ where
                         continue;
                     }
 
-                    let number_of_leaves = if let Some(ref leaf_counts) = leaf_counts {
-                        *leaf_counts.get(src.shallow()).unwrap_or(&0)
-                    } else {
-                        self.count_leaves_on_demand(src)
-                    };
-
+                    let number_of_leaves = *leaf_counts.get(src.shallow()).unwrap_or(&0);
                     let threshold = if number_of_leaves > self.config.base_config.max_leaves {
                         self.config.base_config.sim_threshold_large_trees
                     } else {
@@ -152,7 +162,13 @@ where
                             continue;
                         }
 
-                        let similarity = self.compute_similarity(src, dst);
+                        // Use range-based similarity computation for optimal performance
+                        let similarity = similarity_metrics::SimilarityMeasure::range(
+                            &self.src_arena.descendants_range(src),
+                            &self.dst_arena.descendants_range(dst),
+                            &self.mappings,
+                        )
+                        .chawathe();
 
                         if similarity >= threshold {
                             self.mappings.link(*src.shallow(), *dst.shallow());
@@ -168,7 +184,15 @@ where
     fn execute_naive(&mut self) {
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
-            let number_of_leaves = self.count_leaves_on_demand(&src);
+            let number_of_leaves = self
+                .src_arena
+                .descendants(&src)
+                .iter()
+                .filter(|t| {
+                    let id = self.src_arena.decompress_to(&t);
+                    self.src_arena.children(&id).is_empty()
+                })
+                .count();
 
             for d in self.dst_arena.iter_df_post::<true>() {
                 let dst = self.dst_arena.decompress_to(&d);
@@ -193,47 +217,6 @@ where
                 }
             }
         }
-    }
-
-    /// Pre-compute leaf counts for all nodes in a single traversal
-    fn precompute_leaf_counts(&mut self) -> HashMap<M::Src, usize> {
-        let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
-        
-        // Process nodes in post-order so children are processed before parents
-        for s in self.src_arena.iter_df_post::<true>() {
-            let src = self.src_arena.decompress_to(&s);
-            let is_leaf = self.src_arena.children(&src).is_empty();
-
-            let leaf_count = if is_leaf {
-                1 // Leaf nodes have a count of 1
-            } else {
-                // Sum the leaf counts of all children
-                self.src_arena
-                    .children(&src)
-                    .iter()
-                    .map(|child| {
-                        let child = self.src_arena.decompress_to(child);
-                        leaf_counts.get(child.shallow()).copied().unwrap_or(0)
-                    })
-                    .sum()
-            };
-
-            leaf_counts.insert(*src.shallow(), leaf_count);
-        }
-
-        leaf_counts
-    }
-
-    /// Count leaves on demand without pre-computation
-    fn count_leaves_on_demand(&mut self, src: &Dsrc::IdD) -> usize {
-        self.src_arena
-            .descendants(src)
-            .iter()
-            .filter(|t| {
-                let id = self.src_arena.decompress_to(&t);
-                self.src_arena.children(&id).is_empty()
-            })
-            .count()
     }
 
     /// Check if mapping between two nodes is allowed (same type, both unmapped)
