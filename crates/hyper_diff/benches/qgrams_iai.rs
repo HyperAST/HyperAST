@@ -60,10 +60,10 @@ mod iai {
     }
 }
 
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(not(target_os = "linux"))]
+fn main() {}
+
+#[cfg(target_os = "linux")]
 fn main() {
     iai::call_main();
 }
-
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-fn main() {}
