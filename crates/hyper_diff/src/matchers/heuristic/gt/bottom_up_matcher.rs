@@ -38,13 +38,6 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;self.dst_arena.len()];
-
-        let seeds_orig: Vec<_> = seeds
-            .iter()
-            .map(|seed| self.dst_arena.original(seed))
-            .collect();
-        //println!("seeds: {:?}", seeds_orig);
-
         let t = self.stores.resolve_type(s);
         for mut seed in seeds {
             loop {

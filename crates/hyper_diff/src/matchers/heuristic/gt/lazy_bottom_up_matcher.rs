@@ -3,7 +3,7 @@ use crate::decompressed_tree_store::{
     Shallow,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use hyperast::{types::WithStats, PrimInt};
+use hyperast::{PrimInt, types::WithStats};
 use num_traits::ToPrimitive;
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
@@ -13,15 +13,15 @@ pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
 }
 
 impl<
-        Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
-            + DecompressedWithParent<HAST, Dsrc::IdD>
-            + LazyDecompressedTreeStore<HAST, M::Src>,
-        Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
-            + DecompressedWithParent<HAST, Ddst::IdD>
-            + LazyDecompressedTreeStore<HAST, M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-    > BottomUpMatcher<Dsrc, Ddst, HAST, M>
+    Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
+        + DecompressedWithParent<HAST, Dsrc::IdD>
+        + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
+        + DecompressedWithParent<HAST, Ddst::IdD>
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+> BottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
@@ -67,11 +67,11 @@ where
 use hyperast::types::HyperAST;
 
 impl<
-        HAST: HyperAST + Copy,
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        M: MonoMappingStore,
-    > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
+    HAST: HyperAST + Copy,
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    M: MonoMappingStore,
+> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     M::Src: PrimInt,
@@ -85,6 +85,43 @@ where
         + DecompressedWithParent<HAST, Ddst::IdD>
         + LazyDecompressedTreeStore<HAST, M::Dst>,
 {
+    pub(super) fn get_src_candidates_lazily(&mut self, dst: &Ddst::IdD) -> Vec<Dsrc::IdD> {
+        let src_arena = &mut self.mapping.src_arena;
+        let dst_arena = &self.mapping.dst_arena;
+        let mappings = &self.mapping.mappings;
+        let mut seeds = vec![];
+        let s = &dst_arena.original(dst);
+        for c in dst_arena.descendants(dst) {
+            if mappings.is_dst(&c) {
+                let m = mappings.get_src_unchecked(&c);
+                let m = src_arena.decompress_to(&m);
+                seeds.push(m);
+            }
+        }
+        let mut candidates = vec![];
+        let mut visited = bitvec::bitbox![0;src_arena.len()];
+        let t = self.hyperast.resolve_type(s);
+        for mut seed in seeds {
+            loop {
+                let Some(parent) = src_arena.parent(&seed) else {
+                    break;
+                };
+                if visited[parent.to_usize().unwrap()] {
+                    break;
+                }
+                visited.set(parent.to_usize().unwrap(), true);
+                let p = &src_arena.original(&parent);
+                if self.hyperast.resolve_type(p) == t
+                    && !(mappings.is_src(parent.shallow()) || parent.shallow() == &src_arena.root())
+                {
+                    candidates.push(parent);
+                }
+                seed = parent;
+            }
+        }
+        candidates
+    }
+
     pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &mut self.mapping.dst_arena;

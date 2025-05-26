@@ -2,14 +2,14 @@ use super::MappingDurations;
 use super::{DiffResult, PreparedMappingDurations};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
-    decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
+    decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
     matchers::{
+        Decompressible, Mapper,
         heuristic::gt::{
             greedy_subtree_matcher::GreedySubtreeMatcher,
-            simple_marriage_bottom_up_matcher::SimpleMarriageBottomUpMatcher,
+            marriage_bottom_up_matcher::MarriageBottomUpMatcher,
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-        Decompressible, Mapper,
     },
     tree::tree_path::CompressedTreePath,
 };
@@ -45,7 +45,7 @@ where
     let subtree_mappings_s = mapper.mappings().len();
     //dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let now = Instant::now();
-    let mapper = SimpleMarriageBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = MarriageBottomUpMatcher::<_, _, _, _>::match_it(mapper);
     //dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();

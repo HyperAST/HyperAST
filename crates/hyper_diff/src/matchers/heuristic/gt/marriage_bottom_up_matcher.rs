@@ -6,6 +6,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::Decompressible;
 use crate::matchers::mapping_store::MonoMappingStore;
+use crate::matchers::optimal::zs::ZsMatcher;
 use crate::matchers::similarity_metrics;
 use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
@@ -16,7 +17,7 @@ use std::fmt::Debug;
 ///
 /// it will allow to make use complex types as const generics
 /// ie. make the different threshold neater
-pub struct SimpleMarriageBottomUpMatcher<
+pub struct MarriageBottomUpMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -40,7 +41,7 @@ impl<
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
-    for SimpleMarriageBottomUpMatcher<
+    for MarriageBottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,
@@ -77,16 +78,7 @@ impl<
     const SIZE_THRESHOLD: usize,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
->
-    SimpleMarriageBottomUpMatcher<
-        Dsrc,
-        Ddst,
-        HAST,
-        M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    >
+> MarriageBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -158,29 +150,14 @@ where
         // // -1 as root is handled after forloop
         for a in self.internal.src_arena.iter_df_post::<true>() {
             if self.internal.src_arena.parent(&a).is_none() {
-                //dbg!("is root");
                 // TODO remove and flip const param of iter_df_post
                 break;
             } else if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
-                let a_orig = self.internal.src_arena.original(&a);
-                //println!("a: {:?} ", &a_orig);
                 if let Some(best_dst) = self.best_dst_candidate(&a) {
-                    let best_dst_orig = self.internal.dst_arena.original(&best_dst);
-                    //println!("best dst: {:?} ", &best_dst_orig);
                     if self.best_src_candidate(&best_dst) == Some(a) {
-                        //println!("chosen link: {:?} -> {:?}", &a_orig, &best_dst_orig);
-                        self.internal.last_chance_match_histogram(&a, &best_dst);
+                        self.last_chance_match(a, best_dst);
                         self.internal.mappings.link(a, best_dst);
-                    } else {
-                        if let Some(best_src) = self.best_src_candidate(&best_dst) {
-                            let best_src_orig = self.internal.src_arena.original(&best_src);
-                            //println!("no link made, better src candidate: {:?}", &best_src_orig);
-                        } else {
-                            //println!("no link made, no src candidate found for bst dst");
-                        }
                     }
-                } else {
-                    //println!("no candidate found");
                 }
             } else if self.internal.mappings.is_src(&a)
                 && self.has_unmapped_src_children(&a)
@@ -193,7 +170,7 @@ where
                 )
             {
                 if let Some(dst) = self.internal.mappings.get_dst(&a) {
-                    self.internal.last_chance_match_histogram(&a, &dst);
+                    self.last_chance_match(a, dst);
                 }
             }
         }
@@ -202,9 +179,9 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-        self.internal.last_chance_match_histogram(
-            &self.internal.src_arena.root(),
-            &self.internal.dst_arena.root(),
+        self.last_chance_match(
+            self.internal.src_arena.root(),
+            self.internal.dst_arena.root(),
         );
     }
 
@@ -227,14 +204,7 @@ where
     }
 
     fn best_dst_candidate(&self, src: &M::Src) -> Option<M::Dst> {
-        let src_orig = self.internal.src_arena.original(&src);
-        //println!("getting best dst candidate for {:?}", &src_orig);
         let candidates = self.internal.get_dst_candidates(src);
-        let candidates_orig: Vec<_> = candidates
-            .iter()
-            .map(|cand| self.internal.dst_arena.original(cand))
-            .collect();
-        //println!("candidates: {:?}", candidates_orig);
         let mut best = None;
         let mut max: f64 = -1.;
         for cand in candidates {
@@ -253,14 +223,7 @@ where
     }
 
     fn best_src_candidate(&self, dst: &M::Dst) -> Option<M::Src> {
-        let dst_orig = self.internal.dst_arena.original(&dst);
-        //println!("getting best src candidate for {:?}", &dst_orig);
         let candidates = self.internal.get_src_candidates(dst);
-        let candidates_orig: Vec<_> = candidates
-            .iter()
-            .map(|cand| self.internal.src_arena.original(cand))
-            .collect();
-        //println!("candidates: {:?}", candidates_orig);
         let mut best = None;
         let mut max: f64 = -1.;
         for cand in candidates {
@@ -294,5 +257,93 @@ where
             src.to_usize()
         );
         r
+    }
+
+    pub(crate) fn last_chance_match(&mut self, src: M::Src, dst: M::Dst) {
+        self.last_chance_match_zs(src, dst);
+    }
+
+    pub(crate) fn last_chance_match_zs(&mut self, src: M::Src, dst: M::Dst) {
+        // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
+        let src_s = self.internal.src_arena.descendants_count(&src);
+        let dst_s = self.internal.dst_arena.descendants_count(&dst);
+        if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
+            return;
+        }
+        let stores = self.internal.stores;
+        let src_offset;
+        use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+        let mappings: M = if SLICE {
+            let src_arena = self.internal.src_arena.slice_po(&src);
+            src_offset = src - src_arena.root();
+            let dst_arena = self.internal.dst_arena.slice_po(&dst);
+            ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
+        } else {
+            let o_src = self.internal.src_arena.original(&src);
+            let o_dst = self.internal.dst_arena.original(&dst);
+            let src_arena = ZsTree::<HAST::IdN, M::Src>::decompress(stores, &o_src);
+            let src_arena = Decompressible {
+                hyperast: stores,
+                decomp: src_arena,
+            };
+            src_offset = src - src_arena.root();
+            if cfg!(debug_assertions) {
+                let src_arena_z = self.internal.src_arena.slice_po(&src);
+                for i in src_arena.iter_df_post::<true>() {
+                    assert_eq!(src_arena.tree(&i), src_arena_z.tree(&i));
+                    assert_eq!(src_arena.lld(&i), src_arena_z.lld(&i));
+                }
+                use num_traits::ToPrimitive;
+                let mut last = src_arena_z.root();
+                for k in src_arena_z.iter_kr() {
+                    assert!(src_arena.kr[k.to_usize().unwrap()]);
+                    last = k;
+                }
+                assert!(src_arena.kr[src_arena.kr.len() - 1]);
+                dbg!(last == src_arena_z.root());
+            }
+            let dst_arena = ZsTree::<HAST::IdN, M::Dst>::decompress(stores, &o_dst);
+            let dst_arena = Decompressible {
+                hyperast: stores,
+                decomp: dst_arena,
+            };
+            if cfg!(debug_assertions) {
+                let dst_arena_z = self.internal.dst_arena.slice_po(&dst);
+                for i in dst_arena.iter_df_post::<true>() {
+                    assert_eq!(dst_arena.tree(&i), dst_arena_z.tree(&i));
+                    assert_eq!(dst_arena.lld(&i), dst_arena_z.lld(&i));
+                }
+                use num_traits::ToPrimitive;
+                let mut last = dst_arena_z.root();
+                for k in dst_arena_z.iter_kr() {
+                    assert!(dst_arena.kr[k.to_usize().unwrap()]);
+                    last = k;
+                }
+                assert!(dst_arena.kr[dst_arena.kr.len() - 1]);
+                dbg!(last == dst_arena_z.root());
+            }
+            ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
+        };
+        let dst_offset = self.internal.dst_arena.first_descendant(&dst);
+        assert_eq!(self.internal.src_arena.first_descendant(&src), src_offset);
+        for (i, t) in mappings.iter() {
+            //remapping
+            let src: M::Src = src_offset + cast(i).unwrap();
+            let dst: M::Dst = dst_offset + cast(t).unwrap();
+            // use it
+            if !self.internal.mappings.is_src(&src) && !self.internal.mappings.is_dst(&dst) {
+                let tsrc = self
+                    .internal
+                    .stores
+                    .resolve_type(&self.internal.src_arena.original(&src));
+                let tdst = self
+                    .internal
+                    .stores
+                    .resolve_type(&self.internal.dst_arena.original(&dst));
+                if tsrc == tdst {
+                    self.internal.mappings.link(src, dst);
+                }
+            }
+        }
     }
 }

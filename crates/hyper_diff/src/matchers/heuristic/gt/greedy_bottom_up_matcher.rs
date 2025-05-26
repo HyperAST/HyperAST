@@ -10,7 +10,6 @@ use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
 use num_traits::{cast, one};
-use rand::prelude::*;
 use std::fmt::Debug;
 
 /// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
@@ -156,26 +155,9 @@ where
             }
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
                 let candidates = self.internal.get_dst_candidates(&a);
-                let candidates_orig: Vec<_> = candidates
-                    .iter()
-                    .map(|cand| self.internal.dst_arena.original(cand))
-                    .collect();
-                let a_orig = self.internal.src_arena.original(&a);
-                //println!("a: {:?} ", &a_orig);
-                // println!(
-                // "{}",
-                // hyperast::nodes::TextSerializer::new(&self.internal.stores, b)
-                // );
-                //println!("candidates: {:?}", candidates_orig);
                 let mut best = None;
                 let mut max: f64 = -1.;
                 for cand in candidates {
-                    let cand_orig = self.internal.dst_arena.original(&cand);
-                    //println!("cand: {:?} ", &cand_orig);
-                    // println!(
-                    // "{}",
-                    // hyperast::nodes::TextSerializer::new(&self.internal.stores, s)
-                    // );
                     let sim = similarity_metrics::SimilarityMeasure::range(
                         &self.internal.src_arena.descendants_range(&a),
                         &self.internal.dst_arena.descendants_range(&cand),
@@ -190,8 +172,6 @@ where
 
                 if let Some(best) = best {
                     self.last_chance_match_zs(a, best);
-                    let best_orig = self.internal.dst_arena.original(&best);
-                    //println!("chosen link: {:?} -> {:?}", &a_orig, &best_orig);
                     self.internal.mappings.link(a, best);
                 }
             }
