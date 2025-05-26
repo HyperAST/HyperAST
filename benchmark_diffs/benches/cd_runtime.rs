@@ -162,8 +162,7 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
         .is_test(true)
         .try_init();
 
-    let test_inputs = common::get_test_data_mixed();
-    let input_count = test_inputs.len();
+    let test_inputs = common::get_all_cases();
     common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()
@@ -180,9 +179,27 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
 
     let optimization_configs = create_optimization_configs();
 
-    for input in &test_inputs {
+    let total_iterations = test_inputs.len() * optimization_configs.len();
+
+    let skip = 328;
+    let mut iteration = skip;
+
+    for (input_idx, input) in test_inputs.iter().enumerate() {
+        if input_idx < skip {
+            continue;
+        }
         let input = preprocess(input);
-        for opt_config in &optimization_configs {
+        for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
+            iteration += 1;
+            println!(
+                "Progress: {}/{} (Test case {} of {}, Config {} of {})",
+                iteration,
+                total_iterations,
+                input_idx + 1,
+                test_inputs.len(),
+                opt_idx + 1,
+                optimization_configs.len()
+            );
             group.bench_with_input(
                 format!(
                     "CD Single - {} - {} loc {} nodes",
