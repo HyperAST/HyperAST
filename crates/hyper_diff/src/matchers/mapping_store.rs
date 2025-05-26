@@ -86,7 +86,7 @@ impl<T: PrimInt + Debug> VecStore<T> {
     }
 
     pub fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
-        if self.is_src(&t1) && self.is_dst(&t2) {
+        if !self.is_src(&t1) && !self.is_dst(&t2) {
             self.link(t1, t2);
             true
         } else {
