@@ -108,9 +108,8 @@ fn preps_precomputed(
 
 fn compare_querying_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("QueryingRepeat2.2Spoon");
-    group.sample_size(10);
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    group.plot_config(plot_config);
+    // let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    // group.plot_config(plot_config);
 
     let codes = "../../../../spoon/src/main/java"; // spoon dataset (only source code to avoid including resources), could add tests if necessary
     let codes = Path::new(&codes).to_owned();
@@ -128,40 +127,40 @@ fn compare_querying_group(c: &mut Criterion) {
         bench_baseline(&mut group, parameter);
         bench_rust_baseline(&mut group, parameter);
 
-        let pp = preps_default(parameter);
-        group.bench_with_input(
-            BenchmarkId::new("default", parameter.0.3),
-            &pp,
-            |b, (query, stores, roots)| {
-                b.iter(|| {
-                    let mut count = 0;
-                    for &n in roots {
-                        let pos = hyperast::position::StructuralPosition::new(n);
-                        let cursor =
-                            hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
-                        let matches = query.matches(cursor);
-                        count += black_box(matches.count());
-                    }
-                    debug_assert_eq!(count as u64, parameter.0.4);
-                })
-            },
-        );
-        group.bench_with_input(
-            BenchmarkId::new("default_opt", parameter.0.3),
-            &pp,
-            |b, (query, stores, roots)| {
-                b.iter(|| {
-                    let mut count = 0;
-                    for &n in roots {
-                        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
-                        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
-                        let matches = query.matches(cursor);
-                        count += black_box(matches.count());
-                    }
-                    debug_assert_eq!(count as u64, parameter.0.4);
-                })
-            },
-        );
+        // let pp = preps_default(parameter);
+        // group.bench_with_input(
+        //     BenchmarkId::new("default", parameter.0.3),
+        //     &pp,
+        //     |b, (query, stores, roots)| {
+        //         b.iter(|| {
+        //             let mut count = 0;
+        //             for &n in roots {
+        //                 let pos = hyperast::position::StructuralPosition::new(n);
+        //                 let cursor =
+        //                     hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
+        //                 let matches = query.matches(cursor);
+        //                 count += black_box(matches.count());
+        //             }
+        //             debug_assert_eq!(count as u64, parameter.0.4);
+        //         })
+        //     },
+        // );
+        // group.bench_with_input(
+        //     BenchmarkId::new("default_opt", parameter.0.3),
+        //     &pp,
+        //     |b, (query, stores, roots)| {
+        //         b.iter(|| {
+        //             let mut count = 0;
+        //             for &n in roots {
+        //                 let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
+        //                 let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+        //                 let matches = query.matches(cursor);
+        //                 count += black_box(matches.count());
+        //             }
+        //             debug_assert_eq!(count as u64, parameter.0.4);
+        //         })
+        //     },
+        // );
 
         let pp = preps_precomputed(parameter);
         group.bench_with_input(
@@ -193,7 +192,7 @@ fn compare_querying_group(c: &mut Criterion) {
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
-                    debug_assert_eq!(count as u64, parameter.0.4);
+                    assert_eq!(count as u64, parameter.0.4);
                 })
             },
         );
@@ -218,7 +217,7 @@ fn bench_baseline(
                 let mut cursor = tree_sitter::QueryCursor::default();
                 count += black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
             }
-            debug_assert_eq!(count as u64, parameter.0.4);
+            assert_eq!(count as u64, parameter.0.4);
         })
     });
 }
@@ -249,5 +248,9 @@ fn bench_rust_baseline(
     );
 }
 
-criterion_group!(querying, compare_querying_group);
+criterion_group!(
+    name = querying;
+    config = Criterion::default().configure_from_args();
+    targets = compare_querying_group
+);
 criterion_main!(querying);
