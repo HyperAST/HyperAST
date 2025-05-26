@@ -56,8 +56,17 @@ js-sys = "0.3"
 # wasm-bindgen-futures = "0.4"
 
 
+[[example]]
+name = "hscroll"
+path = "src/hscroll.rs"
+harness = false
+required-features = ["eframe"]
+
+
 [features]
 default = ["serde"]
+
+eframe = ["eframe/glow", "eframe/default_fonts"]
 
 # Allow serialization using [`serde`](https://docs.rs/serde).
 serde = ["egui/serde", "dep:serde"]
