@@ -4211,6 +4211,7 @@ dependencies = [
  "tabled",
  "tree-sitter",
  "tuples",
+ "walkdir",
 ]
 
 [[package]]

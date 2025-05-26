@@ -42,6 +42,7 @@ jemalloc-ctl = "0.5.4"
 regex = "1.11.1"
 tabled = "0.19.0"
 chrono = "0.4.41"
+walkdir = "2.5.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
@@ -62,6 +63,10 @@ criterion = { version = "0.4", features = [
 
 [[bench]]
 name = "cd_runtime"
+harness = false
+
+[[bench]]
+name = "cd_memory_criterion"
 harness = false
 
 [[bin]]

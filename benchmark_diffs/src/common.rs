@@ -1,7 +1,7 @@
 use criterion::black_box;
 use hyper_diff::algorithms;
-use hyperast::store::SimpleStores;
-use std::path::Path;
+use hyperast::{store::SimpleStores, types::HyperAST};
+use std::{cmp::max, fs, path::Path};
 
 use crate::preprocess::parse_string_pair;
 
@@ -21,21 +21,23 @@ pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         ),
-        "change_distiller" => algorithms::change_distiller::diff(
+        "change_distiller" => algorithms::change_distiller_optimized::diff_baseline(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         ),
-        "change_distiller_lazy" => algorithms::change_distiller_lazy::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "change_distiller_lazy_2" => algorithms::change_distiller_lazy_2::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
+        "change_distiller_lazy" => {
+            algorithms::change_distiller_optimized::diff_with_all_optimizations(
+                &stores,
+                &src_tr.local.compressed_node,
+                &dst_tr.local.compressed_node,
+            )
+        }
+        // "change_distiller_lazy_2" => algorithms::change_distiller_lazy_2::diff(
+        //     &stores,
+        //     &src_tr.local.compressed_node,
+        //     &dst_tr.local.compressed_node,
+        // ),
         _ => panic!("Unknown diff algorithm"),
     };
 
@@ -239,10 +241,10 @@ pub fn get_test_data_large() -> Vec<(String, String)> {
 }
 
 pub fn get_test_data_mixed() -> Vec<(String, String)> {
-    let mixed = TEST_CASES_S[41..101]
+    let mixed = TEST_CASES_S[0..0]
         .iter()
-        .chain(TEST_CASES_M[0..10].iter())
-        // .chain(TEST_CASES_L[0..2].iter())
+        .chain(TEST_CASES_M[11..49].iter())
+        // .chain(TEST_CASES_L[0..22].iter())
         .cloned()
         .collect::<Vec<_>>();
     println!("Mixed test data size: {}", mixed.len());
@@ -273,6 +275,74 @@ fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
         })
         .collect();
     test_inputs
+}
+
+/// This function examines the defect4j dataset and extracts all file changes sorted by file size
+/// It returns a vector of tuples containing the relative paths of the before and after files.
+pub fn get_all_case_paths() -> Vec<(String, String)> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("datasets/defects4j");
+
+    // Collect all file paths in "before" recursively
+    let mut file_paths = Vec::new();
+    for entry in walkdir::WalkDir::new(root.join("before"))
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file() && e.file_name().to_string_lossy().ends_with(".java"))
+    {
+        file_paths.push(
+            entry
+                .path()
+                .strip_prefix(root.join("before"))
+                .unwrap()
+                .to_owned(),
+        );
+    }
+
+    // Sort by file size (smallest first)
+    file_paths.sort_by_key(|rel_path| {
+        let abs_path = root.join("before").join(rel_path);
+        std::fs::metadata(&abs_path).map(|m| m.len()).unwrap_or(0)
+    });
+
+    file_paths
+        .iter()
+        .map(|path| {
+            let before_path = root.join("before").join(&path);
+            let after_path = root.join("after").join(&path);
+
+            (
+                before_path.to_string_lossy().into_owned(),
+                after_path.to_string_lossy().into_owned(),
+            )
+        })
+        .collect()
+}
+
+/// Given a list of relative paths, reads the before/after file contents and returns them as pairs
+pub fn get_all_cases_from_paths(paths: &[(String, String)]) -> Vec<(String, String)> {
+    let test_inputs: Vec<_> = paths
+        .iter()
+        .map(|(buggy_path, fixed_path)| {
+            // Read file contents
+            let buggy_content = std::fs::read_to_string(&buggy_path)
+                .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
+            let fixed_content = std::fs::read_to_string(&fixed_path)
+                .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
+
+            (buggy_content, fixed_content)
+        })
+        .collect();
+    test_inputs
+}
+
+pub fn get_all_cases() -> Vec<(String, String)> {
+    let paths = get_all_case_paths();
+    get_all_cases_from_paths(&paths)
 }
 
 use tabled::{Table, Tabled};
@@ -350,4 +420,29 @@ pub fn print_test_case_table(test_inputs: &Vec<(String, String)>) {
     );
 
     println!("  Total Nodes: {}", nodes.iter().sum::<usize>());
+}
+
+pub struct Input {
+    pub stores: SimpleStores<hyperast_gen_ts_java::types::TStore>,
+    pub src: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
+    pub dst: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
+    pub loc: usize,
+    pub node_count: usize,
+}
+
+pub fn preprocess(input: &(String, String)) -> Input {
+    let (src, dst) = input;
+    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut md_cache = Default::default();
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, src, dst);
+    let loc = max(src.lines().count(), dst.lines().count());
+    let node_count = stores.node_store().len();
+
+    Input {
+        stores,
+        src: src_tr.local.compressed_node,
+        dst: dst_tr.local.compressed_node,
+        loc,
+        node_count,
+    }
 }

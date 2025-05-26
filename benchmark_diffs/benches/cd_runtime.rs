@@ -126,36 +126,6 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
     ]
 }
 
-struct Input {
-    stores: SimpleStores<hyperast_gen_ts_java::types::TStore>,
-    src: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
-    dst: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
-    loc: usize,
-    node_count: usize,
-}
-
-/// Preprocesses all test inputs to avoid parsing overhead during benchmarking.
-fn preprocess_test_inputs(test_inputs: &[(String, String)]) -> Vec<Input> {
-    test_inputs.iter().map(|input| preprocess(input)).collect()
-}
-
-fn preprocess(input: &(String, String)) -> Input {
-    let (src, dst) = input;
-    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-    let mut md_cache = Default::default();
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, src, dst);
-    let loc = max(src.lines().count(), dst.lines().count());
-    let node_count = stores.node_store().len();
-
-    Input {
-        stores,
-        src: src_tr.local.compressed_node,
-        dst: dst_tr.local.compressed_node,
-        loc,
-        node_count,
-    }
-}
-
 fn benchmark_optimized_change_distiller(c: &mut Criterion) {
     // Initialize logging for debugging if needed
     let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
@@ -188,7 +158,7 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
         if input_idx < skip {
             continue;
         }
-        let input = preprocess(input);
+        let input = common::preprocess(input);
         for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
             iteration += 1;
             println!(
