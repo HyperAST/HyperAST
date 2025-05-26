@@ -1,7 +1,7 @@
 ///! fully compress all subtrees from a tree-sitter query CST
 use std::{collections::HashMap, fmt::Debug};
 
-use hyperast::types::HyperType;
+use hyperast::types::{HyperType, WithSerialization};
 use legion::world::EntryRef;
 
 use hyperast::store::nodes::compo::{self, CS};
@@ -24,6 +24,7 @@ use hyperast::{
     },
     types::{ETypeStore as _, LabelStore as _},
 };
+use num::ToPrimitive;
 
 use crate::types::{TsQueryEnabledTypeStore, Type};
 use crate::{TNode, types::TIdN};
@@ -390,6 +391,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 padding_start: 0,
             }
         };
+        let mut byte_len = 0;
         for c in cs {
             let local = {
                 // print_tree_syntax(&self.stores.node_store, &self.stores.label_store, &c);
@@ -410,6 +412,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                         label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
                         syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
                     };
+                    byte_len += node.try_bytes_len().unwrap();
                     use hyperast::types::WithStats;
                     use num::ToPrimitive;
                     let metrics = SubTreeMetrics {
@@ -469,7 +472,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
             dyn_builder.add(interned_kind);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(
-                (acc.end_byte - acc.start_byte).try_into().unwrap(),
+                byte_len.to_u32().unwrap(), // (acc.end_byte - acc.start_byte).try_into().unwrap(),
             ));
             if let Some(label_id) = label_id {
                 dyn_builder.add(label_id);
@@ -580,20 +583,22 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
 pub struct PP<IdN, HAST, const SPC: bool = false> {
     stores: HAST,
     root: IdN,
-    root_indent: &'static str,
+    pub indent: &'static str,
 }
 
 impl<IdN, HAST, const SPC: bool> std::fmt::Display for PP<IdN, HAST, SPC>
 where
     IdN: hyperast::types::NodeId<IdN = IdN>,
     HAST: hyperast::types::HyperAST<IdN = IdN>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use hyperast::types::Childrn;
         use hyperast::types::WithChildren;
         let kind = self.stores.resolve_type(&self.root);
         if !kind.is_file() {
-            return match self.serialize(&self.root, &self.root_indent, &self.root_indent, f) {
+            return match self.serialize(&self.root, "", &"", f) {
                 Err(hyperast::nodes::IndentedAlt::FmtError) => Err(std::fmt::Error),
                 _ => Ok(()),
             };
@@ -601,15 +606,23 @@ where
         let b = self.stores.resolve(&self.root);
         let children = b.children();
         let mut first = true;
-        for c in children.unwrap() {
-            if !first {
+        let mut ind = "";
+        let Some(children) = children else {
+            return Ok(());
+        };
+        for c in children {
+            let kind = self.stores.resolve_type(&c);
+            if !first && kind.as_static_str() == "named_node" {
+                writeln!(f)?;
                 writeln!(f)?;
             }
-            match self.serialize(&c, &self.root_indent, &self.root_indent, f) {
+            match self.serialize(&c, "", ind, f) {
                 Err(hyperast::nodes::IndentedAlt::FmtError) => return Err(std::fmt::Error),
-                _ => (),
+                Err(hyperast::nodes::IndentedAlt::NoIndent) => {}
+                Ok(_) => {}
             }
             if first {
+                ind = self.indent;
                 first = false;
             }
         }
@@ -621,12 +634,14 @@ impl<IdN, HAST, const SPC: bool> PP<IdN, HAST, SPC>
 where
     IdN: hyperast::types::NodeId<IdN = IdN>,
     HAST: hyperast::types::HyperAST<IdN = IdN>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
 {
     pub fn new(stores: HAST, root: IdN) -> Self {
         Self {
             stores,
             root,
-            root_indent: "\n",
+            indent: "\n  ",
         }
     }
     fn serialize(
@@ -652,21 +667,21 @@ where
         match kind.as_static_str() {
             "program" => (),
             "identifier" | "@" | "#" | "predicate_type" => (),
-            "capture" => (),
             "parameters" => (),
+            "quantifier" => (),
             "(" => (),
-            ")" => {
+            ")" | "]" => {
                 out.write_str(parent_indent)?;
             }
             "predicate" => {
                 out.write_str(" ")?;
             }
-            "string" => {
+            "string" | "capture" => {
                 out.write_str(" ")?;
             }
-            // "named_node" => {
-            //     out.write_str(&format!("{:?}", indent))?;
-            // }
+            "named_node" => {
+                out.write_str(indent)?;
+            }
             _ => {
                 out.write_str(indent)?;
             }
@@ -675,8 +690,17 @@ where
         let r = match (label, children) {
             (None, None) => {
                 out.write_str(&kind.to_string())?;
-                // out.write_str(&format!("{parent_indent:?}"))?;
                 let mut ind = indent.to_string();
+                match kind.as_static_str() {
+                    "[" => ind.push_str("  "),
+                    _ => (),
+                }
+                match kind.as_static_str() {
+                    "[" => Ok(ind),
+                    _ => Err(IndentedAlt::NoIndent),
+                }
+                // out.write_str(&format!("{parent_indent:?}"))?;
+                // let mut ind = indent.to_string();
                 // if kind.as_static_str() == "(" {
                 //     // ind.push_str("    ");
                 //     //     // out.write_str(parent_indent)?;
@@ -690,7 +714,7 @@ where
                 //     // ind.push_str("    ");
                 //     Ok(ind)
                 // }
-                Err(IndentedAlt::NoIndent)
+                // Err(IndentedAlt::NoIndent)
             }
             (label, Some(children)) => {
                 let mut parent_indent = parent_indent.to_string();
@@ -702,11 +726,7 @@ where
                 //     let s = self.stores.label_store().resolve(label);
                 // }
                 //
-                match kind.as_static_str() {
-                    "predicate" => parent_indent = "".to_string(),
-                    "named_node" if children.len() <= 3 => parent_indent = "".to_string(),
-                    _ => (),
-                }
+
                 // if kind.is_file() {
                 // } else if kind.as_static_str() == "anonymous_node" {
                 //     out.write_str(parent_indent)?;
@@ -725,21 +745,49 @@ where
                 // }
                 let mut it = children;
                 let mut ind = indent.to_string();
+
+                match kind.as_static_str() {
+                    "parameters" => ind = " ".to_string(),
+                    // "named_node" if children.len() <= 3 => parent_indent = "".to_string(),
+                    _ => (),
+                }
+
                 // if kind.is_file() {
                 //     // } else if kind.as_static_str() == "anonymous_node" {
                 //     // } else if kind.as_static_str() == "named_node" {
                 // } else {
                 //     ind.push_str("    ");
                 // }
-                for i in 0..it.len() {
+                use hyperast::types::WithStats;
+                let count = it.len();
+                let len = b.size();
+                // let len = b.try_bytes_len().unwrap_or(0);
+                for _ in 0..it.len() {
                     let id = it.next().unwrap();
                     match self.serialize(&id, &parent_indent, &ind, out) {
-                        Ok(_ind) if parent_indent != "" => {
-                            parent_indent = ind;
-                            ind = _ind;
+                        Ok(_ind) if kind.as_static_str() == "named_node" && len <= 4 => {
+                            // Ok(_ind) if kind.as_static_str() == "named_node" && len <= 40 => {
+                            parent_indent = "".to_string();
+                            ind = "\n  ".to_string();
+                            // parent_indent = ind;
+                            // ind = _ind;
+                        }
+                        Ok(_ind) if kind.as_static_str() == "predicate" => {
+                            // parent_indent = "c'".to_string();
+                            parent_indent = "".to_string();
+                            ind = "c".to_string();
+                        }
+                        Ok(_ind) if parent_indent == "" && ind == "" => {
+                            parent_indent = "\n".to_string();
+                            ind = format!("\n{_ind}");
+                            // parent_indent = format!("{ind}d'");
+                            // ind = format!("{_ind}d");
                         }
                         Ok(_ind) => {
+                            parent_indent = ind;
                             ind = _ind;
+                            // parent_indent = format!("{ind}d'");
+                            // ind = format!("{_ind}d");
                         }
                         // Err(IndentedAlt::NoIndent) => ind = indent.to_string(),
                         Err(IndentedAlt::NoIndent) => (),
@@ -784,7 +832,116 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pp() -> Result<(), ()> {
+    fn test_pp_name_node() -> Result<(), ()> {
+        let text = r#"
+(block)
+    "#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_name_nodes() -> Result<(), ()> {
+        let text = r#"
+(block)
+
+(block)
+        "#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_capture() -> Result<(), ()> {
+        let text = r#"
+(block)@a
+        "#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_nested() -> Result<(), ()> {
+        let text = r#"
+(block
+  (local_variable_declaration
+    (variable_declarator
+      (identifier)
+      (string_literal)
+    )
+  )
+)
+"#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_nested2() -> Result<(), ()> {
+        let text = r#"
+(block
+  (local_variable_declaration
+    (variable_declarator
+      (identifier)
+      (string_literal)
+    )
+  )
+  (local_variable_declaration)
+)
+"#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_predicate() -> Result<(), ()> {
+        let text = r#"
+(block
+  (local_variable_declaration
+    (variable_declarator
+      (identifier) (#EQ? "input")
+      (string_literal)
+    )
+  )
+)"#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_predicate_eq() -> Result<(), ()> {
+        let text = r#"
+(block
+  (local_variable_declaration
+    (variable_declarator
+      (identifier) @a
+      (string_literal) @b
+    ) (#eq? @a @b)
+  )
+)
+    "#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_predicate_end() -> Result<(), ()> {
+        let text = r#"
+(block
+  (local_variable_declaration
+    (variable_declarator
+      (identifier) @a
+      (string_literal) @b
+    )
+  )
+) (#eq? @a @b)
+"#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_large() -> Result<(), ()> {
         let text = r#"
 (block
   (local_variable_declaration
@@ -808,10 +965,51 @@ mod tests {
 )@_root
 
 (block)
-"#
+    "#
         .trim();
+        identity_check(text)
+    }
 
-        // use hyperast_gen_ts_java::types::TStore;
+    #[test]
+    fn test_pp_choice() -> Result<(), ()> {
+        let text = r#"
+[
+  (expression_statement)
+  (local_variable_declaration)
+] @x
+            "#
+        .trim();
+        identity_check(text)
+    }
+
+    #[test]
+    fn test_pp_TODO() -> Result<(), ()> {
+        let text = r#"
+(block
+  (expression_statement
+    (method_invocation
+      (identifier) (#EQ? "assertEquals")
+    )
+  )
+  (expression_statement
+    (method_invocation
+      (identifier) (#EQ? "assertEquals")
+      (argument_list
+        (string_literal)
+        (array_access
+          (identifier) (#EQ? "result")
+          (decimal_integer_literal)
+        )
+      )
+    )
+  )
+) @_root
+        "#
+        .trim();
+        identity_check(text)
+    }
+
+    fn identity_check(text: &str) -> Result<(), ()> {
         use crate::types::TStore;
         let mut query_store = SimpleStores::<TStore>::default();
         let mut md_cache = Default::default();
@@ -825,7 +1023,6 @@ mod tests {
         };
         let full_node = query_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
         let root = full_node.local.compressed_node;
-
         let p = PP::<_, _>::new(&query_store, root);
         println!("{p}");
         pretty_assertions::assert_str_eq!(text, p.to_string());

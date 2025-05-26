@@ -241,7 +241,7 @@ impl HyperType for Type {
     }
 
     fn is_file(&self) -> bool {
-        todo!()
+        self == &Type::Program
     }
 
     fn is_spaces(&self) -> bool {

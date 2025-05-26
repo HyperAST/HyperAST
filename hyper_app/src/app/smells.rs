@@ -97,25 +97,25 @@ impl Default for ComputeConfigQuery {
                 .into(),
             meta_simp: r#"(predicate
     (identifier) (#EQ? "EQ")
-    (parameters 
-        (string) @label 
+    (parameters
+        (string) @label
     )
 ) @pred
 (_
-    (named_node 
+    (named_node
         (identifier) (#EQ "expression_statement")
     ) @rm
     .
 )
 (_
-    (named_node 
+    (named_node
         (identifier) (#EQ "expression_statement")
     ) @rm
     .
     (named_node)
 )
 (_
-    (named_node 
+    (named_node
         (identifier) (#EQ "expression_statement")
     ) @rm
     .
@@ -664,6 +664,10 @@ fn show_query_with_example(
             );
             let clip_rect = ui2.clip_rect();
             let bad_ex_cont = &bad_query.examples[..bad_query.examples.len().min(12)];
+            if bad_ex_cont.is_empty() {
+                ui2.label(format!("{}", bad_query.examples.len()));
+                return;
+            }
             MultiSplitter::with_orientation(MultiSplitterOrientation::Horizontal)
                 .ratios(if bad_ex_cont.len() <= 8 {
                     vec![1.0 / bad_ex_cont.len() as f32; bad_ex_cont.len() - 1]
@@ -709,8 +713,8 @@ pub(crate) fn show_query(
     let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
-        let mut layout_job =
-            egui_extras::syntax_highlighting::highlight(ui.ctx(), ui.style(), &theme, code, language);
+        use egui_extras::syntax_highlighting::highlight;
+        let mut layout_job = highlight(ui.ctx(), ui.style(), &theme, code, language);
         // syntax_highlighter::highlight(ui.ctx(), &theme, code, language);
         if false {
             layout_job.wrap.max_width = wrap_width;

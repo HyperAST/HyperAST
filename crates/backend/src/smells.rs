@@ -211,7 +211,7 @@ pub(crate) fn smells(
         hyperast_gen_ts_java::types::TIdN<_>,
     >(sss, ex_map.keys().copied(), &meta_gen, &meta_simp);
     let bad: Vec<_> = query_lattice
-        .iter()
+        .iter_pretty()
         .filter(|x| 5 < x.1.len() && x.1.len() * 2 < ex_map.len())
         .collect();
     dbg!(bad.len());
@@ -247,7 +247,16 @@ pub(crate) fn smells(
             examples: bad[i]
                 .1
                 .iter()
-                .flat_map(|x| ex_map.get(x).unwrap())
+                .filter_map(|x| query_lattice.raw_rels.get(&query_lattice.leaf(*x)))
+                .flat_map(|x| {
+                    x.into_iter()
+                        .filter_map(|x| match x {
+                            hyperast_gen_ts_tsquery::code2query::TR::Init(c) => Some(c),
+                            _ => None,
+                        })
+                        .flat_map(|x| ex_map.get(&x))
+                })
+                .flatten()
                 .copied()
                 .collect::<HashSet<_>>()
                 .into_iter()
