@@ -211,6 +211,7 @@ fn top_bar_ui(app: &mut crate::HyperApp, ui: &mut egui::Ui) {
             ui.add_space(16.0);
         }
 
+        re_ui::notifications::notification_toggle_button(ui, &mut app.notifs);
         ui.medium_icon_toggle_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, &mut app.show_right_panel);
         ui.medium_icon_toggle_button(
             &re_ui::icons::BOTTOM_PANEL_TOGGLE,

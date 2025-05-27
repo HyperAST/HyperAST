@@ -534,7 +534,7 @@ impl crate::HyperApp {
         egui::TopBottomPanel::top("left_panel_top_bar")
             .min_height(3.0 * re_ui::DesignTokens::title_bar_height())
             .frame(egui::Frame {
-                inner_margin: egui::Margin::symmetric(re_ui::DesignTokens::view_padding(), 0.0),
+                inner_margin: egui::Margin::symmetric(re_ui::DesignTokens::view_padding(), 0),
                 ..Default::default()
             })
             .show_inside(ui, |ui| self.show_actions(ui));

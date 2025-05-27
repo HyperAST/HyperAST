@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
-use num::{cast, NumCast, PrimInt, ToPrimitive};
+use num::{NumCast, PrimInt, ToPrimitive, cast};
 
 use crate::types::{
     HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use epaint::text::{cursor::*, Galley, LayoutJob};
+use epaint::text::{Galley, LayoutJob, cursor::*};
 
 use egui::{output::OutputEvent, *};
 
@@ -370,25 +370,28 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                 if output.response.has_focus() {
                     epaint::RectShape::new(
                         frame_rect,
-                        visuals.rounding,
+                        visuals.corner_radius,
                         ui.visuals().extreme_bg_color,
                         ui.visuals().selection.stroke,
+                        egui::StrokeKind::Inside,
                     )
                 } else {
                     epaint::RectShape::new(
                         frame_rect,
-                        visuals.rounding,
+                        visuals.corner_radius,
                         ui.visuals().extreme_bg_color,
                         visuals.bg_stroke,
+                        egui::StrokeKind::Inside,
                     )
                 }
             } else {
                 let visuals = &ui.style().visuals.widgets.inactive;
                 epaint::RectShape::new(
                     frame_rect,
-                    visuals.rounding,
+                    visuals.corner_radius,
                     Color32::TRANSPARENT,
                     visuals.bg_stroke,
+                    egui::StrokeKind::Inside,
                 )
             };
 
@@ -684,7 +687,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                             cursor_rect(text_draw_pos, &galley, &cursor_range.primary, row_height);
 
                         let is_fully_visible = ui.clip_rect().contains_rect(rect); // TODO: remove this HACK workaround for https://github.com/emilk/egui/issues/1531
-                        if (response.changed || selection_changed) && !is_fully_visible {
+                        if (response.changed() || selection_changed) && !is_fully_visible {
                             ui.scroll_to_rect(cursor_pos, None); // keep cursor in view
                         }
 
@@ -702,7 +705,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
 
         state.clone().store(ui.ctx(), id);
 
-        if response.changed {
+        if response.changed() {
             response.widget_info(|| {
                 WidgetInfo::text_edit(
                     true,
@@ -1079,7 +1082,6 @@ fn events<TB: TextBuffer>(
             //         None
             //     }
             // }
-
             #[cfg(feature = "accesskit")]
             Event::AccessKitActionRequest(accesskit::ActionRequest {
                 action: accesskit::Action::SetTextSelection,

@@ -1028,7 +1028,13 @@ fn show_either_side<MH: MakeHighlights>(
                 };
                 egui::Stroke::new(3., color)
             };
-            ui.painter().rect(rect, 1., color.multiply(0.1), stroke);
+            ui.painter().rect(
+                rect,
+                1.,
+                color.multiply(0.1),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
         }
     };
 }

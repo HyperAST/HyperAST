@@ -10,7 +10,7 @@ use egui_addon::{
     meta_edge::meta_egde,
     multi_split::multi_splitter::MultiSplitter,
 };
-use epaint::{ahash::HashSet, Pos2};
+use epaint::{Pos2, ahash::HashSet};
 use hyperast::{
     store::nodes::fetched::NodeIdentifier,
     types::{AnyType, HyperType, Labeled, TypeStore},
@@ -228,8 +228,8 @@ pub(crate) fn show_results(
     let w_id = ui.id().with("Tracking Timeline");
     let timeline_window = ui.available_rect_before_wrap();
     let spacing: egui::Vec2 = (0.0, 0.0).into(); //4.0 // ui.spacing().item_spacing;
-                                                 // let spacing: egui::Vec2 = (4.0, 4.0).into(); //4.0 // ui.spacing().item_spacing;
-                                                 // let spacing: egui::Vec2 = (30.0, 4.0).into(); //4.0 // ui.spacing().item_spacing;
+    // let spacing: egui::Vec2 = (4.0, 4.0).into(); //4.0 // ui.spacing().item_spacing;
+    // let spacing: egui::Vec2 = (30.0, 4.0).into(); //4.0 // ui.spacing().item_spacing;
     let mut w_state = State::load(ui.ctx(), w_id);
     let (total_cols, col_width) = if long_tracking.results.len() <= 2 {
         (
@@ -492,6 +492,7 @@ pub(crate) fn show_results(
                         egui::Rounding::ZERO,
                         fill_color,
                         egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
+                        egui::StrokeKind::Inside,
                     );
                     painter.text(
                         rect.center(),
@@ -666,7 +667,6 @@ pub(crate) fn show_results(
             let clip_rect = egui::Rect::from_x_y_ranges(x_start..=x_end, ui.max_rect().y_range());
             let ui = &mut egui::Ui::new(
                 ui.ctx().clone(),
-                ui.layer_id(),
                 w_id.with(col as isize - long_tracking.origin_index as isize),
                 egui::UiBuilder {
                     ui_stack_info: ui.stack().info.clone(),
@@ -1804,12 +1804,7 @@ fn show_detached_element(
                     epaint::pos2(bot.x, bot.y),
                     epaint::pos2(bot.x - s, bot.y + s),
                 ]);
-                path.fill(
-                    10.0,
-                    egui::Color32::RED,
-                    &epaint::PathStroke::NONE,
-                    &mut out,
-                );
+                path.fill(10.0, egui::Color32::RED, &mut out);
                 ui.painter().set(past, out);
                 // path.stroke_closed(self.feathering, stroke, &mut out);
                 past_resp = Some(ui.interact(
@@ -1884,7 +1879,7 @@ fn show_detached_element(
                             (min.x + size.x + 10.0, min.y + size.y + 10.0).into(),
                         )
                         .expand(20.0),
-                        egui::Rounding::same(1.0),
+                        egui::CornerRadius::same(1),
                         egui::Color32::GREEN,
                     ),
                 );

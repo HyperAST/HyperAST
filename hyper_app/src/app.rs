@@ -8,16 +8,17 @@ use crate::{
     command_palette::CommandPalette,
 };
 use code_aspects::remote_fetch_node;
-use commit::{fetch_commit, CommitSlice, SelectedProjects};
+use commit::{CommitSlice, SelectedProjects, fetch_commit};
 use core::f32;
 use egui::util::hash;
 use egui_addon::{
+    Lang,
     code_editor::{self, generic_text_buffer::TextBuffer},
     egui_utils::radio_collapsing,
-    syntax_highlighting, Lang,
+    syntax_highlighting,
 };
 use querying::DetailsResults;
-use re_ui::{toasts, UiExt as _};
+use re_ui::{UiExt as _, notifications::NotificationUi};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -99,8 +100,10 @@ pub struct HyperApp {
 
     capture_clip_into_repos: bool,
 
+    // #[serde(skip)]
+    // toasts: toasts::Toasts,
     #[serde(skip)]
-    toasts: toasts::Toasts,
+    notifs: NotificationUi,
 
     selected_commit: Option<(ProjectId, String)>,
     selected_baseline: Option<String>,
@@ -537,7 +540,7 @@ impl Default for AppData {
                     code_editor::EditorInfo::default().copied(),
                     r#"(try_statement
   (block
-    (expression_statement 
+    (expression_statement
       (method_invocation
         (identifier) (#EQ? "fail")
       )
@@ -549,7 +552,7 @@ impl Default for AppData {
   body: (_
     (method_declaration
       (modifiers
-        (marker_annotation 
+        (marker_annotation
           name: (_) (#EQ? "Test")
         )
       )
@@ -718,7 +721,7 @@ impl Default for HyperApp {
             dummy_bool: true,
             latest_cmd: Default::default(),
             capture_clip_into_repos: false,
-            toasts: Default::default(),
+            notifs: Default::default(),
             selected_commit: None,
             selected_baseline: None,
         }
@@ -728,7 +731,7 @@ impl Default for HyperApp {
 const DEFAULT_EXPLAINATIONS_MDS: &[&str] = &[r#"# Graphical Interface of the HyperAST
 
 You are using the GUI of the HyperAST.
-The HyperAST enables developpers and researchers alike to explore and investigate 
+The HyperAST enables developpers and researchers alike to explore and investigate
 temporal code evolutions in the repositories of their choice.
 
 Readily supports projects using Java with Maven, and simple C/C++ (Makefile in root and an src/ dir).
@@ -899,7 +902,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 let query = &mut self.data.queries[*id as usize];
                 ui.painter().rect_filled(
                     ui.available_rect_before_wrap(),
-                    ui.visuals().window_rounding,
+                    ui.visuals().window_corner_radius,
                     ui.visuals().extreme_bg_color,
                 );
 
@@ -1373,7 +1376,10 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                             };
                             let max_matches = self.data.queries[qid].max_matches;
                             let timeout = self.data.queries[qid].timeout;
-                            let precomp = self.data.queries[qid].precomp.clone().map(|id| &self.data.queries[id as usize]);
+                            let precomp = self.data.queries[qid]
+                                .precomp
+                                .clone()
+                                .map(|id| &self.data.queries[id as usize]);
                             let precomp = precomp.map(|p| p.query.as_ref().to_string());
                             let hash =
                                 hash((&query, self.selected_baseline.as_ref().unwrap().clone()));
@@ -1416,8 +1422,8 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
             }
             Tab::ProjectSelection() => {
                 egui::Frame::none()
-                    .outer_margin(egui::Margin::same(5.0))
-                    .inner_margin(egui::Margin::same(15.0))
+                    .outer_margin(egui::Margin::same(5))
+                    .inner_margin(egui::Margin::same(15))
                     .show(ui, |ui| {
                         show_project_selection(ui, &mut self.data);
 
@@ -1967,7 +1973,7 @@ impl eframe::App for HyperApp {
         crate::platform::show_nat_menu(ctx, _frame);
 
         self.show_text_logs_as_notifications();
-        self.toasts.show(ctx);
+        // self.toasts.ui(ctx);
 
         self.top_bar(ctx);
 
