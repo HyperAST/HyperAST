@@ -4,11 +4,15 @@ use crate::{
         LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
         ShallowDecompressedTreeStore,
     },
-    matchers::mapping_store::MonoMappingStore,
+    matchers::{
+        heuristic::cd::iterator::{CustomIteratorConfig, CustomPostOrderIterator},
+        mapping_store::MonoMappingStore,
+    },
 };
 use ahash::RandomState;
-use hyperast::PrimInt;
+use hyperast::nodes::TextSerializer;
 use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, TypeStore, WithHashs};
+use hyperast::{PrimInt, types::HyperType};
 use std::fmt::Debug;
 use std::{
     cmp::Ordering,
@@ -67,7 +71,7 @@ where
     HAST::Label: Eq,
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
-    <HAST::TS as TypeStore>::Ty: Hash + Eq + Clone,
+    <HAST::TS as TypeStore>::Ty: Hash + Eq + Clone + HyperType,
     Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
         + DecompressedWithParent<HAST, Dsrc::IdD>
         + PostOrder<HAST, Dsrc::IdD, M::Src>
@@ -136,11 +140,40 @@ where
             HashMap::with_hasher(RandomState::new());
 
         // Create QGram object once if reuse is enabled
-        let qgram = if self.config.reuse_qgram_object {
-            str_distance::QGram::new(3)
-        } else {
-            str_distance::QGram::new(3) // Always create for consistency
-        };
+        let qgram = str_distance::QGram::new(3);
+
+        println!("=== Testing Custom Iterator ===");
+
+        let src_root = self.src_arena.starter();
+
+        // Create a closure that captures arena and stores for statement checking
+        let is_statement_fn =
+            |arena: &mut Dsrc, stores: HAST, node: &<Dsrc as LazyDecompressed<M::Src>>::IdD| {
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                node_type.is_statement()
+            };
+
+        let custom_iter = CustomPostOrderIterator::new(
+            &mut self.src_arena,
+            self.stores,
+            src_root,
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            is_statement_fn,
+        );
+
+        let nodes: Vec<_> = custom_iter.collect();
+
+        for (i, stmt_node) in nodes.iter().enumerate() {
+            let original = self.src_arena.original(stmt_node);
+            let text = TextSerializer::new(&self.stores, original).to_string();
+            println!("Statement leaf {}: {}", i, text.trim());
+        }
+
+        println!("=== End Custom Iterator ===");
 
         // Collect leaves
         let dst_leaves: Vec<M::Dst> = self
