@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 #[cfg(feature = "legion")]
@@ -46,9 +46,7 @@ mod legion_impls {
     }
 }
 
-pub trait TsEnabledTypeStore:
-    hyperast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
-{
+pub trait TsEnabledTypeStore: hyperast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS {
     fn resolve(t: Self::Ty) -> Type;
 }
 
@@ -225,6 +223,15 @@ impl HyperType for Type {
             Type::Identifier => Shared::Identifier,
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        use hyperast::types::Abstract;
+        Abstract::Expression.when(self.is_expression())
+            | Abstract::Statement.when(self.is_statement())
+            | Abstract::Executable.when(self.is_executable_member())
+            | Abstract::Declaration.when(self.is_type_declaration())
+            | Abstract::Literal.when(self.is_literal())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

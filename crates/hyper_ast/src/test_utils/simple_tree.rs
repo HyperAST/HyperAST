@@ -688,6 +688,10 @@ impl HyperType for Ty {
         todo!()
     }
 
+    fn as_abstract(&self) -> crate::types::Abstracts {
+        todo!()
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         todo!()
     }

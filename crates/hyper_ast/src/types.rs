@@ -416,9 +416,12 @@ mod exp {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
-#[strum(serialize_all = "snake_case")]
-enum Abstract {
+/// set of possible abtract type of nodes
+pub type Abstracts = enumset::EnumSet<Abstract>;
+
+/// the posible abstract type that a node can have
+#[derive(Debug, Hash, Display, enumset::EnumSetType)]
+pub enum Abstract {
     Expression,
     Statement,
     Executable,
@@ -426,6 +429,17 @@ enum Abstract {
     Literal,
 }
 
+impl Abstract {
+    pub fn when(self, enable: bool) -> Abstracts {
+        if enable {
+            self.into()
+        } else {
+            Abstracts::empty()
+        }
+    }
+}
+
+/// exclusive shared type, you can use it in combination with `Abstract`
 #[derive(Debug, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
 #[strum(serialize_all = "snake_case")]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
@@ -484,8 +498,10 @@ impl<T> LangRef<T> for LangWrapper<T> {
 // trait object used to facilitate erasing node types
 pub trait HyperType: Display + Debug {
     fn as_shared(&self) -> Shared;
+    /// returns an union of all abstract types that apply
+    fn as_abstract(&self) -> Abstracts;
     fn as_any(&self) -> &dyn std::any::Any;
-    // returns the same address for the same type
+    /// returns the same "address" for the same type
     fn as_static(&self) -> &'static dyn HyperType;
     fn as_static_str(&self) -> &'static str;
     fn generic_eq(&self, other: &dyn HyperType) -> bool
@@ -524,6 +540,10 @@ impl HyperType for u8 {
     }
 
     fn as_shared(&self) -> Shared {
+        todo!()
+    }
+
+    fn as_abstract(&self) -> Abstracts {
         todo!()
     }
 
@@ -1269,6 +1289,10 @@ where
         self.e().as_shared()
     }
 
+    fn as_abstract(&self) -> Abstracts {
+        self.e().as_abstract()
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self.s().as_any()
     }
@@ -1328,10 +1352,9 @@ where
     }
 }
 
-pub use crate::store::nodes::ErasedHolder;
 pub use crate::store::nodes::Compo;
 pub use crate::store::nodes::CompressedCompo;
-
+pub use crate::store::nodes::ErasedHolder;
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore {}
 
@@ -1518,6 +1541,10 @@ impl HyperType for AnyType {
 
     fn as_shared(&self) -> Shared {
         self.0.as_shared()
+    }
+
+    fn as_abstract(&self) -> Abstracts {
+        self.0.as_abstract()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

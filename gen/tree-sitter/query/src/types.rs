@@ -267,6 +267,10 @@ impl HyperType for Type {
         }
     }
 
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        hyperast::types::Abstracts::empty()
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

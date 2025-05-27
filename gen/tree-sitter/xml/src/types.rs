@@ -1,7 +1,7 @@
 use std::{fmt::Display, u16};
 
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 #[cfg(feature = "impl")]
@@ -230,6 +230,10 @@ impl HyperType for Type {
         match self {
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        hyperast::types::Abstracts::empty()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
