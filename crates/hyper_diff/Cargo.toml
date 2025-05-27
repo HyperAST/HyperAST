@@ -14,6 +14,7 @@ log = { version = "0.4.6" }
 hyperast = { workspace = true, features = ["native", "legion"] }
 
 logging_timer = "1.1.0"
+ahash = "0.8.12"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = [

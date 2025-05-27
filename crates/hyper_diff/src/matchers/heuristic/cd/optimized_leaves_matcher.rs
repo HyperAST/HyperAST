@@ -6,6 +6,7 @@ use crate::{
     },
     matchers::mapping_store::MonoMappingStore,
 };
+use ahash::RandomState;
 use hyperast::PrimInt;
 use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, TypeStore, WithHashs};
 use std::fmt::Debug;
@@ -131,7 +132,8 @@ where
     /// Execute with type grouping optimization - only compare leaves of same type
     fn execute_with_type_grouping(&mut self) {
         // Pre-compute and cache label info (always when using type grouping for best performance)
-        let mut label_cache: HashMap<(HAST::IdN, HAST::IdN), f64> = HashMap::new();
+        let mut label_cache: HashMap<(HAST::IdN, HAST::IdN), f64, RandomState> =
+            HashMap::with_hasher(RandomState::new());
 
         // Create QGram object once if reuse is enabled
         let qgram = if self.config.reuse_qgram_object {
@@ -160,14 +162,14 @@ where
             .collect();
 
         // Group leaves by type and build label cache in single pass for optimal performance
-        let mut src_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> =
-            HashMap::new();
-        let mut dst_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> =
-            HashMap::new();
-        let mut src_label_cache: HashMap<M::Src, Option<(HAST::IdN, String)>> =
-            HashMap::with_capacity(src_leaves.len());
-        let mut dst_label_cache: HashMap<M::Dst, Option<(HAST::IdN, String)>> =
-            HashMap::with_capacity(dst_leaves.len());
+        let mut src_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>, RandomState> =
+            HashMap::default();
+        let mut dst_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>, RandomState> =
+            HashMap::default();
+        let mut src_label_cache: HashMap<M::Src, Option<(HAST::IdN, String)>, RandomState> =
+            HashMap::default();
+        let mut dst_label_cache: HashMap<M::Dst, Option<(HAST::IdN, String)>, RandomState> =
+            HashMap::default();
 
         // Process source leaves: group by type and cache labels in single pass
         for src_leaf in &src_leaves {
@@ -411,9 +413,9 @@ where
         dst_leaf: &M::Dst,
         src_tree: &Dsrc::IdD,
         dst_tree: &Ddst::IdD,
-        label_cache: &mut HashMap<(HAST::IdN, HAST::IdN), f64>,
-        src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>>,
-        dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>>,
+        label_cache: &mut HashMap<(HAST::IdN, HAST::IdN), f64, RandomState>,
+        src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>, RandomState>,
+        dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>, RandomState>,
         qgram: &str_distance::QGram,
     ) -> f64 {
         // Get the original node IDs

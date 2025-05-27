@@ -6,6 +6,7 @@ use crate::{
     },
     matchers::{Mapper, Mapping, mapping_store::MonoMappingStore, similarity_metrics},
 };
+use ahash::RandomState;
 use hyperast::PrimInt;
 use hyperast::types::{HyperAST, NodeId, WithHashs};
 use std::collections::HashMap;
@@ -111,8 +112,8 @@ where
             leaf_counts.insert(*src.shallow(), leaf_count);
         }
 
-        let mut src_nodes_by_type: HashMap<_, Vec<_>> = HashMap::new();
-        let mut dst_nodes_by_type: HashMap<_, Vec<_>> = HashMap::new();
+        let mut src_nodes_by_type: HashMap<_, Vec<_>, RandomState> = HashMap::default();
+        let mut dst_nodes_by_type: HashMap<_, Vec<_>, RandomState> = HashMap::default();
 
         // Index source nodes by their type (only unmapped non-leaf nodes)
         for s in self.src_arena.iter_df_post::<true>() {
