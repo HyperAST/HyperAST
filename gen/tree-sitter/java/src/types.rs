@@ -235,6 +235,9 @@ impl HyperType for Type {
     fn is_supertype(&self) -> bool {
         self.is_supertype()
     }
+    fn is_statement(&self) -> bool {
+        <Self as TypeTrait>::is_statement(self)
+    }
     fn is_syntax(&self) -> bool {
         self == &Type::LParen // "(",
         || self == &Type::Amp // "&",

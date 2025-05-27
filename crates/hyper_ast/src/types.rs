@@ -495,6 +495,9 @@ pub trait HyperType: Display + Debug {
     fn is_directory(&self) -> bool;
     fn is_spaces(&self) -> bool;
     fn is_syntax(&self) -> bool;
+    fn is_statement(&self) -> bool {
+        todo!()
+    }
     fn is_hidden(&self) -> bool;
     fn is_named(&self) -> bool;
     fn is_supertype(&self) -> bool;
@@ -1298,6 +1301,10 @@ where
 
     fn is_spaces(&self) -> bool {
         self.e().is_spaces()
+    }
+
+    fn is_statement(&self) -> bool {
+        self.e().is_statement()
     }
 
     fn is_syntax(&self) -> bool {
