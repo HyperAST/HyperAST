@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::{
     any::{Any, TypeId},
     marker::PhantomData,

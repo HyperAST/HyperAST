@@ -1,6 +1,6 @@
 use std::io::stdin;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]

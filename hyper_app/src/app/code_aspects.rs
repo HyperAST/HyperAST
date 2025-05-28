@@ -1,5 +1,5 @@
 use super::tree_view::FetchedViewImpl;
-use super::tree_view::{store::FetchedHyperAST, Action, NodeIdentifier, PrefillCache};
+use super::tree_view::{Action, NodeIdentifier, PrefillCache, store::FetchedHyperAST};
 use super::types;
 use super::types::Resource;
 use super::utils_egui::MyUiExt as _;
@@ -201,8 +201,8 @@ pub(crate) fn show(
     if let Some(aspects_result) = aspects_result.ready_mut() {
         match aspects_result {
             Ok(aspects_result) => {
-                let ui =
-                    &mut ui.child_ui(ui.available_rect_before_wrap(), ui.layout().clone(), None);
+                let ui = &mut ui
+                    .new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
                 let _scroll = egui::ScrollArea::both()
                     .auto_shrink([false, false])
                     .show_viewport(ui, |ui, _viewport| {

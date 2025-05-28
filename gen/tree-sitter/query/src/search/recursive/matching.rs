@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::auto::tsq_ser_meta::Converter;
 
 use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatcher};
@@ -14,8 +15,7 @@ impl<'a, Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
         HAST: TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<Ty = Ty>
-            + 'static,
+        TIdN: hyperast::types::TypedNodeId<Ty = Ty> + 'static,
         Ty: std::fmt::Debug + Eq + Copy,
     {
         let Some((n, t)) = code_store.try_resolve(&id) else {
@@ -46,8 +46,7 @@ impl<'a, Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     where
         HAST: TypedHyperAST<TIdN>,
         HAST::TS: TypeStore,
-        TIdN: hyperast::types::TypedNodeId<Ty = Ty>
-            + 'static,
+        TIdN: hyperast::types::TypedNodeId<Ty = Ty> + 'static,
         Ty: std::fmt::Debug + Eq + Copy,
     {
         let Some((n, _)) = code_store.try_resolve(&id) else {
@@ -139,8 +138,7 @@ impl<Ty> Pattern<Ty> {
     ) -> MatchingRes<HAST::IdN, HAST::Idx>
     where
         HAST: TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId<Ty = Ty>
-            + 'static,
+        TIdN: hyperast::types::TypedNodeId<Ty = Ty> + 'static,
         Ty: std::fmt::Debug + TypeTrait,
     {
         let Some((n, _)) = code_store.try_resolve(&id) else {
@@ -261,8 +259,7 @@ impl<Ty> Pattern<Ty> {
                                 v.path.push(i);
                             }
                             captures.extend(capt);
-                            let Some((n, _)) = code_store.try_resolve(&child)
-                            else {
+                            let Some((n, _)) = code_store.try_resolve(&child) else {
                                 dbg!();
                                 return MatchingRes::zero();
                             };
@@ -276,8 +273,7 @@ impl<Ty> Pattern<Ty> {
                             if immediate {
                                 return MatchingRes::zero();
                             }
-                            let Some((n, _)) = code_store.try_resolve(&child)
-                            else {
+                            let Some((n, _)) = code_store.try_resolve(&child) else {
                                 dbg!();
                                 return MatchingRes::zero();
                             };
@@ -290,8 +286,7 @@ impl<Ty> Pattern<Ty> {
                         } => {
                             immediate = false;
                             matched = Quant::ZeroOrOne;
-                            let Some((n, _)) = code_store.try_resolve(&child)
-                            else {
+                            let Some((n, _)) = code_store.try_resolve(&child) else {
                                 dbg!();
                                 return MatchingRes::zero();
                             };
@@ -487,9 +482,5 @@ impl<Ty> Pattern<Ty> {
 }
 
 fn quant_from_bool(b: bool) -> tree_sitter::CaptureQuantifier {
-    if b {
-        Quant::One
-    } else {
-        Quant::Zero
-    }
+    if b { Quant::One } else { Quant::Zero }
 }

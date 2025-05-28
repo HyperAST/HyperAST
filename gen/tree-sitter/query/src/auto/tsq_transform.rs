@@ -93,8 +93,7 @@ pub fn regen_query(
                             if cs[mid].0 == p {
                                 if path.is_empty() {
                                     let c = ActionTree::New(new);
-                                    todo!();
-                                    cs[mid] = (p, c);
+                                    cs[mid] = (p, c); // TODO check behavior
                                     break;
                                 }
                                 insert(&mut cs[mid].1, Action::Replace { path, new });
@@ -267,8 +266,7 @@ pub fn try_regen_query(
                             if cs[mid].0 == p {
                                 if path.is_empty() {
                                     let c = ActionTree::New(new);
-                                    todo!();
-                                    cs[mid] = (p, c);
+                                    cs[mid] = (p, c); // TODO check behavior
                                     break;
                                 }
                                 insert(&mut cs[mid].1, Action::Replace { path, new });

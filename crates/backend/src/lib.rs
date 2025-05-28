@@ -1,6 +1,7 @@
 // #![feature(array_chunks)]
 // #![feature(map_many_mut)]
 // #![feature(iter_collect_into)]
+#![allow(unused)]
 use std::{
     net::SocketAddr,
     sync::{Arc, RwLock},

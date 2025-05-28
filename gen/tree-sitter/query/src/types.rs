@@ -241,7 +241,7 @@ impl HyperType for Type {
     }
 
     fn is_file(&self) -> bool {
-        todo!()
+        self == &Type::Program
     }
 
     fn is_spaces(&self) -> bool {
@@ -265,6 +265,10 @@ impl HyperType for Type {
             Type::Identifier => Shared::Identifier,
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        hyperast::types::Abstracts::empty()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

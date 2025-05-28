@@ -137,7 +137,7 @@ impl crate::HyperApp {
                         ui.add_space(50.0);
                     };
                     ui.visuals_mut().clip_rect_margin = 0.0;
-                    ui.allocate_ui_at_rect(max_rect, |ui| {
+                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(max_rect), |ui| {
                         egui::ScrollArea::horizontal()
                             // .horizontal_scroll_offset(max_rect.left() - rect.left() + 50.0)
                             .auto_shrink(false)
@@ -172,14 +172,14 @@ impl crate::HyperApp {
 
                     ui.add_space(10.0);
                     use crate::command::UICommandSender;
-                    #[cfg(hyperast_experimental)]
-                    if ui
-                        .add(ui.small_icon_button_widget(&re_ui::icons::ADD))
-                        .on_hover_text("new blank layout")
-                        .clicked()
-                    {
-                        // TODO
-                    }
+                    // #[cfg(hyperast_experimental)]
+                    // if ui
+                    //     .add(ui.small_icon_button_widget(&re_ui::icons::ADD))
+                    //     .on_hover_text("new blank layout")
+                    //     .clicked()
+                    // {
+                    //     // TODO
+                    // }
                     ui.add_space(10.0);
                     if ui.button("💾").on_hover_text("save layout").clicked() {
                         self.data.command_sender.send_ui(UICommand::SaveLayout);
@@ -211,6 +211,7 @@ fn top_bar_ui(app: &mut crate::HyperApp, ui: &mut egui::Ui) {
             ui.add_space(16.0);
         }
 
+        re_ui::notifications::notification_toggle_button(ui, &mut app.notifs);
         ui.medium_icon_toggle_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, &mut app.show_right_panel);
         ui.medium_icon_toggle_button(
             &re_ui::icons::BOTTOM_PANEL_TOGGLE,
@@ -224,7 +225,7 @@ fn top_bar_ui(app: &mut crate::HyperApp, ui: &mut egui::Ui) {
             ui.medium_icon_toggle_button(&re_ui::icons::CONTAINER_HORIZONTAL, &mut grid);
             ui.medium_icon_toggle_button(&re_ui::icons::CONTAINER_VERTICAL, &mut grid);
         });
-        egui::widgets::global_dark_light_mode_switch(ui);
+        egui::global_theme_preference_switch(ui);
 
         let resp = ui.toggle_value(&mut app.persistance, "persistance");
         if resp.changed() {

@@ -2,10 +2,7 @@
 //! here focuses on impact of using different precomputed queries
 use std::path::{Path, PathBuf};
 
-use criterion::{
-    AxisScale, BenchmarkId, Criterion, PlotConfiguration, black_box, criterion_group,
-    criterion_main,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::{self, JavaTreeGen};
@@ -17,34 +14,41 @@ pub const QUERIES: &[BenchQuery] = &[
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null",
-        297, // matches on spoon
+        295, // matches on spoon
     ),
     (
         &[QUERY_RET_NULL_SUBS[1], QUERY_RET_NULL_SUBS[2]],
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null_1+2",
-        297, // matches on spoon
+        295, // matches on spoon
     ),
     (
         &[QUERY_RET_NULL_SUBS[1]],
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null_1",
-        297, // matches on spoon
+        295, // matches on spoon
     ),
     (
         &[QUERY_RET_NULL_SUBS[2]],
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null_2",
-        297, // matches on spoon
+        295, // matches on spoon
+    ),
+    (
+        &[QUERY_RET_NULL_SUBS[0]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth",
+        1, // matches on spoon
     ),
     (
         &[QUERY_MAIN_METH_SUBS[0]],
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
-        "main_meth",
+        "main_meth_0",
         1, // matches on spoon
     ),
     (
@@ -139,7 +143,7 @@ fn preps_precomputed(
         bench_param.0,
     )
     .unwrap();
-    query._check_preprocessed(0, bench_param.0.len());
+    assert_eq!(precomp.enabled_pattern_count(), bench_param.0.len());
     let mut stores =
         hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
@@ -171,12 +175,33 @@ fn compare_querying_group(c: &mut Criterion) {
     //     .map(|()| log::set_max_level(log::LevelFilter::Trace))
     //     .unwrap();
     let mut group = c.benchmark_group("QueryingRepeat3Spoon");
-    group.sample_size(10);
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    group.plot_config(plot_config);
+    // group.sample_size(10);
+    // let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    // group.plot_config(plot_config);
 
-    let codes = "../../../../spoon/src/main/java"; // spoon dataset (only source code to avoid including resources), could add tests if necessary
-    let codes = Path::new(&codes).to_owned();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let ws_path = root.parent().unwrap().parent().unwrap();
+    let project_path = ws_path.parent().unwrap().join("spoon");
+    assert!(
+        project_path.is_dir(),
+        "You must provide a Java project to analyze, such as Spoon"
+    );
+    // TODO clone repo in a tmp dir
+
+    let oid = std::process::Command::new("git")
+        .current_dir(&project_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(oid.status.success());
+    assert_eq!(
+        std::str::from_utf8(&oid.stdout),
+        Ok("56e12a0c0e0e69ea70863011b4f4ca3305e0542b\n"),
+        "expect to analyse Spoon's commit 56e12a0"
+    );
+
+    // spoon dataset (only source code to avoid including resources), could add tests if necessary
+    let codes = project_path.join("src/main/java");
     let codes = It::new(codes).map(|x| {
         let text = std::fs::read_to_string(&x).expect(&format!(
             "{:?} is not a java file or a dir containing java files: ",
@@ -185,7 +210,9 @@ fn compare_querying_group(c: &mut Criterion) {
         (x, text)
     });
     let codes: Box<[_]> = codes.collect();
+
     for parameter in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
+        group.throughput(Throughput::Elements(parameter.0.4 as u64));
         bench_baseline(&mut group, parameter);
         bench_rust_baseline(&mut group, parameter);
 
@@ -225,6 +252,7 @@ fn compare_querying_group(c: &mut Criterion) {
                 })
             },
         );
+        drop(pp);
 
         let mut pp = None;
         group.bench_with_input(
@@ -283,7 +311,7 @@ fn bench_baseline(
                 let mut cursor = tree_sitter::QueryCursor::default();
                 count += black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
             }
-            assert_eq!(count as u64, parameter.0.4);
+            assert_eq!(count as u64, parameter.0.4, "{}", parameter.0.3);
         })
     });
 }
@@ -314,5 +342,9 @@ fn bench_rust_baseline(
     );
 }
 
-criterion_group!(querying, compare_querying_group);
+criterion_group!(
+    name = querying;
+    config = Criterion::default().configure_from_args();
+    targets = compare_querying_group
+);
 criterion_main!(querying);

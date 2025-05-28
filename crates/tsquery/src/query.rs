@@ -1359,6 +1359,7 @@ impl Query {
         // be in the `steps` array, but they will never be read.
         self.pattern_map
             .retain(|pattern| pattern.pattern_index != pattern_index)
+        // TODO check if the quantifier vec should also be updated
     }
 
     pub fn init_tsquery(source: &str, language: Language) -> Result<*mut ffi::TSQuery, QueryError> {
@@ -1441,6 +1442,23 @@ impl Query {
             });
         };
         Ok(ptr)
+    }
+
+    pub fn quant(&self, pid: PatternId, cid: CaptureId) -> CaptureQuantifier {
+        self.capture_quantifiers_vec[pid.to_usize()][cid.to_usize()]
+    }
+
+    pub fn quants(&self, cid: CaptureId) -> impl Iterator<Item = PatternId> {
+        self.capture_quantifiers_vec
+            .iter()
+            .enumerate()
+            .filter_map(move |(i, c)| {
+                matches!(
+                    c[cid.to_usize()],
+                    CaptureQuantifier::One | CaptureQuantifier::OneOrMore
+                )
+                .then_some(PatternId::new(i))
+            })
     }
 
     pub fn pattern_count(&self) -> usize {

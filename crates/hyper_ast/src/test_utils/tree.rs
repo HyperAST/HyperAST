@@ -5,7 +5,6 @@ use std::str::FromStr;
 
 use num::PrimInt;
 use strum_macros::EnumString;
-use strum_macros::ToString;
 
 pub trait HashKind {
     fn structural() -> Self;
@@ -13,7 +12,7 @@ pub trait HashKind {
 }
 
 /// for now the types shared between all languages
-#[derive(Debug, EnumString, ToString)]
+#[derive(Debug, EnumString, strum_macros::Display)]
 #[strum(serialize_all = "snake_case")]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
 pub enum Type {}
@@ -41,6 +40,7 @@ pub trait WithChildren: Node + Stored {
     fn get_children(&self) -> &[Self::TreeId];
 }
 
+#[allow(unused)]
 /// just to show that it is not efficient
 mod owned {
     use std::cell::RefMut;
@@ -127,7 +127,7 @@ pub trait LabelStore<L: ?Sized> {
     type I: Copy + Eq;
 
     fn get_or_insert<T: Borrow<L>>(&mut self, node: T) -> Self::I;
-    
+
     fn get<T: Borrow<L>>(&self, node: T) -> Option<Self::I>;
 
     fn resolve(&self, id: &Self::I) -> &L;

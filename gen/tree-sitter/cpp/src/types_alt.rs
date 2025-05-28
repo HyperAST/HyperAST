@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,AAAA
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 #[cfg(feature = "impl_intern")]
@@ -77,7 +77,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     crate::language().id_for_node_kind(kind, named)
 }
 #[cfg(not(feature = "impl_intern"))]
-fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+fn id_for_node_kind(_kind: &str, _named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
@@ -493,6 +493,15 @@ impl HyperType for Type {
             Type::QualifiedIdentifier => Shared::Identifier,
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        use hyperast::types::Abstract;
+        Abstract::Expression.when(self.is_expression())
+            | Abstract::Statement.when(self.is_statement())
+            | Abstract::Executable.when(self.is_executable_member())
+            | Abstract::Declaration.when(self.is_type_declaration())
+            | Abstract::Literal.when(self.is_literal())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -34,6 +34,7 @@ pub struct PreparedMatcher<Ty, C = Conv<Ty>> {
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
     pub captures: Arc<[Capture]>,
     pub(crate) quantifiers: Arc<[HashMap<usize, tree_sitter::CaptureQuantifier>]>,
+    #[allow(unused)] // TODO remove entire file, now there is the port of the original
     converter: C,
 }
 

@@ -220,10 +220,6 @@ where
         }
     }
 
-    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {
-        format!("{:?} {}", acc.simple.kind, acc.end_byte)
-    }
-
     fn pre_skippable(
         &mut self,
         text: &Self::Text,

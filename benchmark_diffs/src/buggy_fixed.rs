@@ -363,7 +363,6 @@ mod test {
 
     use hyperast_gen_ts_xml::legion::tree_sitter_parse_xml as parse_xml;
     use hyperast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
-    use hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper;
 
     use hyper_diff::{
         decompressed_tree_store::lazy_post_order::LazyPostOrder,
@@ -371,9 +370,7 @@ mod test {
             Decompressible,
             Mapper,
             Mapping,
-            heuristic::gt::lazy_greedy_subtree_matcher::{
-                LazyGreedySubtreeMatcher, SubtreeMatcher,
-            },
+            heuristic::gt::lazy_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
             // heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::{DefaultMultiMappingStore, VecStore},
         },
@@ -507,6 +504,7 @@ mod test {
         // let stores = &tree_gen.stores;
         let mappings = VecStore::default();
 
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
         // type DS<IdN> = LazyPostOrder<IdN, u32>;
 
@@ -632,6 +630,7 @@ mod test {
         //     &mut Into::<IoOut<_>>::into(stdout()),
         // );
         // println!();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
         let mappings = VecStore::default();
         let mut src_arena = DS::decompress(stores, &src);
@@ -722,6 +721,7 @@ mod test {
         // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
         let stores = hyperast_vcs_git::no_space::as_nospaces2(tree_gen.stores);
 
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
         let mappings = VecStore::default();
         let mut _src_arena = DS::decompress(&stores, &src);
@@ -922,6 +922,7 @@ mod test {
             SyntaxWithIdsSerializer::<_, _, true>::new(tree_gen.stores, dst)
         );
 
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
         let mappings = VecStore::default();
         let mut _src_arena = DS::decompress(&stores, &src);
@@ -1044,6 +1045,7 @@ mod test {
         // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
         let stores = hyperast_vcs_git::no_space::as_nospaces2(tree_gen.stores);
         let mappings = VecStore::default();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
         let mut _src_arena = DS::decompress(&stores, &src);
         let mut _dst_arena = DS::decompress(&stores, &dst);
@@ -1143,6 +1145,7 @@ mod test {
         // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
         let stores = hyperast_vcs_git::no_space::as_nospaces2(tree_gen.stores);
         let mappings = VecStore::default();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
 
         // let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh(

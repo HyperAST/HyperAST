@@ -862,10 +862,10 @@ pub fn print_mappings_no_ranges<
     src_arena: &'a SD,
     stores: HAST,
     mappings: &M,
-)
-where
-// <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
-// <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+) where
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithSerialization,
+    // <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
+    // <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
@@ -940,8 +940,7 @@ mod tests {
         println!("{:?}", std::env::current_dir());
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let src_dst = crate::buggy_fixed::buggy_fixed_dataset_roots(root);
-        let [buggy_path, fixed_path] =
-            src_dst.map(|x| x.join("Jsoup/92"));
+        let [buggy_path, fixed_path] = src_dst.map(|x| x.join("Jsoup/92"));
         let src = buggy_path;
         let dst = fixed_path;
 

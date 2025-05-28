@@ -1,5 +1,8 @@
 use std::{
-    fmt::{Debug, Display}, fs, path::{Path, PathBuf}, process
+    fmt::{Debug, Display},
+    fs,
+    path::{Path, PathBuf},
+    process,
 };
 
 pub use git2::Oid;
@@ -67,25 +70,12 @@ impl<'a> Builder<'a> {
 /// This function just lets errors from [git2] bubble up.
 pub(crate) fn all_commits_between<'a>(
     repository: &'a Repository,
-    before: &str,
+    befor: &str,
     after: &str,
 ) -> Result<Revwalk<'a>, git2::Error> {
-    use git2::*;
-    let mut rw = repository.revwalk()?;
-    if !before.is_empty() {
-        let c = retrieve_commit(repository, before)?;
-        for c in c.parents() {
-            rw.hide(c.id())?;
-        }
-    }
-    if after.is_empty() {
-        rw.push_head()?;
-    } else {
-        let c = retrieve_commit(repository, after)?;
-        rw.push(c.id())?;
-    }
-    rw.set_sorting(Sort::TOPOLOGICAL)?;
-    Ok(rw)
+    let b = if befor.is_empty() { &[][..] } else { &[befor] };
+    let a = if after.is_empty() { &[][..] } else { &[after] };
+    all_commits_between_multi(repository, b, a)
 }
 
 pub(crate) fn all_commits_between_multi<'a>(
@@ -96,7 +86,11 @@ pub(crate) fn all_commits_between_multi<'a>(
     use git2::*;
     let mut rw = repository.revwalk()?;
     for before in before {
-        let c = retrieve_commit(repository, before.as_ref())?;
+        let before = before.as_ref();
+        if before.is_empty() {
+            return Err(git2::Error::from_str("one `before` is empty"));
+        }
+        let c = retrieve_commit(repository, before)?;
         for c in c.parents() {
             rw.hide(c.id())?;
         }
@@ -105,7 +99,11 @@ pub(crate) fn all_commits_between_multi<'a>(
         rw.push_head()?;
     } else {
         for after in after {
-            let c = retrieve_commit(repository, after.as_ref())?;
+            let after = after.as_ref();
+            if after.is_empty() {
+                return Err(git2::Error::from_str("one `after` is empty"));
+            }
+            let c = retrieve_commit(repository, after)?;
             rw.push(c.id())?;
         }
     }

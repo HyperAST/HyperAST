@@ -235,10 +235,6 @@ where
         }
     }
 
-    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {
-        format!("{:?} {}", acc.simple.kind, acc.end_byte)
-    }
-
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
@@ -642,15 +638,5 @@ where
             local,
         };
         full_node
-    }
-}
-
-/// TODO partialana
-impl PartialAnalysis {
-    pub(crate) fn refs_count(&self) -> usize {
-        0 //TODO
-    }
-    pub(crate) fn refs(&self) -> impl Iterator<Item = Vec<u8>> {
-        vec![vec![0_u8]].into_iter() //TODO
     }
 }

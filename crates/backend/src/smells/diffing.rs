@@ -215,7 +215,6 @@ pub(crate) fn diff(
         this.del();
         this.actions
     };
-    // ;
 
     dbg!(&actions.len());
 
@@ -225,9 +224,9 @@ pub(crate) fn diff(
         Mov2,
         Ins,
         Upd,
-        Mov2_Del,
+        Mov2Del,
     }
-    let choice = Choice::Mov2_Del;
+    let choice = Choice::Mov2Del;
     let mut focuses = vec![];
     let mut deletes = vec![];
     let mut inserts = vec![];
@@ -241,7 +240,7 @@ pub(crate) fn diff(
         extract_moves(with_spaces_stores, stores, src_tr, dst_tr, &actions).collect()
     } else if let Choice::Mov2 = choice {
         extract_moves2(with_spaces_stores, stores, src_tr, dst_tr, &actions).collect()
-    } else if let Choice::Mov2_Del = choice {
+    } else if let Choice::Mov2Del = choice {
         let foc = extract_focuses(with_spaces_stores, stores, src_tr, dst_tr, &actions);
         focuses = foc.collect();
         let dels = extract_deletes(with_spaces_stores, stores, src_tr, dst_tr, &actions);

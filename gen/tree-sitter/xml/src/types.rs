@@ -1,13 +1,12 @@
 use std::{fmt::Display, u16};
 
-use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, AAAA,
-};
+use hyperast::types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypeU16, TypedNodeId};
 
 #[cfg(feature = "impl")]
 mod impls {
     use super::*;
     use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
+    use hyperast::types::TypeStore;
 
     impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
@@ -80,7 +79,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 }
 
 #[cfg(not(feature = "impl"))]
-fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+fn id_for_node_kind(_kind: &str, _named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
@@ -230,6 +229,10 @@ impl HyperType for Type {
         match self {
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        hyperast::types::Abstracts::empty()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

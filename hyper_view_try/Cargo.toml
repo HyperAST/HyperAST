@@ -25,9 +25,9 @@ eframe = { version = "0.20.1", default-features = false, features = [
     "puffin",
     "wgpu",
 ] }
-egui = { version = "0.21.0", features = ["extra_debug_asserts", "tracing"] }
+egui = { version = "0.31.1", features = ["extra_debug_asserts", "tracing"] }
 # egui_dock = { version = "0.20.1", features = ["serde"] }
-egui_extras = { version = "0.21.0", features = ["tracing"] }
+egui_extras = { version = "0.31.1", features = ["tracing"] }
 # egui-notify = "0.6"
 # egui-wgpu.version = "0.20.1"
 # enumset = "1.0.12"

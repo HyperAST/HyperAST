@@ -1,20 +1,17 @@
 use crate::{
+    Processor, StackEle,
     cpp::CppAcc,
     git::BasicGitObject,
     make::MakeModuleAcc,
-    preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{erased::{CommitProcExt, CommitProcessorHandle}, CacheHolding, InFiles, ObjectName, ParametrizedCommitProcessorHandle},
-    Processor, StackEle,
+    preprocessed::RepositoryProcessor,
+    processing::{CacheHolding, InFiles, ObjectName},
 };
 use git2::{Oid, Repository};
 use hyperast::{
     store::nodes::legion::eq_node,
     types::{ETypeStore as _, LabelStore},
 };
-use hyperast_gen_ts_cpp::{
-    legion as cpp_gen,
-    types::{CppEnabledTypeStore as _, Type},
-};
+use hyperast_gen_ts_cpp::{legion as cpp_gen, types::Type};
 use hyperast_tsquery::ArrayStr;
 use std::{iter::Peekable, path::Components, sync::Arc};
 
@@ -109,8 +106,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
             }
         }
     }
-    fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(cpp_gen::Local, IsSkippedAna)> {
-        let skiped_ana = true;
+    fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(cpp_gen::Local,)> {
         let name = acc.primary.name.clone();
         let key = (oid, name.as_bytes().into());
         let full_node = make(acc, self.prepro.main_stores_mut().mut_with_ts());
@@ -119,10 +115,10 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
             .mut_or_default::<CppProcessorHolder>()
             .get_caches_mut()
             .object_map
-            .insert(key, (full_node.clone(), skiped_ana));
+            .insert(key, (full_node.clone(),));
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
-            Some((full_node, skiped_ana))
+            Some((full_node,))
         } else {
             let w = &mut self.stack.last_mut().unwrap().acc;
             assert!(
@@ -131,7 +127,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
                 w.primary.children_names,
                 name
             );
-            w.push(name, full_node.clone(), skiped_ana);
+            w.push(name, full_node.clone());
             None
         }
     }
@@ -199,7 +195,8 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
             .position(|x| &x.parameter == &t)
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
-                           // self.0.push(CppProc(t));
+                // self.0.push(CppProc(t));
+                // TODO enable multi configs for cpp, do the same as the one for Java
                 let query = if let Some(q) = &t.query {
                     Query::new(q.iter())
                 } else {
@@ -313,7 +310,7 @@ impl RepositoryProcessor {
         name: &ObjectName,
         repository: &Repository,
         parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
-    ) -> Result<(cpp_gen::Local, IsSkippedAna), crate::ParseErr> {
+    ) -> Result<(cpp_gen::Local,), crate::ParseErr> {
         self.processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Cpp>()
             .handle2(oid, repository, &name, parameters, |c, n, t| {
@@ -349,7 +346,7 @@ impl RepositoryProcessor {
                             cpp_proc.cache.md_cache.len(),
                             cpp_proc.cache.object_map.len()
                         );
-                        (local, false)
+                        (local,)
                     })
                     .map_err(|_| crate::ParseErr::IllFormed)
             })
@@ -363,11 +360,11 @@ impl RepositoryProcessor {
         repository: &Repository,
         parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> Result<(), crate::ParseErr> {
-        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository, parameters)?;
+        let (full_node,) = self.handle_cpp_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         assert!(!parent.primary.children_names.contains(&name));
 
-        parent.push(name, full_node, skiped_ana);
+        parent.push(name, full_node);
         Ok(())
     }
     pub(crate) fn help_handle_cpp_file2(
@@ -378,13 +375,13 @@ impl RepositoryProcessor {
         repository: &Repository,
         parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> Result<(), crate::ParseErr> {
-        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository, parameters)?;
+        let (full_node,) = self.handle_cpp_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         // assert!(!parent_acc.children_names.contains(&name));
         // parent_acc.push_pom(name, x);
         assert!(!parent.primary.children_names.contains(&name));
 
-        parent.push_source_file(name, full_node, skiped_ana);
+        parent.push_source_file(name, full_node);
         Ok(())
     }
 
@@ -395,7 +392,7 @@ impl RepositoryProcessor {
         name: &ObjectName,
         oid: git2::Oid,
         handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
-    ) -> (cpp_gen::Local, IsSkippedAna) {
+    ) -> (cpp_gen::Local,) {
         CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid, &handle).process()
     }
 

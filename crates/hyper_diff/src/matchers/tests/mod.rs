@@ -3,3 +3,6 @@
 // pub mod gumtree_tests;
 #[cfg(test)]
 pub mod zs_tests;
+
+#[cfg(test)]
+pub mod instability;

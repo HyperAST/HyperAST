@@ -1,10 +1,7 @@
 use std::time::Instant;
 
 use crate::java_processor::SimpleStores;
-use crate::{
-    Accumulator, PROPAGATE_ERROR_ON_BAD_CST_NODE, preprocessed::IsSkippedAna,
-    processing::ObjectName,
-};
+use crate::{Accumulator, PROPAGATE_ERROR_ON_BAD_CST_NODE, processing::ObjectName};
 use crate::{BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing};
 
 use hyperast::store::defaults::NodeIdentifier;
@@ -120,12 +117,7 @@ impl JavaAcc {
     //         }
     //     }
     // }
-    pub fn push(
-        &mut self,
-        name: LabelIdentifier,
-        full_node: java_tree_gen::Local,
-        skiped_ana: bool,
-    ) {
+    pub fn push(&mut self, name: LabelIdentifier, full_node: java_tree_gen::Local) {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
 
@@ -145,8 +137,8 @@ impl JavaAcc {
 }
 
 impl hyperast::tree_gen::Accumulator for JavaAcc {
-    type Node = (LabelIdentifier, (java_tree_gen::Local, IsSkippedAna));
-    fn push(&mut self, (name, (full_node, skiped_ana)): Self::Node) {
+    type Node = (LabelIdentifier, (java_tree_gen::Local,));
+    fn push(&mut self, (name, (full_node,)): Self::Node) {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
 
@@ -166,5 +158,5 @@ impl hyperast::tree_gen::Accumulator for JavaAcc {
 }
 
 impl Accumulator for JavaAcc {
-    type Unlabeled = (java_tree_gen::Local, IsSkippedAna);
+    type Unlabeled = (java_tree_gen::Local,);
 }

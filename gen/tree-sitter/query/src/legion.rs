@@ -722,3 +722,5 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         node_store.get(&hashable, eq)
     }
 }
+
+pub use hyperast::nodes::TextSerializer as PP;

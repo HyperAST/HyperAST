@@ -461,6 +461,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
+            let md = self.md_cache.get(&compressed_node).unwrap();
             let hashs = hbuilder.build();
             let metrics = SubTreeMetrics {
                 size,
@@ -469,6 +470,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
                 size_no_spaces,
                 line_count,
             };
+            assert_eq!(md.metrics, metrics);
             Local {
                 compressed_node,
                 metrics,

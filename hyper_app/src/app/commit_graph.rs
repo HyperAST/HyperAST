@@ -5,10 +5,9 @@ use crate::app::commit;
 use lazy_static::lazy_static;
 
 use super::{
-    poll_md_with_pr2,
+    CommitMdStore, ProjectId, QueryId, poll_md_with_pr2,
     querying::{MatchingError, StreamedDataTable},
     utils_results_batched::ComputeResultIdentified,
-    CommitMdStore, ProjectId, QueryId,
 };
 
 lazy_static! {
@@ -108,7 +107,12 @@ impl crate::HyperApp {
             let r = r.clone();
 
             let results_per_commit: Option<&super::ResultsPerCommit> = {
-                if let Some(r) = self.data.queries_results.iter().find(|x| x.project == repo_id) {
+                if let Some(r) = self
+                    .data
+                    .queries_results
+                    .iter()
+                    .find(|x| x.project == repo_id)
+                {
                     let qid = r.query;
                     if let Some(Ok(r)) = r.content.get() {
                         let key = { (repo_id, qid, r.rows.lock().unwrap().0) };
@@ -184,21 +188,17 @@ impl crate::HyperApp {
                                 "https://github.com/{}/{}/commit/{}",
                                 r.user, r.name, cached.commits[i]
                             );
-                            ui.output_mut(|r| r.copied_text = commit.to_string());
-                            self.toasts.add(re_ui::toasts::Toast {
-                                kind: re_ui::toasts::ToastKind::Success,
-                                text: format!(
-                                    "Copied address of github commit to clipboard\n{}",
-                                    commit
-                                ),
-                                options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
-                            });
+                            ui.ctx().copy_text(commit.to_string());
+                            self.notifs.success(format!(
+                                "Copied address of github commit to clipboard\n{}",
+                                commit
+                            ));
                             let id = &cached.commits[i];
                             let repo = r.clone();
                             let id = id.clone();
                             let commit = crate::app::types::Commit { repo, id };
                             let md = self.data.fetched_commit_metadata.remove(&commit.id);
-                            let waiting = commit::fetch_merge_pr2(
+                            let waiting = commit::fetch_merge_pr(
                                 ui.ctx(),
                                 &self.data.api_addr,
                                 &commit,
@@ -223,10 +223,10 @@ impl crate::HyperApp {
                             "https://github.com/{}/{}/commit/{}",
                             r.user, r.name, cached.commits[after]
                         );
-                        self.toasts.add(re_ui::toasts::Toast {
-                            kind: re_ui::toasts::ToastKind::Info,
-                            text: format!("Selected\n{} vs {}", commit, cached.commits[i]),
-                            options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
+                        self.notifs.add_log(re_log::LogMsg {
+                            level: log::Level::Info,
+                            target: format!("graph/commits"),
+                            msg: format!("Selected\n{} vs {}", commit, cached.commits[i]),
                         });
                         if resp.response.clicked() {
                             self.selected_baseline = Some(cached.commits[i].to_string());
@@ -248,15 +248,11 @@ impl crate::HyperApp {
                                 panic!()
                             }
                         } else if resp.response.secondary_clicked() {
-                            ui.output_mut(|r| r.copied_text = commit.to_string());
-                            self.toasts.add(re_ui::toasts::Toast {
-                                kind: re_ui::toasts::ToastKind::Success,
-                                text: format!(
-                                    "Copied address of github commit to clipboard\n{}",
-                                    commit
-                                ),
-                                options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
-                            });
+                            ui.ctx().copy_text(commit.to_string());
+                            self.notifs.success(format!(
+                                "Copied address of github commit to clipboard\n{}",
+                                commit
+                            ));
                         }
                     }
                     _ => (),
@@ -324,7 +320,7 @@ impl crate::HyperApp {
                                         repo,
                                         id: id.clone(),
                                     };
-                                    let waiting = commit::fetch_merge_pr2(
+                                    let waiting = commit::fetch_merge_pr(
                                         ui.ctx(),
                                         &self.data.api_addr,
                                         &commit,
@@ -362,7 +358,7 @@ impl crate::HyperApp {
                                         repo,
                                         id: id.clone(),
                                     };
-                                    let waiting = commit::fetch_merge_pr2(
+                                    let waiting = commit::fetch_merge_pr(
                                         ui.ctx(),
                                         &self.data.api_addr,
                                         &commit,
@@ -389,7 +385,7 @@ impl crate::HyperApp {
                             repo,
                             id: id.clone(),
                         };
-                        let waiting = commit::fetch_merge_pr2(
+                        let waiting = commit::fetch_merge_pr(
                             ui.ctx(),
                             &self.data.api_addr,
                             &commit,
@@ -414,7 +410,12 @@ impl crate::HyperApp {
             else {
                 continue;
             };
-            if let Some(r) = self.data.queries_results.iter().find(|x| x.project == repo_id) {
+            if let Some(r) = self
+                .data
+                .queries_results
+                .iter()
+                .find(|x| x.project == repo_id)
+            {
                 let qid = r.query;
                 if let Some(Ok(r)) = r.content.get() {
                     let key = { (repo_id, qid, r.rows.lock().unwrap().0) };
@@ -461,7 +462,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
     } else {
         egui::Color32::RED
     };
-    egui::Frame::none()
+    egui::Frame::NONE
         .inner_margin(egui::vec2(50.0, 10.0))
         .show(ui, |ui| {
             // TODO now use egui_plot, it will handle interation properly and should not be difficult to migrate I think.
@@ -573,7 +574,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                                 with_egui_plot::transform_y(*delta_time) as f64
                                                     + 30.0,
                                             ];
-                                            if plot_ui.response().clicked {
+                                            if plot_ui.response().clicked() {
                                                 let point = plot_ui.response().hover_pos().unwrap();
                                                 let pos = plot_ui
                                                     .transform()
@@ -595,7 +596,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                                 }
                                             }
                                             let series: Vec<[f64; 2]> = vec![plot_point];
-                                            let points = Points::new(series)
+                                            let points = Points::new("error", series)
                                                 .radius(4.0)
                                                 .color(egui::Color32::RED)
                                                 .name(format!(
@@ -645,12 +646,12 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                 line.push(corner);
                                 if let Some(text) = DIFF_VALS.then_some(()).and(diff) {
                                     plot_ui.text(
-                                        Text::new(corner.into(), text)
+                                        Text::new("diff", corner.into(), text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
                                             .color(diff_val_col),
                                     );
 
-                                    if plot_ui.response().clicked {
+                                    if plot_ui.response().clicked() {
                                         let point = plot_ui.response().hover_pos().unwrap();
                                         let plot_point = PlotPoint::new(corner[0], corner[1]);
                                         let pos =
@@ -671,11 +672,11 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                 let position = with_egui_plot::center(a, b);
                                 if let Some(text) = DIFF_VALS.then_some(()).and(diff) {
                                     plot_ui.text(
-                                        Text::new(position, text)
+                                        Text::new("diff val", position, text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
                                             .color(diff_val_col),
                                     );
-                                    if plot_ui.response().clicked {
+                                    if plot_ui.response().clicked() {
                                         let point = plot_ui.response().hover_pos().unwrap();
                                         let pos =
                                             plot_ui.transform().position_from_point(&position);
@@ -691,7 +692,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
 
                             // stop rendering when reached limit
                             if cached.max_time - t > max_fetch {
-                                let line = Line::new(line).allow_hover(false);
+                                let line = Line::new("last line", line).allow_hover(false);
                                 plot_ui.line(line);
                                 continue 'subs;
                             }
@@ -702,7 +703,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                 });
                                 if let Some(text) = text {
                                     plot_ui.text(
-                                        Text::new(p.map(|x| x as f64).into(), text)
+                                        Text::new("text last", p.map(|x| x as f64).into(), text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
                                             .color(egui::Color32::GRAY),
                                     );
@@ -719,7 +720,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                             if let Some(offset) = LEFT_VALS.then_some(()).and(vals_offset) {
                                 let text = results_per_commit.unwrap().vals_to_string(offset);
                                 plot_ui.text(
-                                    Text::new(p.map(|x| x as f64).into(), text)
+                                    Text::new("left vals", p.map(|x| x as f64).into(), text)
                                         .anchor(egui::Align2::RIGHT_BOTTOM)
                                         .color(egui::Color32::GRAY),
                                 );
@@ -777,12 +778,12 @@ fn show_commit_graph_timed_egui_plot<'a>(
                             });
                             if let Some(text) = DIFF_VALS.then_some(()).and(diff) {
                                 plot_ui.text(
-                                    Text::new(position, text)
+                                    Text::new("diff vals", position, text)
                                         .anchor(egui::Align2::RIGHT_BOTTOM)
                                         .color(egui::Color32::RED),
                                 );
 
-                                if plot_ui.response().clicked {
+                                if plot_ui.response().clicked() {
                                     let point = plot_ui.response().hover_pos().unwrap();
                                     let plot_point = position;
                                     let pos = plot_ui.transform().position_from_point(&plot_point);
@@ -806,11 +807,11 @@ fn show_commit_graph_timed_egui_plot<'a>(
                             }
                         }
 
-                        let line = Line::new(line).allow_hover(false);
+                        let line = Line::new("line", line).allow_hover(false);
                         plot_ui.line(line);
                     }
 
-                    let points = Points::new(points)
+                    let points = Points::new("commit", points)
                         .radius(2.0)
                         .color(egui::Color32::GREEN)
                         .name("Commit");
@@ -820,7 +821,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         points,
                         with_data: false,
                     };
-                    if plot_ui.response().clicked {
+                    if plot_ui.response().clicked() {
                         if let Some(x) = item.find_closest(
                             plot_ui.response().hover_pos().unwrap(),
                             plot_ui.transform(),
@@ -836,7 +837,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         }
                     }
                     plot_ui.add(item);
-                    let points = Points::new(points_with_data)
+                    let points = Points::new("commit with data", points_with_data)
                         .radius(2.0)
                         .color(egui::Color32::DARK_GREEN)
                         .name("Commit with data");
@@ -845,7 +846,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         points,
                         with_data: true,
                     };
-                    if plot_ui.response().clicked {
+                    if plot_ui.response().clicked() {
                         if let Some(x) = item.find_closest(
                             plot_ui.response().hover_pos().unwrap(),
                             plot_ui.transform(),
@@ -868,7 +869,8 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         let y = with_egui_plot::transform_y(y);
                         let position = [cached.times[b] as f64, y as f64].into();
                         let text = &cached.commits[b];
-                        let text = Text::new(position, text).anchor(egui::Align2::LEFT_TOP);
+                        let text =
+                            Text::new("branch name", position, text).anchor(egui::Align2::LEFT_TOP);
                         plot_ui.text(text);
                     }
                     ouput
@@ -938,7 +940,7 @@ fn show_commit_graph_timed_custom<'a>(
         _rect
             .shrink2(egui::vec2(55.0, 0.0))
             .translate(egui::vec2(-30.0, 0.0)),
-        ui.visuals().window_rounding,
+        ui.visuals().window_corner_radius,
         ui.visuals().extreme_bg_color,
     );
 
@@ -1089,7 +1091,7 @@ fn show_commit_graph_timed_custom<'a>(
                 egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::C);
             if resp.hovered() {
                 if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
-                    ui.output_mut(|mem| mem.copied_text = commit.to_string());
+                    ui.ctx().copy_text(commit.to_string());
                 }
             }
             if resp.clicked() {
@@ -1216,7 +1218,7 @@ impl crate::HyperApp {
             v.2.clone()
         });
         let min = ui.available_rect_before_wrap().min.to_vec2() + egui::vec2(20.0, 20.0);
-        let rect = &(cached.rect * 3.0 + egui::Margin::same(20.0)).translate(min);
+        let rect = &(cached.rect * 3.0 + egui::Margin::same(20)).translate(min);
         ui.painter()
             .debug_rect(*rect, egui::Color32::RED, "cached rect");
         let desired_size = rect.size();
@@ -1278,23 +1280,23 @@ fn update_results_per_commit(
     >,
 ) {
     let header = &r.head; //.results.iter().find(|x| x.is_ok());
-                          // let Some(header) = header.as_ref() else {
-                          //     wasm_rs_dbg::dbg!("issue with header");
-                          //     panic!("issue with header");
-                          // };
-                          // let font_id = egui::TextStyle::Body.resolve(ui.style());
-                          // let text_color = ui.style().visuals.text_color();
-                          // let header = header.as_ref().unwrap();
-                          // let h =
-                          // header
-                          //     .inner
-                          //     .result
-                          //     .as_array()
-                          //     .unwrap()
-                          //     .into_iter()
-                          //     .enumerate()
-                          //     .map(|(i, h)| i.to_string())
-                          //     .collect();
+    // let Some(header) = header.as_ref() else {
+    //     wasm_rs_dbg::dbg!("issue with header");
+    //     panic!("issue with header");
+    // };
+    // let font_id = egui::TextStyle::Body.resolve(ui.style());
+    // let text_color = ui.style().visuals.text_color();
+    // let header = header.as_ref().unwrap();
+    // let h =
+    // header
+    //     .inner
+    //     .result
+    //     .as_array()
+    //     .unwrap()
+    //     .into_iter()
+    //     .enumerate()
+    //     .map(|(i, h)| i.to_string())
+    //     .collect();
     let mut vals = vec![0; header.len()];
     results_per_commit.set_cols(header);
     for r in &r.rows.lock().unwrap().1 {
@@ -1382,13 +1384,13 @@ mod with_egui_plot {
         years.chain(months).chain(weeks).chain(days).collect()
     }
 
-    pub struct CommitPoints {
+    pub struct CommitPoints<'a> {
         pub offsets: Vec<u32>,
-        pub points: Points,
+        pub points: Points<'a>,
         pub with_data: bool,
     }
 
-    impl PlotItem for CommitPoints {
+    impl<'a> PlotItem for CommitPoints<'a> {
         fn shapes(&self, ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
             self.points.shapes(ui, transform, shapes)
         }
@@ -1425,7 +1427,7 @@ mod with_egui_plot {
             self.points.bounds()
         }
 
-        fn id(&self) -> Option<egui::Id> {
+        fn id(&self) -> egui::Id {
             PlotItem::id(&self.points)
         }
 
@@ -1491,6 +1493,14 @@ mod with_egui_plot {
                 plot.ui.visuals().text_color(),
             );
             log::debug!("{}", label_formatter.is_some());
+        }
+
+        fn base(&self) -> &egui_plot::PlotItemBase {
+            self.points.base()
+        }
+
+        fn base_mut(&mut self) -> &mut egui_plot::PlotItemBase {
+            self.points.base_mut()
         }
     }
 }

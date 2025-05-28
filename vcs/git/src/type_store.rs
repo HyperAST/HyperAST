@@ -18,21 +18,6 @@ impl Default for TStore {
     }
 }
 
-// TODO use/adapt it for decompress_type and roles
-macro_rules! on_multi {
-    ($n:expr, [$on0:ident $(, $on:ident)*], ($with:ident, $with1:ident) => $body:expr, $default:expr) => {
-        if let Ok($with) = $n.get_component::<$on0::types::Type>() {
-            use $on0 as $with1;
-            $body
-        } $( else if let Ok($with) = $n.get_component::<$on::types::Type>() {
-            use $on as $with1;
-            $body
-        })* else {
-            $default
-        }
-    };
-}
-
 impl<'a> hyperast::types::RoleStore for TStore {
     type IdF = u16;
 
@@ -48,8 +33,7 @@ impl<'a> hyperast::types::RoleStore for TStore {
                 hyperast_gen_ts_java::types::TStore::resolve_field(t.get_lang(), field_id)
             }
             #[cfg(feature = "cpp")]
-            "hyperast_gen_ts_cpp::types_alt::Lang" | 
-            "hyperast_gen_ts_cpp::types::Lang" => {
+            "hyperast_gen_ts_cpp::types_alt::Lang" | "hyperast_gen_ts_cpp::types::Lang" => {
                 let t = hyperast_gen_ts_cpp::types::TType::new(
                     hyperast_gen_ts_cpp::types::Type::Spaces,
                 );
@@ -77,8 +61,7 @@ impl<'a> hyperast::types::RoleStore for TStore {
                 hyperast_gen_ts_java::types::TStore::intern_role(t.get_lang(), role)
             }
             #[cfg(feature = "cpp")]
-            "hyperast_gen_ts_cpp::types_alt::Lang" | 
-            "hyperast_gen_ts_cpp::types::Lang" => {
+            "hyperast_gen_ts_cpp::types_alt::Lang" | "hyperast_gen_ts_cpp::types::Lang" => {
                 let t = hyperast_gen_ts_cpp::types::TType::new(
                     hyperast_gen_ts_cpp::types::Type::Spaces,
                 );

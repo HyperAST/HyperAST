@@ -157,7 +157,7 @@ pub trait AccIndentation: Accumulator {
     fn indentation<'a>(&'a self) -> &'a Spaces;
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SubTreeMetrics<U> {
     pub hashs: U,
     pub size: u32,

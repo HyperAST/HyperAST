@@ -2,9 +2,9 @@
 //! But it will require some more love, as I initially did not finish to implement everithing.
 
 use super::{
-    lazy_post_order::LazyPostOrder, ContiguousDescendants, DecendantsLending, IterKr,
-    LazyDecompressed, LazyDecompressedTreeStore, LazyPOBorrowSlice, LazyPOSliceLending,
-    PostOrdKeyRoots, PostOrderIterable, PostOrderKeyRoots, Shallow,
+    ContiguousDescendants, DecendantsLending, IterKr, LazyDecompressed, LazyDecompressedTreeStore,
+    LazyPOBorrowSlice, LazyPOSliceLending, PostOrdKeyRoots, PostOrderIterable, PostOrderKeyRoots,
+    Shallow, lazy_post_order::LazyPostOrder,
 };
 use crate::{
     decompressed_tree_store::{
@@ -12,14 +12,14 @@ use crate::{
         ShallowDecompressedTreeStore,
     },
     matchers::{
-        mapping_store::{MappingStore, MonoMappingStore},
         Decompressible,
+        mapping_store::{MappingStore, MonoMappingStore},
     },
 };
 use bitvec::slice::BitSlice;
-use hyperast::types::{self, AstLending, HyperAST, WithChildren, WithStats};
 use hyperast::PrimInt;
-use num_traits::{cast, zero, ToPrimitive, Zero};
+use hyperast::types::{self, AstLending, HyperAST, WithChildren, WithStats};
+use num_traits::{ToPrimitive, Zero, cast, zero};
 use std::{
     borrow::{Borrow, BorrowMut},
     collections::BTreeMap,
@@ -45,13 +45,13 @@ pub struct SimpleHiddingMapper<
 
 // TODO deref to back
 impl<
-        'a,
-        IdD: Debug,
-        DTS: Debug, // + DecompressedTreeStore<HAST, IdD>,
-        M: BorrowMut<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > Debug for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
+    'a,
+    IdD: Debug,
+    DTS: Debug, // + DecompressedTreeStore<HAST, IdD>,
+    M: BorrowMut<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> Debug for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SD")
@@ -88,7 +88,6 @@ pub fn hiding_map<IdN, IdD: PrimInt, D: BorrowMut<LazyPostOrder<IdN, IdD>>, M: I
 ) -> (Vec<IdD>, BTreeMap<IdD, IdD>)
 where
     M::Output: PrimInt,
-    // T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
     let x: &LazyPostOrder<IdN, IdD> = back.borrow();
     let mut map = Vec::with_capacity(x._len());
@@ -304,7 +303,6 @@ pub fn hide<
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
-    // T::TreeId: Clone + std::fmt::Debug,
 {
     (
         SimpleHiddingMapper {
@@ -349,14 +347,14 @@ where
 // }
 
 impl<
-        'a,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS: ShallowDecompressedTreeStore<HAST, IdD>, //: DecompressedTreeStore<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > ShallowDecompressedTreeStore<HAST, IdD> for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
+    'a,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS: ShallowDecompressedTreeStore<HAST, IdD>, //: DecompressedTreeStore<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> ShallowDecompressedTreeStore<HAST, IdD> for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
 {
     fn len(&self) -> usize {
         self.map.borrow().len()
@@ -391,14 +389,14 @@ impl<
 }
 
 impl<
-        'a,
-        HAST: HyperAST + Copy, // + WithStats,
-        IdD: PrimInt + Debug,  // + Shallow<IdD> + Debug,
-        DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>, //: DecompressedTreeStore<HAST, IdD, IdD> + PostOrder<HAST, IdD>, // + LazyDecompressedTreeStore<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > DecompressedTreeStore<HAST, IdD> for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
+    'a,
+    HAST: HyperAST + Copy, // + WithStats,
+    IdD: PrimInt + Debug,  // + Shallow<IdD> + Debug,
+    DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>, //: DecompressedTreeStore<HAST, IdD, IdD> + PostOrder<HAST, IdD>, // + LazyDecompressedTreeStore<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> DecompressedTreeStore<HAST, IdD> for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
 {
     fn descendants(&self, x: &IdD) -> Vec<IdD> {
         let cs = self
@@ -449,28 +447,28 @@ impl<
 }
 
 impl<
-        'a,
-        'd,
-        // HAST: HyperAST + Copy,
-        IdD: PrimInt,
-        DTS: DecompressedParentsLending<'a, IdD>, //: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > DecompressedParentsLending<'a, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
+    'a,
+    'd,
+    // HAST: HyperAST + Copy,
+    IdD: PrimInt,
+    DTS: DecompressedParentsLending<'a, IdD>, //: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> DecompressedParentsLending<'a, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 {
     type PIt = <DTS as DecompressedParentsLending<'a, IdD>>::PIt;
 }
 
 impl<
-        'd,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > DecompressedWithParent<HAST, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
+    'd,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> DecompressedWithParent<HAST, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 {
     fn has_parent(&self, id: &IdD) -> bool {
         self.back
@@ -508,46 +506,35 @@ impl<
     }
 }
 impl<
-        'a,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS, //DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > super::DecompressedSubtree<HAST::IdN>
+    'a,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS, //DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> super::DecompressedSubtree<HAST::IdN>
     for Decompressible<HAST, SimpleHiddingMapper<'a, IdD, DTS, M, R, D>>
 where
     for<'t> <HAST as AstLending<'t>>::RT: WithStats,
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    // T::TreeId: Debug,
-    // <T as WithChildren>::ChildIdx: PrimInt,
-    // T: for<'t> types::NLending<'t, T::TreeId>,
-    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren + WithStats,
 {
     type Out = Decompressible<HAST, LazyPostOrder<HAST::IdN, IdD>>;
 
     fn decompress(self, _id: &HAST::IdN) -> Self::Out {
         todo!()
     }
-    // fn decompress2<HAST>(store: &HAST, id: &<T as Stored>::TreeId) -> Self::Out
-    // where
-    //     T: for<'t> types::AstLending<'t>,
-    //     HAST: types::HyperAST<IdN = <T as Stored>::TreeId, TM = T>,
-    // {
-    //     todo!() //
-    // }
 }
 
 impl<
-        'a,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > PostOrder<HAST, IdD> for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
+    'a,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> PostOrder<HAST, IdD> for SimpleHiddingMapper<'a, IdD, DTS, M, R, D>
 where
     HAST::IdN: Debug,
 {
@@ -568,16 +555,14 @@ where
     }
 }
 impl<
-        'd,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > PostOrderIterable<HAST, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
-where
-// T::TreeId: Clone + Debug,
+    'd,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS: DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> PostOrderIterable<HAST, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 {
     type It = super::Iter<IdD>;
     fn iter_df_post<const ROOT: bool>(&self) -> Self::It {
@@ -606,41 +591,31 @@ where
 // }
 
 impl<
-        'd,
-        'a,
-        // HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS: for<'t> DecendantsLending<'t>, // : DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > DecendantsLending<'a> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
-where
-// T: for<'t> types::NLending<'t, T::TreeId>,
-// for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren,
-// T::TreeId: Debug + NodeId<IdN = T::TreeId>,
-
-// DTS: for<'t> types::NLending<'t, T::TreeId>,
-// for<'t> <DTS as types::NLending<'t, T::TreeId>>::N: hyperast::types::WithChildren,
+    'd,
+    'a,
+    // HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS: for<'t> DecendantsLending<'t>, // : DecompressedTreeStore<HAST, IdD> + DecompressedWithParent<HAST, IdD> + PostOrder<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> DecendantsLending<'a> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 {
     type Slice = <DTS as DecendantsLending<'a>>::Slice;
-    // type Slice = SimplePOSlice<'a, HAST::IdN, IdD>;
 }
 
 impl<
-        'd,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Debug,
-        DTS: for<'t> DecendantsLending<'t>
-            + DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrder<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > ContiguousDescendants<HAST, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
-where
-// T::TreeId: Debug,
+    'd,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Debug,
+    DTS: for<'t> DecendantsLending<'t>
+        + DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrder<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> ContiguousDescendants<HAST, IdD> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         let conv = self.map.borrow()[self.map.borrow().len() - 1 - x.to_usize().unwrap()]; //self.back.borrow_mut().lld(aaa);
@@ -771,39 +746,32 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
 // }
 
 impl<
-        'd,
-        // HAST: HyperAST + Copy,
-        IdS: PrimInt + Shallow<IdS> + Debug,
-        IdD: Shallow<IdS>,
-        DTS,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-        // T: WithChildren +  WithStats,
-        // IdS: PrimInt + Shallow<IdS> + Debug,
-        // DTS: LazyDecompressedTreeStore<HAST, IdS>,
-        // M: Borrow<Vec<<DTS as LazyDecompressed<IdS>>::IdD>>,
-        // R: Borrow<BTreeMap<<DTS as LazyDecompressed<IdS>>::IdD, <DTS as LazyDecompressed<IdS>>::IdD>>,
-        // D: BorrowMut<DTS>,
-    > LazyDecompressed<IdS> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
+    'd,
+    IdS: PrimInt + Shallow<IdS> + Debug,
+    IdD: Shallow<IdS>,
+    DTS,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> LazyDecompressed<IdS> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 {
     type IdD = IdD;
 }
 
 impl<
-        'd,
-        HAST: HyperAST + Copy,
-        IdS: PrimInt + Shallow<IdS> + Debug,
-        IdD: PrimInt + Shallow<IdS> + Debug,
-        DTS: LazyDecompressed<IdS, IdD = IdD>
-            + LazyDecompressedTreeStore<HAST, IdS>
-            + DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrder<HAST, IdD>,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<DTS>,
-    > LazyDecompressedTreeStore<HAST, IdS> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
+    'd,
+    HAST: HyperAST + Copy,
+    IdS: PrimInt + Shallow<IdS> + Debug,
+    IdD: PrimInt + Shallow<IdS> + Debug,
+    DTS: LazyDecompressed<IdS, IdD = IdD>
+        + LazyDecompressedTreeStore<HAST, IdS>
+        + DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrder<HAST, IdD>,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<DTS>,
+> LazyDecompressedTreeStore<HAST, IdS> for SimpleHiddingMapper<'d, IdD, DTS, M, R, D>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
     Self: DecompressedTreeStore<HAST, IdD, IdS>,
@@ -830,21 +798,13 @@ where
 }
 
 impl<
-        'a,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt + Shallow<IdD> + Debug,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, IdD>>>,
-    >
-    SimpleHiddingMapper<
-        'a,
-        IdD,
-        Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, IdD>>,
-        M,
-        R,
-        D,
-    >
+    'a,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt + Shallow<IdD> + Debug,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, IdD>>>,
+> SimpleHiddingMapper<'a, IdD, Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, IdD>>, M, R, D>
 where
     for<'t> <HAST as types::AstLending<'t>>::RT: WithChildren + WithStats,
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
@@ -869,14 +829,14 @@ where
 }
 
 impl<
-        'a,
-        'd,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<Decompressible<HAST, &'d mut LazyPostOrder<HAST::IdN, IdD>>>,
-    > LazyPOSliceLending<'a, HAST, IdD>
+    'a,
+    'd,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<Decompressible<HAST, &'d mut LazyPostOrder<HAST::IdN, IdD>>>,
+> LazyPOSliceLending<'a, HAST, IdD>
     for SimpleHiddingMapper<
         'd,
         IdD,
@@ -892,13 +852,13 @@ where
 }
 
 impl<
-        'd,
-        HAST: HyperAST + Copy,
-        IdD: PrimInt,
-        M: Borrow<Vec<IdD>>,
-        R: Borrow<BTreeMap<IdD, IdD>>,
-        D: BorrowMut<Decompressible<HAST, &'d mut LazyPostOrder<HAST::IdN, IdD>>>,
-    > LazyPOBorrowSlice<HAST, IdD>
+    'd,
+    HAST: HyperAST + Copy,
+    IdD: PrimInt,
+    M: Borrow<Vec<IdD>>,
+    R: Borrow<BTreeMap<IdD, IdD>>,
+    D: BorrowMut<Decompressible<HAST, &'d mut LazyPostOrder<HAST::IdN, IdD>>>,
+> LazyPOBorrowSlice<HAST, IdD>
     for SimpleHiddingMapper<
         'd,
         IdD,

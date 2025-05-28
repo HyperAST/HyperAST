@@ -1,6 +1,7 @@
+#![allow(unexpected_cfgs)]
 use std::sync::Arc;
 
-use epaint::text::{cursor::*, Galley, LayoutJob};
+use epaint::text::{Galley, LayoutJob, cursor::*};
 
 use egui::{output::OutputEvent, *};
 
@@ -351,7 +352,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
 
         let margin = self.margin;
         let max_rect = ui.available_rect_before_wrap().shrink2(margin);
-        let mut content_ui = ui.child_ui(max_rect, *ui.layout(), None);
+        let mut content_ui = ui.new_child(egui::UiBuilder::new().max_rect(max_rect));
         let mut output = self.show_content(&mut content_ui);
         let id = output.response.id;
         let frame_rect = output.response.rect.expand2(margin);
@@ -370,25 +371,28 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                 if output.response.has_focus() {
                     epaint::RectShape::new(
                         frame_rect,
-                        visuals.rounding,
+                        visuals.corner_radius,
                         ui.visuals().extreme_bg_color,
                         ui.visuals().selection.stroke,
+                        egui::StrokeKind::Inside,
                     )
                 } else {
                     epaint::RectShape::new(
                         frame_rect,
-                        visuals.rounding,
+                        visuals.corner_radius,
                         ui.visuals().extreme_bg_color,
                         visuals.bg_stroke,
+                        egui::StrokeKind::Inside,
                     )
                 }
             } else {
                 let visuals = &ui.style().visuals.widgets.inactive;
                 epaint::RectShape::new(
                     frame_rect,
-                    visuals.rounding,
+                    visuals.corner_radius,
                     Color32::TRANSPARENT,
                     visuals.bg_stroke,
+                    egui::StrokeKind::Inside,
                 )
             };
 
@@ -684,7 +688,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                             cursor_rect(text_draw_pos, &galley, &cursor_range.primary, row_height);
 
                         let is_fully_visible = ui.clip_rect().contains_rect(rect); // TODO: remove this HACK workaround for https://github.com/emilk/egui/issues/1531
-                        if (response.changed || selection_changed) && !is_fully_visible {
+                        if (response.changed() || selection_changed) && !is_fully_visible {
                             ui.scroll_to_rect(cursor_pos, None); // keep cursor in view
                         }
 
@@ -702,7 +706,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
 
         state.clone().store(ui.ctx(), id);
 
-        if response.changed {
+        if response.changed() {
             response.widget_info(|| {
                 WidgetInfo::text_edit(
                     true,
@@ -939,7 +943,7 @@ fn events<TB: TextBuffer>(
     let copy_if_not_password = |ui: &Ui, text: String| {
         if !password {
             print_copied_text(text.as_str());
-            ui.ctx().output_mut(|o| o.copied_text = text);
+            ui.ctx().copy_text(text);
         }
     };
 
@@ -1079,7 +1083,6 @@ fn events<TB: TextBuffer>(
             //         None
             //     }
             // }
-
             #[cfg(feature = "accesskit")]
             Event::AccessKitActionRequest(accesskit::ActionRequest {
                 action: accesskit::Action::SetTextSelection,

@@ -656,10 +656,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils;
+    // use crate::test_utils;
 
-    use super::*;
-    use crate::test_utils::tree::Type;
+    // use super::*;
+    // use crate::test_utils::tree::Type;
     // use crate_gen_ts_java::types::Type;
 
     // impl From<Type> for S {

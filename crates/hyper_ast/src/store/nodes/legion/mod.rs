@@ -12,10 +12,11 @@ pub mod dyn_builder;
 mod elem;
 pub use elem::{EntryRef, HashedNode, HashedNodeRef, NodeIdentifier};
 
-pub struct NodeStore {
-    dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
+pub struct NodeStore<I = NodeStoreInner, D = hashbrown::HashMap<NodeIdentifier, (), ()>> {
     #[doc(hidden)]
-    pub inner: NodeStoreInner,
+    pub dedup: D,
+    #[doc(hidden)]
+    pub inner: I,
 }
 
 pub struct NodeStoreInner {
@@ -75,6 +76,27 @@ impl<'a> PendingInsert<'a> {
     }
 }
 
+impl NodeStoreInner {
+    pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
+        &'a mut self,
+        dedup: &'a mut hashbrown::HashMap<NodeIdentifier, (), ()>,
+        hashable: &V,
+        eq: Eq,
+    ) -> PendingInsert<'a> {
+        let Self {
+            internal: backend,
+            hasher,
+            ..
+        } = self;
+        let hash = make_hash(hasher, hashable);
+        let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
+            let r = eq(backend.entry_ref(*symbol).unwrap());
+            r
+        });
+        PendingInsert(entry, (hash, self))
+    }
+}
+
 impl NodeStore {
     pub fn get<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a self,
@@ -99,18 +121,7 @@ impl NodeStore {
         hashable: &V,
         eq: Eq,
     ) -> PendingInsert<'a> {
-        let Self {
-            dedup,
-            inner: NodeStoreInner {
-                internal: backend, ..
-            },
-        } = self;
-        let hash = make_hash(&self.inner.hasher, hashable);
-        let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
-            let r = eq(backend.entry_ref(*symbol).unwrap());
-            r
-        });
-        PendingInsert(entry, (hash, &mut self.inner))
+        self.inner.prepare_insertion(&mut self.dedup, hashable, eq)
     }
 
     pub fn insert_after_prepare<T>(
@@ -277,6 +288,17 @@ impl crate::types::NStore for NodeStore {
     type Idx = u16;
 }
 
+impl NodeStoreInner {
+    pub fn try_resolve_typed<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>>(
+        &self,
+        id: &TIdN::IdN,
+    ) -> Option<(HashedNodeRef<TIdN>, TIdN)> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        x.get_component::<TIdN::Ty>().ok()?;
+        Some((HashedNodeRef::new(x), unsafe { TIdN::from_id(id.clone()) }))
+    }
+}
+
 impl<'a> crate::types::lending::NLending<'a, NodeIdentifier> for NodeStore {
     type N = HashedNodeRef<'a, NodeIdentifier>;
 }
@@ -331,6 +353,11 @@ pub fn _resolve<'a, T>(
     id: &NodeIdentifier,
 ) -> Result<HashedNodeRef<'a, T>, legion::world::EntityAccessError> {
     slf.entry_ref(*id).map(|x| HashedNodeRef::new(x))
+}
+
+impl<'a> crate::types::NStore for NodeStoreInner {
+    type IdN = NodeIdentifier;
+    type Idx = u16;
 }
 
 impl<'a> crate::types::NStore for &'a NodeStoreInner {
@@ -410,19 +437,42 @@ impl NodeStore {
         self.inner.len()
     }
 }
+impl Default for NodeStoreInner {
+    fn default() -> Self {
+        NodeStoreInner {
+            count: 0,
+            errors: 0,
+            #[cfg(feature = "subtree-stats")]
+            stats: Default::default(),
+            // roots: Default::default(),
+            internal: Default::default(),
+            hasher: Default::default(),
+        }
+    }
+}
+impl NodeStoreInner {
+    pub fn make_dedup_map() -> DedupMap {
+        DedupMap(hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
+            1 << 10,
+            Default::default(),
+        ))
+    }
+
+    pub fn with_dedup<'a, 'b>(
+        &'a mut self,
+        dedup: &'b mut DedupMap,
+    ) -> NodeStore<&'a mut NodeStoreInner, &'b mut DedupMap> {
+        NodeStore { dedup, inner: self }
+    }
+}
+
+#[derive(Default)]
+pub struct DedupMap(pub hashbrown::HashMap<NodeIdentifier, (), ()>);
 
 impl NodeStore {
     pub fn new() -> Self {
         Self {
-            inner: NodeStoreInner {
-                count: 0,
-                errors: 0,
-                #[cfg(feature = "subtree-stats")]
-                stats: Default::default(),
-                // roots: Default::default(),
-                internal: Default::default(),
-                hasher: Default::default(),
-            },
+            inner: NodeStoreInner::default(),
             dedup: hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
                 1 << 10,
                 Default::default(),
@@ -634,7 +684,7 @@ mod stores_impl {
     {
         fn try_resolve(
             &self,
-            id: &Self::IdN,
+            _id: &Self::IdN,
         ) -> Option<(
             <Self as types::TypedLending<'_, <TIdN as TypedNodeId>::Ty>>::TT,
             TIdN,
@@ -642,13 +692,13 @@ mod stores_impl {
             todo!()
         }
 
-        fn try_typed(&self, id: &Self::IdN) -> Option<TIdN> {
+        fn try_typed(&self, _id: &Self::IdN) -> Option<TIdN> {
             todo!()
         }
 
         fn resolve_typed(
             &self,
-            id: &TIdN,
+            _id: &TIdN,
         ) -> <Self as types::TypedLending<'_, <TIdN as TypedNodeId>::Ty>>::TT {
             todo!()
         }
