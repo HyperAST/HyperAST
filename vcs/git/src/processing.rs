@@ -256,8 +256,23 @@ pub(crate) mod caches {
 
     use super::ObjectName;
 
-    pub(crate) type OidMap<T> = std::collections::BTreeMap<git2::Oid, T>;
-    pub(crate) type NamedMap<T> = std::collections::BTreeMap<(git2::Oid, ObjectName), T>;
+    #[derive(Default)]
+    pub struct OidHash(u64);
+    impl std::hash::Hasher for OidHash {
+        fn finish(&self) -> u64 {
+            self.0
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            self.0 = u64::from_be_bytes([
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            ])
+        }
+    }
+    type OidHasher = core::hash::BuildHasherDefault<OidHash>;
+
+    pub(crate) type OidMap<T> = std::collections::HashMap<git2::Oid, T, OidHasher>;
+    pub(crate) type NamedMap<T> = hyperast::compat::HashMap<(git2::Oid, ObjectName), T>;
 
     #[derive(Default)]
     pub struct Java {
