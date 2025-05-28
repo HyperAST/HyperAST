@@ -22,7 +22,7 @@ use crate::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMat
 #[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
-pub fn diff_hybrid<HAST: HyperAST + Copy, const SIZE_THRESHOLD: usize>(
+pub fn diff_hybrid<HAST: HyperAST + Copy, const MAX_SIZE_THRESHOLD: usize, const MIN_HEIGHT_THRESHOLD: usize>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
@@ -49,7 +49,7 @@ where
 
     let now = Instant::now();
     let mapper =
-        GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+        GreedySubtreeMatcher::<_, _, _, _, MIN_HEIGHT_THRESHOLD>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     tr!(subtree_matcher_t, subtree_mappings_s);
@@ -57,7 +57,7 @@ where
     let bottomup_prepare_t = 0.; // nothing to prepare
 
     let now = Instant::now();
-    let mapper = HybridBottomUpMatcher::<_, _, _, _, SIZE_THRESHOLD>::match_it(mapper);
+    let mapper = HybridBottomUpMatcher::<_, _, _, _, MAX_SIZE_THRESHOLD>::match_it(mapper);
     dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();

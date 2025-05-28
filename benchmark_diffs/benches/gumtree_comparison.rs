@@ -165,7 +165,7 @@ fn run_diff<const SIZE_THRESHOLD: usize>(src: &str, dst: &str, algorithm: &str) 
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
 
     let diff_result= match algorithm {
-        "hybrid" => algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD>(
+        "hybrid" => algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD, 1>(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,

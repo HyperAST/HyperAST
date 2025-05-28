@@ -1,10 +1,12 @@
+use std::fs::remove_dir_all;
 use hyper_diff::{actions::{action_vec::actions_vec_f, action_vec::ActionsVec}, algorithms};
 use hyper_diff::tree::tree_path::CompressedTreePath;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use hyper_diff::actions::Actions;
 use std::process::Command;
 use std::io::Write;
+use std::ptr::null;
 use serde::Deserialize;
 use hyper_diff::actions::script_generator2::{Act, SimpleAction};
 use hyper_diff::matchers::Mapping;
@@ -281,7 +283,7 @@ fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(name: &str, buggy_rel_path: 
         parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD, 1>(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
@@ -371,40 +373,99 @@ fn test_cd_diff_3() {
     )
 }
 
-fn find_java_files(dir: &Path) -> Vec<String> {
+fn find_java_files(dir: &Path, root: &Path) -> Vec<PathBuf> {
     let mut java_files = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_dir() {
-                    java_files.extend(find_java_files(&path));
-                } else if path.extension().and_then(|s| s.to_str()) == Some("java") {
-                    if let Some(rel_path) = path.strip_prefix(dir).ok().and_then(|p| p.to_str()) {
-                        java_files.push(rel_path.to_string());
+
+    if dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        java_files.extend(find_java_files(&path, &root));
+                    } else if path.extension().and_then(|ext| ext.to_str()) == Some("java") {
+                        if let Ok(rel_path) = path.strip_prefix(root) {
+                            java_files.push(rel_path.to_path_buf());
+                        }
                     }
                 }
             }
         }
     }
+
     java_files
 }
 
 #[test]
-fn test_all() {
+fn script_find_highest_edit_script_difference() {
+    println!("Starting test...");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .join(DATASET_PATH);
 
     let before_dir = root.join("before");
-    let java_files = find_java_files(&before_dir);
+    let java_files = find_java_files(&before_dir, &before_dir);
+    
 
+    let mut max_difference = 0;
+    let mut max_path = PathBuf::new();
+    let mut max_50 = 0;
+    let mut max_3000 = 0;
+    let measurements = &mut Vec::new();
+    
     for rel_path in java_files {
-        dbg!(&rel_path);
-        let name = rel_path.replace("/", "-");
-        let before_path = format!("before/{}", rel_path);
-        let after_path = format!("after/{}", rel_path);
-        test_cd_diff_single::<100>(&name, &before_path, &after_path);
+        println!("DBG Checking {:?}", rel_path);
+        let buggy_path = root.join("before").join(&rel_path);
+        let fixed_path = root.join("after").join(&rel_path);
+
+        let buggy_content = std::fs::read_to_string(&buggy_path)
+            .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
+        let fixed_content = std::fs::read_to_string(&fixed_path)
+            .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
+
+        // Initialize stores
+        let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+        let mut md_cache = Default::default();
+
+        // Parse the two Java files
+        let (src_tr, dst_tr) =
+            parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
+
+        // Perform the diff using gumtree lazy
+        let _diff_result_50 = algorithms::gumtree_hybrid::diff_hybrid::<_, 100, 1> ( //50, 1>(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        );
+
+        let _diff_result_3000 = algorithms::gumtree_hybrid::diff_hybrid::<_, 100, 3> ( //3000, 1>(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        );
+
+        let actions_50 = _diff_result_50.actions.expect("Expected a result");
+        let actions_3000 = _diff_result_3000.actions.expect("Expected a result");
+        
+        if (actions_3000.len() <= actions_50.len()) {
+            let difference = actions_50.len() - actions_3000.len();
+            println!("DBG Tried: {:?} / {} ({} - {})", &rel_path, difference, actions_50.len(), actions_3000.len());
+            measurements.push((rel_path.clone(), difference, actions_50.len(), actions_3000.len()));
+            if (difference > max_difference) {
+                max_difference = difference;
+                max_50 = actions_50.len();
+                max_3000 = actions_3000.len();
+                max_path = rel_path.clone();
+                println!("DBG !!! New file: {:?} / {} ({} - {})", &rel_path, max_difference, max_50, max_3000);
+            }
+        } else {
+            println!("DBG Smaller value for action_50: {} / {}", actions_50.len(), actions_3000.len());
+        }
+
     }
+    
+    println!("DBG Max: {:?} / {} ({} - {})", &max_path, max_difference, max_3000, max_50);
+    println!("DBG: {:?}", measurements);
+    dbg!(measurements);
 }

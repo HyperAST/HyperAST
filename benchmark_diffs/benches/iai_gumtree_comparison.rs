@@ -1,11 +1,11 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use iai_callgrind::{main, library_benchmark_group, library_benchmark};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
+use std::hint::black_box;
 
 const DEFAULT_SIZE_THRESHOLD: usize = 1000;
-const DEFAULT_MIN_HEIGHT: usize = 1;
 
 const TEST_CASES: &[(&str, &str, &str)] = &[
     (
@@ -80,13 +80,12 @@ const TEST_CASES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-fn diff_benchmark(c: &mut Criterion) {
+#[library_benchmark]
+fn iai_hybrid_benchmark() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .is_test(true)
         .init();
-    let mut group = c.benchmark_group("gumtree_hybrid_basic");
 
-    group.sample_size(100);
 
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -117,32 +116,47 @@ fn diff_benchmark(c: &mut Criterion) {
             (name, buggy_content, fixed_content)
         })
         .collect();
+    
+    let (_, buggy, fixed) = test_inputs.first().unwrap();
 
-    group.bench_function("hybrid 100", |b| {
-        b.iter(|| {
-            let (_name, buggy, fixed) = &test_inputs[5];
-            run_diff(buggy, fixed, 100);
-        })
-    });
+    run_diff::<50>(black_box(buggy), black_box(fixed), "hybrid");
 
-    group.finish();
 }
 
-fn run_diff(src: &str, dst: &str, max_size: usize) {
+fn run_diff<const SIZE_THRESHOLD: usize>(src: &str, dst: &str, algorithm: &str) {
     let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
 
     let (src_tr, dst_tr) =
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-    
-    let diff_result= algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
-        &stores,
-        &src_tr.local.compressed_node,
-        &dst_tr.local.compressed_node,
-    );
+
+    let diff_result = match algorithm {
+        "hybrid" => algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD, 1>(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        "simple" => algorithms::gumtree_simple::diff_simple(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        "greedy" => algorithms::gumtree::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        "lazy" => algorithms::gumtree_lazy::diff(
+            &stores,
+            &src_tr.local.compressed_node,
+            &dst_tr.local.compressed_node,
+        ),
+        _ => panic!("Unknown function")
+    };
 
     black_box(diff_result);
 }
 
-criterion_group!(benches, diff_benchmark);
-criterion_main!(benches);
+
+library_benchmark_group!(name = bench_gumtree_comparison_group; benchmarks = iai_hybrid_benchmark);
+main!(library_benchmark_groups = bench_gumtree_comparison_group);

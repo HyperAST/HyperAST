@@ -29,6 +29,7 @@ use hyperast::{types::HyperASTShared, PrimInt};
 /// - post order
 /// - key roots
 /// - parents
+#[derive(Clone)]
 pub struct CompletePostOrder<IdN, IdD> {
     pub(super) simple: SimplePostOrder<IdN, IdD>,
     /// LR_keyroots(T) = {k | there exists no k < k' such that l(k) = l(k’)}.

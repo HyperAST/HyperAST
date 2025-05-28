@@ -15,6 +15,7 @@ use hyperast_gen_ts_java::{
 use crate::tests::hybrid_matcher_examples::*;
 
 const DEFAULT_SIZE_THRESHOLD: usize = 1000;
+const DEFAULT_MIN_HEIGHT: usize = 1;
 
 fn prepare_tree_print<'a>(
     stores: &'a SimpleStores<TStore>,
@@ -35,7 +36,7 @@ fn test_gumtree_hybrid_java_simple() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_simple());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
         &stores,
         &src,
         &dst,
@@ -58,7 +59,7 @@ fn test_gumtree_hybrid_java_method() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
         &stores,
         &src,
         &dst,
@@ -80,7 +81,7 @@ fn test_gumtree_hybrid_reorder_children() {
     let (stores, src, dst) = vpair_to_stores(example_reorder_children());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
         &stores,
         &src,
         &dst,
@@ -102,7 +103,7 @@ fn test_gumtree_hybrid_move_method() {
     let (stores, src, dst) = vpair_to_stores(example_move_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
         &stores,
         &src,
         &dst,

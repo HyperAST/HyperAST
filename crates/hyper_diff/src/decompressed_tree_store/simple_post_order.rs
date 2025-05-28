@@ -16,6 +16,7 @@ use hyperast::{
 use num_traits::{ToPrimitive, Zero, cast, one, zero};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
 
+#[derive(Clone)]
 pub struct SimplePostOrder<IdN, IdD> {
     pub(super) basic: BasicPostOrder<IdN, IdD>,
     pub(super) id_parent: Box<[IdD]>,
