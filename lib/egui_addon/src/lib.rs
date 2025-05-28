@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub mod async_exec;
 pub mod code_editor;
 pub mod egui_utils;

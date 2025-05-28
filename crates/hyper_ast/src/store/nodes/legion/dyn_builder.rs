@@ -332,7 +332,7 @@ impl TypeInfo {
     /// Construct a `TypeInfo` directly from the static type.
     pub fn of<T: 'static + Send + Sync>() -> Self {
         unsafe fn drop_ptr<T>(x: *mut u8) {
-            x.cast::<T>().drop_in_place()
+            unsafe { x.cast::<T>().drop_in_place() }
         }
 
         Self {
@@ -375,7 +375,7 @@ impl TypeInfo {
     /// All of the caveats of [`core::ptr::drop_in_place`] apply, with the additional requirement
     /// that this method is being called on a pointer to an object of the correct component type.
     pub unsafe fn drop(&self, data: *mut u8) {
-        (self.drop)(data)
+        unsafe { (self.drop)(data) }
     }
 
     /// Get the function pointer encoding the destructor for the component type this `TypeInfo`
@@ -454,16 +454,18 @@ impl<M> Common<M> {
             Entry::Occupied(occupied) => {
                 let index = *occupied.get();
                 let (ty, offset, _) = self.inner.info[index];
-                let storage = self.inner.storage.as_ptr().add(offset);
+                unsafe {
+                    let storage = self.inner.storage.as_ptr().add(offset);
 
-                // Drop the existing value
-                ty.drop(storage);
+                    // Drop the existing value
+                    ty.drop(storage);
 
-                // Overwrite the old value with our new one.
-                std::ptr::copy_nonoverlapping(ptr, storage, ty.layout().size());
+                    // Overwrite the old value with our new one.
+                    std::ptr::copy_nonoverlapping(ptr, storage, ty.layout().size());
+                }
             }
             Entry::Vacant(vacant) => {
-                self.inner.fun_name(ty, ptr, vacant, meta);
+                unsafe { self.inner.fun_name(ty, ptr, vacant, meta) };
             }
         }
     }
@@ -477,8 +479,8 @@ impl<M> CommonInner<M> {
         storage: NonNull<u8>,
     ) -> (NonNull<u8>, Layout) {
         let layout = Layout::from_size_align(min_size.next_power_of_two().max(64), align).unwrap();
-        let new_storage = NonNull::new_unchecked(alloc(layout));
-        std::ptr::copy_nonoverlapping(storage.as_ptr(), new_storage.as_ptr(), cursor);
+        let new_storage = unsafe { NonNull::new_unchecked(alloc(layout)) };
+        unsafe { std::ptr::copy_nonoverlapping(storage.as_ptr(), new_storage.as_ptr(), cursor) };
         (new_storage, layout)
     }
 
@@ -493,9 +495,10 @@ impl<M> CommonInner<M> {
         let end = offset + ty.layout().size();
         if end > self.layout.size() || ty.layout().align() > self.layout.align() {
             let new_align = self.layout.align().max(ty.layout().align());
-            let (new_storage, new_layout) = Self::grow(end, self.cursor, new_align, self.storage);
+            let (new_storage, new_layout) =
+                unsafe { Self::grow(end, self.cursor, new_align, self.storage) };
             if self.layout.size() != 0 {
-                dealloc(self.storage.as_ptr(), self.layout);
+                unsafe { dealloc(self.storage.as_ptr(), self.layout) };
             }
             self.storage = new_storage;
             self.layout = new_layout;
@@ -503,7 +506,7 @@ impl<M> CommonInner<M> {
 
         if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
             let aaa = ptr as *mut (Vec<usize>,);
-            dbg!(aaa.as_ref());
+            dbg!(unsafe { aaa.as_ref() });
             // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
             // dbg!(&v);
             // std::mem::forget(v);
@@ -511,14 +514,14 @@ impl<M> CommonInner<M> {
 
         if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
             let aaa = ptr as *mut (Box<[u32]>,);
-            dbg!(aaa.as_ref());
+            dbg!(unsafe { aaa.as_ref() });
             // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
             // dbg!(&v);
             // std::mem::forget(v);
         }
 
-        let addr = self.storage.as_ptr().add(offset);
-        std::ptr::copy_nonoverlapping(ptr, addr, ty.layout().size());
+        let addr = unsafe { self.storage.as_ptr().add(offset) };
+        unsafe { std::ptr::copy_nonoverlapping(ptr, addr, ty.layout().size()) };
 
         vacant.insert(self.info.len());
         self.info.push((ty, offset, meta));
@@ -526,7 +529,7 @@ impl<M> CommonInner<M> {
 
         if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
             let aaa = ptr as *mut (Box<[u32]>,);
-            dbg!(aaa.as_ref());
+            dbg!(unsafe { aaa.as_ref() });
             // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
             // dbg!(&v);
             // std::mem::forget(v);
@@ -570,7 +573,6 @@ impl<M> Default for Common<M> {
 
 #[test]
 fn example() {
-    use crate::store::nodes::EntityBuilder as _;
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
     components._add(42i32);
@@ -589,7 +591,6 @@ fn example() {
 
 #[test]
 fn simple() {
-    use crate::store::nodes::EntityBuilder as _;
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
     let mut comp0: (Box<[u32]>,) = (vec![0, 0, 0, 0, 0, 1, 4100177920].into_boxed_slice(),); //0, 14, 43, 10, 876, 7, 1065, 35

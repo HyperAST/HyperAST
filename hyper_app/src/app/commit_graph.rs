@@ -198,7 +198,7 @@ impl crate::HyperApp {
                             let id = id.clone();
                             let commit = crate::app::types::Commit { repo, id };
                             let md = self.data.fetched_commit_metadata.remove(&commit.id);
-                            let waiting = commit::fetch_merge_pr2(
+                            let waiting = commit::fetch_merge_pr(
                                 ui.ctx(),
                                 &self.data.api_addr,
                                 &commit,
@@ -320,7 +320,7 @@ impl crate::HyperApp {
                                         repo,
                                         id: id.clone(),
                                     };
-                                    let waiting = commit::fetch_merge_pr2(
+                                    let waiting = commit::fetch_merge_pr(
                                         ui.ctx(),
                                         &self.data.api_addr,
                                         &commit,
@@ -358,7 +358,7 @@ impl crate::HyperApp {
                                         repo,
                                         id: id.clone(),
                                     };
-                                    let waiting = commit::fetch_merge_pr2(
+                                    let waiting = commit::fetch_merge_pr(
                                         ui.ctx(),
                                         &self.data.api_addr,
                                         &commit,
@@ -385,7 +385,7 @@ impl crate::HyperApp {
                             repo,
                             id: id.clone(),
                         };
-                        let waiting = commit::fetch_merge_pr2(
+                        let waiting = commit::fetch_merge_pr(
                             ui.ctx(),
                             &self.data.api_addr,
                             &commit,
@@ -462,7 +462,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
     } else {
         egui::Color32::RED
     };
-    egui::Frame::none()
+    egui::Frame::NONE
         .inner_margin(egui::vec2(50.0, 10.0))
         .show(ui, |ui| {
             // TODO now use egui_plot, it will handle interation properly and should not be difficult to migrate I think.
@@ -1091,7 +1091,7 @@ fn show_commit_graph_timed_custom<'a>(
                 egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::C);
             if resp.hovered() {
                 if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
-                    ui.output_mut(|mem| mem.copied_text = commit.to_string());
+                    ui.ctx().copy_text(commit.to_string());
                 }
             }
             if resp.clicked() {

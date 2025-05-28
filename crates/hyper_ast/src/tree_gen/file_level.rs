@@ -3,7 +3,7 @@ pub trait Accumulator: crate::tree_gen::Accumulator {
 }
 
 impl Accumulator for Acc {
-    type Unlabeled = (Local, IsSkippedAna);
+    type Unlabeled = (Local, );
 }
 
 trait ProcessorSke<Acc: Accumulator, O = PathBuf> {
@@ -88,12 +88,11 @@ impl PreprocessFileSys {
         &mut self,
         path: PathBuf,
         filesys: &mut FileSys,
-    ) -> (Local, IsSkippedAna) {
+    ) -> (Local, ) {
         JavaProcessor::<JavaAcc>::new(self, filesys, path).process()
     }
 }
 
-pub(crate) type IsSkippedAna = bool;
 
 pub fn parse_filesys(gen: &mut PreprocessFileSys, path: &Path) -> Local {
     let a = std::fs::read_dir(path)
@@ -247,7 +246,7 @@ where
             panic!("not file nor dir: {:?}", path);
         }
     }
-    fn post(&mut self, acc: Acc) -> Option<(<Acc as Makeable>::Local, IsSkippedAna)> {
+    fn post(&mut self, acc: Acc) -> Option<(<Acc as Makeable>::Local, )> {
         let name = acc.name();
         let full_node = acc.make(&mut self.prepro.main_stores);
         let key = full_node.compressed_node.clone();

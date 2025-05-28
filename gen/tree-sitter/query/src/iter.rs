@@ -1,10 +1,10 @@
 use std::fmt::{self, Debug};
 
-use hyperast::types::{TypedHyperAST, AAAA};
+use hyperast::types::{AAAA, TypedHyperAST};
 use hyperast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
-    types::{HyperAST, Children, Childrn, NodeId, Tree, TypedNodeStore, WithChildren},
+    types::{Childrn, HyperAST, NodeId, Tree, TypedNodeStore, WithChildren},
 };
 use num::ToPrimitive;
 
@@ -59,10 +59,10 @@ where
 }
 
 impl<
-        'a,
-        T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: TypedHyperAST<TIdN<NodeIdentifier>, Idx = u16>,
-    > Iterator for IterAll<'a, T, HAST>
+    'a,
+    T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
+    HAST: TypedHyperAST<TIdN<NodeIdentifier>, Idx = u16>,
+> Iterator for IterAll<'a, T, HAST>
 where
 // HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
 // HAST::TS: TypeStore<HAST::T, Ty = Type>,
@@ -119,8 +119,7 @@ where
                         ));
                     }
                     self.stack.push((node, offset + 1, Some(children)));
-                    let child = if let Some(tid) = self.stores.try_typed(&child)
-                    {
+                    let child = if let Some(tid) = self.stores.try_typed(&child) {
                         Id::Query(tid)
                     } else {
                         Id::Other(child)
@@ -137,8 +136,7 @@ where
                 let b = match &node {
                     Id::Query(node) => self.stores.resolve_typed(node),
                     Id::Other(node) => {
-                        let b =
-                            hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
+                        let b = hyperast::types::NodeStore::resolve(self.stores.node_store(), node);
                         if b.has_children() {
                             let children = b.children();
                             let children = children.unwrap();

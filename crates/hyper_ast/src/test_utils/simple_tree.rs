@@ -678,7 +678,7 @@ pub struct TStore;
 pub struct Ty(u8);
 
 impl Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
@@ -704,7 +704,7 @@ impl HyperType for Ty {
         todo!()
     }
 
-    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    fn generic_eq(&self, _other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized,
     {

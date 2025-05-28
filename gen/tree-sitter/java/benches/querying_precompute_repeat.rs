@@ -68,7 +68,6 @@ fn compare_querying_group(c: &mut Criterion) {
 
     for p in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
         group.throughput(Throughput::Elements(p.0.4 as u64));
-        let mut sizes = Vec::<usize>::with_capacity(p.1.len());
 
         group.bench_with_input(
             BenchmarkId::new(format!("baseline-{}", p.0.3), p.0.4),

@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 use hyperast::types;
-use hyperast::types::Children as _;
 use hyperast::types::Childrn as _;
 use hyperast::types::HyperAST;
 use hyperast::types::HyperType as _;

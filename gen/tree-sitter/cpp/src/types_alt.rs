@@ -77,7 +77,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     crate::language().id_for_node_kind(kind, named)
 }
 #[cfg(not(feature = "impl_intern"))]
-fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+fn id_for_node_kind(_kind: &str, _named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 

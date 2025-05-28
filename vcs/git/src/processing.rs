@@ -254,8 +254,6 @@ pub(crate) mod caches {
 
     use hyperast::store::defaults::NodeIdentifier;
 
-    use crate::preprocessed::IsSkippedAna;
-
     use super::ObjectName;
 
     pub(crate) type OidMap<T> = std::collections::BTreeMap<git2::Oid, T>;
@@ -266,13 +264,13 @@ pub(crate) mod caches {
         pub(crate) md_cache: hyperast_gen_ts_java::legion_with_refs::MDCache,
         /// Passed to subtree builder when deriving different data (assumed to be incompatible).
         pub(crate) dedup: hyperast::store::nodes::legion::DedupMap,
-        pub object_map: NamedMap<(hyperast_gen_ts_java::legion_with_refs::Local, IsSkippedAna)>,
+        pub object_map: NamedMap<(hyperast_gen_ts_java::legion_with_refs::Local,)>,
     }
 
     impl super::ObjectMapper for Java {
         type K = (git2::Oid, ObjectName);
 
-        type V = (hyperast_gen_ts_java::legion_with_refs::Local, IsSkippedAna);
+        type V = (hyperast_gen_ts_java::legion_with_refs::Local,);
 
         fn get(&self, key: &Self::K) -> Option<&Self::V> {
             self.object_map.get(key)
@@ -286,13 +284,13 @@ pub(crate) mod caches {
     #[derive(Default)]
     pub struct Cpp {
         pub(crate) md_cache: hyperast_gen_ts_cpp::legion::MDCache,
-        pub object_map: NamedMap<(hyperast_gen_ts_cpp::legion::Local, IsSkippedAna)>,
+        pub object_map: NamedMap<(hyperast_gen_ts_cpp::legion::Local,)>,
     }
 
     impl super::ObjectMapper for Cpp {
         type K = (git2::Oid, ObjectName);
 
-        type V = (hyperast_gen_ts_cpp::legion::Local, IsSkippedAna);
+        type V = (hyperast_gen_ts_cpp::legion::Local,);
 
         fn get(&self, key: &Self::K) -> Option<&Self::V> {
             self.object_map.get(key)
@@ -389,8 +387,8 @@ pub mod file_sys {
     // TODO move these things to their respective modules
     use super::{CachesHolding, ObjectName};
 
-    /// The default file system, directories and files
-    pub struct Any;
+    // /// The default file system, directories and files
+    // pub struct Any;
 
     /// The maven scheme https://maven.apache.org/guides/introduction/introduction-to-the-standard-directory-layout.html ,
     /// made of nested maven modules.

@@ -9,7 +9,6 @@ use criterion::{
 };
 
 mod shared;
-use hyperast::tree_gen::GlobalData;
 use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
@@ -374,7 +373,7 @@ fn compare_querying_group(c: &mut Criterion) {
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
-                    // assert_eq!(count as u64, parameter.0.4);
+                    assert_eq!(count as u64, parameter.0.4);
                 })
             },
         );

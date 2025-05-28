@@ -3,10 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use criterion::{
-    AxisScale, BenchmarkId, Criterion, PlotConfiguration, black_box, criterion_group,
-    criterion_main,
-};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::{JavaTreeGen, tree_sitter_parse};
@@ -127,40 +124,40 @@ fn compare_querying_group(c: &mut Criterion) {
         bench_baseline(&mut group, parameter);
         bench_rust_baseline(&mut group, parameter);
 
-        // let pp = preps_default(parameter);
-        // group.bench_with_input(
-        //     BenchmarkId::new("default", parameter.0.3),
-        //     &pp,
-        //     |b, (query, stores, roots)| {
-        //         b.iter(|| {
-        //             let mut count = 0;
-        //             for &n in roots {
-        //                 let pos = hyperast::position::StructuralPosition::new(n);
-        //                 let cursor =
-        //                     hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
-        //                 let matches = query.matches(cursor);
-        //                 count += black_box(matches.count());
-        //             }
-        //             debug_assert_eq!(count as u64, parameter.0.4);
-        //         })
-        //     },
-        // );
-        // group.bench_with_input(
-        //     BenchmarkId::new("default_opt", parameter.0.3),
-        //     &pp,
-        //     |b, (query, stores, roots)| {
-        //         b.iter(|| {
-        //             let mut count = 0;
-        //             for &n in roots {
-        //                 let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
-        //                 let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
-        //                 let matches = query.matches(cursor);
-        //                 count += black_box(matches.count());
-        //             }
-        //             debug_assert_eq!(count as u64, parameter.0.4);
-        //         })
-        //     },
-        // );
+        let pp = preps_default(parameter);
+        group.bench_with_input(
+            BenchmarkId::new("default", parameter.0.3),
+            &pp,
+            |b, (query, stores, roots)| {
+                b.iter(|| {
+                    let mut count = 0;
+                    for &n in roots {
+                        let pos = hyperast::position::StructuralPosition::new(n);
+                        let cursor =
+                            hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
+                        let matches = query.matches(cursor);
+                        count += black_box(matches.count());
+                    }
+                    debug_assert_eq!(count as u64, parameter.0.4);
+                })
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("default_opt", parameter.0.3),
+            &pp,
+            |b, (query, stores, roots)| {
+                b.iter(|| {
+                    let mut count = 0;
+                    for &n in roots {
+                        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
+                        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+                        let matches = query.matches(cursor);
+                        count += black_box(matches.count());
+                    }
+                    debug_assert_eq!(count as u64, parameter.0.4);
+                })
+            },
+        );
 
         let pp = preps_precomputed(parameter);
         group.bench_with_input(

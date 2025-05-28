@@ -1,5 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![allow(unused)]
 
 const ADDR: &str = "127.0.0.1:8888";
 
@@ -9,9 +10,8 @@ fn main() -> eframe::Result<()> {
     use std::ops::Not;
     // Log to stdout (if you run with `RUST_LOG=debug`).
     tracing_subscriber::fmt::init();
-    let args = std::env::args()
-        .collect::<Vec<_>>();
-    log::trace!("{:?}",args);
+    let args = std::env::args().collect::<Vec<_>>();
+    log::trace!("{:?}", args);
     let api_addr = args
         .get(1)
         .and_then(|x| x.is_empty().not().then(|| x))
@@ -33,16 +33,14 @@ fn main() -> eframe::Result<()> {
             .with_titlebar_shown(!re_ui::FULLSIZE_CONTENT)
             .with_transparent(re_ui::CUSTOM_WINDOW_DECORATIONS), // To have rounded corners without decorations we need transparency
 
-
         ..Default::default()
     };
     eframe::run_native(
         "HyperAST",
         native_options,
         Box::new(move |cc| {
-            cc.egui_ctx.options_mut(|opt| {
-                opt.theme_preference = egui::ThemePreference::Dark
-            });
+            cc.egui_ctx
+                .options_mut(|opt| opt.theme_preference = egui::ThemePreference::Dark);
             re_ui::apply_style_and_install_loaders(&cc.egui_ctx);
             Ok(Box::new(hyper_app::HyperApp::new(cc, languages, api_addr)))
         }),
@@ -88,7 +86,7 @@ fn main() {
             .expect("Failed to find the_canvas_id")
             .dyn_into::<web_sys::HtmlCanvasElement>()
             .expect("the_canvas_id was not a HtmlCanvasElement");
-        
+
         let start_result = eframe::WebRunner::new()
             .start(
                 canvas, // hardcode it

@@ -1304,21 +1304,25 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                             };
                                             use std::ops::SubAssign;
                                             rect.bottom_mut().sub_assign(B);
-                                            let line_pos_1 = ui
-                                                .painter()
-                                                .round_pos_to_pixels(rect.left_bottom());
-                                            let line_pos_2 = ui
-                                                .painter()
-                                                .round_pos_to_pixels(rect.right_bottom());
+                                            let line_pos_1 =
+                                                egui::emath::GuiRounding::round_to_pixels(
+                                                    rect.left_bottom(),
+                                                    ui.painter().pixels_per_point(),
+                                                );
+                                            let line_pos_2 =
+                                                egui::emath::GuiRounding::round_to_pixels(
+                                                    rect.right_bottom(),
+                                                    ui.painter().pixels_per_point(),
+                                                );
                                             ui.painter().line_segment(
                                                 [line_pos_1, line_pos_2],
                                                 ui.visuals().window_stroke(),
                                             );
                                             rect.bottom_mut().sub_assign(B);
-                                            let mut ui = ui.child_ui(
-                                                rect,
-                                                egui::Layout::top_down(egui::Align::Min),
-                                                None,
+                                            let mut ui = ui.new_child(
+                                                egui::UiBuilder::new().max_rect(rect).layout(
+                                                    egui::Layout::top_down(egui::Align::Min),
+                                                ),
                                             );
                                             ui.set_clip_rect(rect.intersect(ui.clip_rect()));
                                             ui.label(format!(
@@ -1328,7 +1332,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                                 x.results[i].0.range.as_ref().unwrap().end
                                             ));
                                             ui.push_id(id.with(i).with(&x.results[i]), |ui| {
-                                                let mut after = x.results[i].1.clone();
+                                                let after = x.results[i].1.clone();
                                                 assert_eq!(
                                                     after.file.commit.id,
                                                     self.selected_commit.as_ref().unwrap().1
@@ -1421,7 +1425,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 Default::default()
             }
             Tab::ProjectSelection() => {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .outer_margin(egui::Margin::same(5))
                     .inner_margin(egui::Margin::same(15))
                     .show(ui, |ui| {

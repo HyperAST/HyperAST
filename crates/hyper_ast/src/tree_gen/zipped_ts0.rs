@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::utils_ts::*;
 use crate::store::nodes::compo;
 use crate::store::{
@@ -230,10 +231,6 @@ where
             indentation: indent,
             role: Default::default(),
         }
-    }
-
-    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {
-        format!("{:?} {}", acc.simple.kind, acc.end_byte)
     }
 
     fn pre_skippable(

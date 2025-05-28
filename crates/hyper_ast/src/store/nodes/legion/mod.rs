@@ -84,7 +84,9 @@ impl NodeStoreInner {
         eq: Eq,
     ) -> PendingInsert<'a> {
         let Self {
-            internal: backend, hasher, ..
+            internal: backend,
+            hasher,
+            ..
         } = self;
         let hash = make_hash(hasher, hashable);
         let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
@@ -464,8 +466,8 @@ impl NodeStoreInner {
     }
 }
 
-    #[derive(Default)]
-    pub struct DedupMap(pub hashbrown::HashMap<NodeIdentifier, (), ()>);
+#[derive(Default)]
+pub struct DedupMap(pub hashbrown::HashMap<NodeIdentifier, (), ()>);
 
 impl NodeStore {
     pub fn new() -> Self {
@@ -682,7 +684,7 @@ mod stores_impl {
     {
         fn try_resolve(
             &self,
-            id: &Self::IdN,
+            _id: &Self::IdN,
         ) -> Option<(
             <Self as types::TypedLending<'_, <TIdN as TypedNodeId>::Ty>>::TT,
             TIdN,
@@ -690,13 +692,13 @@ mod stores_impl {
             todo!()
         }
 
-        fn try_typed(&self, id: &Self::IdN) -> Option<TIdN> {
+        fn try_typed(&self, _id: &Self::IdN) -> Option<TIdN> {
             todo!()
         }
 
         fn resolve_typed(
             &self,
-            id: &TIdN,
+            _id: &TIdN,
         ) -> <Self as types::TypedLending<'_, <TIdN as TypedNodeId>::Ty>>::TT {
             todo!()
         }

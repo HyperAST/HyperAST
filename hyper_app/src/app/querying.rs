@@ -19,11 +19,10 @@ use egui_addon::{
 };
 
 use super::{
-    code_editor_automerge, show_repo_menu,
+    Sharing, code_editor_automerge, show_repo_menu,
     types::{Commit, Config, QueryEditor, Resource, SelectedConfig, WithDesc},
-    utils_edition::{show_interactions, update_shared_editors, EditStatus},
-    utils_results_batched::{self, show_long_result, ComputeResults},
-    Sharing,
+    utils_edition::{EditStatus, show_interactions, update_shared_editors},
+    utils_results_batched::{self, ComputeResults, show_long_result},
 };
 pub(crate) mod example_queries;
 
@@ -699,7 +698,7 @@ pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQ
         ui.add(
             egui::Slider::new(&mut single.content.len, 1..=200)
                 .text("commits")
-                .clamp_to_range(false)
+                .clamping(egui::SliderClamping::Never)
                 .integer()
                 .logarithmic(true),
         );

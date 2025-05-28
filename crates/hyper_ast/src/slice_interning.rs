@@ -1,4 +1,5 @@
-use num::{PrimInt, ToPrimitive};
+#![allow(unused)]
+use num::ToPrimitive;
 
 pub type DefaultInterner<T> = BasicInterner<T>;
 pub type DefaultIdentifier = BasicIdentifier;

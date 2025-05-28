@@ -130,6 +130,8 @@ test-log = "0.2"
 [features]
 default = ["tsg"]
 # default = ["rerun", "tsg"]
+experimental = [] # very experimental features, will either crash or do nothing
+impact = [] # impact and reference analysis
 tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",

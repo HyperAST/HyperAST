@@ -1,7 +1,6 @@
 use std::{fmt::Debug, path::PathBuf};
 
 use hyperast::{
-    position::TreePath,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
 };
@@ -9,8 +8,8 @@ use hyperast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyperast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
 
 use crate::{
-    processing::ObjectName, Accumulator, BasicDirAcc, DefaultMetrics, SimpleStores,
-    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    Accumulator, BasicDirAcc, DefaultMetrics, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    processing::ObjectName,
 };
 
 pub(crate) fn handle_makefile_file<'a>(
@@ -18,7 +17,9 @@ pub(crate) fn handle_makefile_file<'a>(
     name: &ObjectName,
     text: &'a [u8],
 ) -> Result<MakeFile, ()> {
-    let tree = match hyperast_gen_ts_xml::legion::tree_sitter_parse_xml(b"<proj></proj>") {
+    log::trace!("not parsing {} bytes long Makefile", text.len()); // TODO parse the makefile
+    let text = b"<proj></proj>";
+    let tree = match hyperast_gen_ts_xml::legion::tree_sitter_parse_xml(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");
@@ -32,7 +33,7 @@ pub(crate) fn handle_makefile_file<'a>(
         }
     };
     let x = tree_gen
-        .generate_file(name.as_bytes(), b"<proj></proj>", tree.walk())
+        .generate_file(name.as_bytes(), text, tree.walk())
         .local;
     // TODO extract submodules, dependencies and directories. maybe even more ie. artefact id, ...
     let x = MakeFile {
@@ -57,13 +58,10 @@ pub struct MakeFile {
 #[derive(Debug, Clone)]
 pub struct MD {
     pub(crate) metrics: DefaultMetrics,
-    #[allow(unused)] // TODO needed for scalable module level reference analysis
-    pub(crate) ana: MakePartialAnalysis,
 }
 
 pub struct MakeModuleAcc {
     pub(crate) primary: BasicDirAcc<NodeIdentifier, LabelIdentifier, DefaultMetrics>,
-    pub(crate) ana: MakePartialAnalysis,
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
@@ -73,7 +71,6 @@ impl From<String> for MakeModuleAcc {
     fn from(name: String) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
-            ana: MakePartialAnalysis::new(),
             sub_modules: None,
             main_dirs: None,
             test_dirs: None,
@@ -85,7 +82,6 @@ impl MakeModuleAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
-            ana: MakePartialAnalysis::new(),
             sub_modules: None,
             main_dirs: None,
             test_dirs: None,
@@ -99,7 +95,6 @@ impl MakeModuleAcc {
     ) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
-            ana: MakePartialAnalysis::new(),
             sub_modules: if sub_modules.is_empty() {
                 None
             } else {
@@ -143,7 +138,6 @@ impl MakeModuleAcc {
         &mut self,
         name: LabelIdentifier,
         full_node: cpp_tree_gen::Local,
-        skiped_ana: bool,
     ) {
         self.primary.children.push(full_node.compressed_node);
         self.primary.children_names.push(name);
@@ -185,37 +179,6 @@ impl MakeModuleAcc {
             line_count: 0,
         });
     }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct MakePartialAnalysis {
-    submodules: Vec<()>,
-    main_dirs: Vec<()>,
-    test_dirs: Vec<()>,
-}
-
-impl MakePartialAnalysis {
-    pub(crate) fn new() -> Self {
-        // TODO
-        Self {
-            submodules: vec![],
-            main_dirs: vec![],
-            test_dirs: vec![],
-        }
-    }
-    pub(crate) fn resolve(&self) -> Self {
-        Self {
-            submodules: self.submodules.clone(),
-            main_dirs: self.main_dirs.clone(),
-            test_dirs: self.test_dirs.clone(),
-        }
-    }
-}
-
-pub struct IterMavenModules<'a, T: TreePath<NodeIdentifier>> {
-    stores: &'a SimpleStores,
-    path: T,
-    stack: Vec<(NodeIdentifier, usize, Option<Vec<NodeIdentifier>>)>,
 }
 
 impl hyperast::tree_gen::Accumulator for MakeModuleAcc {

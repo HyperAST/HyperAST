@@ -16,7 +16,10 @@ impl<Idx: PrimInt> IntoIterator for SimpleTreePath<Idx> {
 }
 
 impl<Idx: PrimInt> TreePath for SimpleTreePath<Idx> {
-    type ItemIterator<'a> = IterSimple<'a, Idx> where Idx: 'a;
+    type ItemIterator<'a>
+        = IterSimple<'a, Idx>
+    where
+        Idx: 'a;
     fn iter(&self) -> Self::ItemIterator<'_> {
         IterSimple {
             internal: self.vec.iter(),
@@ -58,11 +61,5 @@ impl<'a, Idx: 'a + Copy> Iterator for IterSimple<'a, Idx> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.internal.next().and_then(|x| Some(*x))
-    }
-}
-
-impl<Idx: PrimInt> SimpleTreePath<Idx> {
-    pub(crate) fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
-        super::shared_ancestors(self.iter(), other.iter())
     }
 }

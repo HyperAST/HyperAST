@@ -109,14 +109,6 @@ pub(crate) struct CodeRange {
     path: Vec<Idx>,
 }
 
-#[derive(PartialEq, Eq)]
-enum QueryGenKind {
-    Simple,
-    Advanced,
-    Advanced2,
-}
-const QUERY_GENERATOR: QueryGenKind = QueryGenKind::Advanced2;
-
 pub(crate) fn smells(
     examples: Examples,
     state: SharedState,
@@ -129,6 +121,7 @@ pub(crate) fn smells(
         commit,
         len,
     } = path;
+    log::warn!("use len value={len}");
     let Examples {
         meta_gen,
         meta_simp,
@@ -173,7 +166,7 @@ pub(crate) fn smells(
     let commit_src = repositories
         .get_commit(repo_handle.config(), &src_oid)
         .unwrap();
-    let src_tr = commit_src.ast_root;
+    let _src_tr = commit_src.ast_root;
     let commit_dst = repositories
         .get_commit(repo_handle.config(), &dst_oid)
         .unwrap();
@@ -294,8 +287,8 @@ pub(crate) fn smells_ex_from_diffs(
         commit,
         len,
     } = path;
+    log::warn!("use len value={len}");
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let configs = state.clone();
     let repo_handle = state
         .repositories
         .write()

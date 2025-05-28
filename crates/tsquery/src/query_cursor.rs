@@ -8,7 +8,7 @@ use crate::indexed::StepId;
 use crate::indexed::{CaptureId, PatternId};
 
 #[derive(Clone)]
-pub(crate) struct State {
+pub struct State {
     pub(crate) id: super::indexed::StateId,
     pub(crate) capture_list_id: super::indexed::CaptureListId,
     pub(crate) start_depth: u16,

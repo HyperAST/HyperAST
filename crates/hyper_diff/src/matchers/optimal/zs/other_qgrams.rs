@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::qgrams::pad;
 use crate::matchers::optimal::zs::qgrams::qgram_distance_hash_opti;
 use std::collections::{HashMap, HashSet};
@@ -165,8 +166,10 @@ fn validity_qgram_distance_hash() {
         "abcdefg".as_bytes()
     ));
     use str_distance::DistanceMetric;
-    dbg!(super::str_distance_patched::QGram::new(3)
-        .normalized("##abaaacdef##".as_bytes(), "##abcdefg##".as_bytes()));
+    dbg!(
+        super::str_distance_patched::QGram::new(3)
+            .normalized("##abaaacdef##".as_bytes(), "##abcdefg##".as_bytes())
+    );
 }
 
 use hyperast::compat::DefaultHashBuilder;

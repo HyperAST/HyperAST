@@ -489,7 +489,7 @@ pub(crate) fn show_results(
                     }
                     painter.rect(
                         rect,
-                        egui::Rounding::ZERO,
+                        egui::CornerRadius::ZERO,
                         fill_color,
                         egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
                         egui::StrokeKind::Inside,
@@ -521,9 +521,9 @@ pub(crate) fn show_results(
                             if ui.input(|i| i.pointer.any_pressed() && i.pointer.any_down())
                                 && mouse_over_resize_line
                             {
-                                ui.memory_mut(|mem| mem.set_dragged_id(resize_id));
+                                ui.ctx().set_dragged_id(resize_id);
                             }
-                            is_resizing = ui.memory(|mem| mem.is_being_dragged(resize_id));
+                            is_resizing = ui.ctx().is_being_dragged(resize_id);
                             if is_resizing {
                                 // let width = (pointer.x - second_rect.left()).abs();
                                 // let width =
@@ -593,9 +593,9 @@ pub(crate) fn show_results(
                             if ui.input(|i| i.pointer.any_pressed() && i.pointer.any_down())
                                 && mouse_over_resize_line
                             {
-                                ui.memory_mut(|mem| mem.set_dragged_id(resize_id));
+                                ui.ctx().set_dragged_id(resize_id);
                             }
-                            is_resizing = ui.memory(|mem| mem.is_being_dragged(resize_id));
+                            is_resizing = ui.ctx().is_being_dragged(resize_id);
                             if is_resizing {
                                 // let width = (pointer.x - second_rect.left()).abs();
                                 // let width =
@@ -1081,10 +1081,10 @@ pub(crate) fn show_results(
     use egui::NumExt;
     let viewport =
         egui::Rect::from_x_y_ranges(viewport_x, ui.available_rect_before_wrap().y_range());
-    let ui = &mut ui.child_ui(
-        viewport,
-        egui::Layout::left_to_right(egui::Align::BOTTOM),
-        None,
+    let ui = &mut ui.new_child(
+        egui::UiBuilder::new()
+            .layout(egui::Layout::left_to_right(egui::Align::BOTTOM))
+            .max_rect(viewport),
     );
     ui.set_clip_rect(timeline_window);
 
@@ -1092,7 +1092,11 @@ pub(crate) fn show_results(
     let x_max =
         ui.max_rect().left() + max_col as f32 * col_width_with_spacing - spacing.x * 2.0 / 3.0;
     let rect = egui::Rect::from_x_y_ranges(x_min..=x_max, ui.max_rect().y_range());
-    let mut cui = ui.child_ui(rect, egui::Layout::left_to_right(egui::Align::BOTTOM), None);
+    let mut cui = ui.new_child(
+        egui::UiBuilder::new()
+            .layout(egui::Layout::left_to_right(egui::Align::BOTTOM))
+            .max_rect(rect),
+    );
     // cui.skip_ahead_auto_ids(min_col);
     // cui.set_clip_rect(timeline_window);
     let attacheds = (add_contents)(&mut cui, min_col..max_col);
@@ -1237,13 +1241,13 @@ pub(crate) fn show_results(
                                         } else {
                                             mem.data.insert_temp(line_id, id.with("past_interact"));
                                         }
-                                        mem.set_dragged_id(line_id);
                                     });
+                                    ui.ctx().set_dragged_id(line_id);
                                 }
                             }
                         }
                         {
-                            let is_dragged = ui.memory(|mem| mem.is_being_dragged(line_id));
+                            let is_dragged = ui.ctx().is_being_dragged(line_id);
                             // wasm_rs_dbg::dbg!(&is_dragged);
                             if is_dragged {
                                 let state =
@@ -1331,13 +1335,13 @@ pub(crate) fn show_results(
                                                 mem.data
                                                     .insert_temp(line_id, id.with("past_interact"));
                                             }
-                                            mem.set_dragged_id(line_id);
                                         });
+                                        ui.ctx().set_dragged_id(line_id);
                                     }
                                 }
                             }
                             {
-                                let is_dragged = ui.memory(|mem| mem.is_being_dragged(line_id));
+                                let is_dragged = ui.ctx().is_being_dragged(line_id);
                                 // wasm_rs_dbg::dbg!(&is_dragged);
                                 if is_dragged {
                                     let state = ui.memory_mut(|mem| {
@@ -1833,12 +1837,7 @@ fn show_detached_element(
                     .pointer_hover_pos()
                     .map_or(false, |x| rect.contains(x))
                 {
-                    let resp = ui.interact_with_hovered(
-                        rect,
-                        true,
-                        id.with("past_interact"),
-                        egui::Sense::click(),
-                    );
+                    let resp = ui.interact(rect, id.with("past_interact"), egui::Sense::click());
                     let col = if resp.clicked() {
                         egui::Color32::BLUE //.gamma_multiply(0.5)
                     } else {
@@ -1906,12 +1905,7 @@ fn show_detached_element(
                     .pointer_hover_pos()
                     .map_or(false, |x| rect.contains(x))
                 {
-                    let resp = ui.interact_with_hovered(
-                        rect,
-                        true,
-                        id.with("fut_interact"),
-                        egui::Sense::click(),
-                    );
+                    let resp = ui.interact(rect, id.with("fut_interact"), egui::Sense::click());
                     let col = if resp.clicked() {
                         egui::Color32::BLUE //.gamma_multiply(0.5)
                     } else {
@@ -2319,7 +2313,7 @@ fn show_commitid_info(
                     ui.label("CTRL+C to copy (and send in the debug console)");
                 });
                 if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
-                    ui.output_mut(|mem| mem.copied_text = id.to_string());
+                    ui.ctx().copy_text(id.to_string());
                     wasm_rs_dbg::dbg!(id);
                 }
             }

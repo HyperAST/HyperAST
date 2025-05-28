@@ -1,31 +1,29 @@
-use hyper_diff::matchers::optimal::zs::{self, str_distance_patched};
-use std::hint::black_box;
-use str_distance::DistanceMetric;
-
-const PAIRS: [(&[u8], &[u8]); 5] = [
-    ("abaaacdefg".as_bytes(), "abcdefg".as_bytes()),
-    (
-        "za".as_bytes(),
-        "qvvsdflflvjehrgipuerpq".as_bytes(),
-    ),
-    (
-        "abaaeqrogireiuvnlrpgacdefg".as_bytes(),
-        "aaaa".as_bytes(),
-    ),
-    (
-        "abaaeqrogireiuvnlrpgacdefgabaaeqrogireiuvnlrpgacdefg".as_bytes(),
-        "qvvsdflflvjehrgipuerpqqvvsdflflvjehrgipuerpq".as_bytes(),
-    ),
-    (
-        "abaaeqro64646s468gireiuvnlrpg137zfaèàç-_éèàaç_è'ç(-cdefgrgeedbdsfdg6546465".as_bytes(),
-        "qvvsdflflvjehrgegrhdbeoijovirejvoirzejvoerivjeorivjeroivjeroivjerovijrevoierjvoierjoipuerpq".as_bytes(),
-    ),
-];
-
 #[cfg(target_os = "linux")]
 mod iai {
-    use super::*;
+    use hyper_diff::matchers::optimal::zs::{self, str_distance_patched};
     use iai_callgrind::{library_benchmark, library_benchmark_group, main};
+    use std::hint::black_box;
+    use str_distance::DistanceMetric;
+
+    const PAIRS: [(&[u8], &[u8]); 5] = [
+        ("abaaacdefg".as_bytes(), "abcdefg".as_bytes()),
+        (
+            "za".as_bytes(),
+            "qvvsdflflvjehrgipuerpq".as_bytes(),
+        ),
+        (
+            "abaaeqrogireiuvnlrpgacdefg".as_bytes(),
+            "aaaa".as_bytes(),
+        ),
+        (
+            "abaaeqrogireiuvnlrpgacdefgabaaeqrogireiuvnlrpgacdefg".as_bytes(),
+            "qvvsdflflvjehrgipuerpqqvvsdflflvjehrgipuerpq".as_bytes(),
+        ),
+        (
+            "abaaeqro64646s468gireiuvnlrpg137zfaèàç-_éèàaç_è'ç(-cdefgrgeedbdsfdg6546465".as_bytes(),
+            "qvvsdflflvjehrgegrhdbeoijovirejvoirzejvoerivjeorivjeroivjeroivjerovijrevoierjvoierjoipuerpq".as_bytes(),
+        ),
+    ];
 
     #[library_benchmark]
     #[bench::zero(0)]

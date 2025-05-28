@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::auto::tsq_ser_meta::Converter;
 use crate::auto::tsq_transform;
 use hyperast::position::position_accessors::{SolvedPosition, WithPreOrderOffsets};
@@ -50,8 +51,6 @@ pub struct QueryLattice<E> {
     sort_cache: Vec<u32>,
 }
 
-/// Might have collisions
-type DedupSimp = std::collections::HashMap<u32, Vec<(IdN, TR)>>;
 /// make the deduplication through raw entries, probably slower, is it marginal ?
 #[derive(Default)]
 pub struct DedupRawEntry(hashbrown::HashMap<IdNQ, Vec<(IdN, TR)>>);
@@ -462,82 +461,6 @@ impl<'q, E, D> Builder<'q, E, D> {
         });
         b.lattice.leaf_queries.dedup();
         b
-    }
-}
-
-impl Builder<'_, IdN, DedupSimp> {
-    pub fn actives(&mut self, active_size: usize) -> Vec<IdN> {
-        self.dedup.iter().map(|x| x.1[0].0).collect()
-        // .keys()
-        // .copied()
-        // .filter(|x| {
-        //     // simp_search_need(
-        //     //     &self.lattice.query_store,
-        //     //     self.dedup[active_size].get(&x).unwrap()[0].0,
-        //     //     self.meta_simp,
-        //     // )
-        //     simp_search_need(&self.lattice.query_store, *x, self.meta_simp)
-        // })
-    }
-    fn rest0(&mut self) {
-        let s = &mut self.lattice;
-        let dedup = &mut self.dedup;
-        let meta_simp = self.meta_simp;
-        let mut active: Vec<_> = dedup
-            .keys()
-            .copied()
-            .filter(|x| simp_search_need(&s.query_store, dedup.get(&x).unwrap()[0].0, meta_simp))
-            .collect();
-
-        for _ in 0..4 {
-            dbg!(active.len());
-            let rms = std::mem::take(&mut active)
-                .into_iter()
-                .flat_map(|x| {
-                    let Some(x) = dedup.get(&x) else {
-                        return vec![];
-                    };
-                    let query = x[0].0;
-                    simp_rms2(&mut s.query_store, query, meta_simp)
-                        .map(|(new_q, label_h)| (label_h, (new_q, TR::RMs(query))))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-            dbg!(rms.len());
-            for (label_h, x) in rms {
-                let v = dedup.entry(label_h);
-                let v = match v {
-                    std::collections::hash_map::Entry::Occupied(x) => x.into_mut(),
-                    std::collections::hash_map::Entry::Vacant(x) => {
-                        active.push(label_h);
-                        x.insert(vec![])
-                    }
-                };
-                if !v.contains(&x) {
-                    v.push(x);
-                } else {
-                    dbg!()
-                }
-            }
-            // TODO add pass to replace some symbols with a wildcard
-        }
-        dbg!(dedup.len());
-        let simp_eq = dedup
-            .values()
-            .filter_map(|x| {
-                let query = x[0].0;
-                let (new_q, label_h) = simp_imm_eq(&mut s.query_store, query, meta_simp)?;
-                Some((label_h, (new_q, TR::RMs(query))))
-            })
-            .collect::<Vec<_>>();
-
-        for (label_h, x) in simp_eq {
-            let v = dedup.entry(label_h).or_default();
-            if !v.contains(&x) {
-                v.push(x);
-            }
-        }
-        dbg!(dedup.len());
     }
 }
 
@@ -1399,7 +1322,7 @@ fn simp_search_need2(
         let Some(m) = matches.next() else {
             return found;
         };
-        if let Some(cid) = uniq {}
+        if let Some(_cid) = uniq {}
         if let Some(cid) = need {
             let q = meta_simp.quant(m.pattern_index, cid);
             if matches!(

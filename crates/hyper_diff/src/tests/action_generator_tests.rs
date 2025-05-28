@@ -1,14 +1,12 @@
 use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::matchers::Decompressible;
-use crate::tree::simple_tree::Tree;
 use crate::{
     actions::script_generator::{self, Actions, SimpleAction, TestActions},
     decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_gt_java_code},
-    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef},
+    tree::simple_tree::{DisplayTree, vpair_to_stores},
 };
-use hyperast::store::SimpleStores;
 use hyperast::types::{DecompressedFrom, LabelStore, Labeled, NodeStore};
 use std::fmt;
 
@@ -88,10 +86,7 @@ fn test_with_action_example() {
     );
 
     // Decompressible<_, CompletePostOrder<_, IdD>>
-    let dst_arena =
-        SimpleBfsMapper::<u16, _, _>::with_store(
-            &stores, dst_arena,
-        );
+    let dst_arena = SimpleBfsMapper::<u16, _, _>::with_store(&stores, dst_arena);
     let from_dst = |path: &[u8]| dst_arena.child(dst, path);
 
     // let actions = script_generator::ScriptGenerator::<
@@ -289,8 +284,6 @@ type IdD = u16;
 #[test]
 fn test_with_zs_custom_example() {
     let (stores, src, dst) = vpair_to_stores(example_gt_java_code());
-    let node_store = &stores.node_store;
-    let label_store = &stores.label_store;
 
     let mut ms = DefaultMappingStore::default();
     let src_arena = Decompressible::<_, CompletePostOrder<_, u16>>::decompress(&stores, &src);
@@ -298,7 +291,6 @@ fn test_with_zs_custom_example() {
     // let src_arena = src_arena.as_ref();
     // let dst_arena = dst_arena.as_ref();
     let node_store = &stores.node_store;
-    let label_store = &stores.label_store;
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len(), dst_arena.len());
@@ -311,8 +303,7 @@ fn test_with_zs_custom_example() {
     ms.link(from_src(&[1, 2]), from_dst(&[0, 1, 2]));
     ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
 
-    let dst_arena =
-        SimpleBfsMapper::<u16, _, _>::with_store(&stores, dst_arena);
+    let dst_arena = SimpleBfsMapper::<u16, _, _>::with_store(&stores, dst_arena);
     let from_dst = |path: &[u8]| dst_arena.child(dst, path);
     // let actions = script_generator::ScriptGenerator::<
     //     _,
@@ -356,19 +347,21 @@ fn test_with_zs_custom_example() {
             idx: 0,
         },
     ]));
-    assert!(actions.has_actions(&[
-        // new Update(src.getChild("1.3"), "r2"),
-        SimpleAction::Update {
-            src: from_src(&[1, 3]),
-            dst: from_dst(&[0, 1, 3]),
-            old: *node_store
-                .resolve(&src_arena.original(&from_src(&[1, 3])))
-                .get_label_unchecked(),
-            new: *node_store
-                .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
-                .get_label_unchecked(),
-        }, // label: "r2".to_owned()},
-    ]));
+    assert!(
+        actions.has_actions(&[
+            // new Update(src.getChild("1.3"), "r2"),
+            SimpleAction::Update {
+                src: from_src(&[1, 3]),
+                dst: from_dst(&[0, 1, 3]),
+                old: *node_store
+                    .resolve(&src_arena.original(&from_src(&[1, 3])))
+                    .get_label_unchecked(),
+                new: *node_store
+                    .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
+                    .get_label_unchecked(),
+            }, // label: "r2".to_owned()},
+        ])
+    );
     assert!(actions.has_actions(&[
         // new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
         SimpleAction::Insert {

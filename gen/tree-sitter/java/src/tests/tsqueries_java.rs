@@ -1,5 +1,3 @@
-use std::{path::Path, time::Instant};
-
 use hyperast::store::{SimpleStores, defaults::NodeIdentifier};
 
 static LOGGER: SimpleLogger = SimpleLogger;
@@ -78,6 +76,7 @@ class A {
     // insta::assert_snapshot!(run_prepro(query, &prepro, text), @"1");
 }
 
+#[allow(unused)]
 fn run_stepped2(query: &str, text: &[u8]) -> usize {
     let (query, tree) = prep_stepped2(query, text);
     let cursor = hyperast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());

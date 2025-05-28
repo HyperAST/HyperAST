@@ -26,21 +26,25 @@ pub mod tests;
 
 use git::BasicGitObject;
 use git2::Oid;
-use hyperast::{store::{defaults::LabelIdentifier, nodes::legion::NodeStoreInner}, utils::Bytes};
+use hyperast::{
+    store::{defaults::LabelIdentifier, nodes::legion::NodeStoreInner},
+    utils::Bytes,
+};
 
 mod type_store;
 
 pub use type_store::TStore;
 
-pub type NodeStore<'a, 'b> = hyperast::store::nodes::legion::NodeStore<&'a mut NodeStoreInner, &'b mut hyperast::store::nodes::legion::DedupMap>;
+pub type NodeStore<'a, 'b> = hyperast::store::nodes::legion::NodeStore<
+    &'a mut NodeStoreInner,
+    &'b mut hyperast::store::nodes::legion::DedupMap,
+>;
 
 // pub type SimpleStores<TS> = hyperast::store::SimpleStores<TS, NodeStoreInner>;
 pub type SimpleStores = hyperast::store::SimpleStores<crate::TStore>;
 
 // might also skip
 pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;
-
-pub(crate) const MAX_REFS: u32 = 10000; //4096;
 
 pub(crate) type DefaultMetrics =
     hyperast::tree_gen::SubTreeMetrics<hyperast::hashed::SyntaxNodeHashs<u32>>;
@@ -101,10 +105,18 @@ trait Processor<Acc: Accumulator, Oid = self::Oid, O = BasicGitObject> {
     fn post(&mut self, oid: Oid, acc: Acc) -> Option<Acc::Unlabeled>;
 }
 
-#[derive(Debug)]
 pub(crate) enum ParseErr {
     NotUtf8(std::str::Utf8Error),
     IllFormed,
+}
+
+impl std::fmt::Debug for ParseErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotUtf8(e) => e.fmt(f),
+            Self::IllFormed => write!(f, "IllFormed"),
+        }
+    }
 }
 
 impl From<std::str::Utf8Error> for ParseErr {

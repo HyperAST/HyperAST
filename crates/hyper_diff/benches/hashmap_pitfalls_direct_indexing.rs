@@ -99,6 +99,7 @@ fn compare_hashmaps(c: &mut Criterion) {
     ];
     simple.sort_by_key(|x| x.0);
     simple.dedup_by_key(|x| x.0);
+    #[allow(non_snake_case)]
     let INPUTS: &[(&[(K, V)], &[K])] = &[
         (&simple[0..10], k),
         (&simple[0..100], k),
@@ -109,7 +110,7 @@ fn compare_hashmaps(c: &mut Criterion) {
         (&simple[0..4000], k),
     ];
 
-    for (i, (collec, keys)) in INPUTS.into_iter().enumerate() {
+    for (_i, (collec, keys)) in INPUTS.into_iter().enumerate() {
         let id = collec.len();
         group.throughput(Throughput::Elements(collec.len() as u64));
         let mut hashmap = None;

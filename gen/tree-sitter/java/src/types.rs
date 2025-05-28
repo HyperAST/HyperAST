@@ -1,13 +1,12 @@
 use std::fmt::Display;
 
-use hyperast::types::{
-    AAAA, AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId,
-};
+use hyperast::types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypedNodeId};
 
 #[cfg(feature = "impl")]
 mod impls {
     use super::*;
     use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
+    use hyperast::types::{RoleStore, TypeStore};
 
     impl TsEnableTS for TStore {
         fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
@@ -94,7 +93,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     crate::language().id_for_node_kind(kind, named)
 }
 #[cfg(not(feature = "impl"))]
-fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+fn id_for_node_kind(_kind: &str, _named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
@@ -122,7 +121,7 @@ impl<IdN: Clone + Eq + hyperast::types::AAAA> NodeId for TIdN<IdN> {
     }
 
     unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
-        std::mem::transmute(id)
+        unsafe { std::mem::transmute(id) }
     }
 }
 
@@ -697,7 +696,6 @@ impl hyperast::types::LLang<TType> for Java {
     }
 }
 
-const COUNT: u16 = 326 + 1 + 2;
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {

@@ -1,4 +1,3 @@
-use super::bottom_up_matcher::BottomUpMatcher;
 use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,

@@ -291,7 +291,7 @@ where
 impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::ErasedHolder
     for HashedCompressedNode<U, N, L, T>
 {
-    fn unerase_ref<TT: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&TT> {
+    fn unerase_ref<TT: 'static + Send + Sync>(&self, _tid: std::any::TypeId) -> Option<&TT> {
         unimplemented!("CompressedNode should be deprecated anyway")
     }
 }

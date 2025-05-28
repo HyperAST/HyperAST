@@ -1,12 +1,13 @@
+#![allow(unused)]
 //! demo from https://github.com/joelparkerhenderson/demo-rust-axum
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
 use http::request;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// axum handler for "GET /" which returns a string and causes axum to
 /// immediately respond with status code `200 OK` and with the string.

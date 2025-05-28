@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 use std::sync::Arc;
 
 use epaint::text::{Galley, LayoutJob, cursor::*};
@@ -351,7 +352,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
 
         let margin = self.margin;
         let max_rect = ui.available_rect_before_wrap().shrink2(margin);
-        let mut content_ui = ui.child_ui(max_rect, *ui.layout(), None);
+        let mut content_ui = ui.new_child(egui::UiBuilder::new().max_rect(max_rect));
         let mut output = self.show_content(&mut content_ui);
         let id = output.response.id;
         let frame_rect = output.response.rect.expand2(margin);
@@ -942,7 +943,7 @@ fn events<TB: TextBuffer>(
     let copy_if_not_password = |ui: &Ui, text: String| {
         if !password {
             print_copied_text(text.as_str());
-            ui.ctx().output_mut(|o| o.copied_text = text);
+            ui.ctx().copy_text(text);
         }
     };
 

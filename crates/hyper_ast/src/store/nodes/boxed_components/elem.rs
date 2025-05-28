@@ -1,8 +1,8 @@
 use num::ToPrimitive;
 
+use super::NodeIdentifier;
 use super::boxing;
 use super::compo;
-use super::NodeIdentifier;
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
 use crate::hashed::NodeHashs;
@@ -176,7 +176,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     type HK = SyntaxNodeHashsKinds;
     type HP = HashSize;
 
-    fn hash(&self, kind: impl std::ops::Deref<Target=Self::HK>) -> Self::HP {
+    fn hash(&self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
         self.0
             .get::<SyntaxNodeHashs<Self::HP>>()
             .unwrap()
@@ -185,7 +185,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
 }
 
 impl<'a, Id> crate::store::nodes::ErasedHolder for HashedNodeRef<'a, Id> {
-    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, _tid: std::any::TypeId) -> Option<&T> {
         todo!()
     }
 }
@@ -196,7 +196,9 @@ where
     Id::Ty: Copy + Hash + Eq,
 {
     fn has_children(&self) -> bool {
-        self.cs().map(|x| !crate::types::Childrn::is_empty(&x)).unwrap_or(false)
+        self.cs()
+            .map(|x| !crate::types::Childrn::is_empty(&x))
+            .unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {

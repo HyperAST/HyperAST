@@ -626,6 +626,7 @@ impl<'cursor, 'tree, HAST: hyperast::types::HyperAST> QueryWithLang
     type I = u32;
 }
 
+#[allow(type_alias_bounds)]
 type Pos<HAST: HyperASTShared> = hyperast::position::StructuralPosition<
     <HAST as HyperASTShared>::IdN,
     <HAST as HyperASTShared>::Idx,

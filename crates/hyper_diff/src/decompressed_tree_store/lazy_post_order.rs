@@ -1,25 +1,21 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::fmt::Debug;
 
-use num_traits::{cast, one, zero, ToPrimitive, Zero};
+use num_traits::{ToPrimitive, cast, one, zero};
 
 use crate::matchers::Decompressible;
 
 use super::{
-    basic_post_order::{BasicPOSlice, BasicPostOrder},
-    complete_post_order::CompletePOSlice,
-    simple_post_order::{SimplePOSlice, SimplePostOrder},
     ContiguousDescendants, DecendantsLending, DecompressedParentsLending, DecompressedTreeStore,
     DecompressedWithParent, DecompressedWithSiblings, Iter, LazyDecompressed,
     LazyDecompressedTreeStore, LazyPOBorrowSlice, LazyPOSliceLending, PostOrder, PostOrderIterable,
     Shallow, ShallowDecompressedTreeStore,
+    basic_post_order::{BasicPOSlice, BasicPostOrder},
+    complete_post_order::CompletePOSlice,
+    simple_post_order::{SimplePOSlice, SimplePostOrder},
 };
-use hyperast::{
-    position::Position,
-    types::{
-        self, AstLending, Children, Childrn, HyperAST, HyperASTShared, WithChildren, WithStats,
-    },
-    PrimInt,
-};
+
+use hyperast::PrimInt;
+use hyperast::types::{self, AstLending, Children, Childrn, HyperAST, WithChildren, WithStats};
 
 pub struct LazyPostOrder<IdN, IdD> {
     pub(super) id_compressed: Box<[IdN]>,
@@ -460,7 +456,6 @@ where
     }
 
     fn decompress_descendants_continuous(&mut self, x: &<Self as LazyDecompressed<IdD>>::IdD) {
-        let store = self.hyperast;
         // PAVE CESAR oO
         let mut c = *x;
         let mut s: Vec<(IdD, Vec<HAST::IdN>)> = vec![];
@@ -520,7 +515,6 @@ where
     }
 
     pub fn decompress_descendants(&mut self, x: &IdD) {
-        let store = self.hyperast;
         let mut q = vec![x.clone()];
         while let Some(x) = q.pop() {
             assert!(self.id_parent[x.to_usize().unwrap()] != zero());
@@ -647,8 +641,7 @@ where
         cast(self._root()).unwrap()
     }
 
-    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD
-    {
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
         let store = self.hyperast;
         let mut r = *x;
         for d in p {
@@ -669,8 +662,7 @@ where
         r
     }
 
-    fn children(&self, x: &IdD) -> Vec<IdD>
-    {
+    fn children(&self, x: &IdD) -> Vec<IdD> {
         debug_assert!(
             self.id_parent.len() == 0 || self.id_parent[x.to_usize().unwrap()] != zero(),
             "x has not been initialized"
@@ -699,8 +691,7 @@ where
     }
 }
 
-impl<'d, IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD>
-{
+impl<'d, IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD> {
     pub fn child_decompressed<HAST>(
         mut self,
         store: HAST,
@@ -847,8 +838,7 @@ where
     }
 }
 
-impl<IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD>
-{
+impl<IdN, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<IdN, IdD> {
     fn is_decompressed(&self, x: &IdD) -> bool {
         self.id_parent.len() == 0 || self.id_parent[x.to_usize().unwrap()] != zero()
     }
@@ -931,8 +921,7 @@ where
     HAST::IdN: Debug,
     for<'t> <HAST as AstLending<'t>>::RT: WithStats,
 {
-    fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo
-    {
+    fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo {
         self.complete_subtree(x);
         let range = self.slice_range(x);
         let basic = BasicPOSlice {
@@ -974,12 +963,6 @@ where
     }
 }
 
-pub struct RecCachedPositionProcessor<'a, HAST: HyperASTShared + Copy, IdD: Hash + Eq> {
-    pub(crate) ds: Decompressible<HAST, &'a LazyPostOrder<HAST::IdN, IdD>>,
-    root: HAST::IdN,
-    cache: HashMap<IdD, Position>,
-}
-
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Eq>
     Decompressible<HAST, &mut LazyPostOrder<HAST::IdN, IdD>>
 where
@@ -993,11 +976,7 @@ where
             return None;
         }
         let sib = lld - num_traits::one();
-        if &sib < p_lld {
-            None
-        } else {
-            Some(sib)
-        }
+        if &sib < p_lld { None } else { Some(sib) }
     }
 }
 
@@ -1018,6 +997,31 @@ where
         z + 1
     }
 }
+
+impl<IdN, IdD: PrimInt> LazyPostOrder<IdN, IdD> {
+    pub(crate) fn _compute_kr_bitset(&self) -> bitvec::boxed::BitBox {
+        // use bitvec::prelude::Lsb0;
+        let node_count = self.id_compressed.len();
+        let mut kr = bitvec::bitbox!(0;node_count);
+        // let mut kr = Vec::with_capacity(node_count);
+        let mut visited = bitvec::bitbox!(0; node_count);
+        for i in (1..node_count).rev() {
+            if !visited[self._lld(i).to_usize().unwrap()] {
+                kr.set(i, true);
+                // kr.push(cast(i + 1).unwrap());
+                visited.set(self._lld(i).to_usize().unwrap(), true);
+            }
+        }
+        // kr.into_boxed_slice()
+        kr
+    }
+}
+
+// pub struct RecCachedPositionProcessor<'a, HAST: HyperASTShared + Copy, IdD: Hash + Eq> {
+//     pub(crate) ds: Decompressible<HAST, &'a LazyPostOrder<HAST::IdN, IdD>>,
+//     root: HAST::IdN,
+//     cache: HashMap<IdD, Position>,
+// }
 
 // impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Hash + Eq>
 //     From<(&'a LazyPostOrder<T, IdD>, T::TreeId)> for RecCachedPositionProcessor<'a, T, IdD>
@@ -1504,22 +1508,3 @@ where
 //         <LazyPostOrder<T, IdD>>::slice_po(self, store, x)
 //     }
 // }
-
-impl<IdN, IdD: PrimInt> LazyPostOrder<IdN, IdD> {
-    pub(crate) fn _compute_kr_bitset(&self) -> bitvec::boxed::BitBox {
-        // use bitvec::prelude::Lsb0;
-        let node_count = self.id_compressed.len();
-        let mut kr = bitvec::bitbox!(0;node_count);
-        // let mut kr = Vec::with_capacity(node_count);
-        let mut visited = bitvec::bitbox!(0; node_count);
-        for i in (1..node_count).rev() {
-            if !visited[self._lld(i).to_usize().unwrap()] {
-                kr.set(i, true);
-                // kr.push(cast(i + 1).unwrap());
-                visited.set(self._lld(i).to_usize().unwrap(), true);
-            }
-        }
-        // kr.into_boxed_slice()
-        kr
-    }
-}

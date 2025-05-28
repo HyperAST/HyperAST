@@ -260,7 +260,7 @@ pub fn windowed_commits_compare(
                         dst_s,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        summarized_lazy.actions.map_or(-1,|x|x as isize),
+                        summarized_lazy.actions.map_or(-1, |x| x as isize),
                         gt_counts.actions,
                         valid.missing_mappings,
                         valid.additional_mappings,
@@ -333,19 +333,16 @@ mod test {
     use super::*;
 
     use hyper_diff::{
-        decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
+        decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
         matchers::{
+            Decompressible,
             heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::{DefaultMultiMappingStore, VecStore},
-            Decompressible,
         },
     };
-    use hyperast::{
-        store::nodes::legion::HashedNodeRef,
-        types::{HyperASTShared, WithChildren},
-    };
+    use hyperast::types::{HyperASTShared, WithChildren};
 
-    use crate::postprocess::{print_mappings, SimpleJsonPostProcess};
+    use crate::postprocess::{SimpleJsonPostProcess, print_mappings};
 
     #[test]
     fn issue_mappings_pomxml_spoon_pom() {
@@ -386,6 +383,7 @@ mod test {
         let src = src_tr;
         let dst = dst_tr;
         let mappings = VecStore::default();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
         // type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
@@ -448,6 +446,7 @@ mod test {
         let src = src_tr;
         let dst = dst_tr;
         let mappings = VecStore::default();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
         let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
             DefaultMultiMappingStore<_>,

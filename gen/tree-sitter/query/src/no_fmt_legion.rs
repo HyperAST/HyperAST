@@ -18,7 +18,7 @@ use hyperast::{
     tree_gen::{
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, Parents, PreResult,
         SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-        ZippedTreeGen, get_spacing,
+        ZippedTreeGen,
         parser::{Node as _, TreeCursor},
         utils_ts::TTreeCursor,
     },
@@ -177,9 +177,9 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
     }
     fn pre(
         &mut self,
-        text: &[u8],
+        _text: &[u8],
         node: &Self::Node<'_>,
-        stack: &Parents<Self::Acc>,
+        _stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let kind = TS::obtain_type(node);
@@ -198,7 +198,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
 
     fn post(
         &mut self,
-        parent: &mut <Self as TreeGen>::Acc,
+        _parent: &mut <Self as TreeGen>::Acc,
         global: &mut Self::Global,
         text: &[u8],
         acc: <Self as TreeGen>::Acc,
@@ -337,7 +337,7 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
             }
             match acc.simple.children.len() {
                 0 => {}
-                x => {
+                _ => {
                     let a = acc.simple.children.into_boxed_slice();
                     dyn_builder.add(compo::Size(size));
                     dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
@@ -479,7 +479,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
             }
             match acc.simple.children.len() {
                 0 => {}
-                x => {
+                _ => {
                     let a = acc.simple.children.into_boxed_slice();
                     dyn_builder.add(compo::Size(size));
                     dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
@@ -594,7 +594,6 @@ where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use hyperast::types::Childrn;
         use hyperast::types::WithChildren;
         let kind = self.stores.resolve_type(&self.root);
         if !kind.is_file() {
@@ -656,7 +655,6 @@ where
         use hyperast::types::HyperType;
         use hyperast::types::LabelStore;
         use hyperast::types::Labeled;
-        use hyperast::types::NodeStore;
         use hyperast::types::WithChildren;
         let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
@@ -716,16 +714,12 @@ where
                 // }
                 // Err(IndentedAlt::NoIndent)
             }
-            (label, Some(children)) => {
+            (_, Some(children)) => {
                 let mut parent_indent = parent_indent.to_string();
                 // out.write_str("[")?;
                 // out.write_str(&kind.to_string())?;
                 // // out.write_str(&format!("{parent_indent:?}"))?;
                 // out.write_str("]")?;
-                // if let Some(label) = label {
-                //     let s = self.stores.label_store().resolve(label);
-                // }
-                //
 
                 // if kind.is_file() {
                 // } else if kind.as_static_str() == "anonymous_node" {
@@ -752,14 +746,8 @@ where
                     _ => (),
                 }
 
-                // if kind.is_file() {
-                //     // } else if kind.as_static_str() == "anonymous_node" {
-                //     // } else if kind.as_static_str() == "named_node" {
-                // } else {
-                //     ind.push_str("    ");
-                // }
                 use hyperast::types::WithStats;
-                let count = it.len();
+                // let len = it.len();
                 let len = b.size();
                 // let len = b.try_bytes_len().unwrap_or(0);
                 for _ in 0..it.len() {
@@ -983,7 +971,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pp_TODO() -> Result<(), ()> {
+    fn test_pp_more_complex() -> Result<(), ()> {
         let text = r#"
 (block
   (expression_statement

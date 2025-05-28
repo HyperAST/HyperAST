@@ -57,9 +57,9 @@ pub use crate::impact::partial_analysis::PartialAnalysis;
 pub struct PartialAnalysis;
 impl PartialAnalysis {
     pub fn init<F: FnMut(&str) -> LabelIdentifier>(
-        kind: &Type,
-        label: Option<&str>,
-        mut intern_label: F,
+        _kind: &Type,
+        _label: Option<&str>,
+        mut _intern_label: F,
     ) -> Self {
         Self
     }
@@ -579,7 +579,7 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
 
     pub fn with_line_break(self, line_break: Vec<u8>) -> Self {
         JavaTreeGen {
-            line_break: self.line_break,
+            line_break: line_break,
             dedup: self.dedup,
             stores: self.stores,
             md_cache: self.md_cache,
@@ -788,11 +788,11 @@ where
         full_node
     }
 
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
+    fn build_ana(&mut self, _kind: &Type) -> Option<PartialAnalysis> {
         if !ANA {
             return None;
         }
-        let label_store = &mut self.stores.label_store;
+        let _label_store = &mut self.stores.label_store;
         #[cfg(feature = "impact")]
         {
             build_ana(kind, label_store)

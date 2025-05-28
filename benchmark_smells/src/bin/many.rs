@@ -1,15 +1,11 @@
+// #![allow(unused)]
 use std::collections::HashSet;
 
-use hyperast::{position, types::DecompressedSubtree as _, utils::memusage_linux};
-use hyperast_benchmark_smells::{
-    diffing,
-    github_ranges::{format_pos_as_github_diff_url, format_pos_as_github_url, PositionWithContext},
-    simple::count_matches,
-    DATASET,
+use hyperast_benchmark_smells::github_ranges::{
+    PositionWithContext, format_pos_as_github_diff_url, format_pos_as_github_url,
 };
 use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
-use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -42,7 +38,7 @@ fn main() {
         "(class_declaration)",
         "(method_declaration)",
         // an "@Test" annotation without parameters
-        r#"(marker_annotation 
+        r#"(marker_annotation
         name: (identifier) (#EQ? "Test")
     )"#,
         "(constructor_declaration)",
@@ -136,8 +132,8 @@ fn many(
                 // format!(",[{:?}]", x)
             })
             .collect();
+        eprintln!("{:?}", matches_links);
 
-        let mu = memusage_linux();
         // TODO
         if old_matches_count != matches_count {
             eprintln!(
@@ -196,7 +192,7 @@ fn many(
                     matches_count_print,
                 );
 
-                for (i, ((added, removed), count)) in print_added
+                for (i, ((added, removed), _count)) in print_added
                     .zip(print_removed)
                     .zip(matches_count.iter())
                     .enumerate()
@@ -258,66 +254,79 @@ fn track_heuristic2(
     (old_a, new_b)
 }
 
-// !!! query is currently incorrect but it is running :)
-#[test]
-fn conditional_test_logic() {
-    let repo_name = "INRIA/spoon";
-    let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
-    let limit = 2;
-    let query = r#"(if_statement consequence: (_ 
-    (_ (method_invocation 
-         name: (identifier) (#EQ? "assertEquals") 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperast_benchmark_smells::DATASET;
+    macro_rules! select_data {
+        (name = $name:expr) => {
+            (DATASET.iter().find(|x| x.0 == $name))
+                .expect("the entry corresponding to provided name")
+        };
+    }
+
+    // !!! query is currently incorrect but it is running :)
+    #[test]
+    fn conditional_test_logic() {
+        let repo_name = "INRIA/spoon";
+        let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
+        let limit = 2;
+        let query = r#"(if_statement consequence: (_
+    (_ (method_invocation
+         name: (identifier) (#EQ? "assertEquals")
   ))
     ))"#;
-    many(repo_name, commit, limit, query, [].as_slice());
-    eprintln!("conditional_test_logic done!")
-}
+        many(repo_name, commit, limit, query, [].as_slice());
+        eprintln!("conditional_test_logic done!")
+    }
 
-#[test]
-fn assertion_roulette_dubbo() {
-    let data = DATASET.iter().find(|x| x.0 == "dubbo").unwrap();
-    let repo_name = data.1;
-    eprintln!("{}:", repo_name);
-    let commit = data.2;
-    let limit = 2000;
-    let query = hyperast_benchmark_smells::queries::assertion_roulette();
-    eprint!("{}", query);
-    let subs = [
-        r#"(method_invocation
+    #[test]
+    fn assertion_roulette_dubbo() {
+        let data = select_data!(name = "dubbo");
+        let repo_name = data.1;
+        eprintln!("{}:", repo_name);
+        let commit = data.2;
+        let limit = 2000;
+        let query = hyperast_benchmark_smells::queries::assertion_roulette();
+        eprint!("{}", query);
+        let subs = [
+            r#"(method_invocation
                 name: (identifier) (#EQ? "assertThat")
             )"#,
-        "(class_declaration)",
-        "(method_declaration)",
-        r#"(marker_annotation 
+            "(class_declaration)",
+            "(method_declaration)",
+            r#"(marker_annotation
         name: (identifier) (#EQ? "Test")
     )"#,
-    ]
-    .as_slice();
-    many(repo_name, commit, limit, &query, subs);
-}
+        ]
+        .as_slice();
+        many(repo_name, commit, limit, &query, subs);
+    }
 
-#[test]
-fn exception_handling() {
-    let repo_name = "dubbo/dubbo";
-    let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
-    let limit = 2000;
-    let query = hyperast_benchmark_smells::queries::exception_handling();
-    let query = format!("{} @root\n{} @root", query[0], query[1]);
-    println!("{}:", repo_name);
-    println!("{}", query);
-    many(repo_name, commit, limit, &query, [].as_slice());
-}
+    #[test]
+    fn exception_handling() {
+        let repo_name = "dubbo/dubbo";
+        let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
+        let limit = 2000;
+        let query = hyperast_benchmark_smells::queries::exception_handling();
+        let query = format!("{} @root\n{} @root", query[0], query[1]);
+        println!("{}:", repo_name);
+        println!("{}", query);
+        many(repo_name, commit, limit, &query, [].as_slice());
+    }
 
-#[test]
-fn exception_handling_graphhopper() {
-    let data = DATASET.iter().find(|x| x.0 == "graphhopper").unwrap();
-    let repo_name = data.1;
-    eprintln!("{}:", repo_name);
-    let commit = data.2;
-    let limit = 1000;
-    let query = hyperast_benchmark_smells::queries::exception_handling();
-    let query = format!("{} @root", query[0]);
-    println!("{}:", repo_name);
-    println!("{}", query);
-    many(repo_name, commit, limit, &query, [].as_slice());
+    #[test]
+    fn exception_handling_graphhopper() {
+        let data = select_data!(name = "graphhopper");
+        // DATASET.iter().find(|x| x.0 == "graphhopper").unwrap();
+        let repo_name = data.1;
+        eprintln!("{}:", repo_name);
+        let commit = data.2;
+        let limit = 1000;
+        let query = hyperast_benchmark_smells::queries::exception_handling();
+        let query = format!("{} @root", query[0]);
+        println!("{}:", repo_name);
+        println!("{}", query);
+        many(repo_name, commit, limit, &query, [].as_slice());
+    }
 }
