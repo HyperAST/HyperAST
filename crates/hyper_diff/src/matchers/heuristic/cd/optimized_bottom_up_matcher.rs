@@ -7,16 +7,20 @@ use crate::{
     matchers::{Mapper, Mapping, mapping_store::MonoMappingStore, similarity_metrics},
 };
 use ahash::RandomState;
-use hyperast::PrimInt;
-use hyperast::types::{HyperAST, NodeId, WithHashs};
+use hyperast::types::{HyperAST, HyperType, NodeId, WithHashs};
+use hyperast::{PrimInt, types::TypeStore};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 
-use super::OptimizedBottomUpMatcherConfig;
+use super::{
+    OptimizedBottomUpMatcherConfig,
+    iterator::{CustomIteratorConfig, CustomPostOrderIterator},
+};
 
 /// Optimized bottom-up matcher with configurable optimizations
 pub struct OptimizedBottomUpMatcher<Dsrc, Ddst, HAST, M: MonoMappingStore> {
-    pub hyperast: HAST,
+    pub stores: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
@@ -35,6 +39,7 @@ where
     M::Dst: PrimInt,
     HAST::Label: Eq,
     HAST::IdN: Debug + NodeId<IdN = HAST::IdN>,
+    <HAST::TS as TypeStore>::Ty: Hash + Eq + Clone + HyperType,
     Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
         + DecompressedWithParent<HAST, Dsrc::IdD>
         + PostOrder<HAST, Dsrc::IdD, M::Src>
@@ -58,7 +63,7 @@ where
         config: OptimizedBottomUpMatcherConfig,
     ) -> Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
-            hyperast: mapping.hyperast,
+            stores: mapping.hyperast,
             mappings: mapping.mapping.mappings,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
@@ -78,7 +83,9 @@ where
 
     /// Execute the bottom-up matching with configured optimizations
     fn execute(&mut self) {
-        if self.config.enable_type_grouping {
+        if self.config.statement_level_iteration {
+            self.execute_statement_level();
+        } else if self.config.enable_type_grouping {
             self.execute_with_type_grouping();
         } else {
             self.execute_naive();
@@ -118,7 +125,7 @@ where
         // Index source nodes by their type (only unmapped non-leaf nodes)
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
-            let src_type = self.hyperast.resolve_type(&self.src_arena.original(&src));
+            let src_type = self.stores.resolve_type(&self.src_arena.original(&src));
 
             let is_leaf = self.src_arena.children(&src).is_empty();
             let is_mapped = self.mappings.is_src(src.shallow());
@@ -131,7 +138,7 @@ where
         // Index destination nodes by their type (only unmapped non-leaf nodes)
         for d in self.dst_arena.iter_df_post::<true>() {
             let dst = self.dst_arena.decompress_to(&d);
-            let dst_type = self.hyperast.resolve_type(&self.dst_arena.original(&dst));
+            let dst_type = self.stores.resolve_type(&self.dst_arena.original(&dst));
 
             let is_leaf = self.dst_arena.children(&dst).is_empty();
             let is_mapped = self.mappings.is_dst(dst.shallow());
@@ -181,6 +188,87 @@ where
         }
     }
 
+    /// Execute with up to statement level iteration
+    fn execute_statement_level(&mut self) {
+        let dst_nodes = self.collect_statement_inner_dst();
+        let src_nodes = self.collect_statement_inner_src();
+
+        for src in &src_nodes {
+            let number_of_leaves = self
+                .src_arena
+                .descendants(&src)
+                .iter()
+                .filter(|t| {
+                    let id = self.src_arena.decompress_to(&t);
+                    self.src_arena.children(&id).is_empty()
+                })
+                .count();
+
+            for dst in &dst_nodes {
+                if self.is_mapping_allowed(&src, &dst) {
+                    // no need to check if both are leaves since we only iterate over inner nodes
+
+                    let similarity = self.compute_similarity(&src, &dst);
+                    let threshold = if number_of_leaves > self.config.base_config.max_leaves {
+                        self.config.base_config.sim_threshold_large_trees
+                    } else {
+                        self.config.base_config.sim_threshold_small_trees
+                    };
+
+                    if similarity >= threshold {
+                        self.mappings.link(*src.shallow(), *dst.shallow());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    fn collect_statement_inner_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
+        let src_root = self.src_arena.starter();
+
+        let iter = CustomPostOrderIterator::new(
+            &mut self.src_arena,
+            self.stores,
+            src_root,
+            CustomIteratorConfig {
+                yield_leaves: true,
+                yield_inner: false,
+            },
+            |arena: &mut Dsrc,
+             stores: HAST,
+             node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
+             -> bool {
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                node_type.is_statement()
+            },
+        );
+        let nodes: Vec<_> = iter.collect();
+        nodes
+    }
+
+    fn collect_statement_inner_dst(&mut self) -> Vec<<Ddst as LazyDecompressed<M::Dst>>::IdD> {
+        let dst_root = self.dst_arena.starter();
+
+        let iter = CustomPostOrderIterator::new(
+            &mut self.dst_arena,
+            self.stores,
+            dst_root,
+            CustomIteratorConfig {
+                yield_leaves: true,
+                yield_inner: false,
+            },
+            |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                node_type.is_statement()
+            },
+        );
+        let nodes: Vec<_> = iter.collect();
+        nodes
+    }
+
     /// Execute naive approach without optimizations - compare all nodes
     fn execute_naive(&mut self) {
         for s in self.src_arena.iter_df_post::<true>() {
@@ -226,8 +314,8 @@ where
             return false;
         }
 
-        let src_type = self.hyperast.resolve_type(&self.src_arena.original(src));
-        let dst_type = self.hyperast.resolve_type(&self.dst_arena.original(dst));
+        let src_type = self.stores.resolve_type(&self.src_arena.original(src));
+        let dst_type = self.stores.resolve_type(&self.dst_arena.original(dst));
 
         src_type == dst_type
     }
@@ -249,7 +337,7 @@ impl<HAST: HyperAST + Copy, Dsrc, Ddst, M: MonoMappingStore> Into<Mapper<HAST, D
 {
     fn into(self) -> Mapper<HAST, Dsrc, Ddst, M> {
         Mapper {
-            hyperast: self.hyperast,
+            hyperast: self.stores,
             mapping: Mapping {
                 src_arena: self.src_arena,
                 dst_arena: self.dst_arena,
@@ -387,6 +475,7 @@ mod tests {
         let config = OptimizedBottomUpMatcherConfig {
             base_config: super::super::BottomUpMatcherConfig::default(),
             enable_type_grouping: false,
+            statement_level_iteration: false,
             enable_leaf_count_precomputation: false,
         };
 

@@ -21,18 +21,18 @@ pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         ),
-        "change_distiller" => algorithms::change_distiller_optimized::diff_baseline(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "change_distiller_lazy" => {
-            algorithms::change_distiller_optimized::diff_with_all_optimizations(
-                &stores,
-                &src_tr.local.compressed_node,
-                &dst_tr.local.compressed_node,
-            )
-        }
+        // "change_distiller" => algorithms::change_distiller_optimized::diff_baseline(
+        //     &stores,
+        //     &src_tr.local.compressed_node,
+        //     &dst_tr.local.compressed_node,
+        // ),
+        // "change_distiller_lazy" => {
+        //     algorithms::change_distiller_optimized::diff_with_all_optimizations(
+        //         &stores,
+        //         &src_tr.local.compressed_node,
+        //         &dst_tr.local.compressed_node,
+        //     )
+        // }
         // "change_distiller_lazy_2" => algorithms::change_distiller_lazy_2::diff(
         //     &stores,
         //     &src_tr.local.compressed_node,

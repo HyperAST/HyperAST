@@ -177,7 +177,7 @@ fn run_diff_test(test_cases: &[(&str, &str, &str)]) {
             parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
         // Perform the diff
-        let diff_result = algorithms::change_distiller::diff(
+        let diff_result = algorithms::change_distiller_optimized::diff_with_all_optimizations(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,

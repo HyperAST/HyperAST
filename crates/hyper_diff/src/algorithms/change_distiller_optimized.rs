@@ -95,11 +95,13 @@ where
             enable_label_caching: false,
             enable_type_grouping: false,
             use_binary_heap: false,
+            statement_level_iteration: true,
             reuse_qgram_object: false,
         },
         bottom_up_matcher: OptimizedBottomUpMatcherConfig {
             base_config: BottomUpMatcherConfig::default(),
             enable_type_grouping: false,
+            statement_level_iteration: true,
             enable_leaf_count_precomputation: false,
         },
     };
@@ -363,11 +365,13 @@ mod tests {
                 enable_label_caching: true,
                 enable_type_grouping: false,
                 use_binary_heap: true,
+                statement_level_iteration: true,
                 reuse_qgram_object: false,
             },
             bottom_up_matcher: OptimizedBottomUpMatcherConfig {
                 base_config: BottomUpMatcherConfig::default(),
                 enable_type_grouping: true,
+                statement_level_iteration: false,
                 enable_leaf_count_precomputation: false,
             },
         };

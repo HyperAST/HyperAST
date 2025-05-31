@@ -88,6 +88,8 @@ where
         + LazyPOBorrowSlice<HAST, Ddst::IdD, M::Dst>
         + ShallowDecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
         + LazyDecompressedTreeStore<HAST, M::Dst>,
+    Dsrc::IdD: Clone + Hash + Eq,
+    Ddst::IdD: Clone + Hash + Eq,
 {
     /// Create matcher with custom configuration
     pub fn with_config(
@@ -126,7 +128,9 @@ where
 
     /// Execute the leaves matching with configured optimizations
     fn execute(&mut self) {
-        if self.config.enable_type_grouping {
+        if self.config.statement_level_iteration {
+            self.execute_statement();
+        } else if self.config.enable_type_grouping {
             self.execute_with_type_grouping();
         } else {
             self.execute_naive();
@@ -143,37 +147,6 @@ where
         let qgram = str_distance::QGram::new(3);
 
         println!("=== Testing Custom Iterator ===");
-
-        let src_root = self.src_arena.starter();
-
-        // Create a closure that captures arena and stores for statement checking
-        let is_statement_fn =
-            |arena: &mut Dsrc, stores: HAST, node: &<Dsrc as LazyDecompressed<M::Src>>::IdD| {
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                node_type.is_statement()
-            };
-
-        let custom_iter = CustomPostOrderIterator::new(
-            &mut self.src_arena,
-            self.stores,
-            src_root,
-            CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
-            },
-            is_statement_fn,
-        );
-
-        let nodes: Vec<_> = custom_iter.collect();
-
-        for (i, stmt_node) in nodes.iter().enumerate() {
-            let original = self.src_arena.original(stmt_node);
-            let text = TextSerializer::new(&self.stores, original).to_string();
-            println!("Statement leaf {}: {}", i, text.trim());
-        }
-
-        println!("=== End Custom Iterator ===");
 
         // Collect leaves
         let dst_leaves: Vec<M::Dst> = self
@@ -264,7 +237,7 @@ where
                             if !self.mappings.is_src(src.shallow())
                                 && !self.mappings.is_dst(dst.shallow())
                             {
-                                let sim = self.compute_cached_label_similarity_lazy_2(
+                                let sim = self.compute_cached_label_similarity(
                                     &src_leaf,
                                     &dst_leaf,
                                     &src,
@@ -308,7 +281,7 @@ where
                             if !self.mappings.is_src(src.shallow())
                                 && !self.mappings.is_dst(dst.shallow())
                             {
-                                let sim = self.compute_cached_label_similarity_lazy_2(
+                                let sim = self.compute_cached_label_similarity(
                                     &src_leaf,
                                     &dst_leaf,
                                     &src,
@@ -343,28 +316,103 @@ where
         }
     }
 
-    /// Execute naive approach without type grouping - compare all leaves
-    fn execute_naive(&mut self) {
-        let dst_leaves = self.collect_leaves_dst();
-        let src_leaves = self.collect_leaves_src();
+    /// Execute with statement level iteration
+    fn execute_statement(&mut self) {
+        let dst_leaves = self.collect_statement_leaves_dst();
+        let src_leaves = self.collect_statement_leaves_src();
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
 
-        for &src_leaf in &src_leaves {
-            let src = self.src_arena.decompress_to(&src_leaf);
+        if self.config.enable_label_caching {
+            let mut src_text_cache = HashMap::new();
+            let mut dst_text_cache = HashMap::new();
 
-            for &dst_leaf in &dst_leaves {
-                let dst = self.dst_arena.decompress_to(&dst_leaf);
+            for src in &src_leaves {
+                let src_text = if let Some(text) = src_text_cache.get(&src) {
+                    text
+                } else {
+                    let original_src = self.src_arena.original(&src);
 
-                if self.is_mapping_allowed(&src, &dst) {
-                    let sim = self.compute_label_similarity_simple(&src, &dst);
+                    let text = TextSerializer::new(&self.stores, original_src).to_string();
+                    src_text_cache.insert(src, text);
+                    src_text_cache.get(&src).unwrap()
+                };
+                for dst in &dst_leaves {
+                    let dst_text = if let Some(text) = dst_text_cache.get(&dst) {
+                        text
+                    } else {
+                        let original_dst = self.dst_arena.original(&dst);
+
+                        let text = TextSerializer::new(&self.stores, original_dst).to_string();
+                        dst_text_cache.insert(dst, text);
+                        dst_text_cache.get(dst).unwrap()
+                    };
+                    // no need to check for equal types since all nodes are statements
+                    let sim = 1.0
+                        - str_distance::QGram::new(3)
+                            .normalized(src_text.chars(), dst_text.chars());
                     if sim > self.config.base_config.label_sim_threshold {
                         leaves_mappings.push(MappingWithSimilarity {
-                            src: src_leaf,
-                            dst: dst_leaf,
+                            src: src.shallow().clone(),
+                            dst: dst.shallow().clone(),
                             sim,
                         });
                     }
+                }
+            }
+        } else {
+            for src in &src_leaves {
+                let original_src = self.src_arena.original(&src);
+
+                let src_text = TextSerializer::new(&self.stores, original_src).to_string();
+
+                for dst in &dst_leaves {
+                    let original_dst = self.dst_arena.original(&dst);
+
+                    let dst_text = TextSerializer::new(&self.stores, original_dst).to_string();
+
+                    // no need to check for equal types since all nodes are statements
+                    let sim = 1.0
+                        - str_distance::QGram::new(3)
+                            .normalized(src_text.chars(), dst_text.chars());
+                    if sim > self.config.base_config.label_sim_threshold {
+                        leaves_mappings.push(MappingWithSimilarity {
+                            src: src.shallow().clone(),
+                            dst: dst.shallow().clone(),
+                            sim,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Sort mappings by similarity
+        leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+
+        // Process mappings in order
+        for mapping in leaves_mappings {
+            self.mappings
+                .link_if_both_unmapped(mapping.src, mapping.dst);
+        }
+    }
+
+    /// Execute naive approach without type grouping - compare all leaves
+    fn execute_naive(&mut self) {
+        let dst_leaves = self.collect_statement_leaves_dst();
+        let src_leaves = self.collect_statement_leaves_src();
+
+        let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+
+        for src in &src_leaves {
+            for dst in &dst_leaves {
+                // no need to check for equal types since all are only statements
+                let sim = self.compute_label_similarity_simple(&src, &dst);
+                if sim > self.config.base_config.label_sim_threshold {
+                    leaves_mappings.push(MappingWithSimilarity {
+                        src: src.shallow().clone(),
+                        dst: dst.shallow().clone(),
+                        sim,
+                    });
                 }
             }
         }
@@ -399,6 +447,61 @@ where
                 self.src_arena.children(&id).is_empty()
             })
             .collect()
+    }
+
+    fn node_is_statement(
+        arena: &mut Dsrc,
+        stores: HAST,
+        node: &<Dsrc as LazyDecompressed<M::Src>>::IdD,
+    ) -> bool {
+        let original = arena.original(node);
+        let node_type = stores.resolve_type(&original);
+        node_type.is_statement()
+    }
+
+    fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
+        let src_root = self.src_arena.starter();
+
+        let iter = CustomPostOrderIterator::new(
+            &mut self.src_arena,
+            self.stores,
+            src_root,
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            |arena: &mut Dsrc,
+             stores: HAST,
+             node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
+             -> bool {
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                node_type.is_statement()
+            },
+        );
+        let nodes: Vec<_> = iter.collect();
+        nodes
+    }
+
+    fn collect_statement_leaves_dst(&mut self) -> Vec<<Ddst as LazyDecompressed<M::Dst>>::IdD> {
+        let dst_root = self.dst_arena.starter();
+
+        let iter = CustomPostOrderIterator::new(
+            &mut self.dst_arena,
+            self.stores,
+            dst_root,
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                node_type.is_statement()
+            },
+        );
+        let nodes: Vec<_> = iter.collect();
+        nodes
     }
 
     /// Check if mapping between two nodes is allowed (same type, both unmapped)
@@ -440,7 +543,7 @@ where
     }
 
     /// Exact implementation of lazy_2 cached label similarity computation
-    fn compute_cached_label_similarity_lazy_2(
+    fn compute_cached_label_similarity(
         &self,
         src_leaf: &M::Src,
         dst_leaf: &M::Dst,
@@ -531,6 +634,7 @@ mod tests {
             base_config: super::super::LeavesMatcherConfig::default(),
             enable_label_caching: false,
             enable_type_grouping: false,
+            statement_level_iteration: false,
             use_binary_heap: false,
             reuse_qgram_object: false,
         };

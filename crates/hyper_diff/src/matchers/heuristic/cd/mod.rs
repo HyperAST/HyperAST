@@ -74,10 +74,15 @@ pub struct OptimizedLeavesMatcherConfig {
     /// Cache label strings to avoid repeated resolution. This is automatically enabled when using type grouping.
     pub enable_label_caching: bool,
     /// Group leaves by type before comparison. This automatically enables label caching.
+    #[deprecated]
     pub enable_type_grouping: bool,
+    /// Only iterate to the highest statement level nodes
+    pub statement_level_iteration: bool,
     /// Use binary heap instead of vector + sort for mappings
+    #[deprecated]
     pub use_binary_heap: bool,
     /// Reuse QGram object for string distance computation
+    #[deprecated]
     pub reuse_qgram_object: bool,
 }
 
@@ -87,7 +92,8 @@ impl Default for OptimizedLeavesMatcherConfig {
         Self {
             base_config: LeavesMatcherConfig::default(),
             enable_label_caching: true,
-            enable_type_grouping: true,
+            enable_type_grouping: false,
+            statement_level_iteration: true,
             use_binary_heap: true,
             reuse_qgram_object: true,
         }
@@ -100,9 +106,12 @@ pub struct OptimizedBottomUpMatcherConfig {
     /// Base configuration (thresholds and max_leaves)
     pub base_config: BottomUpMatcherConfig,
     /// Group nodes by type before comparison
+    #[deprecated]
     pub enable_type_grouping: bool,
     /// Pre-compute leaf counts in single traversal
     pub enable_leaf_count_precomputation: bool,
+    /// Only iterate up to the highest statement level nodes
+    pub statement_level_iteration: bool,
 }
 
 impl Default for OptimizedBottomUpMatcherConfig {
@@ -110,8 +119,9 @@ impl Default for OptimizedBottomUpMatcherConfig {
     fn default() -> Self {
         Self {
             base_config: BottomUpMatcherConfig::default(),
-            enable_type_grouping: true,
+            enable_type_grouping: false,
             enable_leaf_count_precomputation: true,
+            statement_level_iteration: true,
         }
     }
 }

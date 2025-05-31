@@ -1,15 +1,10 @@
-use std::cmp::max;
-
-use criterion::{BenchmarkId, Criterion, SamplingMode, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, SamplingMode, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyper_diff::matchers::heuristic::cd::{BottomUpMatcherConfig, LeavesMatcherConfig};
 use hyper_diff::{
     OptimizedBottomUpMatcherConfig, OptimizedDiffConfig, OptimizedLeavesMatcherConfig,
 };
-use hyperast::store::SimpleStores;
-use hyperast::types::HyperAST;
 use hyperast_benchmark_diffs::common;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 
 /// Configuration for different optimization combinations to benchmark
 struct OptimizationConfig {
@@ -32,23 +27,113 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             OptimizedDiffConfig {
                 use_lazy_decompression: false,
                 use_ranged_similarity: false,
-                calculate_script: true,
+                calculate_script: false,
                 leaves_matcher: OptimizedLeavesMatcherConfig {
                     base_config: LeavesMatcherConfig::default(),
                     enable_label_caching: false,
                     enable_type_grouping: false,
+                    statement_level_iteration: false,
                     use_binary_heap: false,
                     reuse_qgram_object: false,
                 },
                 bottom_up_matcher: OptimizedBottomUpMatcherConfig {
                     base_config: BottomUpMatcherConfig::default(),
                     enable_type_grouping: false,
+                    statement_level_iteration: false,
                     enable_leaf_count_precomputation: false,
                 },
             },
         ),
+        OptimizationConfig::new(
+            "Baseline Statement",
+            OptimizedDiffConfig {
+                use_lazy_decompression: false,
+                use_ranged_similarity: false,
+                calculate_script: false,
+                leaves_matcher: OptimizedLeavesMatcherConfig {
+                    base_config: LeavesMatcherConfig::default(),
+                    enable_label_caching: false,
+                    enable_type_grouping: false,
+                    statement_level_iteration: true,
+                    use_binary_heap: false,
+                    reuse_qgram_object: false,
+                },
+                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+                    base_config: BottomUpMatcherConfig::default(),
+                    enable_type_grouping: false,
+                    statement_level_iteration: true,
+                    enable_leaf_count_precomputation: false,
+                },
+            },
+        ),
+        OptimizationConfig::new(
+            "Lazy Statement",
+            OptimizedDiffConfig {
+                use_lazy_decompression: true,
+                use_ranged_similarity: true,
+                calculate_script: false,
+                leaves_matcher: OptimizedLeavesMatcherConfig {
+                    base_config: LeavesMatcherConfig::default(),
+                    enable_label_caching: false,
+                    enable_type_grouping: false,
+                    statement_level_iteration: true,
+                    use_binary_heap: false,
+                    reuse_qgram_object: false,
+                },
+                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+                    base_config: BottomUpMatcherConfig::default(),
+                    statement_level_iteration: true,
+                    enable_type_grouping: false,
+                    enable_leaf_count_precomputation: true,
+                },
+            },
+        ),
+        OptimizationConfig::new(
+            "Lazy Statement Label Cache",
+            OptimizedDiffConfig {
+                use_lazy_decompression: true,
+                use_ranged_similarity: true,
+                calculate_script: false,
+                leaves_matcher: OptimizedLeavesMatcherConfig {
+                    base_config: LeavesMatcherConfig::default(),
+                    enable_label_caching: true,
+                    enable_type_grouping: false,
+                    statement_level_iteration: true,
+                    use_binary_heap: false,
+                    reuse_qgram_object: false,
+                },
+                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+                    base_config: BottomUpMatcherConfig::default(),
+                    statement_level_iteration: true,
+                    enable_type_grouping: false,
+                    enable_leaf_count_precomputation: true,
+                },
+            },
+        ),
+        OptimizationConfig::new(
+            "Lazy Grouping",
+            OptimizedDiffConfig {
+                use_lazy_decompression: true,
+                use_ranged_similarity: true,
+                calculate_script: false,
+                leaves_matcher: OptimizedLeavesMatcherConfig {
+                    base_config: LeavesMatcherConfig::default(),
+                    enable_label_caching: true,
+                    enable_type_grouping: true,
+                    statement_level_iteration: false,
+                    use_binary_heap: false,
+                    reuse_qgram_object: false,
+                },
+                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+                    base_config: BottomUpMatcherConfig::default(),
+                    statement_level_iteration: false,
+                    enable_type_grouping: true,
+                    enable_leaf_count_precomputation: true,
+                },
+            },
+        ),
         // All optimizations enabled
-        OptimizationConfig::new("All Optimizations", OptimizedDiffConfig::default()),
+        // OptimizationConfig::new("All Optimizations", OptimizedDiffConfig::default()),
         // // All except for ranged optimisation
         // OptimizationConfig::new(
         //     "All Optimizations except Ranged",
@@ -132,7 +217,7 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
         .is_test(true)
         .try_init();
 
-    let test_inputs = common::get_all_cases();
+    let test_inputs = common::get_test_data_small();
     common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()
@@ -145,13 +230,13 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("optimized_change_distiller");
     group.sample_size(10);
-    // group.sampling_mode(SamplingMode::Flat);
+    group.sampling_mode(SamplingMode::Flat);
 
     let optimization_configs = create_optimization_configs();
 
     let total_iterations = test_inputs.len() * optimization_configs.len();
 
-    let skip = 328;
+    let skip = 0;
     let mut iteration = skip;
 
     for (input_idx, input) in test_inputs.iter().enumerate() {
