@@ -24,5 +24,8 @@ pub mod hungarian_tests;
 pub mod lazy_decompression_tests;
 pub mod pair_tests;
 pub mod simple_examples;
-mod hybrid_matcher_tests;
-mod hybrid_matcher_examples;
+#[cfg(test)]
+pub mod hybrid_matcher_tests;
+pub mod hybrid_matcher_examples;
+#[cfg(test)]
+pub mod lazy_hybrid_matcher_tests;

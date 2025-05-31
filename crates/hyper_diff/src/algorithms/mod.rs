@@ -9,6 +9,7 @@ pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
 pub mod gumtree_hybrid;
 pub mod gumtree_simple;
+pub mod gumtree_hybrid_lazy;
 
 #[derive(Debug, Clone)]
 pub struct MappingDurations<const N: usize>(pub [f64; N]);

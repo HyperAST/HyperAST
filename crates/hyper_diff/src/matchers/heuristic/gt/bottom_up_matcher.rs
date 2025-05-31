@@ -183,9 +183,10 @@ where
         src: &HAST::IdN,
         dst: &HAST::IdN,
     ) -> bool {
-        // if src == dst {
-        //     return true;
-        // }
+        if src == dst {
+            return true;
+        }
+        
         let _src = self.stores.node_store().resolve(src);
         let _dst = self.stores.node_store().resolve(dst);
         if use_hash {

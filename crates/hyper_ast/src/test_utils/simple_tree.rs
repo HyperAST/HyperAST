@@ -6,10 +6,7 @@ use std::{
 
 use num::{cast, NumCast, PrimInt, ToPrimitive};
 
-use crate::types::{
-    HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
-    WithChildren, WithStats,
-};
+use crate::types::{HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Shared, Stored, Typed, WithChildren, WithStats};
 
 pub struct SimpleTree<K> {
     kind: K,
@@ -686,15 +683,16 @@ impl Display for Ty {
 
 impl HyperType for Ty {
     fn as_shared(&self) -> crate::types::Shared {
-        todo!()
+        Shared::Identifier
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        todo!()
+        // TODO: do this better
+        Box::leak(Box::new(self.clone()))
     }
 
     fn as_static_str(&self) -> &'static str {
@@ -705,7 +703,10 @@ impl HyperType for Ty {
     where
         Self: 'static + Sized,
     {
-        todo!()
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other_concrete) => self == other_concrete,
+            _ => false,
+        }
     }
 
     fn is_file(&self) -> bool {

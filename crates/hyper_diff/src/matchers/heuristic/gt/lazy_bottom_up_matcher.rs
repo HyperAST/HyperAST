@@ -62,6 +62,84 @@ where
         }
         candidates
     }
+
+    pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
+        let src_arena = &self.src_arena;
+        let dst_arena = &mut self.dst_arena;
+        let mappings = &self.mappings;
+        let mut seeds = vec![];
+        let s = &src_arena.original(src);
+        for c in src_arena.descendants(src) {
+            if mappings.is_src(&c) {
+                let m = mappings.get_dst_unchecked(&c);
+                let m = dst_arena.decompress_to(&m);
+                seeds.push(m);
+            }
+        }
+        let mut candidates = vec![];
+        let mut visited = bitvec::bitbox![0;dst_arena.len()];
+        let t = self.stores.resolve_type(s);
+        for mut seed in seeds {
+            loop {
+                let Some(parent) = dst_arena.parent(&seed) else {
+                    break;
+                };
+                if visited[parent.to_usize().unwrap()] {
+                    break;
+                }
+                visited.set(parent.to_usize().unwrap(), true);
+                let p = &dst_arena.original(&parent);
+                if self.stores.resolve_type(p) == t
+                    && !(mappings.is_dst(parent.shallow()) || parent.shallow() == &dst_arena.root())
+                {
+                    candidates.push(parent);
+                }
+                seed = parent;
+            }
+        }
+        candidates
+    }
+
+    /// Returns true if *all* descendants in src are unmapped
+    pub(super) fn are_srcs_unmapped(&self, src: &Dsrc::IdD) -> bool {
+        self.src_arena
+            .descendants(src)
+            .iter()
+            .all(|x| !self.mappings.is_src(x))
+    }
+
+    /// Returns true if *all* descendants in dst are unmapped
+    pub(super) fn are_dsts_unmapped(&self, dst: &Ddst::IdD) -> bool {
+        self.dst_arena
+            .descendants(dst)
+            .iter()
+            .all(|x| !self.mappings.is_dst(x))
+    }
+
+    /// Returns true if *any* descendants in src are unmapped
+    pub(super) fn has_unmapped_src_children(&self, src: &Dsrc::IdD) -> bool {
+        self.src_arena
+            .descendants(src)
+            .iter()
+            .any(|x| !self.mappings.is_src(x))
+    }
+    
+    /// Returns true if *any* descendants in dst are unmapped
+    pub(super) fn has_unmapped_dst_children(&self, dst: &Ddst::IdD) -> bool {
+        self.dst_arena
+            .descendants(dst)
+            .iter()
+            .any(|x| !self.mappings.is_dst(x))
+    }
+
+    pub(crate) fn add_mapping_recursively(&mut self, src: &Dsrc::IdD, dst: &Ddst::IdD) {
+        self.mappings.link(*src.shallow(), *dst.shallow());
+        self.src_arena
+            .descendants(src)
+            .iter()
+            .zip(self.dst_arena.descendants(dst).iter())
+            .for_each(|(src, dst)| self.mappings.link(*src, *dst));
+    }
 }
 
 use hyperast::types::HyperAST;
