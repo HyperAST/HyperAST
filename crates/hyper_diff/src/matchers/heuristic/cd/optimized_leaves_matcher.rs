@@ -139,6 +139,9 @@ where
 
     /// Execute with type grouping optimization - only compare leaves of same type
     fn execute_with_type_grouping(&mut self) {
+        let start_time = std::time::Instant::now();
+        println!("=== TYPE GROUPING MATCHER START ===");
+
         // Pre-compute and cache label info (always when using type grouping for best performance)
         let mut label_cache: HashMap<(HAST::IdN, HAST::IdN), f64, RandomState> =
             HashMap::with_hasher(RandomState::new());
@@ -146,9 +149,8 @@ where
         // Create QGram object once if reuse is enabled
         let qgram = str_distance::QGram::new(3);
 
-        println!("=== Testing Custom Iterator ===");
-
         // Collect leaves
+        let collect_start = std::time::Instant::now();
         let dst_leaves: Vec<M::Dst> = self
             .dst_arena
             .iter_df_post::<true>()
@@ -167,7 +169,16 @@ where
             })
             .collect();
 
+        let collect_time = collect_start.elapsed();
+        println!(
+            "✓ Leaf collection: {:?} (src: {}, dst: {})",
+            collect_time,
+            src_leaves.len(),
+            dst_leaves.len()
+        );
+
         // Group leaves by type and build label cache in single pass for optimal performance
+        let grouping_start = std::time::Instant::now();
         let mut src_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>, RandomState> =
             HashMap::default();
         let mut dst_leaves_by_type: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>, RandomState> =
@@ -221,7 +232,38 @@ where
                 .push(*dst_leaf);
         }
 
+        let grouping_time = grouping_start.elapsed();
+        println!(
+            "✓ Type grouping & caching: {:?} (src types: {}, dst types: {})",
+            grouping_time,
+            src_leaves_by_type.len(),
+            dst_leaves_by_type.len()
+        );
+
+        // Calculate total comparisons that will be made vs naive approach
+        let total_naive_comparisons = src_leaves.len() * dst_leaves.len();
+        let total_grouped_comparisons: usize = src_leaves_by_type
+            .iter()
+            .map(|(node_type, src_leaves)| {
+                dst_leaves_by_type
+                    .get(node_type)
+                    .map(|dst_leaves| src_leaves.len() * dst_leaves.len())
+                    .unwrap_or(0)
+            })
+            .sum();
+
+        println!(
+            "✓ Comparison reduction: {} → {} ({:.1}x speedup)",
+            total_naive_comparisons,
+            total_grouped_comparisons,
+            total_naive_comparisons as f64 / total_grouped_comparisons.max(1) as f64
+        );
+
         // Use appropriate collection type for mappings
+        let comparison_start = std::time::Instant::now();
+        let mut comparison_count = 0;
+        let mut similarity_calculations = 0;
+
         if self.config.use_binary_heap {
             let mut best_mappings = BinaryHeap::new();
 
@@ -233,10 +275,12 @@ where
 
                         for &dst_leaf in dst_leaves {
                             let dst = self.dst_arena.decompress_to(&dst_leaf);
+                            comparison_count += 1;
 
                             if !self.mappings.is_src(src.shallow())
                                 && !self.mappings.is_dst(dst.shallow())
                             {
+                                similarity_calculations += 1;
                                 let sim = self.compute_cached_label_similarity(
                                     &src_leaf,
                                     &dst_leaf,
@@ -261,11 +305,28 @@ where
                 }
             }
 
+            let comparison_time = comparison_start.elapsed();
+            println!(
+                "✓ Binary heap comparisons: {:?} ({} total, {} similarities calculated)",
+                comparison_time, comparison_count, similarity_calculations
+            );
+
+            let mapping_start = std::time::Instant::now();
+            let mut mapped_count = 0;
             // Process mappings in order
             while let Some(mapping) = best_mappings.pop() {
-                self.mappings
-                    .link_if_both_unmapped(mapping.src, mapping.dst);
+                if self
+                    .mappings
+                    .link_if_both_unmapped(mapping.src, mapping.dst)
+                {
+                    mapped_count += 1;
+                }
             }
+            let mapping_time = mapping_start.elapsed();
+            println!(
+                "✓ Binary heap mapping: {:?} ({} mappings created)",
+                mapping_time, mapped_count
+            );
         } else {
             let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
 
@@ -277,10 +338,12 @@ where
 
                         for &dst_leaf in dst_leaves {
                             let dst = self.dst_arena.decompress_to(&dst_leaf);
+                            comparison_count += 1;
 
                             if !self.mappings.is_src(src.shallow())
                                 && !self.mappings.is_dst(dst.shallow())
                             {
+                                similarity_calculations += 1;
                                 let sim = self.compute_cached_label_similarity(
                                     &src_leaf,
                                     &dst_leaf,
@@ -305,25 +368,67 @@ where
                 }
             }
 
+            let comparison_time = comparison_start.elapsed();
+            println!(
+                "✓ Vector comparisons: {:?} ({} total, {} similarities calculated, {} candidates)",
+                comparison_time,
+                comparison_count,
+                similarity_calculations,
+                leaves_mappings.len()
+            );
+
+            let sort_start = std::time::Instant::now();
             // Sort mappings by similarity
             leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+            let sort_time = sort_start.elapsed();
+            println!("✓ Vector sorting: {:?}", sort_time);
 
+            let mapping_start = std::time::Instant::now();
+            let mut mapped_count = 0;
             // Process mappings in order
             for mapping in leaves_mappings {
-                self.mappings
-                    .link_if_both_unmapped(mapping.src, mapping.dst);
+                if self
+                    .mappings
+                    .link_if_both_unmapped(mapping.src, mapping.dst)
+                {
+                    mapped_count += 1;
+                }
             }
+            let mapping_time = mapping_start.elapsed();
+            println!(
+                "✓ Vector mapping: {:?} ({} mappings created)",
+                mapping_time, mapped_count
+            );
         }
+
+        let total_time = start_time.elapsed();
+        println!("=== TYPE GROUPING MATCHER COMPLETE: {:?} ===\n", total_time);
     }
 
     /// Execute with statement level iteration
     fn execute_statement(&mut self) {
+        let start_time = std::time::Instant::now();
+        println!("=== STATEMENT LEVEL MATCHER START ===");
+
+        let collect_start = std::time::Instant::now();
         let dst_leaves = self.collect_statement_leaves_dst();
         let src_leaves = self.collect_statement_leaves_src();
+        let collect_time = collect_start.elapsed();
+        println!(
+            "✓ Statement leaf collection: {:?} (src: {}, dst: {})",
+            collect_time,
+            src_leaves.len(),
+            dst_leaves.len()
+        );
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+        let total_comparisons = src_leaves.len() * dst_leaves.len();
+        println!("✓ Total comparisons needed: {}", total_comparisons);
 
+        let comparison_start = std::time::Instant::now();
         if self.config.enable_label_caching {
+            println!("✓ Using label caching optimization");
+            let cache_build_start = std::time::Instant::now();
             let mut src_text_cache = HashMap::new();
             let mut dst_text_cache = HashMap::new();
 
@@ -360,7 +465,13 @@ where
                     }
                 }
             }
+            let cache_build_time = cache_build_start.elapsed();
+            println!(
+                "✓ Cached text serialization & comparison: {:?}",
+                cache_build_time
+            );
         } else {
+            println!("✓ Using direct text serialization (no caching)");
             for src in &src_leaves {
                 let original_src = self.src_arena.original(&src);
 
@@ -371,7 +482,7 @@ where
 
                     let dst_text = TextSerializer::new(&self.stores, original_dst).to_string();
 
-                    // no need to check for equal types since all nodes are statements
+                    // no need to check for equal types since all are only statements
                     let sim = 1.0
                         - str_distance::QGram::new(3)
                             .normalized(src_text.chars(), dst_text.chars());
@@ -386,25 +497,69 @@ where
             }
         }
 
+        let comparison_time = comparison_start.elapsed();
+        println!(
+            "✓ All comparisons: {:?} ({} candidates found)",
+            comparison_time,
+            leaves_mappings.len()
+        );
+
+        let sort_start = std::time::Instant::now();
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+        let sort_time = sort_start.elapsed();
+        println!("✓ Sorting candidates: {:?}", sort_time);
 
+        let mapping_start = std::time::Instant::now();
+        let mut mapped_count = 0;
         // Process mappings in order
         for mapping in leaves_mappings {
-            self.mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst);
+            if self
+                .mappings
+                .link_if_both_unmapped(mapping.src, mapping.dst)
+            {
+                mapped_count += 1;
+            }
         }
+        let mapping_time = mapping_start.elapsed();
+        println!(
+            "✓ Creating mappings: {:?} ({} mappings created)",
+            mapping_time, mapped_count
+        );
+
+        let total_time = start_time.elapsed();
+        println!(
+            "=== STATEMENT LEVEL MATCHER COMPLETE: {:?} ===\n",
+            total_time
+        );
     }
 
     /// Execute naive approach without type grouping - compare all leaves
     fn execute_naive(&mut self) {
+        let start_time = std::time::Instant::now();
+        println!("=== NAIVE MATCHER START ===");
+
+        let collect_start = std::time::Instant::now();
         let dst_leaves = self.collect_statement_leaves_dst();
         let src_leaves = self.collect_statement_leaves_src();
+        let collect_time = collect_start.elapsed();
+        println!(
+            "✓ Statement leaf collection: {:?} (src: {}, dst: {})",
+            collect_time,
+            src_leaves.len(),
+            dst_leaves.len()
+        );
+
+        let total_comparisons = src_leaves.len() * dst_leaves.len();
+        println!("✓ Total comparisons needed: {}", total_comparisons);
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
 
+        let comparison_start = std::time::Instant::now();
+        let mut comparison_count = 0;
         for src in &src_leaves {
             for dst in &dst_leaves {
+                comparison_count += 1;
                 // no need to check for equal types since all are only statements
                 let sim = self.compute_label_similarity_simple(&src, &dst);
                 if sim > self.config.base_config.label_sim_threshold {
@@ -416,15 +571,39 @@ where
                 }
             }
         }
+        let comparison_time = comparison_start.elapsed();
+        println!(
+            "✓ Simple similarity calculations: {:?} ({} comparisons, {} candidates)",
+            comparison_time,
+            comparison_count,
+            leaves_mappings.len()
+        );
 
+        let sort_start = std::time::Instant::now();
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+        let sort_time = sort_start.elapsed();
+        println!("✓ Sorting candidates: {:?}", sort_time);
 
+        let mapping_start = std::time::Instant::now();
+        let mut mapped_count = 0;
         // Process mappings in order
         for mapping in leaves_mappings {
-            self.mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst);
+            if self
+                .mappings
+                .link_if_both_unmapped(mapping.src, mapping.dst)
+            {
+                mapped_count += 1;
+            }
         }
+        let mapping_time = mapping_start.elapsed();
+        println!(
+            "✓ Creating mappings: {:?} ({} mappings created)",
+            mapping_time, mapped_count
+        );
+
+        let total_time = start_time.elapsed();
+        println!("=== NAIVE MATCHER COMPLETE: {:?} ===\n", total_time);
     }
 
     /// Collect all destination leaf nodes
