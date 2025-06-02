@@ -114,6 +114,7 @@ where
         loop {
             // dbg!();
             if self.halted {
+                log::trace!("releasing {} states", self.states.len());
                 while (self.states.len() > 0) {
                     let state = self.states.pop().unwrap();
                     self.capture_list_pool.release(state.capture_list_id);
@@ -192,7 +193,7 @@ where
         let mut did_match = false;
         if self.on_visible_node {
             log::trace!(
-                "leave node. depth:{}, type:{}\n",
+                "leave node. depth:{}, type:{}",
                 self.depth,
                 self.cursor.current_node().str_symbol()
             );
