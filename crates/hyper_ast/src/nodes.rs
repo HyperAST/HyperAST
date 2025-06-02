@@ -632,11 +632,8 @@ where
                 if LABELS {
                     let s = self.stores.label_store().resolve(label);
                     if s.len() > 20 {
-                        write!(
-                            out,
-                            "='{}...'",
-                            &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i])
-                        )?;
+                        let short = &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i]);
+                        write!(out, "='{short}...'")?;
                     } else {
                         write!(out, "='{}'", s)?;
                     }
@@ -736,7 +733,8 @@ where
                 if LABELS {
                     let s = self.stores.label_store().resolve(label);
                     if s.len() > 20 {
-                        write!(out, "='{}...'", &s[..20])?;
+                        let short = &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i]);
+                        write!(out, "='{short}...'")?;
                     } else {
                         write!(out, "='{}'", s)?;
                     }
