@@ -24,4 +24,5 @@ jobs:
           --err \
           --adapter json \
           --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-          bencher mock
+          --adapter rust_criterion
+          "cargo bench -p hyperast_vcs_git --bench construction_runtime"
