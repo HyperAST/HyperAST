@@ -4305,6 +4305,7 @@ dependencies = [
 name = "hyperast_vcs_git"
 version = "0.3.0"
 dependencies = [
+ "criterion 0.4.0",
  "enumset",
  "env_logger 0.11.5",
  "git2",
