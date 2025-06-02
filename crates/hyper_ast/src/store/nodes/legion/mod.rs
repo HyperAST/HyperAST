@@ -453,7 +453,7 @@ impl Default for NodeStoreInner {
 impl NodeStoreInner {
     pub fn make_dedup_map() -> DedupMap {
         DedupMap(hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
-            1 << 10,
+            1 << 20,
             Default::default(),
         ))
     }
@@ -474,7 +474,7 @@ impl NodeStore {
         Self {
             inner: NodeStoreInner::default(),
             dedup: hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
-                1 << 10,
+                1 << 20,
                 Default::default(),
             ),
         }
