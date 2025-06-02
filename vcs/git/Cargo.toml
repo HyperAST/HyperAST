@@ -26,9 +26,17 @@ vec_extract_if_polyfill = "0.1.0"
 env_logger = "0.11.3"
 tree-sitter-graph = { workspace = true }
 hyperast_tsquery = { workspace = true, features = ["tsg"] }
-hyperast_gen_ts_java = { workspace = true }                 #, features = ["subtree-stats"]
+hyperast_gen_ts_java = { workspace = true } #, features = ["subtree-stats"]
+criterion = { version = "0.4", features = [
+    "rayon",
+    "plotters",
+    "cargo_bench_support",
+    "html_reports",
+] }
 
-[build-dependencies]
+[[bench]]
+name = "construction_runtime"
+harness = false
 
 [features]
 default = ["maven_java", "make_cpp", "npm_ts"]
