@@ -535,7 +535,7 @@ where
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.serialize(&self.root, f, 0, &mut Vec::new())
+        self.serialize(&self.root, f)
     }
 }
 
@@ -565,63 +565,67 @@ where
         &self,
         id: &HAST::IdN,
         out: &mut std::fmt::Formatter<'_>,
-        depth: usize,
-        path: &mut Vec<usize>,
     ) -> Result<(), std::fmt::Error> {
-        use crate::types::{LabelStore, Labeled, NodeStore, WithChildren};
-        let node = self.stores.node_store().resolve(&id);
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::WithChildren;
+        let b = self.stores.node_store().resolve(&id);
+        // let kind = (self.stores.type_store(), b);
         let kind = self.stores.resolve_type(id);
-        let label = node.try_get_label();
-        let children = node.children();
-
-        fn print_line_with_path(
-            out: &mut std::fmt::Formatter<'_>,
-            depth: usize,
-            node_info: impl std::fmt::Display,
-            path: &[usize],
-        ) -> std::fmt::Result {
-            let mut line = String::new();
-
-            for _ in 0..depth {
-                //indent the left side
-                write!(line, "  ")?;
-            }
-
-            write!(line, "{}", node_info)?; // Write the node
-
-            // Add padding till we reach the hard coded padding depth
-            // If we go over the padding we just paste it directly
-            let padding = 120usize.saturating_sub(line.len());
-            for _ in 0..padding {
-                line.push(' ');
-            }
-
-            // add the 'path' to the line, this keeps track which path we took trough the tree to get here
-            if !path.is_empty() {
-                writeln!(
-                    line,
-                    "{}",
-                    path.iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(".")
-                )?;
-            } else {
-                writeln!(line)?;
-            }
-
-            out.write_str(&line)
-        }
+        let label = b.try_get_label();
+        let children = b.children();
 
         if kind.is_spaces() {
-            return Ok(()); // I don't care about the space nodes, we don't print them.
+            if SPC {
+                let s = self.stores.label_store().resolve(&label.unwrap());
+                let b: String = Space::format_indentation(s.as_bytes())
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect();
+                write!(out, "(")?;
+                if IDS { write!(out, "{:?}", id) } else { Ok(()) }
+                    .and_then(|x| if TY { write!(out, "_",) } else { Ok(x) })?;
+                if LABELS {
+                    write!(out, " {:?}", Space::format_indentation(b.as_bytes()))?;
+                }
+                write!(out, ")")?;
+            }
+            return Ok(());
         }
+
+        let w_kind = |out: &mut std::fmt::Formatter<'_>| {
+            if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                if TY {
+                    write!(out, "{}", kind.to_string())
+                } else {
+                    Ok(x)
+                }
+            })
+        };
 
         match (label, children) {
             (None, None) => {
-                print_line_with_path(out, depth, format!("({})", kind), path)?;
+                w_kind(out)?;
             }
-
+            (label, Some(children)) => {
+                if let Some(label) = label {
+                    let s = self.stores.label_store().resolve(label);
+                    if LABELS {
+                        write!(out, " {:?}", Space::format_indentation(s.as_bytes()))?;
+                    }
+                }
+                if !children.is_empty() {
+                    let it = children;
+                    write!(out, "(")?;
+                    w_kind(out)?;
+                    for id in it {
+                        write!(out, " ")?;
+                        self.serialize(&id, out)?;
+                    }
+                    write!(out, ")")?;
+                }
+            }
             (Some(label), None) => {
                 write!(out, "(")?;
                 w_kind(out)?;
@@ -634,19 +638,10 @@ where
                         write!(out, "='{}'", s)?;
                     }
                 }
-                node_info.push(')');
-                print_line_with_path(out, depth, node_info, path)?;
-
-                // Handle all the children
-                for (i, child) in children.enumerate() {
-                    path.push(i);
-                    self.serialize(&child, out, depth + 1, path)?;
-                    path.pop();
-                }
+                write!(out, ")")?;
             }
         }
-
-        Ok(())
+        return Ok(());
     }
 }
 
