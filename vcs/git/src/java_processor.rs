@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::sync::Arc;
 use std::{iter::Peekable, path::Components};
 
@@ -394,7 +393,9 @@ pub struct JavaProc {
     commits: std::collections::HashMap<git2::Oid, crate::Commit>,
 }
 
+#[cfg(feature = "tsg")]
 type ErazedFcts = Arc<dyn std::any::Any + Send + Sync>;
+#[cfg(feature = "tsg")]
 type ErazedTSG = Box<dyn std::any::Any + Send + Sync>;
 
 impl crate::processing::erased::Parametrized for JavaProcessorHolder {
@@ -420,6 +421,7 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
         #[cfg(feature = "tsg")]
         let tsg = if let Some(q) = &t.tsg {
+            use std::ops::Deref;
             let tsg = q.deref();
             type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
             type ExtQ<'hast, TS, Acc> =
@@ -702,7 +704,10 @@ impl RepositoryProcessor {
                 let tsg = java_proc.tsg.as_ref();
                 let r = if let Some(tsg) = tsg {
                     #[cfg(not(feature = "tsg"))]
-                    panic!();
+                    {
+                        let _ = tsg;
+                        panic!();
+                    }
                     #[cfg(feature = "tsg")]
                     {
                         let spec: &tree_sitter_graph::ast::File<

@@ -112,7 +112,6 @@ where
     pub(crate) fn advance(&mut self, stop_on_definite_step: bool) -> bool {
         let mut did_match = false;
         loop {
-            // dbg!();
             if self.halted {
                 log::trace!("releasing {} states", self.states.len());
                 while (self.states.len() > 0) {

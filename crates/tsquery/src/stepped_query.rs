@@ -179,7 +179,7 @@ impl<'tree, HAST: HyperAST> Node<'tree, HAST> {
         stores: &'tree HAST,
         pos: hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
     ) -> Self {
-        Self(crate::hyperast_cursor::Node { stores, pos })
+        Self(crate::hyperast_cursor::Node::new(stores, pos))
     }
 }
 

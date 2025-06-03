@@ -297,9 +297,6 @@ where
             global.sum_byte_length(),
             &parent_indentation,
         );
-        // if global.sum_byte_length() < 400 {
-        //     dbg!((kind,node.start_byte(),node.end_byte(),global.sum_byte_length(),indent.len()));
-        // }
         Acc {
             labeled: node.has_label(),
             start_byte: node.start_byte(),
