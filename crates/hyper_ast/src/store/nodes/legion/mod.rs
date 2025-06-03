@@ -28,8 +28,30 @@ pub struct NodeStoreInner {
     // dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
     internal: legion::World,
     // TODO intern lists of [`NodeIdentifier`]s, e.g. children, no space children, ...
-    hasher: DefaultHashBuilder, //fasthash::city::Hash64,//fasthash::RandomState<fasthash::>,
-                                // internal: VecMapStore<HashedNode, NodeIdentifier, legion::World>,
+    // hasher: DefaultHashBuilder,
+    //fasthash::city::Hash64,//fasthash::RandomState<fasthash::>,
+
+    // internal: VecMapStore<HashedNode, NodeIdentifier, legion::World>,
+    hasher: std::hash::BuildHasherDefault<MyNoHashH>,
+}
+
+#[derive(Default)]
+struct MyNoHashH(u32);
+
+impl std::hash::Hasher for MyNoHashH {
+    #[inline]
+    fn finish(&self) -> u64 {
+        (self.0 as u64) << 32 | (self.0 as u64)
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.0 = i
+    }
+
+    fn write(&mut self, _bytes: &[u8]) {
+        unimplemented!()
+    }
 }
 
 // * Node store impl
