@@ -41,8 +41,8 @@ use hyperast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
+use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::{collections::HashMap, fmt::Debug, vec};
 
 #[cfg(feature = "impact")]
 mod reference_analysis;
@@ -94,7 +94,7 @@ pub struct JavaTreeGen<
     pub _p: PhantomData<TS>,
 }
 
-pub type MDCache = HashMap<NodeIdentifier, MD>;
+pub type MDCache = hashbrown::HashMap<NodeIdentifier, MD>;
 
 // NOTE only keep compute intensive metadata (where space/time tradeoff is worth storing)
 // eg. decls refs, maybe hashes but not size and height

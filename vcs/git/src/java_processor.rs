@@ -390,7 +390,7 @@ pub struct JavaProc {
     #[cfg(feature = "tsg")]
     tsg: Option<(ErazedTSG, ErazedFcts)>,
     cache: crate::processing::caches::Java,
-    commits: std::collections::HashMap<git2::Oid, crate::Commit>,
+    commits: crate::processing::caches::OidMap<crate::Commit>,
 }
 
 #[cfg(feature = "tsg")]
