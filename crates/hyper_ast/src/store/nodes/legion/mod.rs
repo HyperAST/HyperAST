@@ -99,6 +99,7 @@ impl<'a> PendingInsert<'a> {
 }
 
 impl NodeStoreInner {
+    #[inline]
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
         dedup: &'a mut hashbrown::HashMap<NodeIdentifier, (), ()>,
@@ -138,6 +139,7 @@ impl NodeStore {
         });
         entry.map(|x| *x.0)
     }
+    #[inline]
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
         hashable: &V,
@@ -146,6 +148,7 @@ impl NodeStore {
         self.inner.prepare_insertion(&mut self.dedup, hashable, eq)
     }
 
+    #[inline]
     pub fn insert_after_prepare<T>(
         (vacant, (hash, inner)): (
             crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
@@ -172,6 +175,7 @@ impl NodeStore {
     }
 
     /// uses the dyn builder see dyn_builder::EntityBuilder
+    #[inline]
     pub fn insert_built_after_prepare(
         (vacant, (hash, inner)): (
             crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
