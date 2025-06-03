@@ -89,6 +89,10 @@ where
     }
 
     fn execute(&mut self) {
+        let start_time = std::time::Instant::now();
+        println!("=== LEAVES MATCHER START ===");
+
+        let collect_start = std::time::Instant::now();
         let dst_leaves: Vec<M::Dst> = self
             .dst_arena
             .iter_df_post::<true>()
@@ -100,12 +104,26 @@ where
             .iter_df_post::<true>()
             .filter(|t| self.src_arena.children(t).is_empty())
             .collect();
+        let collect_time = collect_start.elapsed();
+        println!(
+            "✓ Leaf collection: {:?} (src: {}, dst: {})",
+            collect_time,
+            src_leaves.len(),
+            dst_leaves.len()
+        );
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+        let total_comparisons = src_leaves.len() * dst_leaves.len();
+        println!("✓ Total comparisons needed: {}", total_comparisons);
 
+        let comparison_start = std::time::Instant::now();
+        let mut comparison_count = 0;
+        let mut allowed_count = 0;
         for &src_leaf in &src_leaves {
             for &dst_leaf in &dst_leaves {
+                comparison_count += 1;
                 if self.is_mapping_allowed(&src_leaf, &dst_leaf) {
+                    allowed_count += 1;
                     let sim = self.compute_label_similarity(&src_leaf, &dst_leaf);
                     if sim > self.config.label_sim_threshold {
                         leaves_mappings.push(MappingWithSimilarity {
@@ -117,16 +135,86 @@ where
                 }
             }
         }
+        let comparison_time = comparison_start.elapsed();
+        println!(
+            "✓ Similarity calculations: {:?} ({} total, {} allowed, {} candidates)",
+            comparison_time,
+            comparison_count,
+            allowed_count,
+            leaves_mappings.len()
+        );
 
+        let sort_start = std::time::Instant::now();
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+        let sort_time = sort_start.elapsed();
+        println!("✓ Sorting candidates: {:?}", sort_time);
 
+        let mapping_start = std::time::Instant::now();
+        let mut mapped_count = 0;
         // Process mappings in order
         for mapping in leaves_mappings {
-            self.mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst);
+            if self
+                .mappings
+                .link_if_both_unmapped(mapping.src, mapping.dst)
+            {
+                mapped_count += 1;
+            }
         }
+        let mapping_time = mapping_start.elapsed();
+        println!(
+            "✓ Creating mappings: {:?} ({} mappings created)",
+            mapping_time, mapped_count
+        );
+
+        let total_time = start_time.elapsed();
+        println!("=== LEAVES MATCHER COMPLETE: {:?} ===\n", total_time);
     }
+
+    // fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
+    //     let src_root = self.src_arena.starter();
+
+    //     let iter = CustomPostOrderIterator::new(
+    //         &mut self.src_arena,
+    //         self.stores,
+    //         src_root,
+    //         CustomIteratorConfig {
+    //             yield_leaves: false,
+    //             yield_inner: true,
+    //         },
+    //         |arena: &mut Dsrc,
+    //          stores: HAST,
+    //          node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
+    //          -> bool {
+    //             let original = arena.original(node);
+    //             let node_type = stores.resolve_type(&original);
+    //             node_type.is_statement()
+    //         },
+    //     );
+    //     let nodes: Vec<_> = iter.collect();
+    //     nodes
+    // }
+
+    // fn collect_statement_leaves_dst(&mut self) -> Vec<<Ddst as LazyDecompressed<M::Dst>>::IdD> {
+    //     let dst_root = self.dst_arena.starter();
+
+    //     let iter = CustomPostOrderIterator::new(
+    //         &mut self.dst_arena,
+    //         self.stores,
+    //         dst_root,
+    //         CustomIteratorConfig {
+    //             yield_leaves: false,
+    //             yield_inner: true,
+    //         },
+    //         |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
+    //             let original = arena.original(node);
+    //             let node_type = stores.resolve_type(&original);
+    //             node_type.is_statement()
+    //         },
+    //     );
+    //     let nodes: Vec<_> = iter.collect();
+    //     nodes
+    // }
 
     fn is_mapping_allowed(&self, src_tree: &M::Src, dst_tree: &M::Dst) -> bool {
         let src_linked = self.mappings.get_src(dst_tree).is_some();

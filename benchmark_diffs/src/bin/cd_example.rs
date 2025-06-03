@@ -261,7 +261,7 @@ fn main() {
                 &input.dst,
                 opt_config.config.clone(),
             );
-            println!("Result: {:#?}", result.summarize());
+            println!("Result: {:#?}\n\n", result.summarize());
         }
     }
 }

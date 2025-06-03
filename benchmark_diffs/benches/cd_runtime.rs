@@ -217,7 +217,7 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
         .is_test(true)
         .try_init();
 
-    let test_inputs = common::get_test_data_small();
+    let test_inputs = common::get_all_cases();
     common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()
