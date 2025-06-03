@@ -99,6 +99,7 @@ impl<'a> PendingInsert<'a> {
 }
 
 impl NodeStoreInner {
+    #[inline]
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
         dedup: &'a mut hashbrown::HashMap<NodeIdentifier, (), ()>,
@@ -138,6 +139,7 @@ impl NodeStore {
         });
         entry.map(|x| *x.0)
     }
+    #[inline]
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
         hashable: &V,
@@ -146,6 +148,7 @@ impl NodeStore {
         self.inner.prepare_insertion(&mut self.dedup, hashable, eq)
     }
 
+    #[inline]
     pub fn insert_after_prepare<T>(
         (vacant, (hash, inner)): (
             crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
@@ -172,6 +175,7 @@ impl NodeStore {
     }
 
     /// uses the dyn builder see dyn_builder::EntityBuilder
+    #[inline]
     pub fn insert_built_after_prepare(
         (vacant, (hash, inner)): (
             crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
@@ -475,7 +479,7 @@ impl Default for NodeStoreInner {
 impl NodeStoreInner {
     pub fn make_dedup_map() -> DedupMap {
         DedupMap(hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
-            1 << 20,
+            1 << 21,
             Default::default(),
         ))
     }
@@ -496,7 +500,7 @@ impl NodeStore {
         Self {
             inner: NodeStoreInner::default(),
             dedup: hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
-                1 << 20,
+                1 << 21,
                 Default::default(),
             ),
         }
