@@ -392,7 +392,7 @@ impl HyperType for Type {
     fn as_abstract(&self) -> hyperast::types::Abstracts {
         use hyperast::types::Abstract;
         Abstract::Expression.when(self.is_expression())
-            | Abstract::Statement.when(self.is_statement())
+            | Abstract::Statement.when(HyperType::is_statement(self))
             | Abstract::Executable.when(self.is_executable_member())
             | Abstract::Declaration.when(self.is_type_declaration())
             | Abstract::Literal.when(self.is_literal())
