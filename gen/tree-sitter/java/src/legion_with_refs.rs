@@ -336,8 +336,10 @@ where
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let node = &cursor.node();
-        let kind = TS::obtain_type(node);
+        let node = cursor.node();
+        let Some(kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         if should_get_hidden_nodes() {
             if kind.is_repeat() {
                 return PreResult::Ignore;
@@ -351,7 +353,7 @@ where
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let mut acc = self.pre(text, node, stack, global);
+        let mut acc = self.pre(text, &node, stack, global);
         // TODO replace with wrapper
         if !stack
             .parent()
@@ -572,14 +574,14 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
             dedup: self.dedup,
             stores: self.stores,
             md_cache: self.md_cache,
-            more: more,
+            more,
             _p: self._p,
         }
     }
 
     pub fn with_line_break(self, line_break: Vec<u8>) -> Self {
         JavaTreeGen {
-            line_break: line_break,
+            line_break,
             dedup: self.dedup,
             stores: self.stores,
             md_cache: self.md_cache,

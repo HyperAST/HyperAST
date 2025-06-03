@@ -180,7 +180,9 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let kind = TS::obtain_type(&node);
+        let Some(kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         let mut acc = self.pre(text, &node, stack, global);
         if kind == Type::AttValue {
             acc.labeled = true;

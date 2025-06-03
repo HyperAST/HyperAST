@@ -160,7 +160,9 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let node = cursor.node();
-        let kind = TS::obtain_type(&node);
+        let Some(kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         let mut acc = self.pre(text, &node, stack, global);
         if kind == Type::String {
             acc.labeled = true;

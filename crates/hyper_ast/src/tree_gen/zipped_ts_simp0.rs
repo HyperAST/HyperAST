@@ -292,7 +292,9 @@ where
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let node = cursor.node();
-        let kind = TS::obtain_type(&node);
+        let Some(kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         if HIDDEN_NODES {}
         if node.0.is_missing() {
             dbg!("missing");
