@@ -10,9 +10,10 @@ use crate::{
     },
 };
 use ahash::RandomState;
-use hyperast::nodes::TextSerializer;
 use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, TypeStore, WithHashs};
 use hyperast::{PrimInt, types::HyperType};
+use hyperast::{nodes::TextSerializer, types::HashKind};
+use num_traits::ToPrimitive;
 use std::fmt::Debug;
 use std::{
     cmp::Ordering,
@@ -128,11 +129,16 @@ where
 
     /// Execute the leaves matching with configured optimizations
     fn execute(&mut self) {
+        println!("=== OPTIMIZED LEAVES MATCHER START ===");
         if self.config.statement_level_iteration {
+            println!("=== STATEMENT LEVEL ITERATION START ===");
             self.execute_statement();
         } else if self.config.enable_type_grouping {
+            println!("=== TYPE GROUPING MATCHER START ===");
+
             self.execute_with_type_grouping();
         } else {
+            println!("=== NAIVE MATCHER START ===");
             self.execute_naive();
         }
     }
@@ -429,29 +435,62 @@ where
         if self.config.enable_label_caching {
             println!("✓ Using label caching optimization");
             let cache_build_start = std::time::Instant::now();
-            let mut src_text_cache = HashMap::new();
-            let mut dst_text_cache = HashMap::new();
+            let mut src_text_cache: HashMap<
+                &<Dsrc as LazyDecompressed<M::Src>>::IdD,
+                String,
+                RandomState,
+            > = HashMap::default();
+            let mut dst_text_cache: HashMap<
+                &<Ddst as LazyDecompressed<M::Dst>>::IdD,
+                String,
+                RandomState,
+            > = HashMap::default();
+
+            let mut ignore_dst = bitvec::bitbox![0;self.dst_arena.len()];
 
             for src in &src_leaves {
-                let src_text = if let Some(text) = src_text_cache.get(&src) {
-                    text
-                } else {
-                    let original_src = self.src_arena.original(&src);
+                let src_original = self.src_arena.original(src);
+                let src_node = self.stores.node_store().resolve(&src_original);
+                let src_label_hash = WithHashs::hash(&src_node, &HashKind::label());
 
-                    let text = TextSerializer::new(&self.stores, original_src).to_string();
-                    src_text_cache.insert(src, text);
-                    src_text_cache.get(&src).unwrap()
-                };
                 for dst in &dst_leaves {
-                    let dst_text = if let Some(text) = dst_text_cache.get(&dst) {
+                    let dst_idx = dst.shallow().to_usize().unwrap();
+                    if ignore_dst[dst_idx] {
+                        continue;
+                    }
+                    let dst_original = self.dst_arena.original(&dst);
+                    let dst_node = self.stores.node_store().resolve(&dst_original);
+                    let dst_label_hash = WithHashs::hash(&dst_node, &HashKind::label());
+
+                    if src_label_hash == dst_label_hash {
+                        self.mappings
+                            .link_if_both_unmapped(*src.shallow(), *dst.shallow());
+
+                        ignore_dst.set(dst_idx, true);
+                        break;
+                    }
+
+                    // get src and dst text
+
+                    let src_text = if let Some(text) = src_text_cache.get(src) {
+                        text
+                    } else {
+                        let original_src = self.src_arena.original(&src);
+
+                        let text = TextSerializer::new(&self.stores, original_src).to_string();
+                        src_text_cache.insert(&src, text.clone());
+                        src_text_cache.get(src).unwrap()
+                    };
+                    let dst_text = if let Some(text) = dst_text_cache.get(dst) {
                         text
                     } else {
                         let original_dst = self.dst_arena.original(&dst);
 
                         let text = TextSerializer::new(&self.stores, original_dst).to_string();
-                        dst_text_cache.insert(dst, text);
+                        dst_text_cache.insert(&dst, text.clone());
                         dst_text_cache.get(dst).unwrap()
                     };
+
                     // no need to check for equal types since all nodes are statements
                     let sim = 1.0
                         - str_distance::QGram::new(3)
