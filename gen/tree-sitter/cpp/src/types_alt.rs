@@ -20,6 +20,17 @@ mod legion_impls {
             let k = n.kind_id();
             Type::from_u16(k)
         }
+
+        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+            n: &N,
+        ) -> Option<Self::Ty2> {
+            let k = n.kind_id();
+            static LEN: u16 = S_T_L.len() as u16;
+            if LEN <= k && k < TStore::LOWEST_RESERVED {
+                return None;
+            }
+            Some(Type::from_u16(k))
+        }
     }
 
     impl TsType for Type {
@@ -272,7 +283,17 @@ impl LangRef<AnyType> for Cpp {
 
 impl LangRef<Type> for Cpp {
     fn make(&self, t: u16) -> &'static Type {
-        &S_T_L[t as usize]
+        if t == TStore::ERROR {
+            &Type::ERROR
+        } else if t == TStore::_ERROR {
+            &Type::_ERROR
+        } else if t == TStore::SPACES {
+            &Type::Spaces
+        } else if t == TStore::DIRECTORY {
+            &Type::Directory
+        } else {
+            &S_T_L[t as usize]
+        }
     }
     fn to_u16(&self, t: Type) -> u16 {
         t as u16
@@ -1233,9 +1254,10 @@ pub enum Type {
     SimpleRequirement,
     StatementIdentifier,
     TypeIdentifier,
-    Spaces,
-    Directory,
-    ERROR,
+    Directory = TStore::DIRECTORY,
+    Spaces = TStore::SPACES,
+    _ERROR = TStore::_ERROR,
+    ERROR = TStore::ERROR,
 }
 impl Type {
     pub fn from_u16(t: u16) -> Type {
@@ -1798,7 +1820,10 @@ impl Type {
             555u16 => Type::SimpleRequirement,
             556u16 => Type::StatementIdentifier,
             557u16 => Type::TypeIdentifier,
-            u16::MAX => Type::ERROR,
+            TStore::DIRECTORY => Type::Directory,
+            TStore::SPACES => Type::Spaces,
+            TStore::_ERROR => Type::_ERROR,
+            TStore::ERROR => Type::ERROR,
             x => panic!("{}", x),
         }
     }
@@ -2304,8 +2329,9 @@ impl Type {
             "simple_requirement" => Type::SimpleRequirement,
             "statement_identifier" => Type::StatementIdentifier,
             "type_identifier" => Type::TypeIdentifier,
-            "Spaces" => Type::Spaces,
             "Directory" => Type::Directory,
+            "Spaces" => Type::Spaces,
+            "_ERROR" => Type::_ERROR,
             "ERROR" => Type::ERROR,
             _ => return None,
         })
@@ -2814,6 +2840,7 @@ impl Type {
             Type::TypeIdentifier => "type_identifier",
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
+            Type::_ERROR => "_ERROR",
             Type::ERROR => "ERROR",
         }
     }
@@ -3646,7 +3673,4 @@ const S_T_L: &'static [Type] = &[
     Type::SimpleRequirement,
     Type::StatementIdentifier,
     Type::TypeIdentifier,
-    Type::Spaces,
-    Type::Directory,
-    Type::ERROR,
 ];

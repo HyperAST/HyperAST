@@ -208,7 +208,9 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let _kind = TS::obtain_type(&node);
+        let Some(_kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         let acc = self.pre(text, &node, stack, global);
         log::warn!("not retrieving roles");
         PreResult::Ok(acc)

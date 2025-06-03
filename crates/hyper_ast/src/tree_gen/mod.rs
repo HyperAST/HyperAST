@@ -629,6 +629,15 @@ pub mod utils_ts {
     where
         Self::Ty2: TsType,
     {
+        const ERROR: u16 = u16::MAX;
+        const _ERROR: u16 = u16::MAX - 1;
+        const SPACES: u16 = u16::MAX - 2;
+        const DIRECTORY: u16 = u16::MAX - 3;
+        const META_DIR: u16 = u16::MAX - 4;
+        const LOWEST_RESERVED: u16 = Self::META_DIR;
+        fn try_obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(
+            n: &N,
+        ) -> Option<Self::Ty2>;
         fn obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
     }
 
