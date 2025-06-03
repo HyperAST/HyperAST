@@ -771,18 +771,36 @@ where
         let l = x.get_component::<L>().ok();
         if l != label_id {
             return false;
-        } else {
-            use super::compo::CS; // FIXME not
-            let cs = x.get_component::<CS<I>>();
-            let r = match cs {
-                Ok(CS(cs)) => cs.as_ref() == children,
-                Err(_) => children.is_empty(),
-            };
-            if !r {
-                return false;
-            }
         }
-        true
+        eq_node_cs(children)(x)
+    }
+}
+
+pub fn eq_node_cs<'a, I>(children: &'a [I]) -> impl Fn(EntryRef) -> bool + 'a
+where
+    I: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+{
+    move |x: EntryRef| {
+        use crate::store::nodes::compo;
+
+        if children.len() == 1 {
+            let Ok(cs) = x.get_component::<compo::CS0<I, 1>>() else {
+                return false;
+            };
+            cs.0[0] == children[0]
+        } else if children.len() == 2 {
+            let Ok(cs) = x.get_component::<compo::CS0<I, 2>>() else {
+                return false;
+            };
+            cs.0[..] == children[..]
+        } else if !children.is_empty() {
+            let Ok(cs) = x.get_component::<compo::CS<I>>() else {
+                return false;
+            };
+            cs.0.as_ref() == children
+        } else {
+            true
+        }
     }
 }
 
