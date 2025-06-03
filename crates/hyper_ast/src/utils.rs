@@ -1,12 +1,11 @@
 use core::fmt;
 use std::{
-    collections::hash_map::DefaultHasher,
     hash::{BuildHasher, Hash, Hasher},
     str::FromStr,
 };
 
 pub fn hash<T: ?Sized + Hash>(x: &T) -> u64 {
-    let mut state = DefaultHasher::default();
+    let mut state = hashbrown::hash_map::DefaultHashBuilder::default().build_hasher();
     x.hash(&mut state);
     state.finish()
 }

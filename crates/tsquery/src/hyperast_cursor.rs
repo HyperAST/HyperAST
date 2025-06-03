@@ -404,7 +404,7 @@ where
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
         self.pos.cmp(&other.pos)
     }
-    
+
     fn text<'s, 'l>(
         &'s self,
         text_provider: <Self as super::TextLending<'l>>::TP,
