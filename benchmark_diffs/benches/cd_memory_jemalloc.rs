@@ -1,6 +1,7 @@
 use hyperast_benchmark_diffs::common::get_test_data_small;
 use std::time::Instant;
 
+#[cfg(not(target_env = "msvc"))]
 use jemalloc_ctl::{epoch, stats};
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
