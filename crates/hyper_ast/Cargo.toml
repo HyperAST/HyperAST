@@ -39,14 +39,14 @@ indexmap = "2.2.6"                 # https://github.com/tkaitchuck/aHash/issues/
 hecs = { version = "0.10.5", features = [], optional = true }
 bevy_ecs = { version = "0.14.2", default-features = false, optional = true }
 
-ref-cast = "1.0" # help with transparent unit structs, it makes proper layout assertions
+ref-cast = "1.0"   # help with transparent unit structs, it makes proper layout assertions
 enumset = "1.0.12"
 
 frunk = { version = "0.4.3", optional = true }
 
 ## scripting
 mlua = { version = "0.9", features = ["luau"], optional = true }
-rhai = { version = "1.12.0", features = [
+rhai = { version = "=1.20.0", features = [
     "sync",
     "serde",
     "internals",

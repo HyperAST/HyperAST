@@ -1169,13 +1169,11 @@ impl Type {
             380u16 => Type::StatementIdentifier,
             381u16 => Type::ThisType,
             382u16 => Type::TypeIdentifier,
-            TStore::DIRECTORY => Type::Directory,
-            TStore::SPACES => Type::Spaces,
-            TStore::_ERROR => Type::_ERROR,
-            TStore::ERROR => Type::ERROR,
+            u16::MAX => Type::ERROR,
             x => panic!("{}", x),
         }
     }
+    #[allow(unreachable_patterns)]
     pub fn from_str(t: &str) -> Option<Type> {
         Some(match t {
             "end" => Type::End,
