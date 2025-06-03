@@ -42,4 +42,5 @@ impl = [
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-typescript",
+    "hyperast/ts",
 ]

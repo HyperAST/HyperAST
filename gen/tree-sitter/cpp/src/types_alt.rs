@@ -751,7 +751,7 @@ impl Into<TypeU16<Cpp>> for Type {
 
 impl Into<u16> for Type {
     fn into(self) -> u16 {
-        self as u8 as u16
+        self as u16
     }
 }
 
@@ -1827,6 +1827,7 @@ impl Type {
             x => panic!("{}", x),
         }
     }
+    #[allow(unreachable_patterns)]
     pub fn from_str(t: &str) -> Option<Type> {
         Some(match t {
             "end" => Type::End,
@@ -3173,6 +3174,17 @@ impl Type {
             Type::TypeIdentifier => true,
             _ => false,
         }
+    }
+}
+
+#[test]
+fn test_tslanguage_and_type_identity() {
+    let l = crate::language();
+    assert_eq!(l.node_kind_count(), S_T_L.len());
+    for id in 0..l.node_kind_count() {
+        let kind = l.node_kind_for_id(id as u16).unwrap();
+        let ty = Type::from_u16(id as u16);
+        assert_eq!(ty.to_str(), kind);
     }
 }
 

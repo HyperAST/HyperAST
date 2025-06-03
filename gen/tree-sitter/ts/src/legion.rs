@@ -2,6 +2,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::TNode;
+use hyperast::tree_gen::{PreResult, ZippedTreeGen};
 use legion::world::EntryRef;
 
 use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
@@ -16,8 +17,8 @@ use hyperast::{
     },
     tree_gen::{
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
-        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
-        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
+        compute_indentation, get_spacing, has_final_space,
         parser::{Node as _, TreeCursor},
     },
     types::LabelStore as _,

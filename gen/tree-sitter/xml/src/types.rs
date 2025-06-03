@@ -477,6 +477,26 @@ impl TryFrom<&str> for Type {
     }
 }
 
+impl Type {
+    pub(crate) fn is_repeat(&self) -> bool {
+        self == &Type::DocumentRepeat1
+            || self == &Type::TS42
+            || self == &Type::ContentRepeat1
+            || self == &Type::TS43
+            || self == &Type::TS44
+            || self == &Type::TS45
+            || self == &Type::TS46
+            || self == &Type::TS47
+            || self == &Type::_ChoiceRepeat1
+            || self == &Type::_ChoiceRepeat2
+            || self == &Type::TS48
+            || self == &Type::TS49
+            || self == &Type::TS50
+            || self == &Type::TS51
+            || self == &Type::TS52
+    }
+}
+
 impl hyperast::types::LLang<hyperast::types::TypeU16<Self>> for Xml {
     type I = u16;
 
@@ -508,7 +528,6 @@ impl Into<u16> for Type {
         self as u8 as u16
     }
 }
-
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
@@ -570,6 +589,7 @@ pub enum Type {
     TS31,
     TS32,
     Uri,
+    Uri_,
     TS33,
     TS34,
     Version,
@@ -582,6 +602,8 @@ pub enum Type {
     Comment,
     CharData,
     CData,
+    Name_,
+    Name__,
     _ErroneousEndName,
     Document,
     Prolog,
@@ -719,7 +741,7 @@ impl Type {
             55u16 => Type::TS31,
             56u16 => Type::TS32,
             57u16 => Type::Uri,
-            58u16 => Type::Uri,
+            58u16 => Type::Uri_,
             59u16 => Type::TS33,
             60u16 => Type::TS34,
             61u16 => Type::Version,
@@ -732,8 +754,8 @@ impl Type {
             68u16 => Type::Comment,
             69u16 => Type::CharData,
             70u16 => Type::CData,
-            71u16 => Type::Name,
-            72u16 => Type::Name,
+            71u16 => Type::Name_,
+            72u16 => Type::Name__,
             73u16 => Type::_ErroneousEndName,
             74u16 => Type::Document,
             75u16 => Type::Prolog,
@@ -811,6 +833,7 @@ impl Type {
             x => panic!("{}", x),
         }
     }
+    #[allow(unreachable_patterns)]
     pub fn from_str(t: &str) -> Option<Type> {
         Some(match t {
             "end" => Type::End,
@@ -871,6 +894,7 @@ impl Type {
             "SYSTEM" => Type::TS31,
             "PUBLIC" => Type::TS32,
             "URI" => Type::Uri,
+            "URI" => Type::Uri_,
             "PubidLiteral_token1" => Type::TS33,
             "PubidLiteral_token2" => Type::TS34,
             "version" => Type::Version,
@@ -883,6 +907,8 @@ impl Type {
             "Comment" => Type::Comment,
             "CharData" => Type::CharData,
             "CData" => Type::CData,
+            "Name" => Type::Name_,
+            "Name" => Type::Name__,
             "_erroneous_end_name" => Type::_ErroneousEndName,
             "document" => Type::Document,
             "prolog" => Type::Prolog,
@@ -1021,6 +1047,7 @@ impl Type {
             Type::TS31 => "SYSTEM",
             Type::TS32 => "PUBLIC",
             Type::Uri => "URI",
+            Type::Uri_ => "URI",
             Type::TS33 => "PubidLiteral_token1",
             Type::TS34 => "PubidLiteral_token2",
             Type::Version => "version",
@@ -1033,6 +1060,8 @@ impl Type {
             Type::Comment => "Comment",
             Type::CharData => "CharData",
             Type::CData => "CData",
+            Type::Name_ => "Name",
+            Type::Name__ => "Name",
             Type::_ErroneousEndName => "_erroneous_end_name",
             Type::Document => "document",
             Type::Prolog => "prolog",
@@ -1172,12 +1201,15 @@ impl Type {
             Type::TokenizedType => true,
             Type::Nmtoken => true,
             Type::Uri => true,
+            Type::Uri_ => true,
             Type::VersionNum => true,
             Type::EncName => true,
             Type::PiTarget => true,
             Type::Comment => true,
             Type::CharData => true,
             Type::CData => true,
+            Type::Name_ => true,
+            Type::Name__ => true,
             Type::Document => true,
             Type::Prolog => true,
             Type::XmlDecl => true,
@@ -1226,8 +1258,16 @@ impl Type {
             _ => false,
         }
     }
-    pub fn is_repeat(&self) -> bool {
-        todo!("need to generate with the polyglote crate")
+}
+
+#[test]
+fn test_tslanguage_and_type_identity() {
+    let l = crate::language();
+    assert_eq!(l.node_kind_count(), S_T_L.len());
+    for id in 0..l.node_kind_count() {
+        let kind = l.node_kind_for_id(id as u16).unwrap();
+        let ty = Type::from_u16(id as u16);
+        assert_eq!(ty.to_str(), kind);
     }
 }
 
@@ -1290,6 +1330,7 @@ const S_T_L: &'static [Type] = &[
     Type::TS31,
     Type::TS32,
     Type::Uri,
+    Type::Uri_,
     Type::TS33,
     Type::TS34,
     Type::Version,
@@ -1302,6 +1343,8 @@ const S_T_L: &'static [Type] = &[
     Type::Comment,
     Type::CharData,
     Type::CData,
+    Type::Name_,
+    Type::Name_,
     Type::_ErroneousEndName,
     Type::Document,
     Type::Prolog,
