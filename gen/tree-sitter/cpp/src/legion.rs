@@ -81,6 +81,7 @@ pub struct Local {
     pub ana: Option<PartialAnalysis>,
     pub role: Option<Role>,
     pub precomp_queries: PrecompQueries,
+    pub viz_cs_count: u32,
 }
 
 impl Local {
@@ -95,6 +96,10 @@ impl Local {
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
         acc.precomp_queries |= self.precomp_queries;
+        acc.viz_cs_count = acc
+            .viz_cs_count
+            .checked_add(self.viz_cs_count)
+            .expect("viz_cs_count is too small");
 
         // TODO things with this.ana
     }
@@ -106,6 +111,7 @@ pub struct Acc {
     labeled: bool,
     start_byte: usize,
     end_byte: usize,
+    viz_cs_count: u32,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
     padding_start: usize,
@@ -226,6 +232,7 @@ where
             labeled,
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
+            viz_cs_count: 0,
             metrics: Default::default(),
             ana,
             padding_start: 0,
@@ -249,7 +256,11 @@ where
         if HIDDEN_NODES {
             if kind.is_repeat() {
                 // dbg!(kind);
-                return PreResult::Ignore;
+                if stack.parent().unwrap().simple.children.len() < 1024
+                    && stack.parent().unwrap().viz_cs_count < 1024
+                {
+                    return PreResult::Ignore;
+                }
             } else if kind.is_hidden() {
                 // dbg!(kind);
                 return PreResult::Ignore;
@@ -277,6 +288,10 @@ where
                     log::error!("cannot convert role: {}", r)
                 }
             }
+        }
+        if kind == Type::RawStringLiteral {
+            acc.labeled = true;
+            return PreResult::SkipChildren(acc);
         }
         PreResult::Ok(acc)
     }
@@ -309,6 +324,7 @@ where
                 kind,
                 children: vec![],
             },
+            viz_cs_count: 0,
             no_space: vec![],
             role: Default::default(),
             precomp_queries: Default::default(),
@@ -455,6 +471,7 @@ where
             ana: Default::default(),
             role: None,
             precomp_queries: Default::default(),
+            viz_cs_count: 0,
         }
     }
 
@@ -570,12 +587,18 @@ where
             debug_assert_eq!(metrics.hashs.build(), md.metrics.hashs);
             let metrics = md.metrics;
             let precomp_queries = md.precomp_queries;
+            let viz_cs_count = if acc.simple.kind.is_hidden() {
+                acc.viz_cs_count
+            } else {
+                1
+            };
             Local {
                 compressed_node,
                 metrics,
                 ana,
                 role: acc.role.current,
                 precomp_queries,
+                viz_cs_count,
             }
         } else {
             let metrics = metrics.map_hashs(|h| h.build());
@@ -609,6 +632,14 @@ where
                 let children = acc.no_space;
                 tree_gen::add_cs_no_spaces(&mut dyn_builder, children);
             }
+            let viz_cs_count = if acc.simple.kind.is_hidden() {
+                acc.viz_cs_count
+            } else {
+                if acc.viz_cs_count != 0 {
+                    dyn_builder.add(compo::VizCsCount(acc.viz_cs_count));
+                }
+                1
+            };
             acc.simple
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
 
@@ -629,6 +660,7 @@ where
                 ana: acc.ana,
                 role: current_role,
                 precomp_queries: acc.precomp_queries,
+                viz_cs_count,
             }
         };
 

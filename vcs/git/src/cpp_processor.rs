@@ -439,6 +439,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
             ana,
             role: None,
             precomp_queries: Default::default(),
+            viz_cs_count: 0,
         };
     }
 
@@ -465,6 +466,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
         ana,
         role: None,
         precomp_queries: Default::default(),
+        viz_cs_count: 0,
     };
     full_node
 }
