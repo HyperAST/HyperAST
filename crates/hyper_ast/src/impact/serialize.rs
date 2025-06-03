@@ -6,7 +6,7 @@ use std::{
 };
 
 use num::ToPrimitive;
-use string_interner::{symbol::SymbolU16, Symbol};
+use string_interner::{Symbol, symbol::SymbolU16};
 
 use crate::filter::default::VaryHasher;
 
@@ -132,8 +132,13 @@ impl<T> Table<T> {
     }
 }
 
-#[derive(Debug)]
 pub struct CachedHasherError(String);
+
+impl Debug for CachedHasherError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CachedHasherError").field(&self.0).finish()
+    }
+}
 
 impl Display for CachedHasherError {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -172,7 +177,7 @@ impl<'a, I, S, H: VaryHasher<S>> CachedHasher<'a, I, S, H> {
     pub fn new(table: &'a mut Table<H>, index: I) -> Self {
         Self {
             index,
-            table: table,
+            table,
             phantom: PhantomData,
         }
     }

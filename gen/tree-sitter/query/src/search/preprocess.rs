@@ -5,7 +5,7 @@ use super::{Capture, Pattern, Predicate, PreparedMatcher, QuickTrigger};
 
 use hyperast::store::SimpleStores;
 use hyperast::store::nodes::legion::NodeIdentifier;
-use hyperast::types::{Children, Childrn, HyperAST, Labeled, Typed, WithChildren};
+use hyperast::types::{Childrn, HyperAST, Labeled, Typed, WithChildren};
 
 use tree_sitter::CaptureQuantifier as Quant;
 
@@ -79,7 +79,6 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         query_store: &'a SimpleStores<TStore>,
         query: legion::Entity,
     ) -> PreparingMatcher<Ty, C> {
-        use crate::types::TIdN;
         use crate::types::Type;
         use hyperast::types::LabelStore;
         let mut res = PreparingMatcher::default();
@@ -116,7 +115,6 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     if i_ty == Type::Capture {
                         let mut cs = i.children().unwrap().iter_children();
                         let n_id = cs.next().unwrap();
-                        let n = query_store.node_store.resolve(n_id);
                         let t = *query_store.resolve_type(&n_id);
                         assert_eq!(t, Type::At);
                         let name = cs.next().unwrap();
@@ -422,7 +420,6 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         rule: NodeIdentifier,
         preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
-        use crate::types::TIdN;
         use crate::types::Type;
         use hyperast::types::LabelStore;
         let n = query_store
@@ -483,7 +480,6 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         rule: NodeIdentifier,
         preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
-        use crate::types::TIdN;
         use crate::types::Type;
         use hyperast::types::LabelStore;
         let n = query_store
@@ -589,7 +585,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                             }
                         },
                         Pattern::NegatedField { .. } => todo!(),
-                        Pattern::SupNamedNode { sup, ty, children } => todo!(),
+                        Pattern::SupNamedNode { .. } => todo!(),
                     }
                     res = Pattern::Capture {
                         name: capture_id,
@@ -616,7 +612,6 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         query_store: &SimpleStores<TStore>,
         rule: NodeIdentifier,
     ) -> Predicate<String> {
-        use crate::types::TIdN;
         use crate::types::Type;
         use hyperast::types::LabelStore;
         let n = query_store

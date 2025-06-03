@@ -6,14 +6,14 @@ use crate::tree::tree_path::CompressedTreePath;
 use crate::tree::tree_path::TreePath;
 use crate::{
     actions::{
+        Actions,
         action_vec::{ActionsVec, TestActions},
         script_generator2::{Act, ApplicablePath, ScriptGenerator, SimpleAction},
-        Actions,
     },
     decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_action2, example_gt_java_code},
-    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
+    tree::simple_tree::{DisplayTree, NS, vpair_to_stores},
 };
 use hyperast::types::{
     DecompressedFrom, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Typed, WithChildren,
@@ -160,7 +160,7 @@ fn test_with_action_example() {
         actions
     };
 
-    let mut stores = stores;
+    let stores = stores;
     let mut node_store = stores.node_store;
 
     let mut root = vec![src];

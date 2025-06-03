@@ -1,10 +1,9 @@
 use self::example_queries::EXAMPLES;
 use super::{
-    code_editor_automerge, show_repo_menu,
+    Sharing, code_editor_automerge, show_repo_menu,
     types::{Commit, Config, Resource, SelectedConfig, TsgEditor, WithDesc},
     utils_edition::{show_interactions, update_shared_editors},
-    utils_results_batched::{self, show_long_result, ComputeResults},
-    Sharing,
+    utils_results_batched::{self, ComputeResults, show_long_result},
 };
 use crate::app::{
     types::EditorHolder as _,
@@ -53,7 +52,7 @@ pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQ
         ui.add(
             egui::Slider::new(&mut single.content.len, 1..=200)
                 .text("commits")
-                .clamp_to_range(false)
+                .clamping(egui::SliderClamping::Never)
                 .integer()
                 .logarithmic(true),
         );
@@ -137,7 +136,7 @@ pub(super) struct ComputeConfigQuery {
     commit: Commit,
     config: Config,
     len: usize,
-    path: String
+    path: String,
 }
 
 impl Default for ComputeConfigQuery {

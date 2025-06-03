@@ -67,6 +67,7 @@ mod graph {
     //! offsets (like all nodes at subtree + created ones)
     //! or string (node are considered to have a uniq name per subtree)
 
+    #[allow(unused)]
     mod heap {
         //! ref impl, as simple as possible, no dedup, no additional arena.
         //! Issues might appear on large trees

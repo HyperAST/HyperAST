@@ -12,19 +12,13 @@ use hyperast::{
     types::{AnyType, Childrn, LabelStore as _, WithChildren},
     utils::memusage,
 };
-use hyperast_gen_ts_java::legion_with_refs::PartialAnalysis;
 use log::info;
 
 use crate::{
+    Commit, DefaultMetrics,
     git::{all_commits_between, all_first_parents_between, retrieve_commit},
-    make::MakeModuleAcc,
-    make_processor::MakeProcessor,
-    maven::MavenModuleAcc,
-    maven_processor::MavenProcessor,
-    processing::{file_sys, ConfiguredRepo2},
-    Commit, DefaultMetrics, Processor, SimpleStores,
+    processing::{ConfiguredRepo2, file_sys},
 };
-// use hyperast_gen_ts_cpp::legion as cpp_tree_gen;
 
 /// Preprocess a git repository
 /// using the hyperAST and caching git object transformations
@@ -37,6 +31,8 @@ pub struct PreProcessedRepository {
 
     pub processor: RepositoryProcessor,
 }
+
+type SimpleStores = hyperast::store::SimpleStores<crate::TStore>;
 
 #[derive(Default)]
 pub struct RepositoryProcessor {
@@ -53,12 +49,6 @@ pub struct RepositoryProcessor {
 // Maven -> Java on source/ and test/ directories (also look at relevant fields in pom.xml)
 // Any -> Make when detecting a Makefile
 // Make -> Cpp on src/
-
-pub(crate) type IsSkippedAna = bool;
-
-trait GeneratorProvider<Generator> {
-    fn generator(&mut self, text: &[u8]) -> Generator;
-}
 
 impl RepositoryProcessor {
     pub fn main_stores_mut(&mut self) -> &mut SimpleStores {
@@ -78,11 +68,6 @@ impl RepositoryProcessor {
     ) -> hyperast::store::labels::DefaultLabelIdentifier {
         use hyperast::types::LabelStore;
         self.main_stores.label_store.get_or_insert(s)
-    }
-
-    pub fn print_refs(&self, ana: &PartialAnalysis) {
-        #[cfg(feature = "impact")]
-        ana.print_refs(&self.main_stores.label_store);
     }
 
     pub fn purge_caches(&mut self) {
@@ -143,6 +128,7 @@ impl PreProcessedRepository {
 }
 impl RepositoryProcessor {
     /// If `before` and `after` are unrelated then only one commit will be processed.
+    #[cfg(feature = "impact")]
     pub(crate) fn pre_process(
         &mut self,
         repository: &mut ConfiguredRepo2,
@@ -190,7 +176,7 @@ impl RepositoryProcessor {
                 .by_id(&repository.config.0)
                 .unwrap()
                 .get(repository.config.1);
-            if let Some(c) = commit_processor.get_commit(oid) {
+            if let Some(_) = commit_processor.get_commit(oid) {
                 rw.next();
                 r.push(oid);
             } else {
@@ -286,15 +272,6 @@ impl PreProcessedRepository {
         // after: &str,
         // dir_path: &str,
     ) -> (usize, usize) {
-        struct BuffOut {
-            buff: String,
-        }
-
-        impl std::fmt::Write for BuffOut {
-            fn write_str(&mut self, s: &str) -> std::fmt::Result {
-                Ok(self.buff.extend(s.chars()))
-            }
-        }
         // log::info!(
         //     "commits to process: {}",
         //     all_commits_between(&repository, before, after).map(|x|x.count())
@@ -328,12 +305,10 @@ impl PreProcessedRepository {
             if let Ok(_) = std::str::from_utf8(blob.content()) {
                 // log::debug!("content: {}", z);
                 let text = blob.content();
-                if let Ok(full_node) = self.processor.handle_java_file(&b"".into(), text)
-                // handle_java_file(&mut self.processor.java_generator(text), b"", text)
-                {
+                if let Ok(subtree) = self.processor.handle_java_file(&b"".into(), text) {
                     let out = hyperast::nodes::TextSerializer::new(
                         &self.processor.main_stores,
-                        full_node.local.compressed_node,
+                        subtree.local.compressed_node,
                     )
                     .to_string();
                     println!("{}", out);
@@ -657,22 +632,22 @@ impl CommitBuilder {
     }
 }
 
-#[cfg(feature = "any")]
-impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
-    fn handle_module<'a, 'b, const RMS: bool>(
-        &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
-    ) -> NodeIdentifier {
-        let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
-            repository, self, dir_path, name, oid,
-        )
-        .process();
-        root_full_node.0
-    }
-}
+// #[cfg(feature = "any")]
+// impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
+//     fn handle_module<'a, 'b, const RMS: bool>(
+//         &mut self,
+//         repository: &'a Repository,
+//         dir_path: &'b mut Peekable<Components<'b>>,
+//         name: &[u8],
+//         oid: git2::Oid,
+//     ) -> NodeIdentifier {
+//         let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
+//             repository, self, dir_path, name, oid,
+//         )
+//         .process();
+//         root_full_node.0
+//     }
+// }
 
 impl<H: IdHolder, T> IdHolder for (H, T) {
     type Id = H::Id;
@@ -693,23 +668,24 @@ impl CommitProcessor<file_sys::Maven> for RepositoryProcessor {
     type Module = (NodeIdentifier, crate::maven::MD);
     fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
+        _repository: &'a Repository,
+        _dir_path: &'b mut Peekable<Components<'b>>,
+        _name: &[u8],
+        _oid: git2::Oid,
     ) -> Self::Module {
-        let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
-            repository,
-            self,
-            dir_path,
-            name,
-            oid,
-            todo!("para"),
-        )
-        .process();
-        // self.object_map_maven
-        //     .insert(commit_oid, root_full_node.clone());
-        root_full_node
+        todo!("need to refactor the some methods")
+        // let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
+        //     repository,
+        //     self,
+        //     dir_path,
+        //     name,
+        //     oid,
+        //     todo!("para"),
+        // )
+        // .process();
+        // // self.object_map_maven
+        // //     .insert(commit_oid, root_full_node.clone());
+        // root_full_node
     }
 }
 #[cfg(feature = "java")]
@@ -717,21 +693,22 @@ impl CommitProcessor<file_sys::Java> for RepositoryProcessor {
     type Module = (NodeIdentifier, crate::maven::MD);
     fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
+        _repository: &'a Repository,
+        _dir_path: &'b mut Peekable<Components<'b>>,
+        _name: &[u8],
+        _oid: git2::Oid,
     ) -> Self::Module {
-        let root_full_node = MavenProcessor::<RMS, true, MavenModuleAcc>::new(
-            repository,
-            self,
-            dir_path,
-            name,
-            oid,
-            todo!("para"),
-        )
-        .process();
-        root_full_node
+        todo!("need to refactor the some methods")
+        // let root_full_node = MavenProcessor::<RMS, true, MavenModuleAcc>::new(
+        //     repository,
+        //     self,
+        //     dir_path,
+        //     name,
+        //     oid,
+        //     todo!("para"),
+        // )
+        // .process();
+        // root_full_node
     }
 }
 
@@ -740,32 +717,39 @@ impl CommitProcessor<file_sys::Make> for RepositoryProcessor {
     type Module = (NodeIdentifier, crate::make::MD);
     fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
-    ) -> Self::Module {
-        let root_full_node =
-            MakeProcessor::<RMS, false, MakeModuleAcc>::new(repository, self, dir_path, name, oid, todo!("para"))
-                .process();
-        // self.object_map_make
-        //     .insert(commit_oid, root_full_node.clone());
-        root_full_node
-    }
-}
-
-impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
-    type Module = (NodeIdentifier, DefaultMetrics);
-    fn handle_module<'a, 'b, const RMS: bool>(
-        &mut self,
         _repository: &'a Repository,
         _dir_path: &'b mut Peekable<Components<'b>>,
         _name: &[u8],
         _oid: git2::Oid,
     ) -> Self::Module {
-        todo!("still not sure how to dispatch")
+        todo!("need to refactor the some methods")
+        // let root_full_node = MakeProcessor::<RMS, false, MakeModuleAcc>::new(
+        //     repository,
+        //     self,
+        //     dir_path,
+        //     name,
+        //     oid,
+        //     todo!("para"),
+        // )
+        // .process();
+        // // self.object_map_make
+        // //     .insert(commit_oid, root_full_node.clone());
+        // root_full_node
     }
 }
+
+// impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
+//     type Module = (NodeIdentifier, DefaultMetrics);
+//     fn handle_module<'a, 'b, const RMS: bool>(
+//         &mut self,
+//         _repository: &'a Repository,
+//         _dir_path: &'b mut Peekable<Components<'b>>,
+//         _name: &[u8],
+//         _oid: git2::Oid,
+//     ) -> Self::Module {
+//         todo!("still not sure how to dispatch")
+//     }
+// }
 
 /// plan to work on all languges of the family of typesript ie. ts, js, tsx, jsx
 /// - [ ] ts
@@ -844,7 +828,6 @@ pub fn child_by_type(
         .iter_children()
         .enumerate()
         .find(|(_, x)| {
-            let n = stores.node_store.resolve(*x);
             use hyperast::types::HyperAST;
             stores.resolve_type(x).eq(t)
         })
@@ -910,7 +893,7 @@ mod experiments {
             dir_path: &'b mut Peekable<Components<'b>>,
             name: &[u8],
             oid: git2::Oid,
-        ) -> <MavenModuleAcc as Accumulator>::Unlabeled {
+        ) -> <crate::maven::MavenModuleAcc as Accumulator>::Unlabeled {
             processor_factory::ffwd::Maven {
                 sources: &middle::MiddleWare { repository },
                 maven: &mut self.maven,
@@ -953,7 +936,7 @@ mod experiments {
         }
         pub struct Java<Id> {
             java_md_cache: java_tree_gen::MDCache,
-            object_map_java: BTreeMap<Id, (java_tree_gen::Local, IsSkippedAna)>,
+            object_map_java: BTreeMap<Id, (java_tree_gen::Local,)>,
         }
     }
 

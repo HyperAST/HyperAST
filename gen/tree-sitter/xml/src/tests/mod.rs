@@ -4,7 +4,7 @@ use hyperast::store::SimpleStores;
 use tree_sitter::Parser;
 
 use crate::{
-    legion::{tree_sitter_parse_xml, XmlTreeGen},
+    legion::{XmlTreeGen, tree_sitter_parse_xml},
     types::TStore,
 };
 
@@ -77,7 +77,7 @@ fn xml_tree_sitter_on_pom() {
 }
 
 #[test]
-fn hyperAST_on_pom() {
+fn hyperast_on_pom() {
     let path: PathBuf = Path::new("src/tests/pom.xml.test").to_path_buf();
 
     let text = std::fs::read(path).unwrap();

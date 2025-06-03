@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use criterion::{
-    AxisScale, BenchmarkId, Criterion, PlotConfiguration, black_box, criterion_group,
+    AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput, black_box, criterion_group,
     criterion_main,
 };
 
@@ -102,28 +102,28 @@ pub const QUERIES: &[BenchQuery] = &[
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null",
-        417, // matches on spoon
+        415, // matches on spoon
     ),
     (
         &[QUERY_RET_NULL_SUBS[1], QUERY_RET_NULL_SUBS[2]],
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null_1+2",
-        417, // matches on spoon
+        415, // matches on spoon
     ),
     (
         &[QUERY_RET_NULL_SUBS[1]],
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null_1",
-        417, // matches on spoon
+        415, // matches on spoon
     ),
     (
         &[QUERY_RET_NULL_SUBS[2]],
         QUERY_RET_NULL.0,
         QUERY_RET_NULL.1,
         "ret_null_2",
-        417, // matches on spoon
+        415, // matches on spoon
     ),
     (
         &[QUERY_MAIN_METH_SUBS[0]],
@@ -154,6 +154,13 @@ pub const QUERIES: &[BenchQuery] = &[
         46, // matches on spoon
     ),
     (
+        &[QUERY_MAIN_METH_SUBS[4]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_4",
+        46, // matches on spoon
+    ),
+    (
         &[QUERY_MAIN_METH_SUBS[1], QUERY_MAIN_METH_SUBS[2]],
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
@@ -165,6 +172,13 @@ pub const QUERIES: &[BenchQuery] = &[
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
         "main_meth_6",
+        46, // matches on spoon
+    ),
+    (
+        &[QUERY_MAIN_METH_SUBS[4], QUERY_MAIN_METH_SUBS[5]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_4+5",
         46, // matches on spoon
     ),
     (
@@ -227,7 +241,7 @@ fn preps_precomputed(
         bench_param.0,
     )
     .unwrap();
-    query._check_preprocessed(0, bench_param.0.len());
+    // query._check_preprocessed(0, bench_param.0.len());
     let mut stores =
         hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
@@ -240,6 +254,7 @@ fn preps_precomputed(
         .into_iter()
         .map(|(name, text)| {
             let name = &name.to_str().unwrap();
+            dbg!(name);
             let tree =
                 match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
                     Ok(t) => t,
@@ -248,10 +263,12 @@ fn preps_precomputed(
             log::trace!("preprocess file: {}", name);
             let full_node =
                 java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk());
+            dbg!(java_tree_gen.stores.node_store.len());
             full_node.local.compressed_node
         })
         .collect();
     log::trace!("finished preprocessing");
+    dbg!();
     (query, stores, roots)
 }
 
@@ -260,7 +277,7 @@ fn compare_querying_group(c: &mut Criterion) {
     //     .map(|()| log::set_max_level(log::LevelFilter::Trace))
     //     .unwrap();
     let mut group = c.benchmark_group("QueryingRepeat4Spoon");
-    group.sample_size(10);
+    // group.sample_size(10);
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     group.plot_config(plot_config);
 
@@ -295,7 +312,8 @@ fn compare_querying_group(c: &mut Criterion) {
         None
     });
     let codes: Box<[_]> = codes.chain(tests).collect();
-    for parameter in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
+    for parameter in QUERIES.into_iter().map(|x| (x, &codes.as_ref()[..200])) {
+        group.throughput(Throughput::Elements(parameter.0.4 as u64));
         bench_baseline(&mut group, parameter);
         bench_rust_baseline(&mut group, parameter);
 
@@ -335,13 +353,17 @@ fn compare_querying_group(c: &mut Criterion) {
                 })
             },
         );
+        drop(pp);
 
         let mut pp = None;
+        dbg!();
         group.bench_with_input(
             BenchmarkId::new("precomputed", parameter.0.3),
             &parameter,
             |b, parameter| {
+                dbg!(pp.is_none());
                 let (query, stores, roots) = &pp.get_or_insert(preps_precomputed(parameter));
+                dbg!();
                 b.iter(|| {
                     let mut count = 0;
                     for &n in roots {
@@ -355,23 +377,23 @@ fn compare_querying_group(c: &mut Criterion) {
                 })
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new("precomputed_opt", parameter.0.3),
-            &parameter,
-            |b, parameter| {
-                let (query, stores, roots) = &pp.get_or_insert(preps_precomputed(parameter));
-                b.iter(|| {
-                    let mut count = 0;
-                    for &n in roots {
-                        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
-                        let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
-                        let matches = query.matches(cursor);
-                        count += black_box(matches.count());
-                    }
-                    assert_eq!(count as u64, parameter.0.4);
-                })
-            },
-        );
+        // group.bench_with_input(
+        //     BenchmarkId::new("precomputed_opt", parameter.0.3),
+        //     &parameter,
+        //     |b, parameter| {
+        //         let (query, stores, roots) = &pp.get_or_insert(preps_precomputed(parameter));
+        //         b.iter(|| {
+        //             let mut count = 0;
+        //             for &n in roots {
+        //                 let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
+        //                 let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+        //                 let matches = query.matches(cursor);
+        //                 count += black_box(matches.count());
+        //             }
+        //             assert_eq!(count as u64, parameter.0.4);
+        //         })
+        //     },
+        // );
     }
     group.finish()
 }
@@ -424,5 +446,9 @@ fn bench_rust_baseline(
     );
 }
 
-criterion_group!(querying, compare_querying_group);
+criterion_group!(
+    name = querying;
+    config = Criterion::default().configure_from_args();
+    targets = compare_querying_group
+);
 criterion_main!(querying);

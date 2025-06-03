@@ -688,6 +688,10 @@ impl HyperType for Ty {
         todo!()
     }
 
+    fn as_abstract(&self) -> crate::types::Abstracts {
+        todo!()
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         todo!()
     }
@@ -700,7 +704,7 @@ impl HyperType for Ty {
         todo!()
     }
 
-    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    fn generic_eq(&self, _other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized,
     {

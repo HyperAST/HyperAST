@@ -6,9 +6,12 @@ pub mod extends_package_local;
 pub mod obj_creation;
 
 use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
+#[cfg(feature = "impact")]
 use std::env;
 
-use hyperast::{store::labels::LabelStore, utils::memusage};
+use hyperast::store::labels::LabelStore;
+#[cfg(feature = "impact")]
+use hyperast::utils::memusage;
 
 #[cfg(feature = "impact")]
 #[test]
@@ -125,8 +128,12 @@ fn example_process_make_cpp_project() {
         "src",
         2,
     );
-    // let id = preprocessed.processor.object_map_make.get(&a).unwrap();
-    // hyperast_gen_ts_cpp::legion::print_tree_syntax(&preprocessed.processor.main_stores.node_store, &preprocessed.processor.main_stores.label_store, &id.0);
+
+    let id = preprocessed.commits.get(&a[0]).unwrap().ast_root;
+    eprintln!(
+        "{}",
+        hyperast::nodes::SyntaxSerializer::new(&preprocessed.processor.main_stores, id)
+    );
 }
 
 #[test]
@@ -207,11 +214,9 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
         M::check(&mut file).unwrap();
         file
     };
-    let t = INNER_CLASSES;
-    let spec: &tree_sitter_graph::ast::File<
-        hyperast_tsquery::QueryMatcher<_, &Acc>,
-    > = &tsg;
-    let query: Option<&hyperast_tsquery::Query> = None;
+    let _t = INNER_CLASSES;
+    let _spec: &tree_sitter_graph::ast::File<hyperast_tsquery::QueryMatcher<_, &Acc>> = &tsg;
+    let _query: Option<&hyperast_tsquery::Query> = None;
     // let functions = tree_sitter_graph::functions::Functions::<
     // tree_sitter_graph::graph::Graph<
     //     hyperast_tsquery::Node<

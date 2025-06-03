@@ -29,6 +29,7 @@ mod exp_mlua;
 mod metrics; // TODO migrate to rhai_impl and preprocessing // TODO migrate to lua_impl and preprocessing
 
 #[cfg(feature = "scripting")]
+#[allow(unused)]
 mod exp_lisp {
     pub static PREPRO_MCC: &'static str = r#"
 (defun init ()
@@ -125,8 +126,6 @@ impl<HAST, Acc> From<std::sync::Arc<str>> for Prepro<HAST, Acc> {
 }
 
 use crate::{store::defaults::NodeIdentifier, types::HyperType};
-
-type ScriptingError = Box<dyn std::error::Error>;
 
 pub trait Scriptable {
     type Error: std::error::Error;
@@ -249,9 +248,9 @@ impl Accumulable for Acc {
     >(
         &mut self,
         _scripts: &Self::Scripts,
-        store: &'a HAST::S<'_>,
-        ty: T,
-        child: SubtreeHandle<T2>,
+        _store: &'a HAST::S<'_>,
+        _ty: T,
+        _child: SubtreeHandle<T2>,
     ) -> Result<(), Self::Error> {
         unimplemented!()
     }

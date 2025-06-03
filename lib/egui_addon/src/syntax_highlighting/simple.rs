@@ -50,7 +50,7 @@ impl CodeTheme {
 
             ui.vertical(|ui| {
                 ui.set_width(150.0);
-                egui::widgets::global_dark_light_mode_buttons(ui);
+                egui::global_theme_preference_buttons(ui);
 
                 ui.add_space(8.0);
                 ui.separator();

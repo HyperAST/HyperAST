@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
-use hyperast::types::{
-    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
+use hyperast::{
+    tree_gen::utils_ts::TsEnableTS,
+    types::{
+        AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
+    },
 };
 
 #[cfg(feature = "impl")]
@@ -19,6 +22,17 @@ mod legion_impls {
         ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
             let k = n.kind_id();
             Type::from_u16(k)
+        }
+
+        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+            n: &N,
+        ) -> Option<Self::Ty2> {
+            let k = n.kind_id();
+            static LEN: u16 = S_T_L.len() as u16;
+            if LEN <= k && k < TStore::LOWEST_RESERVED {
+                return None;
+            }
+            Some(Type::from_u16(k))
         }
     }
 
@@ -174,13 +188,24 @@ impl LangRef<AnyType> for C {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
+        // TODO check lang
         id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
 impl LangRef<Type> for C {
     fn make(&self, t: u16) -> &'static Type {
-        &S_T_L[t as usize]
+        if t == TStore::ERROR {
+            &Type::ERROR
+        } else if t == TStore::_ERROR {
+            &Type::_ERROR
+        } else if t == TStore::SPACES {
+            &Type::Spaces
+        } else if t == TStore::DIRECTORY {
+            &Type::Directory
+        } else {
+            &S_T_L[t as usize]
+        }
     }
     fn to_u16(&self, t: Type) -> u16 {
         t as u16
@@ -392,6 +417,15 @@ impl HyperType for Type {
             Type::Identifier => Shared::Identifier,
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        use hyperast::types::Abstract;
+        Abstract::Expression.when(self.is_expression())
+            | Abstract::Statement.when(self.is_statement())
+            | Abstract::Executable.when(self.is_executable_member())
+            | Abstract::Declaration.when(self.is_type_declaration())
+            | Abstract::Literal.when(self.is_literal())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -928,10 +962,12 @@ pub enum Type {
     FieldIdentifier,
     StatementIdentifier,
     TypeIdentifier,
-    Spaces,
-    Directory,
-    ERROR,
+    Directory = TStore::DIRECTORY,
+    Spaces = TStore::SPACES,
+    _ERROR = TStore::_ERROR,
+    ERROR = TStore::ERROR,
 }
+
 impl Type {
     pub fn from_u16(t: u16) -> Type {
         match t {
@@ -1298,7 +1334,10 @@ impl Type {
             360u16 => Type::FieldIdentifier,
             361u16 => Type::StatementIdentifier,
             362u16 => Type::TypeIdentifier,
-            u16::MAX => Type::ERROR,
+            TStore::DIRECTORY => Type::Directory,
+            TStore::SPACES => Type::Spaces,
+            TStore::_ERROR => Type::_ERROR,
+            TStore::ERROR => Type::ERROR,
             x => panic!("{}", x),
         }
     }
@@ -1635,8 +1674,9 @@ impl Type {
             "field_identifier" => Type::FieldIdentifier,
             "statement_identifier" => Type::StatementIdentifier,
             "type_identifier" => Type::TypeIdentifier,
-            "Spaces" => Type::Spaces,
             "Directory" => Type::Directory,
+            "Spaces" => Type::Spaces,
+            "_ERROR" => Type::_ERROR,
             "ERROR" => Type::ERROR,
             _ => return None,
         })
@@ -1976,6 +2016,7 @@ impl Type {
             Type::TypeIdentifier => "type_identifier",
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
+            Type::_ERROR => "_ERROR",
             Type::ERROR => "ERROR",
         }
     }
@@ -2522,7 +2563,4 @@ const S_T_L: &'static [Type] = &[
     Type::FieldIdentifier,
     Type::StatementIdentifier,
     Type::TypeIdentifier,
-    Type::Spaces,
-    Type::Directory,
-    Type::ERROR,
 ];

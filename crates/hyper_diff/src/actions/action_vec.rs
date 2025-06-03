@@ -1,17 +1,8 @@
 use std::fmt::Debug;
 
-use num_traits::ToPrimitive;
-
 use hyperast::{
     position::compute_range,
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::HashedNodeRef,
-    },
-    types::{
-        AnyType, Children, HyperAST, LabelStore, Labeled, NodeId, NodeStore, NodeStoreExt,
-        TypeStore, Typed, WithChildren,
-    },
+    types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, NodeStoreExt, WithChildren},
 };
 
 use crate::tree::tree_path::TreePath;
@@ -141,9 +132,9 @@ where
             let p = hyperast::position::PositionConverter::new(&of)
                 .with_stores(&stores)
                 .compute_pos_pre_order::<_, Pos>();
-            let p3 = hyperast::position::PositionConverter::new(&of)
-                .with_stores(&stores)
-                .compute_pos_pre_order::<_, hyperast::position::CompoundPositionPreparer<Pos, Pos2<HAST::IdN, HAST::Idx>>>();
+            // let p3 = hyperast::position::PositionConverter::new(&of)
+            //     .with_stores(&stores)
+            //     .compute_pos_pre_order::<_, hyperast::position::CompoundPositionPreparer<Pos, Pos2<HAST::IdN, HAST::Idx>>>();
             use hyperast::position::position_accessors::SolvedPosition;
             let i = p2.node();
             let r = p.range();
@@ -284,7 +275,7 @@ pub fn apply_actions<T, S, P>(
 pub fn apply_action<T, S, P>(
     a: &SimpleAction<T::Label, P, T::TreeId>,
     root: &'_ mut Vec<T::TreeId>,
-    s: &'_ mut S,
+    _s: &'_ mut S,
 ) where
     S: NodeStoreExt<T> + NodeStore<T::TreeId>,
     T: hyperast::types::TypedTree,
@@ -294,7 +285,12 @@ pub fn apply_action<T, S, P>(
     T::ChildIdx: Debug + Copy,
     P: TreePath<Item = T::ChildIdx> + Debug,
 {
-    todo!()
+    todo!("{:?}, {:?}", a, root)
+    // use hyperast::store::{
+    //     defaults::{LabelIdentifier, NodeIdentifier},
+    //     nodes::HashedNodeRef,
+    // };
+    // use hyperast::types::{AnyType, Children, TypeStore, Typed};
     // let fun_name = |s: &mut S, x: &T::TreeId| -> (T::Type, Option<T::Label>) {
     //     let node = s.resolve(x);
     //     let t = node.get_type().to_owned();

@@ -555,24 +555,29 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
         #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
         pub enum Type {
             #merged
-            Spaces,
-            Directory,
-            ERROR,
+            Directory = TStore::DIRECTORY,
+            Spaces = TStore::SPACES,
+            _ERROR = TStore::_ERROR,
+            ERROR = TStore::ERROR,
         }
         impl Type {
             pub fn from_u16(t: u16) -> Type {
                 match t {
                     #from_u16
                     //#len => Type::ERROR,
-                    u16::MAX => Type::ERROR,
+                    TStore::DIRECTORY => Type::Directory,
+                    TStore::SPACES => Type::Spaces,
+                    TStore::_ERROR => Type::_ERROR,
+                    TStore::ERROR => Type::ERROR,
                     x => panic!("{}",x),
                 }
             }
             pub fn from_str(t: &str) -> Option<Type> {
                 Some(match t {
                     #from_str
-                    "Spaces" => Type::Spaces,
                     "Directory" => Type::Directory,
+                    "Spaces" => Type::Spaces,
+                    "_ERROR" => Type::_ERROR,
                     "ERROR" => Type::ERROR,
                     _ => return None,
                 })
@@ -580,8 +585,9 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             pub fn to_str(&self) -> &'static str {
                 match self {
                     #to_str
-                    Type::Spaces => "Spaces",
                     Type::Directory => "Directory",
+                    Type::Spaces => "Spaces",
+                    Type::_ERROR => "_ERROR",
                     Type::ERROR => "ERROR",
                 }
             }

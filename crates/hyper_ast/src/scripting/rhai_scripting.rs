@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::store::SimpleStores;
 use crate::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
 use crate::tree_gen::WithChildren;
@@ -162,10 +163,10 @@ impl super::Accumulable for Acc {
         HAST: mlua::UserData + 'static,
     >(
         &mut self,
-        scripts: &Self::Scripts,
-        store: &'a HAST,
-        ty: T,
-        child: crate::scripting::SubtreeHandle<T2>,
+        _scripts: &Self::Scripts,
+        _store: &'a HAST,
+        _ty: T,
+        _child: crate::scripting::SubtreeHandle<T2>,
     ) -> Result<(), Self::Error> {
         unimplemented!()
     }

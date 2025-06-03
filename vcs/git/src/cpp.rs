@@ -1,7 +1,8 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::{
-    cpp_processor::SimpleStores, preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing, PROPAGATE_ERROR_ON_BAD_CST_NODE
+    Accumulator, BasicDirAcc, FailedParsing, FileProcessingResult, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    SuccessProcessing, cpp_processor::SimpleStores, processing::ObjectName,
 };
 
 use hyperast::{
@@ -10,10 +11,7 @@ use hyperast::{
     tree_gen::{self, SubTreeMetrics},
 };
 
-use hyperast_gen_ts_cpp::{
-    legion as cpp_tree_gen,
-    types::{TStore, Type},
-};
+use hyperast_gen_ts_cpp::{legion as cpp_tree_gen, types::TStore};
 
 // waiting for residual stabilization https://github.com/rust-lang/rust/issues/84277
 // see after the temporary solution
@@ -42,8 +40,8 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> FileProcessingResult<cpp_tree_gen::FNode>
 where
-    More: tree_gen::Prepro<SimpleStores>
-        + tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
+    More:
+        tree_gen::Prepro<SimpleStores> + tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
 {
     // handling the parsing explicitly in this function is a good idea
     // to control complex stuff like timeout, instead of the call on next line
@@ -131,25 +129,20 @@ impl CppAcc {
     //         }
     //     }
     // }
-    pub(crate) fn push(
-        &mut self,
-        name: LabelIdentifier,
-        full_node: cpp_tree_gen::Local,
-        skiped_ana: bool,
-    ) {
+    pub(crate) fn push(&mut self, name: LabelIdentifier, full_node: cpp_tree_gen::Local) {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
     }
 }
 
 impl hyperast::tree_gen::Accumulator for CppAcc {
-    type Node = (LabelIdentifier, (cpp_tree_gen::Local, IsSkippedAna));
-    fn push(&mut self, (name, (full_node, skiped_ana)): Self::Node) {
+    type Node = (LabelIdentifier, (cpp_tree_gen::Local,));
+    fn push(&mut self, (name, (full_node,)): Self::Node) {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
     }
 }
 
 impl Accumulator for CppAcc {
-    type Unlabeled = (cpp_tree_gen::Local, IsSkippedAna);
+    type Unlabeled = (cpp_tree_gen::Local,);
 }

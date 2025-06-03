@@ -8,7 +8,7 @@ use crate::indexed::StepId;
 use crate::indexed::{CaptureId, PatternId};
 
 #[derive(Clone)]
-pub(crate) struct State {
+pub struct State {
     pub(crate) id: super::indexed::StateId,
     pub(crate) capture_list_id: super::indexed::CaptureListId,
     pub(crate) start_depth: u16,
@@ -112,8 +112,8 @@ where
     pub(crate) fn advance(&mut self, stop_on_definite_step: bool) -> bool {
         let mut did_match = false;
         loop {
-            // dbg!();
             if self.halted {
+                log::trace!("releasing {} states", self.states.len());
                 while (self.states.len() > 0) {
                     let state = self.states.pop().unwrap();
                     self.capture_list_pool.release(state.capture_list_id);
@@ -192,7 +192,7 @@ where
         let mut did_match = false;
         if self.on_visible_node {
             log::trace!(
-                "leave node. depth:{}, type:{}\n",
+                "leave node. depth:{}, type:{}",
                 self.depth,
                 self.cursor.current_node().str_symbol()
             );
@@ -471,9 +471,22 @@ where
                                     node_does_match = false;
                                 }
                             }
-                            crate::predicate::ImmediateTextPredicate::MatchString { re } => todo!(),
-                            crate::predicate::ImmediateTextPredicate::MatchStringUnamed { re } => {
-                                todo!()
+                            crate::predicate::ImmediateTextPredicate::MatchString { re }
+                            | crate::predicate::ImmediateTextPredicate::MatchStringUnamed { re } => {
+                                let current_node = &self.cursor.current_node();
+                                let t = current_node.text(self.cursor.text_provider());
+                                match t {
+                                    crate::BiCow::A(t) if !re.is_match(t.as_bytes()) => {
+                                        node_does_match = false
+                                    }
+                                    crate::BiCow::B(t) if !re.is_match(t.as_bytes()) => {
+                                        node_does_match = false
+                                    }
+                                    crate::BiCow::Owned(t) if !re.is_match(t.as_bytes()) => {
+                                        node_does_match = false
+                                    }
+                                    _ => (),
+                                }
                             }
                             crate::predicate::ImmediateTextPredicate::AnyString(_) => todo!(),
                         }

@@ -1,7 +1,7 @@
 // region: Stuff provided usually provided by HyperAST
 
 /// Helper to define and build subtrees while computing metrics
-struct Builder<C>(C);
+pub struct Builder<C>(C);
 
 /// The AS node types
 #[derive(Clone, Copy, Debug)]
@@ -10,12 +10,6 @@ pub enum Ty {
     Method,
     IfStatement,
     WhileStatement,
-}
-
-impl Ty {
-    fn is_branch(&self) -> bool {
-        matches!(self, Ty::IfStatement | Ty::WhileStatement)
-    }
 }
 
 /// interface to an AS node
@@ -102,7 +96,7 @@ pub trait MetricComputing {
     fn finish(&self, acc: Self::Acc, current: Self::S) -> Self::S;
 }
 
-struct NoMetrics<U>(std::marker::PhantomData<U>);
+pub struct NoMetrics<U>(std::marker::PhantomData<U>);
 impl<U> Default for NoMetrics<U> {
     fn default() -> Self {
         Self(Default::default())
@@ -115,14 +109,14 @@ impl<S: Subtree> MetricComputing for NoMetrics<S> {
         o
     }
     type Acc = ();
-    fn init(&self, ty: Ty, l: Option<&str>) -> Self::Acc {
+    fn init(&self, _ty: Ty, _l: Option<&str>) -> Self::Acc {
         ()
     }
-    fn acc(&self, acc: Self::Acc, current: &Self::S) -> Self::Acc {
+    fn acc(&self, _acc: Self::Acc, _current: &Self::S) -> Self::Acc {
         ()
     }
     type M = ();
-    fn finish(&self, acc: Self::Acc, current: Self::S) -> Self::S {
+    fn finish(&self, _acc: Self::Acc, current: Self::S) -> Self::S {
         current
     }
 }
@@ -153,35 +147,43 @@ impl<F0: MetricComputing, F1: MetricComputing<S = F0::S>> MetricComputing for Ch
 /// Defining computation behavior of a metric with functions
 struct Functional<T, U>(T, std::marker::PhantomData<U>);
 impl<
-        A,
-        M: 'static,
-        I: Fn(Ty, Option<&str>) -> A,
-        Acc: Fn(A, &S) -> A,
-        F: Fn(A, &S) -> M,
-        S: Subtree,
-    > MetricComputing for Functional<(I, Acc, F), (A, M, S)>
+    A,
+    M: 'static,
+    I: Fn(Ty, Option<&str>) -> A,
+    Acc: Fn(A, &S) -> A,
+    F: Fn(A, &S) -> M,
+    S: Subtree,
+> MetricComputing for Functional<(I, Acc, F), (A, M, S)>
 {
     type S = S;
     type Acc = A;
     fn init(&self, ty: Ty, l: Option<&str>) -> Self::Acc {
-        (self.0 .0)(ty, l)
+        (self.0.0)(ty, l)
     }
     type M = M;
     fn finish(&self, acc: Self::Acc, mut current: Self::S) -> Self::S {
-        let m = (self.0 .2)(acc, &current);
+        let m = (self.0.2)(acc, &current);
         current.push_metric(m);
         current
     }
     fn acc(&self, acc: Self::Acc, current: &Self::S) -> Self::Acc {
-        (self.0 .1)(acc, current)
+        (self.0.1)(acc, current)
     }
 }
 
 // endregion
 
 #[cfg(test)]
+#[allow(unused)]
 mod tests {
     use super::*;
+
+    impl Ty {
+        fn is_branch(&self) -> bool {
+            matches!(self, Ty::IfStatement | Ty::WhileStatement)
+        }
+    }
+
     #[allow(dead_code, unreachable_code, unused)]
     #[test]
     fn test_metrics_computing_function_api() {
@@ -307,7 +309,7 @@ mod tests {
 
             type M = M;
 
-            fn init(ty: Ty, l: Option<&str>) -> Self {
+            fn init(_ty: Ty, _l: Option<&str>) -> Self {
                 A(0)
             }
 
@@ -442,13 +444,10 @@ mod tests {
         ) -> Builder<impl MetricComputing<S = C::S>> {
             struct Comp<A, M, S>(std::marker::PhantomData<(A, M, S)>);
             impl<
-                    A: 'static
-                        + Default
-                        + std::ops::Add<M, Output = A>
-                        + std::ops::Add<Ty, Output = M>,
-                    M: 'static + Copy,
-                    S: Subtree,
-                > MetricComputing for Comp<A, M, S>
+                A: 'static + Default + std::ops::Add<M, Output = A> + std::ops::Add<Ty, Output = M>,
+                M: 'static + Copy,
+                S: Subtree,
+            > MetricComputing for Comp<A, M, S>
             {
                 type S = S;
 
@@ -463,7 +462,7 @@ mod tests {
 
                 type M = M;
 
-                fn init(&self, ty: Ty, l: Option<&str>) -> Self::Acc {
+                fn init(&self, _ty: Ty, _l: Option<&str>) -> Self::Acc {
                     A::default()
                 }
 
@@ -491,13 +490,13 @@ mod tests {
         ) -> Builder<impl MetricComputing<S = C::S>> {
             struct Comp<A, M, S>(std::marker::PhantomData<(A, M, S)>);
             impl<
-                    A: 'static
-                        + Default
-                        + for<'a> std::ops::AddAssign<&'a S>
-                        + for<'a> std::ops::Add<&'a S, Output = M>,
-                    M: 'static + Copy,
-                    S: Subtree,
-                > MetricComputing for Comp<A, M, S>
+                A: 'static
+                    + Default
+                    + for<'a> std::ops::AddAssign<&'a S>
+                    + for<'a> std::ops::Add<&'a S, Output = M>,
+                M: 'static + Copy,
+                S: Subtree,
+            > MetricComputing for Comp<A, M, S>
             {
                 type S = S;
 
@@ -512,7 +511,7 @@ mod tests {
 
                 type M = M;
 
-                fn init(&self, ty: Ty, l: Option<&str>) -> Self::Acc {
+                fn init(&self, _ty: Ty, _l: Option<&str>) -> Self::Acc {
                     A::default()
                 }
 

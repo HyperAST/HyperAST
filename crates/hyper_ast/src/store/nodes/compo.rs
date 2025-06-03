@@ -17,6 +17,7 @@ pub struct SizeNoSpaces(pub u32);
 pub struct Height(pub u32);
 pub struct BytesLen(pub u32);
 pub struct LineCount(pub u16);
+pub struct VizCsCount(pub u32);
 
 pub struct HStruct(pub u32);
 pub struct HLabel(pub u32);
@@ -74,6 +75,7 @@ impls! { SizeNoSpaces }
 impls! { Height }
 impls! { BytesLen }
 impls! { LineCount }
+impls! { VizCsCount }
 impls! { HStruct }
 impls! { HLabel }
 impls! { Roles<R> }

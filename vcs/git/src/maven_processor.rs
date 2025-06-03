@@ -223,7 +223,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         log::debug!("maven tree {:?}", name.try_str());
         let parent_acc = &mut self.stack.last_mut().unwrap().acc;
         if FFWD {
-            let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
+            let (name, (full_node,)) = self.prepro.help_handle_java_folder(
                 &self.repository,
                 &mut self.dir_path,
                 oid,
@@ -248,7 +248,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         let helper = MavenModuleHelper::from((parent_acc, &name));
         if helper.source_directories.0 || helper.test_source_directories.0 {
             // handle as source dir
-            let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
+            let (name, (full_node,)) = self.prepro.help_handle_java_folder(
                 &self.repository,
                 self.dir_path,
                 oid,
@@ -460,36 +460,25 @@ impl RepositoryProcessor {
         let x = self
             .processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Pom>()
-            .handle(oid, repository, &name, parameters, |c, n, t| {
-                // let caches = c.mut_or_default::<PomProcessorHolder>().get_caches_mut();
-                crate::maven::handle_pom_file(
-                    &mut XmlTreeGen {
-                        line_break: "\n".as_bytes().to_vec(),
-                        stores: self.main_stores.mut_with_ts(),
-                    },
-                    n,
-                    t,
-                )
+            .handle(oid, repository, &name, parameters, |_c, n, t| {
+                let line_break = if t.contains(&b'\r') {
+                    "\r\n".as_bytes().to_vec()
+                } else {
+                    "\n".as_bytes().to_vec()
+                };
+                // let holder = c.mut_or_default::<PomProcessorHolder>();
+                // let pom_proc = holder.with_parameters_mut(parameters.0);
+                // let md_cache = &mut pom_proc.cache.object_map;
+                let mut xml_tree_gen = XmlTreeGen {
+                    line_break,
+                    stores: self.main_stores.mut_with_ts(),
+                };
+                crate::maven::handle_pom_file(&mut xml_tree_gen, n, t)
             })?;
         let name = self.intern_object_name(&name);
         assert!(!parent_acc.primary.children_names.contains(&name));
         parent_acc.push_pom(name, x);
         Ok(())
-    }
-
-    fn handle_pom_file(
-        &mut self,
-        name: &ObjectName,
-        text: &[u8],
-    ) -> Result<crate::maven::POM, crate::ParseErr> {
-        crate::maven::handle_pom_file(&mut self.xml_generator(), name, text)
-    }
-
-    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<hyperast_gen_ts_xml::types::TStore> {
-        XmlTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: self.main_stores.mut_with_ts(),
-        }
     }
 }
 
@@ -527,16 +516,6 @@ impl MavenModuleHelper {
             self.source_directories.1,
             self.test_source_directories.1,
         )
-    }
-    pub fn into_acc_with_scripting(self, prepro_acc: hyperast::scripting::Acc) -> MavenModuleAcc {
-        let mut r = MavenModuleAcc::with_content(
-            self.name,
-            self.submodules.1,
-            self.source_directories.1,
-            self.test_source_directories.1,
-        );
-        r.scripting_acc = Some(prepro_acc);
-        r
     }
 }
 
@@ -607,6 +586,9 @@ pub struct Parameter {
     pub java_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
         crate::java_processor::JavaProc,
     >,
+    pub pom_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
+        crate::maven_processor::PomProc,
+    >,
 }
 
 impl From<PCP2Handle<MavenProc>> for PCP2Handle<PomProc> {
@@ -614,21 +596,25 @@ impl From<PCP2Handle<MavenProc>> for PCP2Handle<PomProc> {
         PCP2Handle(value.0, PhantomData)
     }
 }
-struct PomProcessorHolder(Option<PomProc>);
+pub struct PomProcessorHolder(Vec<PomProc>);
 impl Default for PomProcessorHolder {
     fn default() -> Self {
-        Self(Some(PomProc {
+        Self(vec![PomProc {
             parameter: None,
             cache: Default::default(),
-        }))
+        }])
     }
 }
-struct PomProc {
-    parameter: Option<Parameter>,
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct PomParameter {}
+
+pub struct PomProc {
+    parameter: Option<PomParameter>,
     cache: crate::processing::caches::Pom,
 }
 impl crate::processing::erased::Parametrized for PomProcessorHolder {
-    type T = Parameter;
+    type T = PomParameter;
     fn register_param(
         &mut self,
         t: Self::T,
@@ -638,14 +624,14 @@ impl crate::processing::erased::Parametrized for PomProcessorHolder {
             .iter()
             .position(|x| x.parameter.as_ref() == Some(&t))
             .unwrap_or_else(|| {
-                let l = 0; //self.0.len();
-                // self.0.push(PomProc(t));
-                self.0 = Some(PomProc {
+                let l = self.0.len();
+                self.0.push(PomProc {
                     parameter: Some(t),
                     cache: Default::default(),
                 });
                 l
             });
+        assert_eq!(l, 1);
         use crate::processing::erased::ConfigParametersHandle;
         use crate::processing::erased::ParametrizedCommitProc;
         use crate::processing::erased::ParametrizedCommitProcessorHandle;
@@ -677,16 +663,14 @@ impl crate::processing::erased::ParametrizedCommitProc2 for PomProcessorHolder {
         &mut self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &mut Self::Proc {
-        assert_eq!(0, parameters.0);
-        self.0.as_mut().unwrap()
+        &mut self.0[parameters.0]
     }
 
     fn with_parameters(
         &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &Self::Proc {
-        assert_eq!(0, parameters.0);
-        self.0.as_ref().unwrap()
+        &self.0[parameters.0]
     }
 }
 impl CacheHolding<crate::processing::caches::Pom> for PomProc {
@@ -698,15 +682,15 @@ impl CacheHolding<crate::processing::caches::Pom> for PomProc {
         &self.cache
     }
 }
-impl CacheHolding<crate::processing::caches::Pom> for PomProcessorHolder {
-    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Pom {
-        &mut self.0.as_mut().unwrap().cache
-    }
+// impl CacheHolding<crate::processing::caches::Pom> for PomProcessorHolder {
+//     fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Pom {
+//         &mut self.0.as_mut().unwrap().cache
+//     }
 
-    fn get_caches(&self) -> &crate::processing::caches::Pom {
-        &self.0.as_ref().unwrap().cache
-    }
-}
+//     fn get_caches(&self) -> &crate::processing::caches::Pom {
+//         &self.0.as_ref().unwrap().cache
+//     }
+// }
 
 // # Maven
 #[derive(Default)]
@@ -842,14 +826,5 @@ impl CacheHolding<crate::processing::caches::Maven> for MavenProc {
     }
     fn get_caches(&self) -> &crate::processing::caches::Maven {
         &self.cache
-    }
-}
-
-impl CacheHolding<crate::processing::caches::Maven> for MavenProcessorHolder {
-    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Maven {
-        &mut self.0[0].cache
-    }
-    fn get_caches(&self) -> &crate::processing::caches::Maven {
-        &self.0[0].cache
     }
 }

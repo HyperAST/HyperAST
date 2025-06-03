@@ -269,7 +269,7 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
         self.children().and_then(|x| x.get(*idx).copied())
     }
 
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
+    fn child_rev(&self, _idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
         todo!()
         // self.children().and_then(|x| x.rev(*idx)).copied()
     }
@@ -744,90 +744,6 @@ impl SimplePackedBuilder {
                 _ => unreachable!("SimplePackedBuilder::add variant Typed"),
             }
         };
-    }
-    #[cfg(feature = "single-indirection")]
-    pub fn add<T>(&mut self, id: NodeIdentifier, node: T)
-    where
-        T: crate::types::Tree<Type = crate::types::Type, Label = defaults::LabelIdentifier>,
-        T::TreeId: Copy + Into<NodeIdentifier>,
-    {
-        let loc: Location = id.into();
-
-        match self.stockages.entry(loc.arch) {
-            hashbrown::hash_map::Entry::Occupied(mut occ) => {
-                let kind = node.get_type();
-                match occ.get_mut() {
-                    RawVariant::Typed { entities } => {
-                        entities.kind.push(kind);
-                        entities.rev.push(loc.offset);
-                    }
-                    RawVariant::Labeled { entities } => {
-                        entities.kind.push(kind);
-                        entities.rev.push(loc.offset);
-                        let label = node.get_label();
-                        entities.label.push(label.into());
-                    }
-                    RawVariant::Children { entities } => {
-                        entities.kind.push(kind);
-                        entities.rev.push(loc.offset);
-                        let children = node.children().unwrap();
-                        entities
-                            .children
-                            .push(children.iter_children().map(|x| (*x).into()).collect());
-                    }
-                    RawVariant::Both { entities } => {
-                        entities.kind.push(kind);
-                        entities.rev.push(loc.offset);
-                        let label = node.get_label();
-                        entities.label.push(label.into());
-                        let children = node.children().unwrap();
-                        entities
-                            .children
-                            .push(children.iter_children().map(|x| (*x).into()).collect());
-                    }
-                }
-            }
-            hashbrown::hash_map::Entry::Vacant(vac) => {
-                let kind = node.get_type();
-                let ent = if let Some(children) = node.children() {
-                    let children = children.iter_children().map(|x| (*x).into()).collect();
-                    if node.has_label() {
-                        RawVariant::Both {
-                            entities: variants::Both {
-                                rev: vec![loc.offset],
-                                kind: vec![kind],
-                                children: vec![children],
-                                label: vec![node.get_label().into()],
-                            },
-                        }
-                    } else {
-                        RawVariant::Children {
-                            entities: variants::Children {
-                                rev: vec![loc.offset],
-                                kind: vec![kind],
-                                children: vec![children],
-                            },
-                        }
-                    }
-                } else if node.has_label() {
-                    RawVariant::Labeled {
-                        entities: variants::Labeled {
-                            rev: vec![loc.offset],
-                            kind: vec![kind],
-                            label: vec![node.get_label().into()],
-                        },
-                    }
-                } else {
-                    RawVariant::Typed {
-                        entities: variants::Typed {
-                            rev: vec![loc.offset],
-                            kind: vec![kind],
-                        },
-                    }
-                };
-                vac.insert(ent);
-            }
-        }
     }
 
     pub fn build(self) -> SimplePacked<&'static str> {

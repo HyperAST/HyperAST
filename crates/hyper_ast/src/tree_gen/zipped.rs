@@ -69,10 +69,6 @@ where
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 
-    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {
-        "".to_string()
-    }
-
     fn stores(&mut self) -> &mut Self::Stores;
 
     fn r#gen(
@@ -143,6 +139,8 @@ where
                         }
                     }
                 };
+
+                log::trace!("{}", is_parent_hidden);
 
                 let parent = stack.parent_mut().unwrap();
                 if let Some(full_node) = full_node {

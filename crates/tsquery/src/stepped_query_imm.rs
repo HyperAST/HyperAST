@@ -721,7 +721,8 @@ where
     where
         Self: 'cursor,
     {
-        vec![todo!()].iter().cloned()
+        #[allow(unreachable_code)]
+        vec![todo!()].into_iter()
     }
 
     // type QM<'cursor>
@@ -842,6 +843,7 @@ where
     type Nodes = CapturedNodesIter<'a, HAST, &'acc Acc>;
 }
 
+#[allow(type_alias_bounds)]
 type Pos<HAST: HyperASTShared> = hyperast::position::StructuralPosition<
     <HAST as HyperASTShared>::IdN,
     <HAST as HyperASTShared>::Idx,

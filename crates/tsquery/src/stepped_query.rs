@@ -179,7 +179,7 @@ impl<'tree, HAST: HyperAST> Node<'tree, HAST> {
         stores: &'tree HAST,
         pos: hyperast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
     ) -> Self {
-        Self(crate::hyperast_cursor::Node { stores, pos })
+        Self(crate::hyperast_cursor::Node::new(stores, pos))
     }
 }
 
@@ -626,6 +626,7 @@ impl<'cursor, 'tree, HAST: hyperast::types::HyperAST> QueryWithLang
     type I = u32;
 }
 
+#[allow(type_alias_bounds)]
 type Pos<HAST: HyperASTShared> = hyperast::position::StructuralPosition<
     <HAST as HyperASTShared>::IdN,
     <HAST as HyperASTShared>::Idx,

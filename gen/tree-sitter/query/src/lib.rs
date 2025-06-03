@@ -4,6 +4,9 @@ pub mod types;
 pub mod legion;
 
 #[cfg(feature = "impl")]
+pub mod no_fmt_legion;
+
+#[cfg(feature = "impl")]
 #[cfg(test)]
 pub mod tests;
 

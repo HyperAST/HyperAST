@@ -62,7 +62,10 @@ impl<Idx: PrimInt> IntoIterator for CompressedTreePath<Idx> {
 }
 
 impl<Idx: PrimInt> TreePath for CompressedTreePath<Idx> {
-    type ItemIterator<'a> = Iter<'a, Idx> where Idx: 'a;
+    type ItemIterator<'a>
+        = Iter<'a, Idx>
+    where
+        Idx: 'a;
     fn iter(&self) -> Self::ItemIterator<'_> {
         Iter {
             is_even: (self.bits[0] & 1) == 1,
@@ -248,8 +251,8 @@ mod tests {
         let b = CompressedTreePath::from(vec![0, 1, 2, 3]);
         let a1 = SimpleTreePath::from(vec![0, 1, 2, 3, 4]);
         let b1 = SimpleTreePath::from(vec![0, 1, 2, 3]);
-        let sh = a.shared_ancestors(&b);
-        let _sh1 = a1.shared_ancestors(&b1);
+        let sh = super::shared_ancestors(a.iter(), b.iter());
+        let _sh1 = super::shared_ancestors(a1.iter(), b1.iter());
         dbg!(&sh);
         match sh {
             SharedPath::Submatch(_) => (),

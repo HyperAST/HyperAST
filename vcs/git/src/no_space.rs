@@ -93,7 +93,7 @@ impl<IdN: Clone + Eq + AAAA> NodeId for MIdN<IdN> {
     }
 
     unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
-        std::mem::transmute(id)
+        unsafe { std::mem::transmute(id) }
     }
 }
 

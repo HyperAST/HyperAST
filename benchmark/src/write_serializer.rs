@@ -1,11 +1,11 @@
 use std::{fmt::Display, io::Write, str::Utf8Error};
 
 use serde::{
+    Serialize, Serializer,
     ser::{
         SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
         SerializeTupleStruct, SerializeTupleVariant,
     },
-    Serialize, Serializer,
 };
 
 pub struct WriteJson<'a, W: Write> {
@@ -17,8 +17,13 @@ impl<'a, W: Write> From<&'a mut W> for WriteJson<'a, W> {
     }
 }
 
-#[derive(Debug)]
 pub struct WriteJsonError(String);
+
+impl std::fmt::Debug for WriteJsonError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "write json error: {}", self.0)
+    }
+}
 
 impl Display for WriteJsonError {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

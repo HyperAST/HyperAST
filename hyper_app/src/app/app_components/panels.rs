@@ -169,13 +169,6 @@ impl crate::HyperApp {
             .clamping(egui::SliderClamping::Never)
             .ui(ui)
             .on_hover_text("Maximum time to match each commit.");
-        ui.add_enabled(
-            false,
-            egui::Slider::new(&mut query.timeout, 1..=5000)
-                .text("commit timeout")
-                .clamping(egui::SliderClamping::Never),
-        )
-        .on_hover_text("Maximum time to match all commit.");
         let compute_button = ui.add_enabled(false, egui::Button::new("Compute All"));
         let q_res_ids = &mut query.results;
         if self.data.selected_code_data.commit_count() != q_res_ids.len() {
@@ -534,7 +527,7 @@ impl crate::HyperApp {
         egui::TopBottomPanel::top("left_panel_top_bar")
             .min_height(3.0 * re_ui::DesignTokens::title_bar_height())
             .frame(egui::Frame {
-                inner_margin: egui::Margin::symmetric(re_ui::DesignTokens::view_padding(), 0.0),
+                inner_margin: egui::Margin::symmetric(re_ui::DesignTokens::view_padding(), 0),
                 ..Default::default()
             })
             .show_inside(ui, |ui| self.show_actions(ui));
@@ -628,7 +621,7 @@ impl crate::HyperApp {
                         self.save_interval = std::time::Duration::ZERO;
                     }
                     let resp = &egui::widgets::Slider::new(&mut self.data.max_fetch, MIN..=MAX)
-                        .clamp_to_range(false)
+                        .clamping(egui::SliderClamping::Never)
                         .custom_formatter(|n, _| {
                             let n = n as i64;
                             let days = n / (60 * 60 * 24);

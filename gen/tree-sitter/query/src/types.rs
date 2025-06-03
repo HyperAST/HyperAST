@@ -28,6 +28,17 @@ mod legion_impls {
             let k = n.kind_id();
             Type::from_u16(k)
         }
+
+        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+            n: &N,
+        ) -> Option<Self::Ty2> {
+            let k = n.kind_id();
+            static LEN: u16 = S_T_L.len() as u16;
+            if LEN <= k && k < TStore::LOWEST_RESERVED {
+                return None;
+            }
+            Some(Type::from_u16(k))
+        }
     }
 
     impl TsType for Type {
@@ -180,7 +191,17 @@ impl LangRef<AnyType> for TsQuery {
 
 impl LangRef<Type> for TsQuery {
     fn make(&self, t: u16) -> &'static Type {
-        &S_T_L[t as usize]
+        if t == TStore::ERROR {
+            &Type::ERROR
+        } else if t == TStore::_ERROR {
+            &Type::_ERROR
+        } else if t == TStore::SPACES {
+            &Type::Spaces
+        } else if t == TStore::DIRECTORY {
+            &Type::Directory
+        } else {
+            &S_T_L[t as usize]
+        }
     }
     fn to_u16(&self, t: Type) -> u16 {
         t as u16
@@ -241,7 +262,7 @@ impl HyperType for Type {
     }
 
     fn is_file(&self) -> bool {
-        todo!()
+        self == &Type::Program
     }
 
     fn is_spaces(&self) -> bool {
@@ -265,6 +286,10 @@ impl HyperType for Type {
             Type::Identifier => Shared::Identifier,
             _ => Shared::Other,
         }
+    }
+
+    fn as_abstract(&self) -> hyperast::types::Abstracts {
+        hyperast::types::Abstracts::empty()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -484,9 +509,10 @@ pub enum Type {
     ListRepeat1,
     GroupingRepeat1,
     NamedNodeRepeat1,
-    Spaces,
-    Directory,
-    ERROR,
+    Directory = TStore::DIRECTORY,
+    Spaces = TStore::SPACES,
+    _ERROR = TStore::_ERROR,
+    ERROR = TStore::ERROR,
 }
 impl Type {
     pub fn from_u16(t: u16) -> Type {
@@ -538,7 +564,10 @@ impl Type {
             44u16 => Type::ListRepeat1,
             45u16 => Type::GroupingRepeat1,
             46u16 => Type::NamedNodeRepeat1,
-            u16::MAX => Type::ERROR,
+            TStore::DIRECTORY => Type::Directory,
+            TStore::SPACES => Type::Spaces,
+            TStore::_ERROR => Type::_ERROR,
+            TStore::ERROR => Type::ERROR,
             x => panic!("{}", x),
         }
     }
@@ -590,8 +619,9 @@ impl Type {
             "list_repeat1" => Type::ListRepeat1,
             "grouping_repeat1" => Type::GroupingRepeat1,
             "named_node_repeat1" => Type::NamedNodeRepeat1,
-            "Spaces" => Type::Spaces,
             "Directory" => Type::Directory,
+            "Spaces" => Type::Spaces,
+            "_ERROR" => Type::_ERROR,
             "ERROR" => Type::ERROR,
             _ => return None,
         })
@@ -646,6 +676,7 @@ impl Type {
             Type::NamedNodeRepeat1 => "named_node_repeat1",
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
+            Type::_ERROR => "_ERROR",
             Type::ERROR => "ERROR",
         }
     }
@@ -748,7 +779,4 @@ const S_T_L: &'static [Type] = &[
     Type::ListRepeat1,
     Type::GroupingRepeat1,
     Type::NamedNodeRepeat1,
-    Type::Spaces,
-    Type::Directory,
-    Type::ERROR,
 ];

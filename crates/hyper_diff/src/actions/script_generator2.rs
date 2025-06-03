@@ -1,4 +1,6 @@
+#![allow(unused)] // WIP
 /// inspired by the implementation in gumtree
+/// WIP
 use std::{
     collections::HashSet,
     fmt::{Debug, Display},
@@ -6,7 +8,7 @@ use std::{
 };
 
 use hyperast::PrimInt;
-use num_traits::{cast, ToPrimitive};
+use num_traits::{ToPrimitive, cast};
 
 use super::action_vec::ActionsVec;
 use crate::{
@@ -15,11 +17,11 @@ use crate::{
         BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
         PostOrderIterable,
     },
-    matchers::{mapping_store::MonoMappingStore, Mapping},
+    matchers::{Mapping, mapping_store::MonoMappingStore},
     tree::tree_path::TreePath,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyperast::types::{HyperAST, Labeled, NLending, Stored, Tree, WithChildren};
+use hyperast::types::{HyperAST, Labeled};
 
 #[derive(Clone)]
 pub struct ApplicablePath<P> {
@@ -215,22 +217,22 @@ static MERGE_SIM_ACTIONS: bool = false;
 
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'a1: 'm,
-        'a2: 'm,
-        'm,
-        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrder<HAST, IdD>
-            + PostOrderIterable<HAST, IdD>
-            + Debug,
-        SD: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstIterable<HAST, IdD>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
-        P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    'a1: 'm,
+    'a2: 'm,
+    'm,
+    IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+    SS: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrder<HAST, IdD>
+        + PostOrderIterable<HAST, IdD>
+        + Debug,
+    SD: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstIterable<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+    P: TreePath<Item = HAST::Idx>,
+> ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug + Clone,
@@ -250,22 +252,22 @@ where
 }
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'a1: 'm,
-        'a2: 'm,
-        'm,
-        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrder<HAST, IdD>
-            + PostOrderIterable<HAST, IdD>
-            + Debug,
-        SD: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstIterable<HAST, IdD>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
-        P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    'a1: 'm,
+    'a2: 'm,
+    'm,
+    IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+    SS: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrder<HAST, IdD>
+        + PostOrderIterable<HAST, IdD>
+        + Debug,
+    SD: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstIterable<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+    P: TreePath<Item = HAST::Idx>,
+> ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug,
@@ -292,22 +294,22 @@ where
 }
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'a1: 'm,
-        'a2: 'm,
-        'm,
-        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrder<HAST, IdD>
-            + PostOrderIterable<HAST, IdD>
-            + Debug,
-        SD: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstIterable<HAST, IdD>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
-        P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    'a1: 'm,
+    'a2: 'm,
+    'm,
+    IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+    SS: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrder<HAST, IdD>
+        + PostOrderIterable<HAST, IdD>
+        + Debug,
+    SD: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstIterable<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+    P: TreePath<Item = HAST::Idx>,
+> ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug,
@@ -349,22 +351,22 @@ where
 }
 // TODO split IdD in 2 to help typecheck ids
 impl<
-        'a1: 'm,
-        'a2: 'm,
-        'm,
-        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        SS: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrder<HAST, IdD>
-            + PostOrderIterable<HAST, IdD>
-            + Debug,
-        SD: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstIterable<HAST, IdD>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
-        P: TreePath<Item = HAST::Idx>,
-    > ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
+    'a1: 'm,
+    'a2: 'm,
+    'm,
+    IdD: PrimInt + Debug + Hash + PartialEq + Eq,
+    SS: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrder<HAST, IdD>
+        + PostOrderIterable<HAST, IdD>
+        + Debug,
+    SD: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstIterable<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+    P: TreePath<Item = HAST::Idx>,
+> ScriptGenerator<'a1, 'a2, 'm, IdD, SS, SD, HAST, M, P>
 where
     HAST::Label: Debug + Eq + Copy,
     HAST::IdN: Debug,
@@ -499,11 +501,7 @@ where
                 w = self.cpy_mappings.get_src_unchecked(&x);
                 let v = {
                     let v = self.mid_arena[w.to_usize().unwrap()].parent;
-                    if v == w {
-                        None
-                    } else {
-                        Some(v)
-                    }
+                    if v == w { None } else { Some(v) }
                 };
                 let w_t;
                 let x_t;
@@ -537,7 +535,8 @@ where
                                     if w == z {
                                         return Err(format!(
                                             "w is a child of z and v, thus w and z cannot be equal, but w={:?} z={:?} v={:?}",
-                                            w,z,v));
+                                            w, z, v
+                                        ));
                                     }
                                     assert_ne!(w, z, "{v:?}");
                                     z = p;

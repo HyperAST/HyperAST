@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-use crate::store::nodes::compo::{self, NoSpacesCS, CS};
+use crate::store::nodes::compo::{self, CS, NoSpacesCS};
 
 pub type NodeIdentifier = legion::Entity;
 pub type EntryRef<'a> = legion::world::EntryRef<'a>;
@@ -307,7 +307,7 @@ impl<'a, T> HashedNodeRef<'a, T> {
     pub unsafe fn into_component_unchecked<C: Component>(
         self,
     ) -> Result<&'a mut C, ComponentError> {
-        self.0.into_component_unchecked::<C>()
+        unsafe { self.0.into_component_unchecked::<C>() }
     }
 
     /// Returns a reference to one of the entity's components.
@@ -321,7 +321,7 @@ impl<'a, T> HashedNodeRef<'a, T> {
     /// This function bypasses static borrow checking. The caller must ensure that the component reference
     /// will not be mutably aliased.
     pub unsafe fn get_component_unchecked<C: Component>(&self) -> Result<&mut C, ComponentError> {
-        self.0.get_component_unchecked::<C>()
+        unsafe { self.0.get_component_unchecked::<C>() }
     }
 }
 
@@ -380,7 +380,7 @@ where
         }
         let a = self.0.get_component::<LabelIdentifier>();
         let label: Option<LabelIdentifier> = a.ok().map(|x| x.clone());
-        let children = self.children().map(|mut x| x.map(|x| x.clone()).collect());
+        let children = self.children().map(|x| x.map(|x| x.clone()).collect());
         // .0.get_component::<CS<legion::Entity>>();
         // let children = children.ok().map(|x| x.0.clone());
         Ok(CompressedNode::new(
@@ -655,8 +655,8 @@ impl<'a, T: crate::types::NodeId<IdN = NodeIdentifier>> crate::types::WithRoles
         &self,
         at: Self::ChildIdx,
     ) -> Option<Role> {
+        let r = &self.0.get_component::<compo::Roles<Role>>().ok()?.0;
         let ro = self.0.get_component::<compo::RoleOffsets>().ok()?;
-        let r = self.0.get_component::<Box<[Role]>>().ok()?;
         let mut i = 0;
         for &ro in ro.0.as_ref() {
             if ro as u16 > at {

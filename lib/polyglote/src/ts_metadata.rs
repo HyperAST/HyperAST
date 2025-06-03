@@ -304,6 +304,7 @@ pub enum Patt {
     Predicated {
         kind: String,
         patt: Vec<Patt>,
+        #[allow(unused)]
         captures_with_predicates: Vec<(String, Vec<String>)>,
     },
     Alternation {

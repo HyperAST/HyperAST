@@ -1,0 +1,27 @@
+on: workflow_dispatch
+
+jobs:
+  benchmark_base_branch:
+    name: Continuous Benchmarking with Bencher
+    permissions:
+      checks: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bencherdev/bencher@v0.5.1
+      - name: Track base branch benchmarks with Bencher
+        run: |
+          bencher run \
+          --project hyperast \
+          --token '${{ secrets.BENCHER_API_TOKEN }}' \
+          --branch main \
+          --testbed ubuntu-latest \
+          --threshold-measure latency \
+          --threshold-test t_test \
+          --threshold-max-sample-size 64 \
+          --threshold-upper-boundary 0.99 \
+          --thresholds-reset \
+          --err \
+          --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+          --adapter rust_criterion \
+          "cargo bench -p hyperast_vcs_git --bench construction_runtime"

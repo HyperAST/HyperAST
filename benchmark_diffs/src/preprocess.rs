@@ -89,12 +89,11 @@ impl JavaPreprocessFileSys {
         if let Ok(full_node) = full_node {
             //parse(&text, &name, &mut java_tree_gen) {
             let full_node = full_node.local;
-            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
             self.java_md_cache
                 .insert(full_node.compressed_node, MD::from(full_node.clone()));
             let name = self.main_stores.label_store.get_or_insert(name);
             assert!(!w.primary.children_names.contains(&name));
-            w.push(name, full_node, skiped_ana);
+            w.push(name, full_node);
         }
     }
 
@@ -103,12 +102,10 @@ impl JavaPreprocessFileSys {
         &mut self,
         path: PathBuf,
         filesys: &mut FileSys,
-    ) -> (Local, IsSkippedAna) {
+    ) -> (Local,) {
         JavaProcessor::<JavaAcc>::new(self, filesys, path).process()
     }
 }
-
-pub(crate) type IsSkippedAna = bool;
 
 pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local {
     let a = std::fs::read_dir(path)
@@ -149,14 +146,12 @@ pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local
 
                         {
                             let local = full_node.local;
-                            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
                             let name = java_gen.main_stores.label_store.get_or_insert(name);
-                            w.push(name, local, skiped_ana);
+                            w.push(name, local);
                         }
                     }
                 } else if t.is_dir() {
                     let local = parse_filesys(java_gen, &x.path());
-                    let skiped_ana = false; // TODO ez upgrade to handle skipping in files
                     let name = java_gen.main_stores.label_store.get_or_insert(
                         x.path()
                             .components()
@@ -165,7 +160,7 @@ pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local
                             .as_os_str()
                             .to_string_lossy(),
                     );
-                    w.push(name, local, skiped_ana);
+                    w.push(name, local);
                 } else {
                     todo!("{:?}", x)
                 }
@@ -181,7 +176,7 @@ trait Accumulator: hyperast::tree_gen::Accumulator<Node = (LabelIdentifier, Self
 }
 
 impl Accumulator for JavaAcc {
-    type Unlabeled = (Local, IsSkippedAna);
+    type Unlabeled = (Local,);
 }
 
 trait Processor<Acc: Accumulator> {
@@ -287,8 +282,7 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
             panic!("not file nor dir: {:?}", path);
         }
     }
-    fn post(&mut self, acc: JavaAcc) -> Option<(Local, IsSkippedAna)> {
-        let skiped_ana = acc.skiped_ana;
+    fn post(&mut self, acc: JavaAcc) -> Option<(Local,)> {
         let name = acc.primary.name.clone();
         let full_node = make(acc, &mut self.prepro.main_stores);
         let key = full_node.compressed_node.clone();
@@ -297,7 +291,7 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
             .insert(key, MD::from(full_node.clone()));
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
-            Some((full_node, skiped_ana))
+            Some((full_node,))
         } else {
             let w = &mut self.stack.last_mut().unwrap().1;
             assert!(
@@ -306,7 +300,7 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
                 w.primary.children_names,
                 name
             );
-            w.push(name, full_node.clone(), skiped_ana);
+            w.push(name, full_node.clone());
             None
         }
     }
@@ -354,14 +348,6 @@ fn make(
 
     let children_is_empty = primary.children.is_empty();
 
-    // TODO move add_md_ref_ana to better place
-    #[cfg(feature = "impact")]
-    hyperast_gen_ts_java::legion_with_refs::add_md_ref_ana(
-        &mut dyn_builder,
-        children_is_empty,
-        None,
-    );
-    // }
     let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
     let metrics = metrics.map_hashs(|h| h.build());
     let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
