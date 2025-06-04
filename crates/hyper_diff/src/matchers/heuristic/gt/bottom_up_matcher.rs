@@ -4,7 +4,7 @@ use crate::{
     utils::sequence_algorithms::longest_common_subsequence,
 };
 use hyperast::PrimInt;
-use hyperast::types::{self, HashKind, HyperAST, NodeStore, TypeStore, WithHashs};
+use hyperast::types::{self, HashKind, HyperAST, NodeStore, Tree, TypeStore, WithHashs};
 use num_traits::{ToPrimitive, Zero};
 use std::{collections::HashMap, hash::Hash};
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
@@ -186,7 +186,13 @@ where
                 }
             }
         }
-        todo!()
+    }
+
+    pub(super) fn src_has_children(&mut self, src: M::Src) -> bool {
+        self.stores
+            .node_store()
+            .resolve(&self.src_arena.original(&src))
+            .has_children()
     }
 }
 

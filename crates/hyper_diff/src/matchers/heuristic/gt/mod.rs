@@ -3,6 +3,8 @@ use hyperast::types::{NodeId, NodeStore, WithChildren, Childrn};
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
 pub mod greedy_subtree_matcher;
+pub mod simple_bottom_up_matcher3;
+
 #[allow(unused)] // TODO finish simple bottom up matcher
 pub mod simple_bottom_up_matcher;
 
