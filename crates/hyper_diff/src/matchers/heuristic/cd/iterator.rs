@@ -25,7 +25,9 @@
 //! For more details and diagrams, see the associated paper section on coarse-grained
 //! statement-level implementation.
 
-use hyperast::types::{HyperAST, HyperType, TypeStore, WithHashs};
+use std::fmt::Display;
+
+use hyperast::types::{HyperAST, HyperType, NodeId, TypeStore, WithHashs};
 
 use crate::decompressed_tree_store::LazyDecompressedTreeStore;
 
@@ -55,9 +57,7 @@ impl Default for CustomIteratorConfig {
 pub struct CustomPostOrderIterator<'a, D, HAST, IdS, IdD, F> {
     arena: &'a mut D,
     stores: HAST,
-    current: Option<IdD>,
-    to_traverse: Vec<IdD>,
-    red: bool,
+    stack: Vec<(IdD, bool)>, // (node, children_processed)
     config: CustomIteratorConfig,
     is_leaf_fn: F,
     _phantom: std::marker::PhantomData<IdS>,
@@ -90,9 +90,7 @@ where
         Self {
             arena,
             stores,
-            current: Some(root),
-            to_traverse: vec![],
-            red: false,
+            stack: vec![(root, false)],
             config,
             is_leaf_fn,
             _phantom: std::marker::PhantomData,
@@ -104,6 +102,7 @@ impl<'a, D, HAST, IdD, F> Iterator for CustomPostOrderIterator<'a, D, HAST, IdD,
 where
     D: LazyDecompressedTreeStore<HAST, IdD>,
     HAST: HyperAST + Copy,
+    D::IdD: std::fmt::Debug,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     <HAST::TS as TypeStore>::Ty: HyperType,
     F: Fn(&mut D, HAST, &D::IdD) -> bool,
@@ -121,52 +120,96 @@ where
     /// The iterator will traverse the tree in post-order, treating nodes for which
     /// `is_leaf_fn` returns true as logical leaves (i.e., their children are not traversed).
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.red {
-                let Some(sib) = self.to_traverse.pop() else {
-                    return None;
-                };
-                self.current = Some(sib);
-                self.red = false;
-            }
+        while let Some((node, children_processed)) = self.stack.pop() {
+            println!("=== Iterator loop start ===");
+            println!(
+                "Processing node: {:?}, children_processed: {}, stack: {:?}",
+                node, children_processed, self.stack
+            );
 
-            let Some(current) = self.current.take() else {
-                return None;
-            };
+            if children_processed {
+                // This node's children have all been processed, so we can yield it
+                println!(
+                    "Children already processed, checking if should yield: {:?}",
+                    node
+                );
 
-            // Check if this matches our custom leaf predicate
-            // Pass arena, stores, and node to the predicate function
-            let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &current);
+                // Check if this matches our custom leaf predicate
+                let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
+                println!("is_custom_leaf: {}", is_custom_leaf);
 
-            if is_custom_leaf {
-                self.red = true;
-                if self.config.yield_leaves {
-                    return Some(current);
+                if is_custom_leaf {
+                    if self.config.yield_leaves {
+                        println!("Yielding custom leaf node: {:?}", node);
+                        return Some(node);
+                    } else {
+                        println!("Skipping custom leaf node (yield_leaves=false)");
+                        continue;
+                    }
                 } else {
-                    continue; // Skip leaf nodes
+                    if self.config.yield_inner {
+                        println!("Yielding inner node: {:?}", node);
+                        return Some(node);
+                    } else {
+                        println!("Skipping inner node (yield_inner=false)");
+                        continue;
+                    }
                 }
-            }
+            } else {
+                // This node's children haven't been processed yet
+                println!("Children not yet processed for node: {:?}", node);
 
-            // Rest of the implementation stays the same...
-            let mut children = self.arena.decompress_children(&current);
-            if children.is_empty() {
-                self.red = true;
-                if self.config.yield_inner {
-                    return Some(current);
+                // Check if this matches our custom leaf predicate
+                let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
+                println!("is_custom_leaf: {}", is_custom_leaf);
+
+                if is_custom_leaf {
+                    // Custom leaf - don't process children, yield immediately if configured
+                    println!("Node is custom leaf, not processing children");
+                    if self.config.yield_leaves {
+                        println!("Yielding custom leaf node: {:?}", node);
+                        return Some(node);
+                    } else {
+                        println!("Skipping custom leaf node (yield_leaves=false)");
+                        continue;
+                    }
                 } else {
-                    continue;
+                    // Not a custom leaf - check if it has actual children
+                    let children = self.arena.decompress_children(&node);
+                    println!(
+                        "Node has {} actual children: {:?}",
+                        children.len(),
+                        children
+                    );
+
+                    if children.is_empty() {
+                        // No children - this is a regular leaf
+                        println!("Node has no children (regular leaf)");
+                        if self.config.yield_inner {
+                            println!("Yielding regular leaf as inner node: {:?}", node);
+                            return Some(node);
+                        } else {
+                            println!("Skipping regular leaf (yield_inner=false)");
+                            continue;
+                        }
+                    } else {
+                        // Has children - push back with children_processed=true, then push children
+                        println!("Node has children, pushing back with children_processed=true");
+                        self.stack.push((node, true));
+
+                        // Push children in reverse order so they're processed left-to-right
+                        println!("Pushing children to stack: {:?}", children);
+                        for child in children.into_iter().rev() {
+                            self.stack.push((child, false));
+                        }
+                        continue;
+                    }
                 }
-            }
-
-            let result = current;
-            children.reverse();
-            self.current = children.pop();
-            self.to_traverse.extend(children);
-
-            if self.config.yield_inner {
-                return Some(result);
             }
         }
+
+        println!("Stack is empty, returning None");
+        None
     }
 }
 
