@@ -73,6 +73,8 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
     <HAST::TS as TypeStore>::Ty: Hash + Eq + Clone + HyperType,
+    Dsrc::IdD: std::fmt::Debug,
+    Ddst::IdD: std::fmt::Debug,
     Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
         + DecompressedWithParent<HAST, Dsrc::IdD>
         + PostOrder<HAST, Dsrc::IdD, M::Src>
