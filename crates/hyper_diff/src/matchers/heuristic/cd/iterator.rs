@@ -25,9 +25,7 @@
 //! For more details and diagrams, see the associated paper section on coarse-grained
 //! statement-level implementation.
 
-use std::fmt::Display;
-
-use hyperast::types::{HyperAST, HyperType, NodeId, TypeStore, WithHashs};
+use hyperast::types::{HyperAST, HyperType, TypeStore, WithHashs};
 
 use crate::decompressed_tree_store::LazyDecompressedTreeStore;
 
@@ -220,542 +218,165 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_iterator_default_config() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "a"; [
-                    tree!(1, "b"; [
-                        tree!(2, "d"),
-                        tree!(2, "e"),
-                    ]),
-                    tree!(1, "c"),
-            ]),
-            tree!(0, "a"),
-        ));
+    macro_rules! iterator_test {
+        (
+            $test_name:ident,
+            tree = $tree:expr,
+            config = $config:expr,
+            is_leaf_fn = $is_leaf_fn:expr,
+            expected = $expected:expr
+        ) => {
+            #[test]
+            fn $test_name() {
+                let (stores, src, _dst) = vpair_to_stores(($tree, tree!(0, "")));
 
-        // Tree in post order: d, e, b, c, a
-        //
+                let mut src_arena =
+                    Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
+                let mut src_arena_mut = src_arena.as_mut();
 
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
+                let root = src_arena_mut.root();
 
-        let root = src_arena_mut.root();
+                let config = $config;
 
-        // Test with default config (yield both leaves and inner nodes)
-        let config = CustomIteratorConfig::default();
+                let is_leaf_fn = $is_leaf_fn;
 
-        // Use actual leaves predicate - nodes with no children
-        let is_leaf_fn =
-            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-                arena.decompress_children(node).is_empty()
-            };
+                let iterator = CustomPostOrderIterator::new(
+                    &mut src_arena_mut,
+                    &stores,
+                    root,
+                    config,
+                    is_leaf_fn,
+                );
 
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
+                let nodes: Vec<_> = iterator.collect();
 
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should visit all nodes in post-order: d, e, b, c, a
-        assert_eq!(nodes.len(), 5);
-        assert_labels(&nodes, &stores, &["d", "e", "b", "c", "a"]);
-
-        // The root should be the last element in post-order traversal
-        let last_node = nodes.last().unwrap();
-        assert_eq!(*last_node, root);
+                assert_labels(&nodes, &stores, $expected);
+            }
+        };
     }
 
-    #[test]
-    fn test_iterator_only_leaves() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "a"; [
-                    tree!(1, "b"; [
-                        tree!(2, "d"),
-                        tree!(2, "e"),
-                    ]),
-                    tree!(1, "c"),
-            ]),
-            tree!(0, "a"),
-        ));
+    fn no_children(
+        arena: &mut Decompressible<&Store, &mut LazyPostOrder<u16, u16>>,
+        _stores: &Store,
+        node: &u16,
+    ) -> bool {
+        arena.decompress_children(node).is_empty()
+    }
 
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
+    fn always_false(
+        _arena: &mut Decompressible<&Store, &mut LazyPostOrder<u16, u16>>,
+        _stores: &Store,
+        _node: &u16,
+    ) -> bool {
+        false
+    }
 
-        let root = src_arena_mut.root();
+    fn always_true(
+        _arena: &mut Decompressible<&Store, &mut LazyPostOrder<u16, u16>>,
+        _stores: &Store,
+        _node: &u16,
+    ) -> bool {
+        true
+    }
 
-        // Test with config to yield only leaves
-        let config = CustomIteratorConfig {
+    fn label_statement(
+        arena: &mut Decompressible<&Store, &mut LazyPostOrder<u16, u16>>,
+        stores: &Store,
+        node: &u16,
+    ) -> bool {
+        let original = arena.original(node);
+        let node_ref = stores.node_store.resolve(&original);
+        let label_id = node_ref.get_label_unchecked();
+        let label = stores.label_store.resolve(&label_id);
+        label.starts_with("statement")
+    }
+
+    // Example usage:
+    iterator_test!(
+        test_iterator_default_config,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "l"; [
+                    tree!(1, "l.l"),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"),
+            ]
+        ),
+        config = CustomIteratorConfig::default(),
+        is_leaf_fn = no_children,
+        expected = &["l.l", "l.r", "l", "r", "root"]
+    );
+
+    iterator_test!(
+        test_iterator_leaves_only,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "l"; [
+                    tree!(1, "l.l"),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"),
+            ]
+        ),
+        config = CustomIteratorConfig {
             yield_leaves: true,
-            yield_inner: false,
-        };
+            yield_inner: false
+        },
+        is_leaf_fn = no_children,
+        expected = &["l.l", "l.r", "r"]
+    );
 
-        // Use actual leaves predicate - nodes with no children
-        let is_leaf_fn =
-            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-                arena.decompress_children(node).is_empty()
-            };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should only visit leaf nodes: d, e, c
-        assert_eq!(nodes.len(), 3);
-        assert_labels(&nodes, &stores, &["d", "e", "c"]);
-
-        // Verify all returned nodes are actually leaves
-        for node in &nodes {
-            let children = src_arena_mut.decompress_children(node);
-            assert!(children.is_empty(), "Only leaf nodes should be yielded");
-        }
-    }
-
-    #[test]
-    fn test_iterator_only_inner_nodes() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "a"; [
-                    tree!(1, "b"; [
-                        tree!(2, "d"),
-                        tree!(2, "e"),
-                    ]),
-                    tree!(1, "c"),
-            ]),
-            tree!(0, "a"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        // Test with config to yield only inner nodes
-        let config = CustomIteratorConfig {
-            yield_leaves: false,
-            yield_inner: true,
-        };
-
-        // Use actual leaves predicate - nodes with no children
-        let is_leaf_fn =
-            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-                arena.decompress_children(node).is_empty()
-            };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should only visit inner nodes: b, a (post-order)
-        assert_eq!(nodes.len(), 2);
-        assert_labels(&nodes, &stores, &["b", "a"]);
-
-        // Verify all returned nodes have children
-        for node in &nodes {
-            let children = src_arena_mut.decompress_children(node);
-            assert!(!children.is_empty(), "Only inner nodes should be yielded");
-        }
-    }
-
-    #[test]
-    fn test_iterator_custom_leaf_predicate() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "a"; [
-                    tree!(1, "b"; [
-                        tree!(2, "d"),
-                        tree!(2, "e"),
-                    ]),
-                    tree!(1, "c"),
-            ]),
-            tree!(0, "a"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        let config = CustomIteratorConfig::default();
-
-        // Custom predicate: consider nodes with label "b" as leaves (don't traverse their children)
-        let is_leaf_fn = |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>,
-                          stores: &Store,
-                          node: &_| {
-            let original = arena.original(node);
-            let node_ref = stores.node_store.resolve(&original);
-            let label_id = node_ref.get_label_unchecked();
-            let label = stores.label_store.resolve(&label_id);
-            label == "b"
-        };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should visit: b (treated as leaf, so d,e are not visited), c, a
-        assert_eq!(nodes.len(), 3);
-        assert_labels(&nodes, &stores, &["b", "c", "a"]);
-    }
-
-    // This test results in a panic because I assume HyperAST does not support single node trees.
-    // #[test]
-    // fn test_iterator_single_node_tree() {
-    //     let (stores, src, _dst) = vpair_to_stores((tree!(0, "single"), tree!(0, "single")));
-
-    //     let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-    //     let mut src_arena_mut = src_arena.as_mut();
-
-    //     let root = src_arena_mut.root();
-
-    //     let config = CustomIteratorConfig::default();
-
-    //     // Use actual leaves predicate
-    //     let is_leaf_fn =
-    //         |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-    //             arena.decompress_children(node).is_empty()
-    //         };
-
-    //     let iterator =
-    //         CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-    //     let nodes: Vec<_> = iterator.collect();
-
-    //     // Should visit exactly one node (the root, which is also a leaf)
-    //     assert_eq!(nodes.len(), 1);
-    //     assert_labels(&nodes, &stores, &["single"]);
-    //     assert_eq!(nodes[0], root);
-    // }
-
-    #[test]
-    fn test_iterator_deeper_tree() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "root"; [
-                    tree!(1, "left"; [
-                        tree!(2, "left_left"),
-                        tree!(2, "left_right"),
-                    ]),
-                    tree!(1, "middle"),
-                    tree!(1, "right"; [
-                        tree!(2, "right_left"),
-                        tree!(2, "right_right"; [
-                            tree!(3, "deep"),
-                        ]),
-                    ]),
-            ]),
-            tree!(0, "root"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        let config = CustomIteratorConfig::default();
-
-        // Use actual leaves predicate
-        let is_leaf_fn =
-            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-                arena.decompress_children(node).is_empty()
-            };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should visit nodes in post-order
-        assert!(nodes.len() > 1);
-        assert_labels(
-            &nodes,
-            &stores,
-            &[
-                "left_left",
-                "left_right",
-                "left",
-                "middle",
-                "right_left",
-                "deep",
-                "right_right",
-                "right",
-                "root",
-            ],
-        );
-
-        // The root should be the last element in post-order traversal
-        let last_node = nodes.last().unwrap();
-        assert_eq!(*last_node, root);
-    }
-
-    #[test]
-    fn test_iterator_yield_nothing() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "a"; [
-                    tree!(1, "b"; [
-                        tree!(2, "d"),
-                        tree!(2, "e"),
-                    ]),
-                    tree!(1, "c"),
-            ]),
-            tree!(0, "a"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        // Test with config to yield nothing
-        let config = CustomIteratorConfig {
-            yield_leaves: false,
-            yield_inner: false,
-        };
-
-        // Use actual leaves predicate
-        let is_leaf_fn =
-            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-                arena.decompress_children(node).is_empty()
-            };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should visit no nodes
-        assert!(nodes.is_empty());
-    }
-
-    #[test]
-    fn test_iterator_nested_custom_leaves() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "function"; [
-                    tree!(1, "params"; [
-                        tree!(2, "param1"),
-                        tree!(2, "param2"),
-                    ]),
-                    tree!(1, "body"; [
-                        tree!(2, "statement"; [
-                            tree!(3, "expr1"),
-                            tree!(3, "expr2"),
-                        ]),
-                        tree!(2, "statement"; [
-                            tree!(3, "expr3"),
-                        ]),
-                    ]),
-            ]),
-            tree!(0, "function"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        let config = CustomIteratorConfig::default();
-
-        // Custom predicate: treat "statement" nodes as logical leaves
-        // This simulates coarse-grained analysis where we stop at statement level
-        let is_leaf_fn = |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>,
-                          stores: &Store,
-                          node: &_| {
-            let original = arena.original(node);
-            let node_ref = stores.node_store.resolve(&original);
-            let label_id = node_ref.get_label_unchecked();
-            let label = stores.label_store.resolve(&label_id);
-            label == "statement"
-        };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should visit: param1, param2, params, statement, statement, body, function
-        // Note: expr1, expr2, expr3 are NOT visited because their parents are treated as leaves
-        assert_labels(
-            &nodes,
-            &stores,
-            &[
-                "param1",
-                "param2",
-                "params",
-                "statement",
-                "statement",
-                "body",
-                "function",
-            ],
-        );
-    }
-
-    #[test]
-    fn test_iterator_mixed_predicates() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "class"; [
-                    tree!(1, "method"; [
-                        tree!(2, "param"),
-                        tree!(2, "body"; [
-                            tree!(3, "statement"),
-                            tree!(3, "return"),
-                        ]),
-                    ]),
-                    tree!(1, "field"),
-                    tree!(1, "method"; [
-                        tree!(2, "body"; [
-                            tree!(3, "statement"),
-                        ]),
-                    ]),
-            ]),
-            tree!(0, "class"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        // Only yield leaves, and treat "method" nodes as custom leaves
-        let config = CustomIteratorConfig {
+    iterator_test!(
+        test_iterator_custom_leaves,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"),
+                    tree!(0, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"),
+                    tree!(0, "r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
             yield_leaves: true,
-            yield_inner: false,
-        };
+            yield_inner: false
+        },
+        is_leaf_fn = label_statement,
+        expected = &["statement_l", "statement_r.l"]
+    );
 
-        let is_leaf_fn = |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>,
-                          stores: &Store,
-                          node: &_| {
-            let original = arena.original(node);
-            let node_ref = stores.node_store.resolve(&original);
-            let label_id = node_ref.get_label_unchecked();
-            let label = stores.label_store.resolve(&label_id);
-            label == "method"
-        };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should only visit leaves: method, field, method
-        // (param, body, statement, return are not visited because method is treated as leaf)
-        assert_labels(&nodes, &stores, &["method", "field", "method"]);
-    }
-
-    #[test]
-    fn test_iterator_asymmetric_tree() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "root"; [
-                    tree!(1, "deep"; [
-                        tree!(2, "level2"; [
-                            tree!(3, "level3"; [
-                                tree!(4, "level4"),
-                            ]),
+    iterator_test!(
+        test_iterator_nested_statements_only_highest,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"; [
+                        tree!(0, "l.l.l"; [
+                            tree!(1, "l.l.l.l"),
+                            tree!(1, "l.l.l.r"),
                         ]),
+                        tree!(1, "l.l.r"),
                     ]),
-                    tree!(1, "shallow"),
-                    tree!(1, "medium"; [
-                        tree!(2, "leaf1"),
-                        tree!(2, "leaf2"),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"; [
+                        tree!(1, "r.l.l"),
+                        tree!(1, "r.l.r"),
                     ]),
-            ]),
-            tree!(0, "root"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        let config = CustomIteratorConfig::default();
-
-        // Standard leaf predicate
-        let is_leaf_fn =
-            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
-                arena.decompress_children(node).is_empty()
-            };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Post-order for asymmetric tree
-        assert_labels(
-            &nodes,
-            &stores,
-            &[
-                "level4", "level3", "level2", "deep", "shallow", "leaf1", "leaf2", "medium", "root",
-            ],
-        );
-    }
-
-    #[test]
-    fn test_iterator_selective_subtree_traversal() {
-        let (stores, src, _dst) = vpair_to_stores((
-            tree!(
-                0, "program"; [
-                    tree!(1, "import"; [
-                        tree!(2, "module"),
-                    ]),
-                    tree!(1, "function"; [
-                        tree!(2, "name"),
-                        tree!(2, "implementation"; [
-                            tree!(3, "code"),
-                            tree!(3, "more_code"),
-                        ]),
-                    ]),
-                    tree!(1, "export"; [
-                        tree!(2, "symbol"),
-                    ]),
-            ]),
-            tree!(0, "program"),
-        ));
-
-        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
-        let mut src_arena_mut = src_arena.as_mut();
-
-        let root = src_arena_mut.root();
-
-        let config = CustomIteratorConfig::default();
-
-        // Skip implementation details - treat "implementation" as leaf
-        let is_leaf_fn = |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>,
-                          stores: &Store,
-                          node: &_| {
-            let original = arena.original(node);
-            let node_ref = stores.node_store.resolve(&original);
-            let label_id = node_ref.get_label_unchecked();
-            let label = stores.label_store.resolve(&label_id);
-            label == "implementation"
-        };
-
-        let iterator =
-            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
-
-        let nodes: Vec<_> = iterator.collect();
-
-        // Should visit: module, import, name, implementation, function, symbol, export, program
-        // Note: code, more_code are NOT visited because implementation is treated as leaf
-        assert_labels(
-            &nodes,
-            &stores,
-            &[
-                "module",
-                "import",
-                "name",
-                "implementation",
-                "function",
-                "symbol",
-                "export",
-                "program",
-            ],
-        );
-    }
+                    tree!(1, "r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: true,
+            yield_inner: false
+        },
+        is_leaf_fn = label_statement,
+        expected = &["statement_l", "statement_r.l"]
+    );
 }
