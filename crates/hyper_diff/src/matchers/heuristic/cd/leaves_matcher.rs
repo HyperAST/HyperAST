@@ -90,7 +90,6 @@ where
 
     fn execute(&mut self) {
         let start_time = std::time::Instant::now();
-        println!("=== LEAVES MATCHER START ===");
 
         let collect_start = std::time::Instant::now();
         let dst_leaves: Vec<M::Dst> = self
@@ -168,7 +167,6 @@ where
         );
 
         let total_time = start_time.elapsed();
-        println!("=== LEAVES MATCHER COMPLETE: {:?} ===\n", total_time);
     }
 
     // fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {

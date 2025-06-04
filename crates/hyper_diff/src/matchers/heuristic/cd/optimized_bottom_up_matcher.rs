@@ -234,8 +234,8 @@ where
             self.stores,
             src_root,
             CustomIteratorConfig {
-                yield_leaves: true,
-                yield_inner: false,
+                yield_leaves: false,
+                yield_inner: true,
             },
             |arena: &mut Dsrc,
              stores: HAST,
@@ -261,8 +261,8 @@ where
             self.stores,
             dst_root,
             CustomIteratorConfig {
-                yield_leaves: true,
-                yield_inner: false,
+                yield_leaves: false,
+                yield_inner: true,
             },
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
                 if arena.decompress_children(node).is_empty() {
