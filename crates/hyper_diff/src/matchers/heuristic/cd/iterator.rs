@@ -305,12 +305,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::decompressed_tree_store::Shallow;
     use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
     use crate::decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder};
     use crate::matchers::Decompressible;
     use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
-
+    use ahash::HashMap;
+    use hyperast::types::WithChildren;
     use hyperast::{
         store::SimpleStores,
         test_utils::simple_tree::{LS, NS, TStore, Tree},
@@ -566,4 +568,81 @@ mod tests {
         is_leaf_fn_decomp = decompressed_label_statement,
         expected = &["statement_l", "statement_r.l"]
     );
+
+    #[test]
+    fn test_custom_leaves_count() {
+        let tree = tree!(
+        0, "root"; [                            // 12
+            tree!(0, "statement_l"; [           // 6
+                tree!(0, "l.l"; [               // 4
+                    tree!(0, "l.l.l"; [         // 2
+                        tree!(1, "l.l.l.l"),    // 0
+                        tree!(1, "l.l.l.r"),    // 1
+                    ]),
+                    tree!(1, "l.l.r"),          // 3
+                ]),
+                tree!(1, "l.r"),                // 5
+            ]),
+            tree!(0, "r"; [                     // 11
+                tree!(0, "statement_r.l"; [     // 9
+                    tree!(1, "r.l.l"),          // 7
+                    tree!(1, "r.l.r"),          // 8
+                ]),
+                tree!(1, "r.r"),                // 10
+            ]),
+        ]
+        );
+
+        let (stores, src, _dst) = vpair_to_stores((tree, tree!(0, "")));
+
+        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
+        let mut src_arena_mut = src_arena.as_mut();
+
+        let root = src_arena_mut.root();
+
+        let src_leaves = CustomPostOrderIterator::new(
+            &mut src_arena_mut,
+            &stores,
+            root,
+            CustomIteratorConfig {
+                yield_leaves: true,
+                yield_inner: false,
+            },
+            label_statement,
+        )
+        .collect::<Vec<_>>();
+
+        let src_nodes = CustomPostOrderIterator::new(
+            &mut src_arena_mut,
+            &stores,
+            root,
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            label_statement,
+        )
+        .collect::<Vec<_>>();
+
+        let mut leaf_counts: HashMap<u16, usize> = HashMap::default();
+
+        for src in &src_leaves {
+            leaf_counts.insert(*src.shallow(), 1);
+        }
+
+        // Process nodes in post-order so children are processed before parents
+        for src in &src_nodes {
+            let leaf_count = src_arena_mut
+                .children(&src)
+                .iter()
+                .map(|child| leaf_counts.get(child).copied().unwrap_or(0))
+                .sum();
+
+            leaf_counts.insert(*src.shallow(), leaf_count);
+        }
+
+        println!("Leaf counts: {:?}", leaf_counts);
+        assert_eq!(*leaf_counts.get(&12).unwrap(), 2);
+        assert_eq!(*leaf_counts.get(&11).unwrap(), 1);
+    }
 }
