@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::auto::tsq_ser_meta::Converter;
 
 use super::*;
@@ -35,12 +36,12 @@ struct S<IdN, Idx, Ty> {
 }
 
 impl<
-        'a,
-        'store,
-        HAST: TypedHyperAST<TIdN>,
-        TIdN: 'store + hyperast::types::TypedNodeId,
-        C: Converter,
-    > Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
+    'a,
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId,
+    C: Converter,
+> Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
     type Item = MatchingRes<HAST::IdN, HAST::Idx>;
 
@@ -78,13 +79,14 @@ impl<
         }
     }
 }
+
 impl<
-        'a,
-        'store,
-        HAST: TypedHyperAST<TIdN>,
-        TIdN: 'store + hyperast::types::TypedNodeId,
-        C: Converter,
-    > MatchingIter<'a, 'store, HAST, TIdN, C>
+    'a,
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId,
+    C: Converter,
+> MatchingIter<'a, 'store, HAST, TIdN, C>
 where
 // HAST::TS::Ty: TIdN::Ty,
 {
@@ -294,12 +296,12 @@ where
 }
 
 impl<
-        'a,
-        'store,
-        HAST: TypedHyperAST<TIdN>,
-        TIdN: 'store + hyperast::types::TypedNodeId,
-        C: Converter,
-    > MatchingIter<'a, 'store, HAST, TIdN, C>
+    'a,
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId,
+    C: Converter,
+> MatchingIter<'a, 'store, HAST, TIdN, C>
 {
     fn new(slf: &'a PreparedMatcher<TIdN::Ty, C>, code_store: &'store HAST, id: HAST::IdN) -> Self {
         Self {
@@ -378,9 +380,5 @@ mod exp {
 }
 
 fn quant_from_bool(b: bool) -> tree_sitter::CaptureQuantifier {
-    if b {
-        Quant::One
-    } else {
-        Quant::Zero
-    }
+    if b { Quant::One } else { Quant::Zero }
 }

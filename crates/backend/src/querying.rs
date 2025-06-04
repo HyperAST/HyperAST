@@ -126,7 +126,7 @@ pub fn simple(
         hyperast_vcs_git::processing::RepoConfig::Any
     };
     let lang = &language;
-    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&language)
+    let language = hyperast_vcs_git::resolve_language(&language)
         .ok_or_else(|| QueryingError::MissingLanguage(language.to_string()))?;
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
     let repo = state
@@ -372,7 +372,8 @@ fn pre_repo(
         Some(_) | None => {
             let configs = &mut state.repositories.write().unwrap();
             if let Some(precomp) = precomp {
-                configs.register_config_with_prequeries(repo_spec.clone(), config, &[&precomp]);
+                let precomp = precomp.split("\n\n").filter(|x|!x.is_empty()).collect::<Vec<_>>();
+                configs.register_config_with_prequeries(repo_spec.clone(), config, precomp.as_slice());
             } else {
                 configs.register_config(repo_spec.clone(), config);
             }

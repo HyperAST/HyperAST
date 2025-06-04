@@ -164,7 +164,7 @@ fn simple_aux(
         // >,
     > = tree_sitter_graph::graph::Graph::default();
     init_globals(&mut globals, &mut graph);
-    let mut functions = tree_sitter_graph::functions::Functions::essentials();
+    let functions = tree_sitter_graph::functions::Functions::essentials();
 
     // TODO add it back
     // let mut functions = tree_sitter_graph::functions::Functions::stdlib();

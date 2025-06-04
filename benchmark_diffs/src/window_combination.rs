@@ -340,10 +340,7 @@ mod test {
             mapping_store::{DefaultMultiMappingStore, VecStore},
         },
     };
-    use hyperast::{
-        store::nodes::legion::HashedNodeRef,
-        types::{HyperASTShared, WithChildren},
-    };
+    use hyperast::types::{HyperASTShared, WithChildren};
 
     use crate::postprocess::{SimpleJsonPostProcess, print_mappings};
 
@@ -386,6 +383,7 @@ mod test {
         let src = src_tr;
         let dst = dst_tr;
         let mappings = VecStore::default();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
         // type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
@@ -448,6 +446,7 @@ mod test {
         let src = src_tr;
         let dst = dst_tr;
         let mappings = VecStore::default();
+        #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
         let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
             DefaultMultiMappingStore<_>,

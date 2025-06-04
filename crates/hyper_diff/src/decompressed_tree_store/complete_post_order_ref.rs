@@ -8,18 +8,19 @@ use std::{
 };
 
 use bitvec::slice::BitSlice;
-use num_traits::{cast, ToPrimitive, Zero};
+use num_traits::{ToPrimitive, Zero, cast};
 
 use hyperast::PrimInt;
 use hyperast::{
     position::Position,
-    types::{self, HyperAST, HyperType, NodeId, NodeStore, WithSerialization},
+    types::{self, HyperAST, HyperType, NodeId, WithSerialization},
 };
 
 use super::{
-    lazy_post_order::LazyPostOrder, DecompressedParentsLending, DecompressedTreeStore,
-    DecompressedWithParent, DecompressedWithSiblings, FullyDecompressedTreeStore, Iter, IterKr,
-    PostOrdKeyRoots, PostOrder, PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    DecompressedParentsLending, DecompressedTreeStore, DecompressedWithParent,
+    DecompressedWithSiblings, FullyDecompressedTreeStore, Iter, IterKr, PostOrdKeyRoots, PostOrder,
+    PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    lazy_post_order::LazyPostOrder,
 };
 use crate::matchers::Decompressible;
 
@@ -105,6 +106,7 @@ where
     }
 }
 
+#[allow(unused)]
 pub struct DisplayCompletePostOrder<'store: 'a, 'a, IdD: PrimInt, HAST, D>
 where
     HAST: HyperAST,
@@ -135,7 +137,7 @@ where
         + PostOrder<HAST, IdD>
         + FullyDecompressedTreeStore<HAST, IdD>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
         // let m = SimplePreOrderMapper::from(self.inner);
         // std::fmt::Display::fmt(
@@ -156,7 +158,7 @@ where
         + PostOrder<HAST, IdD>
         + FullyDecompressedTreeStore<HAST, IdD>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
         // let m = SimplePreOrderMapper::from(self.inner);
         // DisplaySimplePreOrderMapper {
@@ -332,6 +334,8 @@ where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
 }
+
+#[allow(unused)]
 pub struct RecCachedPositionProcessor<'a, IdN, IdD: Hash + Eq> {
     pub(crate) ds: &'a CompletePostOrder<'a, IdN, IdD>,
     root: IdN,
@@ -478,14 +482,11 @@ where
         D: DecompressedTreeStore<HAST, IdD>
             + DecompressedWithSiblings<HAST, IdD>
             + PostOrder<HAST, IdD>,
-        // T::TreeId: Clone + Debug,
-        // T: Tree + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
             let id = self.ds.original(&p);
-            let p_r = store.node_store().resolve(&id);
             let p_t = store.resolve_type(&id);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
@@ -628,6 +629,17 @@ pub struct LazyPOSlice<'a, IdN, IdD> {
     pub(super) id_parent: &'a [IdD],
 }
 
+impl<IdN, IdD> Copy for LazyPOSlice<'_, IdN, IdD> {}
+impl<IdN, IdD> Clone for LazyPOSlice<'_, IdN, IdD> {
+    fn clone(&self) -> Self {
+        Self {
+            id_compressed: self.id_compressed,
+            llds: self.llds,
+            id_parent: self.id_parent,
+        }
+    }
+}
+
 impl<'a, IdN, IdD, Kr: Borrow<BitSlice>> Deref for CompletePOSlice<'a, IdN, IdD, Kr> {
     type Target = LazyPOSlice<'a, IdN, IdD>;
 
@@ -728,5 +740,170 @@ impl<'a, IdN, IdD, Kr: Borrow<BitSlice>> Deref for CompletePOSlice<'a, IdN, IdD,
 
 //     fn iter_kr(&self) -> Self::Iter<'_> {
 //         IterKr(self.kr.borrow().iter_ones(), PhantomData)
+//     }
+// }
+
+impl<'a, HAST: HyperAST + Copy, IdD, Kr: Borrow<BitSlice>>
+    Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+{
+    fn as_simple(&self) -> Decompressible<HAST, LazyPOSlice<'a, HAST::IdN, IdD>> {
+        let hyperast = self.hyperast;
+        let decomp = self.simple;
+        Decompressible { hyperast, decomp }
+    }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, LazyPOSlice<'a, HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn len(&self) -> usize {
+        self.id_compressed.len()
+    }
+
+    fn original(&self, id: &IdD) -> HAST::IdN {
+        self.id_compressed[id.to_usize().unwrap()].clone()
+    }
+
+    fn root(&self) -> IdD {
+        cast(self.len() - 1).unwrap()
+    }
+
+    fn child(&self, _x: &IdD, _p: &[impl PrimInt]) -> IdD {
+        todo!()
+    }
+
+    fn children(&self, _x: &IdD) -> Vec<IdD> {
+        todo!()
+    }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> DecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, LazyPOSlice<'a, HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn descendants(&self, x: &IdD) -> Vec<IdD> {
+        (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
+            .map(|x| cast(x).unwrap())
+            .collect()
+    }
+
+    fn first_descendant(&self, i: &IdD) -> IdD {
+        self.llds[(*i).to_usize().unwrap()] // TODO use ldd
+    }
+
+    fn descendants_count(&self, x: &IdD) -> usize {
+        (*x - self.first_descendant(x)).to_usize().unwrap() + 1
+    }
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+        desc < of && &self.first_descendant(of) <= desc
+    }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
+    for Decompressible<HAST, LazyPOSlice<'a, HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn lld(&self, i: &IdD) -> IdD {
+        self.llds[(*i).to_usize().unwrap()]
+    }
+
+    fn tree(&self, id: &IdD) -> HAST::IdN {
+        self.id_compressed[id.to_usize().unwrap()].clone()
+    }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt, Kr: Borrow<BitSlice>>
+    ShallowDecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn len(&self) -> usize {
+        self.as_simple().len()
+    }
+
+    fn original(&self, id: &IdD) -> HAST::IdN {
+        self.as_simple().original(id)
+    }
+
+    fn root(&self) -> IdD {
+        cast(self.len() - 1).unwrap()
+    }
+
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
+        self.as_simple().child(x, p)
+    }
+
+    fn children(&self, x: &IdD) -> Vec<IdD> {
+        self.as_simple().children(x)
+    }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt, Kr: Borrow<BitSlice>> DecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn descendants(&self, x: &IdD) -> Vec<IdD> {
+        self.as_simple().descendants(x)
+    }
+
+    fn first_descendant(&self, i: &IdD) -> IdD {
+        self.as_simple().first_descendant(i)
+    }
+
+    fn descendants_count(&self, x: &IdD) -> usize {
+        self.as_simple().descendants_count(x)
+    }
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+        self.as_simple().is_descendant(desc, of)
+    }
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrder<HAST, IdD>
+    for Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn lld(&self, i: &IdD) -> IdD {
+        self.as_simple().lld(i)
+    }
+
+    fn tree(&self, id: &IdD) -> HAST::IdN {
+        self.as_simple().tree(id)
+    }
+}
+
+impl<'a, 'b, HAST: HyperAST + Copy, IdD: PrimInt, Kr: Borrow<BitSlice>>
+    PostOrdKeyRoots<'b, HAST, IdD> for Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    type Iter = IterKr<'b, IdD>;
+}
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrderKeyRoots<HAST, IdD>
+    for Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+    fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdD>>::Iter {
+        IterKr(self.kr.borrow().iter_ones(), PhantomData)
+    }
+}
+
+// impl<'a, HAST: HyperAST + Copy, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrderKeyRoots<HAST, IdD>
+//     for Decompressible<HAST, CompletePOSlice<'a, HAST::IdN, IdD, Kr>>
+// where
+//     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+// {
+//     fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdD>>::Iter {
+//         IterKr(self.kr.iter_ones(), PhantomData)
 //     }
 // }

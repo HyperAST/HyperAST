@@ -2,6 +2,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::TNode;
+use hyperast::tree_gen::{PreResult, ZippedTreeGen};
 use legion::world::EntryRef;
 
 use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
@@ -16,8 +17,8 @@ use hyperast::{
     },
     tree_gen::{
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
-        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
-        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
+        compute_indentation, get_spacing, has_final_space,
         parser::{Node as _, TreeCursor},
     },
     types::LabelStore as _,
@@ -208,7 +209,9 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let _kind = TS::obtain_type(&node);
+        let Some(_kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         let acc = self.pre(text, &node, stack, global);
         log::warn!("not retrieving roles");
         PreResult::Ok(acc)
@@ -461,6 +464,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
+            let md = self.md_cache.get(&compressed_node).unwrap();
             let hashs = hbuilder.build();
             let metrics = SubTreeMetrics {
                 size,
@@ -469,6 +473,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
                 size_no_spaces,
                 line_count,
             };
+            assert_eq!(md.metrics, metrics);
             Local {
                 compressed_node,
                 metrics,

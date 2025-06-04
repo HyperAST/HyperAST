@@ -5,3 +5,6 @@
 pub mod stability_tests;
 #[cfg(test)]
 pub mod zs_tests;
+
+#[cfg(test)]
+pub mod instability;

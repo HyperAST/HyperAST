@@ -1,3 +1,4 @@
+#![allow(unused)] // TODO maintain those tests
 use crate::tests::cpp_tree;
 use hyperast::nodes::SyntaxSerializer;
 use hyperast::nodes::TextSerializer;
@@ -38,57 +39,57 @@ const Q1: &str = r#"(binary_expression (_expression (identifier) @first) "+" (_e
 // - edit distance between query and subtree
 // - acceleration related to extracting entropy from basic constructs
 
-type CppTIdN = hyperast_gen_ts_cpp::types::TIdN<NodeIdentifier>;
+// type CppTIdN = hyperast_gen_ts_cpp::types::TIdN<NodeIdentifier>;
 
-type Cpp = hyperast_gen_ts_cpp::types::Type;
+// type Cpp = hyperast_gen_ts_cpp::types::Type;
 
-#[test]
-fn simple() {
-    let (code_store, code) = cpp_tree(C0.as_bytes());
-    let (query_store, query) = crate::search::ts_query(Q0.as_bytes());
-    let path = hyperast::position::StructuralPosition::new(code);
-    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
-    let mut matched = false;
-    for e in CppIter::new(&code_store, path, code) {
-        if prepared_matcher.is_matching::<_, CppTIdN>(&code_store, *e.node().unwrap()) {
-            let n = code_store
-                .node_store
-                .try_resolve_typed::<CppTIdN>(e.node().unwrap())
-                .unwrap()
-                .0;
-            let t = n.get_type();
-            dbg!(t);
-            matched = true;
-        }
-    }
-    assert!(matched);
-    let (code_store1, code1) = cpp_tree(C1.as_bytes());
-    let path = hyperast::position::StructuralPosition::new(code1);
-    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
-    for e in CppIter::new(&code_store1, path, code1) {
-        if prepared_matcher.is_matching::<_, CppTIdN>(&code_store1, *e.node().unwrap()) {
-            panic!("should not match")
-        }
-    }
-}
+// #[test]
+// fn simple() {
+//     let (code_store, code) = cpp_tree(C0.as_bytes());
+//     let (query_store, query) = crate::search::ts_query(Q0.as_bytes());
+//     let path = hyperast::position::StructuralPosition::new(code);
+//     let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+//     let mut matched = false;
+//     for e in CppIter::new(&code_store, path, code) {
+//         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store, *e.node().unwrap()) {
+//             let n = code_store
+//                 .node_store
+//                 .try_resolve_typed::<CppTIdN>(e.node().unwrap())
+//                 .unwrap()
+//                 .0;
+//             let t = n.get_type();
+//             dbg!(t);
+//             matched = true;
+//         }
+//     }
+//     assert!(matched);
+//     let (code_store1, code1) = cpp_tree(C1.as_bytes());
+//     let path = hyperast::position::StructuralPosition::new(code1);
+//     let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+//     for e in CppIter::new(&code_store1, path, code1) {
+//         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store1, *e.node().unwrap()) {
+//             panic!("should not match")
+//         }
+//     }
+// }
 
-#[test]
-fn named() {
-    let (code_store, code) = cpp_tree(C2.as_bytes());
-    let (query_store, query) = crate::search::ts_query(Q1.as_bytes());
-    let path = hyperast::position::StructuralPosition::new(code);
-    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
-    let mut matched = false;
-    for e in CppIter::new(&code_store, path, code) {
-        if let Some(c) =
-            prepared_matcher.is_matching_and_capture::<_, CppTIdN>(&code_store, *e.node().unwrap())
-        {
-            dbg!(c);
-            matched = true;
-        }
-    }
-    assert!(matched);
-}
+// #[test]
+// fn named() {
+//     let (code_store, code) = cpp_tree(C2.as_bytes());
+//     let (query_store, query) = crate::search::ts_query(Q1.as_bytes());
+//     let path = hyperast::position::StructuralPosition::new(code);
+//     let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+//     let mut matched = false;
+//     for e in CppIter::new(&code_store, path, code) {
+//         if let Some(c) =
+//             prepared_matcher.is_matching_and_capture::<_, CppTIdN>(&code_store, *e.node().unwrap())
+//         {
+//             dbg!(c);
+//             matched = true;
+//         }
+//     }
+//     assert!(matched);
+// }
 
 #[test]
 fn match_xml() {

@@ -20,10 +20,10 @@ use egui_addon::{
 };
 
 use super::{
-    code_editor_automerge, show_repo_menu,
+    Sharing, code_editor_automerge, show_repo_menu,
     types::{CodeEditors, Commit, Config, Resource, SelectedConfig, WithDesc},
-    utils_edition::{self, show_interactions, update_shared_editors, EditStatus, EditingContext},
-    utils_results_batched, Sharing,
+    utils_edition::{self, EditStatus, EditingContext, show_interactions, update_shared_editors},
+    utils_results_batched,
 };
 mod example_scripts;
 
@@ -32,11 +32,13 @@ const INFO_INIT: EditorInfo<&'static str> = EditorInfo {
     short: "initializes the accumulator on the root node",
     long: concat!("It will recieve the finally results of the entire computation."),
 };
-const INFO_FILTER:EditorInfo<&'static str> = EditorInfo {
+const INFO_FILTER: EditorInfo<&'static str> = EditorInfo {
     title: "Filter",
     short: "filters nodes of the HyperAST that should be processed",
-    long: concat!("It goes through nodes in pre-order, returning the list of node that should be processed next and initializing their own states.\n","`s` is the current node accumulator")
-    ,
+    long: concat!(
+        "It goes through nodes in pre-order, returning the list of node that should be processed next and initializing their own states.\n",
+        "`s` is the current node accumulator"
+    ),
 };
 const INFO_ACCUMULATE: EditorInfo<&'static str> = EditorInfo {
     title: "Accumulate",
@@ -430,7 +432,7 @@ pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigS
         ui.add(
             egui::Slider::new(&mut single.content.len, 1..=200)
                 .text("commits")
-                .clamp_to_range(false)
+                .clamping(egui::SliderClamping::Never)
                 .integer()
                 .logarithmic(true),
         );

@@ -2,7 +2,7 @@ use super::interactive_splitter_orientation::{
     InteractiveSplitterOrientation, InteractiveSplitterResponse,
 };
 use crate::interactive_split::interactive_split_state::InteractiveSplitState;
-use egui::{lerp, Align, CursorIcon, Frame, Layout, Sense, Ui};
+use egui::{Align, CursorIcon, Frame, Layout, Sense, Ui, lerp};
 use epaint::Stroke;
 
 /// A splitter which can separate the UI into 2 parts either vertically or horizontally.
@@ -107,8 +107,10 @@ impl InteractiveSplitter {
         // }.into();
         let line_pos_2 = line_pos_1 + orientation.t((0.0, orientation.r(&rect))).into();
 
-        let line_pos_1 = ui.painter().round_pos_to_pixels(line_pos_1);
-        let line_pos_2 = ui.painter().round_pos_to_pixels(line_pos_2);
+        let line_pos_1 =
+            egui::emath::GuiRounding::round_to_pixels(line_pos_1, ui.pixels_per_point());
+        let line_pos_2 =
+            egui::emath::GuiRounding::round_to_pixels(line_pos_2, ui.pixels_per_point());
 
         let i_spacing = &ui.style().spacing.item_spacing;
         // let top_left_rect = match orientation {
@@ -162,7 +164,8 @@ impl InteractiveSplitter {
                         <= ui.style().interaction.resize_grab_radius_side;
                 let mouse_in_clip_rect = ui.clip_rect().contains(pointer);
                 if ui.input(|i| i.pointer.any_pressed() && i.pointer.any_down())
-                    && mouse_over_resize_line && mouse_in_clip_rect
+                    && mouse_over_resize_line
+                    && mouse_in_clip_rect
                 {
                     ui.ctx().set_dragged_id(resize_id);
                 }
@@ -179,7 +182,8 @@ impl InteractiveSplitter {
 
                 let dragging_something_else =
                     ui.input(|i| i.pointer.any_down() || i.pointer.any_pressed());
-                resize_hover = mouse_over_resize_line && !dragging_something_else && mouse_in_clip_rect;
+                resize_hover =
+                    mouse_over_resize_line && !dragging_something_else && mouse_in_clip_rect;
 
                 if resize_hover || is_resizing {
                     ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
@@ -187,8 +191,16 @@ impl InteractiveSplitter {
             }
         }
 
-        let mut first_ui = ui.child_ui(first_rect, Layout::top_down(Align::Min), None);
-        let mut second_ui = ui.child_ui(second_rect, Layout::top_down(Align::Min), None);
+        let mut first_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(first_rect)
+                .layout(Layout::top_down(Align::Min)),
+        );
+        let mut second_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(second_rect)
+                .layout(Layout::top_down(Align::Min)),
+        );
 
         // panel_ui.expand_to_include_rect(panel_rect);
         // let frame = frame.unwrap_or_else(|| Frame::side_top_panel(ui.style()));

@@ -133,7 +133,7 @@ impl<T> tree_gen::WithChildren<NodeIdentifier> for Acc<T> {
 }
 
 impl<T> tree_gen::WithRole<crate::types::Role> for Acc<T> {
-    fn role_at(&self, o: usize) -> Option<crate::types::Role> {
+    fn role_at(&self, _o: usize) -> Option<crate::types::Role> {
         todo!()
         // self.role
         //     .offsets
@@ -171,6 +171,7 @@ where
 {
 }
 
+#[allow(unreachable_code)]
 impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
     for TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
@@ -191,7 +192,7 @@ where
         global: &mut Self::Global,
     ) {
         let mut pre_post = PrePost::new(cursor);
-        while let Some(vis) = pre_post.next() {
+        while let Some(_vis) = pre_post.next() {
             let (cursor, has) = pre_post.current().unwrap();
             if *has == Has::Up || *has == Has::Right {
                 // #post
@@ -546,20 +547,20 @@ where
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let node = cursor.node();
-        let kind = TS::obtain_type(&node);
+        // let kind = TS::obtain_type(&node);
         if HIDDEN_NODES {}
         if node.0.is_missing() {
             dbg!("missing");
             return PreResult::Skip;
         }
-        let mut acc = self.pre(text, &node, stack, global);
+        let acc = self.pre(text, &node, stack, global);
         // TODO replace with wrapper
         if !stack
             .parent()
             .map_or(false, |a| a.simple.kind.is_supertype())
         {
             if let Some(r) = cursor.0.field_name() {
-                if let Ok(r) = TryInto::<crate::types::Role>::try_into(r) {
+                if let Ok(_r) = TryInto::<crate::types::Role>::try_into(r) {
                     // acc.role.current = Some(r);
                     log::warn!("not retrieving roles");
                 } else {

@@ -1,12 +1,10 @@
 //! inspired by the implementation in gumtree
 //!
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use hyperast::types::{
-    HyperAST, HyperASTShared, Labeled, NLending, NodeStore as _, Stored, WithChildren,
-};
-use num_traits::{cast, PrimInt};
+use hyperast::types::{HyperAST, HyperASTShared, Labeled, NodeStore as _};
+use num_traits::{PrimInt, cast};
 
 use crate::{
     decompressed_tree_store::{
@@ -85,7 +83,6 @@ impl<Src: Debug, Dst: Debug, IdN: Debug, IdL, Idx: Debug> Debug
             SimpleAction::Insert { sub, parent, idx } => {
                 write!(f, "Ins {:?} {:?} {:?}", sub, parent, idx)
             }
-            _ => panic!(),
         }
     }
 }
@@ -144,22 +141,22 @@ pub struct ScriptGenerator<
 }
 
 impl<
-        's,
-        'a,
-        'b,
-        'c,
-        IdD: PrimInt + Debug,
-        // T: Stored,
-        //  + Typed + Labeled + WithChildren,
-        SS: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + PostOrderIterable<HAST, IdD>
-            + PostOrder<HAST, IdD>,
-        SD: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstIterable<HAST, IdD>,
-        HAST: HyperAST+Copy, //:'a + NodeStore2<HAST::IdN, R<'a> = T>, //NodeStore<'a, HAST::IdN, T>,
-    > ScriptGenerator<'a, 'b, 'c, IdD, SS, SD, HAST>
+    's,
+    'a,
+    'b,
+    'c,
+    IdD: PrimInt + Debug,
+    // T: Stored,
+    //  + Typed + Labeled + WithChildren,
+    SS: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + PostOrderIterable<HAST, IdD>
+        + PostOrder<HAST, IdD>,
+    SD: DecompressedTreeStore<HAST, IdD>
+        + DecompressedWithParent<HAST, IdD>
+        + BreadthFirstIterable<HAST, IdD>,
+    HAST: HyperAST + Copy, //:'a + NodeStore2<HAST::IdN, R<'a> = T>, //NodeStore<'a, HAST::IdN, T>,
+> ScriptGenerator<'a, 'b, 'c, IdD, SS, SD, HAST>
 where
     // S: hyperast::types::NodeStore<HAST::IdN>,
     // S: 'a + NodeStore<HAST::IdN>,
@@ -280,11 +277,7 @@ where
                 w = self.cpy_mappings.get_src_unchecked(&x);
                 let v = {
                     let v = self.mid_arena[cast::<_, usize>(w).unwrap()].parent;
-                    if v == w {
-                        None
-                    } else {
-                        Some(v)
-                    }
+                    if v == w { None } else { Some(v) }
                 };
                 let w_l = {
                     let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;

@@ -257,7 +257,7 @@ impl<N: NodeId + Eq, L, T> crate::types::Stored for CompressedNode<N, L, T> {
 }
 
 impl<N, L, T> crate::types::ErasedHolder for CompressedNode<N, L, T> {
-    fn unerase_ref<U: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&U> {
+    fn unerase_ref<U: 'static + Send + Sync>(&self, _tid: std::any::TypeId) -> Option<&U> {
         unimplemented!("CompressedNode should be deprecated anyway")
     }
 }
@@ -632,11 +632,8 @@ where
                 if LABELS {
                     let s = self.stores.label_store().resolve(label);
                     if s.len() > 20 {
-                        write!(
-                            out,
-                            "='{}...'",
-                            &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i])
-                        )?;
+                        let short = &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i]);
+                        write!(out, "='{short}...'")?;
                     } else {
                         write!(out, "='{}'", s)?;
                     }
@@ -736,7 +733,8 @@ where
                 if LABELS {
                     let s = self.stores.label_store().resolve(label);
                     if s.len() > 20 {
-                        write!(out, "='{}...'", &s[..20])?;
+                        let short = &s.char_indices().nth(20).map_or(s, |(i, _)| &s[..i]);
+                        write!(out, "='{short}...'")?;
                     } else {
                         write!(out, "='{}'", s)?;
                     }
@@ -847,7 +845,6 @@ where
     ) -> Result<String, IndentedAlt> {
         use crate::types::LabelStore;
         use crate::types::Labeled;
-        use crate::types::NodeStore;
         use crate::types::WithChildren;
         let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
@@ -879,10 +876,7 @@ where
                 out.write_str(&kind.to_string())?;
                 Err(IndentedAlt::NoIndent)
             }
-            (label, Some(children)) => {
-                if let Some(label) = label {
-                    let s = self.stores.label_store().resolve(label);
-                }
+            (_, Some(children)) => {
                 if !children.is_empty() {
                     let mut it = children;
                     let op = |alt| {
@@ -923,7 +917,6 @@ where
     ) -> Result<String, IndentedAlt> {
         use crate::types::LabelStore;
         use crate::types::Labeled;
-        use crate::types::NodeStore;
         use crate::types::WithChildren;
         let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
@@ -1070,7 +1063,6 @@ where
     ) -> Result<String, IndentedAlt> {
         use crate::types::LabelStore;
         use crate::types::Labeled;
-        use crate::types::NodeStore;
         use crate::types::WithChildren;
         let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
@@ -1102,10 +1094,7 @@ where
                 out.write_str(&kind.to_string())?;
                 Err(IndentedAlt::NoIndent)
             }
-            (label, Some(children)) => {
-                if let Some(label) = label {
-                    let s = self.stores.label_store().resolve(label);
-                }
+            (_, Some(children)) => {
                 if !children.is_empty() {
                     let mut it = children;
                     let op = |alt| {
@@ -1146,7 +1135,6 @@ where
     ) -> Result<String, IndentedAlt> {
         use crate::types::LabelStore;
         use crate::types::Labeled;
-        use crate::types::NodeStore;
         use crate::types::WithChildren;
         let b = self.stores.resolve(id);
         // let kind = (self.stores.type_store(), b);
@@ -1368,7 +1356,6 @@ where
                 if !children.is_empty() {
                     let it = children;
                     for id in it.iter_children() {
-                        let b = self.stores.node_store().resolve(&id);
                         let kind = self.stores.resolve_type(&id);
                         if !kind.is_spaces() {
                             write!(out, "\n{}", "  ".repeat(indent + 1))?;

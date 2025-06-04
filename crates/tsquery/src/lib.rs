@@ -1,3 +1,4 @@
+#![allow(unused)]
 mod predicate;
 
 // static const TSQueryError PARENT_DONE = -1;
@@ -167,9 +168,9 @@ pub struct QueryCursor<'query, Cursor, Node> {
     pub states: Vec<query_cursor::State>,
     pub depth: Depth,
     pub max_start_depth: Depth,
-    pub capture_list_pool: indexed::CaptureListPool<Node>,
+    capture_list_pool: indexed::CaptureListPool<Node>,
     pub finished_states: VecDeque<query_cursor::State>,
-    pub next_state_id: indexed::StateId,
+    next_state_id: indexed::StateId,
     // only triggers when there is no more capture list available
     // not triggered by reaching max_start_depth
     pub did_exceed_match_limit: bool,

@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
-pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
+pub const QUERIES: &[BenchQuery] = &[
     (
         &[QUERY_OVERRIDES_SUBS[1]],
         QUERY_OVERRIDES.0,
@@ -53,7 +53,6 @@ pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
 
 fn compare_querying_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("QueryingRepeatSpoon");
-    group.sample_size(10);
 
     let codes = "../../../../spoon/src/main/java";
     let codes = Path::new(&codes).to_owned();
@@ -68,14 +67,14 @@ fn compare_querying_group(c: &mut Criterion) {
     // let queries: Vec<_> = QUERIES.iter().enumerate().collect();
 
     for p in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
-        group.throughput(Throughput::Elements(p.0 .4 as u64));
+        group.throughput(Throughput::Elements(p.0.4 as u64));
 
         group.bench_with_input(
-            BenchmarkId::new(format!("baseline-{}", p.0 .3), p.0 .4),
+            BenchmarkId::new(format!("baseline-{}", p.0.3), p.0.4),
             &p,
             |b, (q, f)| {
                 b.iter(|| {
-                    for _ in 0..p.0 .4 {
+                    for _ in 0..p.0.4 {
                         for p in f.into_iter() {
                             let (q, t, text) = prep_baseline(q.2)(p);
                             let mut cursor = tree_sitter::QueryCursor::default();
@@ -86,7 +85,7 @@ fn compare_querying_group(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
-            BenchmarkId::new(format!("sharing_default-{}", p.0 .3), p.0 .4),
+            BenchmarkId::new(format!("sharing_default-{}", p.0.3), p.0.4),
             &p,
             |b, (q, f)| {
                 b.iter(|| {
@@ -119,7 +118,7 @@ fn compare_querying_group(c: &mut Criterion) {
                             full_node.local.compressed_node
                         })
                         .collect();
-                    for _ in 0..p.0 .4 {
+                    for _ in 0..p.0.4 {
                         for &n in &roots {
                             let pos = hyperast::position::StructuralPosition::new(n);
                             let cursor =
@@ -132,7 +131,7 @@ fn compare_querying_group(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
-            BenchmarkId::new(format!("sharing_precomputed-{}", p.0 .3), p.0 .4),
+            BenchmarkId::new(format!("sharing_precomputed-{}", p.0.3), p.0.4),
             &p,
             |b, (q, f)| {
                 b.iter(|| {
@@ -171,7 +170,7 @@ fn compare_querying_group(c: &mut Criterion) {
                             full_node.local.compressed_node
                         })
                         .collect();
-                    for _ in 0..p.0 .4 {
+                    for _ in 0..p.0.4 {
                         for &n in &roots {
                             let pos = hyperast::position::StructuralPosition::new(n);
                             let cursor =
@@ -187,5 +186,9 @@ fn compare_querying_group(c: &mut Criterion) {
     group.finish()
 }
 
-criterion_group!(querying, compare_querying_group);
+criterion_group!(
+    name = querying;
+    config = Criterion::default().configure_from_args();
+    targets = compare_querying_group
+);
 criterion_main!(querying);

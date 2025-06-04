@@ -12,10 +12,10 @@ use quote::{format_ident, quote};
 
 pub trait BijectiveFormatedIdentifier: ToOwned {
     /// Convert this type to camel case.
-    fn try_format_ident(&self) -> Option<Self::Owned>;
+    fn try_format_ident(&self, dup_count: u8) -> Option<Self::Owned>;
 }
 impl BijectiveFormatedIdentifier for str {
-    fn try_format_ident(&self) -> Option<Self::Owned> {
+    fn try_format_ident(&self, dup_count: u8) -> Option<Self::Owned> {
         let mut camel_case = heck::ToUpperCamelCase::to_upper_camel_case(self);
         let trimmed = self.trim_start_matches(|c| c == '_');
         if camel_case.is_empty() {
@@ -29,9 +29,13 @@ impl BijectiveFormatedIdentifier for str {
         if u_count > 0 {
             camel_case.insert_str(0, &"_".repeat(u_count));
         }
-        heck::ToSnakeCase::to_snake_case(&camel_case as &str)
-            .eq(trimmed)
-            .then_some(camel_case)
+        if !heck::ToSnakeCase::to_snake_case(&camel_case as &str).eq(trimmed) {
+            return None;
+        }
+        if dup_count > 0 {
+            camel_case.push_str(&"_".repeat(dup_count as usize));
+        }
+        Some(camel_case)
     }
 }
 
@@ -72,20 +76,29 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
     });
     let mut count = 0;
 
+    let mut dup_map = HashMap::<hecs::Entity, u8>::default();
+
     for (i, e) in typesys.list.iter().enumerate() {
         let i = i as u16;
         let v = typesys.types.entity(*e).unwrap();
         let t = v.get::<&preprocess::T>().unwrap().0.to_string();
-        if let Some(kind) = alias_dedup.get(e) {
-            from_u16.extend(quote! {
-                #i => Type::#kind,
-            });
-            continue;
-        }
+        let dup_count = {
+            let count = dup_map.entry(*e).or_insert(0);
+            let dup_count = *count;
+            *count += 1;
+            dup_count
+        };
+
+        // if let Some(kind) = alias_dedup.get(e) {
+        //     from_u16.extend(quote! {
+        //         #i => Type::#kind,
+        //     });
+        //     continue;
+        // }
 
         if !v.get::<&Named>().is_some() {
             // leaf/token
-            let camel_case = t.try_format_ident();
+            let camel_case = t.try_format_ident(dup_count);
             let raw = t.clone();
             let (q, kind) = if let Some(camel_case) = &camel_case {
                 assert!(!camel_case.is_empty(), "{},{}", t, t.to_upper_camel_case());
@@ -103,7 +116,11 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                     kind,
                 )
             } else {
-                let k = leafs.fmt(&t, |k| format!("TS{}", &k.to_upper_camel_case()));
+                let mut k = leafs.fmt(&t, |k| format!("TS{}", &k.to_upper_camel_case()));
+
+                if dup_count > 0 {
+                    k.push_str(&"_".repeat(dup_count as usize));
+                }
                 let kind = format_ident!("{}", &k);
 
                 (
@@ -150,7 +167,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             });
             alias_dedup.insert(*e, kind);
         } else if let Some(st) = v.get::<&SubTypes>() {
-            let camel_case = t.try_format_ident();
+            let camel_case = t.try_format_ident(dup_count);
             let kind = format_ident!(
                 "{}",
                 &camel_case
@@ -162,7 +179,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             for e in &st.0 {
                 let v = typesys.types.entity(*e).unwrap();
                 let t = &v.get::<&preprocess::T>().unwrap().0;
-                let camel_case = t.try_format_ident();
+                let camel_case = t.try_format_ident(dup_count);
                 if let Some(camel_case) = camel_case {
                     let kind = format_ident!("{}", &camel_case);
                     sub_toks.extend(quote! {
@@ -222,7 +239,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             });
             alias_dedup.insert(*e, kind);
         } else if let Some(fields) = v.get::<&Fields>() {
-            let camel_case = t.try_format_ident();
+            let camel_case = t.try_format_ident(dup_count);
             let kind = format_ident!(
                 "{}",
                 &camel_case
@@ -234,7 +251,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             for e in &fields.0 {
                 let v = typesys.types.entity(*e).unwrap();
                 let t = &v.get::<&preprocess::Role>().unwrap().0;
-                let camel_case = t.try_format_ident();
+                let camel_case = t.try_format_ident(dup_count);
                 assert_ne!(camel_case, None);
                 let t = if t == "type" { "r#type" } else { t };
                 let kind = format_ident!("{}", &t);
@@ -243,7 +260,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                 for e in cs {
                     let v = typesys.types.entity(*e).unwrap();
                     let t = &v.get::<&preprocess::T>().unwrap().0;
-                    let camel_case = t.try_format_ident();
+                    let camel_case = t.try_format_ident(dup_count);
                     if let Some(camel_case) = camel_case {
                         let kind = format_ident!("{}", &camel_case);
                         cs_toks.extend(quote! {
@@ -286,7 +303,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                 for e in &cs.0 {
                     let v = typesys.types.entity(*e).unwrap();
                     let t = &v.get::<&preprocess::T>().unwrap().0;
-                    let camel_case = t.try_format_ident();
+                    let camel_case = t.try_format_ident(dup_count);
                     if let Some(camel_case) = camel_case {
                         let kind = format_ident!("{}", &camel_case);
                         cs_toks.extend(quote! {
@@ -362,7 +379,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             });
             alias_dedup.insert(*e, kind);
         } else if let Some(cs) = v.get::<&DChildren>() {
-            let camel_case = t.try_format_ident();
+            let camel_case = t.try_format_ident(dup_count);
             let kind = format_ident!(
                 "{}",
                 &camel_case
@@ -374,7 +391,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             for e in &cs.0 {
                 let v = typesys.types.entity(*e).unwrap();
                 let t = &v.get::<&preprocess::T>().unwrap().0;
-                let camel_case = t.try_format_ident();
+                let camel_case = t.try_format_ident(dup_count);
                 if let Some(camel_case) = camel_case {
                     let kind = format_ident!("{}", &camel_case);
                     cs_toks.extend(quote! {
@@ -445,7 +462,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             });
             alias_dedup.insert(*e, kind);
         } else {
-            let camel_case = t.try_format_ident();
+            let camel_case = t.try_format_ident(dup_count);
             let kind = format_ident!(
                 "{}",
                 &camel_case
@@ -555,24 +572,30 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
         #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
         pub enum Type {
             #merged
-            Spaces,
-            Directory,
-            ERROR,
+            Directory = TStore::DIRECTORY,
+            Spaces = TStore::SPACES,
+            _ERROR = TStore::_ERROR,
+            ERROR = TStore::ERROR,
         }
         impl Type {
             pub fn from_u16(t: u16) -> Type {
                 match t {
                     #from_u16
                     //#len => Type::ERROR,
-                    u16::MAX => Type::ERROR,
+                    TStore::DIRECTORY => Type::Directory,
+                    TStore::SPACES => Type::Spaces,
+                    TStore::_ERROR => Type::_ERROR,
+                    TStore::ERROR => Type::ERROR,
                     x => panic!("{}",x),
                 }
             }
+            #[allow(unreachable_patterns)]
             pub fn from_str(t: &str) -> Option<Type> {
                 Some(match t {
                     #from_str
-                    "Spaces" => Type::Spaces,
                     "Directory" => Type::Directory,
+                    "Spaces" => Type::Spaces,
+                    "_ERROR" => Type::_ERROR,
                     "ERROR" => Type::ERROR,
                     _ => return None,
                 })
@@ -580,8 +603,9 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             pub fn to_str(&self) -> &'static str {
                 match self {
                     #to_str
-                    Type::Spaces => "Spaces",
                     Type::Directory => "Directory",
+                    Type::Spaces => "Spaces",
+                    Type::_ERROR => "_ERROR",
                     Type::ERROR => "ERROR",
                 }
             }

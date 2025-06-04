@@ -7,9 +7,8 @@
 
 use hyperast::{
     PrimInt,
-    types::{self, HyperAST, LendN, NodeId, NodeStore, Stored, WithChildren, WithStats},
+    types::{HyperAST, NodeStore, Stored, WithStats},
 };
-use std::fmt::Debug;
 
 // pub mod breath_first;
 pub mod basic_post_order;
@@ -159,8 +158,6 @@ pub trait LazyPOBorrowSlice<HAST: HyperAST + Copy, IdD, IdS = IdD>:
     fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo;
 }
 
-pub(super) type CIdx<'a, S, IdN> = <<S as types::NLending<'a, IdN>>::N as WithChildren>::ChildIdx;
-
 pub trait DecompressedParentsLending<'a, IdD, __ImplBound = &'a Self> {
     type PIt: 'a + Iterator<Item = IdD>;
 }
@@ -234,6 +231,8 @@ pub struct Iter<IdD> {
     len: IdD,
 }
 
+#[cfg(debug_assertions)]
+#[allow(unused)]
 impl<IdD> Iter<IdD> {
     pub(crate) fn new(current: IdD, len: IdD) -> Self {
         Self { current, len }

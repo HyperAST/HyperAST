@@ -1,6 +1,6 @@
 use crate::app::*;
 use commit::CommitSlice;
-use re_ui::{list_item, DesignTokens};
+use re_ui::{DesignTokens, list_item};
 use utils_egui::MyUiExt as _;
 mod bars;
 mod panels;
@@ -222,21 +222,17 @@ impl super::HyperApp {
                                 }
                             })
                             .collect();
-                        self.toasts.add(toasts::Toast {
-                            kind: toasts::ToastKind::Success,
-                            options: toasts::ToastOptions::with_ttl_in_seconds(2.0),
-                            text: format!("Succesfully added: {}", text),
-                        });
+                        self.notifs.success(format!("Succesfully added: {}", text));
                     }
                     for x in acc {
                         let (repo, commits) = x.unwrap();
                         self.data.selected_code_data.add(repo, commits);
                     }
                 } else if bad == acc.len() {
-                    self.toasts.add(toasts::Toast {
-                        kind: toasts::ToastKind::Error,
-                        options: toasts::ToastOptions::with_ttl_in_seconds(4.0),
-                        text: format!("Wrong input from clipboard:\n{}", paste),
+                    self.notifs.add_log(re_log::LogMsg {
+                        level: log::Level::Error,
+                        target: format!("clipboard"),
+                        msg: format!("Wrong input from clipboard:\n{}", paste),
                     });
                 // } else if bad <= 2 && bad * 4 <= acc.len() { // TODO later if annoying
                 } else {
@@ -245,10 +241,10 @@ impl super::HyperApp {
                         .enumerate()
                         .filter_map(|(i, x)| x.ok().map(|_| i))
                         .collect();
-                    self.toasts.add(toasts::Toast {
-                        kind: toasts::ToastKind::Error,
-                        options: toasts::ToastOptions::with_ttl_in_seconds(6.0),
-                        text: format!(
+                    self.notifs.add_log(re_log::LogMsg {
+                        level: log::Level::Error,
+                        target: format!("clipboard"),
+                        msg: format!(
                             "{bad} Wrong inputs from clipboard but {:?} could be accepted:\n{}",
                             good, paste
                         ),
@@ -256,14 +252,9 @@ impl super::HyperApp {
                 }
             } else {
                 let result = commit::validate_pasted_project_url(&paste);
-                let kind;
-                let text;
-                let ttl_sec;
                 match result {
                     Ok((repo, commits)) => {
-                        kind = toasts::ToastKind::Success;
-                        ttl_sec = 2.0;
-                        text = if commits.is_empty() {
+                        self.notifs.success(if commits.is_empty() {
                             format!("Successfully added github.com/{}/{}", repo.user, repo.name)
                         } else if commits.len() == 1 {
                             format!(
@@ -277,28 +268,24 @@ impl super::HyperApp {
                                 "Successfully added github.com/{}/{}{}",
                                 repo.user, repo.name, commits
                             )
-                        };
+                        });
                         self.data.selected_code_data.add(repo, commits);
                     }
                     Err(err) => {
                         log::warn!("Wrong input from clipboard: {}:\n{}", err, paste);
-                        kind = toasts::ToastKind::Warning;
-                        ttl_sec = 4.0;
-                        text = format!("Wrong input from clipboard: {}:\n{}", err, paste);
+                        self.notifs.add_log(re_log::LogMsg {
+                            level: log::Level::Warn,
+                            target: format!("clipboard"),
+                            msg: format!("Wrong input from clipboard: {}:\n{}", err, paste),
+                        });
                     }
                 }
-                let options = toasts::ToastOptions::with_ttl_in_seconds(ttl_sec);
-                self.toasts.add(toasts::Toast {
-                    kind,
-                    options,
-                    text,
-                });
             }
         }
 
         self.modal_handler_projects.ui(
             ui.ctx(),
-            || re_ui::modal::Modal::new("Project Selection"),
+            || re_ui::modal::ModalWrapper::new("Project Selection"),
             |ui, _| {
                 ui.push_id(ui.id().with("modal projects"), |ui| {
                     show_project_selection(ui, &mut self.data)
@@ -496,7 +483,7 @@ impl super::HyperApp {
         //         }
         //     };
 
-        //     self.toasts.add(toasts::Toast {
+        //     self.toasts.add(re_log::LogMsg {
         //         kind,
         //         text: msg,
         //         options: toasts::ToastOptions::with_ttl_in_seconds(4.0),

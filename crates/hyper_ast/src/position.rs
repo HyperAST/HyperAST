@@ -37,7 +37,7 @@ use std::{fmt::Debug, path::PathBuf};
 
 use crate::{
     store::defaults::NodeIdentifier,
-    types::{HyperAST, NodeId, TypedNodeId, WithChildren},
+    types::{HyperAST, NodeId, TypedNodeId},
 };
 
 pub trait TreePath<IdN = NodeIdentifier, Idx = u16> {
@@ -49,8 +49,7 @@ pub trait TreePath<IdN = NodeIdentifier, Idx = u16> {
         // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
-        IdN::IdN: NodeId<IdN = IdN::IdN>
-        ;
+        IdN::IdN: NodeId<IdN = IdN::IdN>;
 }
 
 pub trait TreePathMut<IdN, Idx>: TreePath<IdN, Idx> {
@@ -171,6 +170,7 @@ pub mod position_accessors {
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
     {
         use crate::types::NodeStore;
+        use crate::types::WithChildren;
         use std::collections::HashSet;
         let mut set: HashSet<IdN> = HashSet::default();
         let root = p.root();
@@ -216,6 +216,7 @@ pub mod position_accessors {
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
     {
         use crate::types::NodeStore;
+        use crate::types::WithChildren;
         use std::collections::HashSet;
         let mut set: HashSet<IdN> = HashSet::default();
         let node = p.node();
@@ -252,6 +253,7 @@ pub mod position_accessors {
         <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
     {
         use crate::types::NodeStore;
+        use crate::types::WithChildren;
         use std::collections::HashSet;
         let mut set: HashSet<IdN> = HashSet::default();
         let (node, it) = p.iter_with_nodes();
@@ -377,9 +379,10 @@ pub mod computing_offset_bottom_up;
 
 mod computing_offset_top_down;
 pub use computing_offset_top_down::{
-    compute_position, compute_position_and_nodes, 
+    compute_position,
+    compute_position_and_nodes,
     // compute_position_and_nodes2,
-    // compute_position_and_nodes3, 
+    // compute_position_and_nodes3,
     compute_range,
 };
 

@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::sync::Arc;
 use std::{iter::Peekable, path::Components};
 
@@ -15,7 +14,7 @@ use crate::{
     Processor,
     git::BasicGitObject,
     java::JavaAcc,
-    preprocessed::{IsSkippedAna, RepositoryProcessor},
+    preprocessed::RepositoryProcessor,
     processing::{CacheHolding, InFiles, ObjectName},
 };
 
@@ -140,8 +139,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
         }
     }
 
-    fn post(&mut self, oid: Oid, acc: JavaAcc) -> Option<(legion_with_refs::Local, IsSkippedAna)> {
-        let skiped_ana = acc.skiped_ana;
+    fn post(&mut self, oid: Oid, acc: JavaAcc) -> Option<(legion_with_refs::Local,)> {
         let name = &acc.primary.name;
         let key = (oid, name.as_bytes().into());
         let name = self.prepro.get_or_insert_label(name);
@@ -152,9 +150,9 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
             .with_parameters_mut(self.handle.0) //.with_parameters(self.parameters.0)
             .cache
             .object_map
-            .insert(key, (full_node.clone(), skiped_ana));
+            .insert(key, (full_node.clone(),));
         if self.stack.is_empty() {
-            Some((full_node, skiped_ana))
+            Some((full_node,))
         } else {
             let w = &mut self.stack.last_mut().unwrap().acc;
             assert!(
@@ -164,7 +162,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                 name
             );
             let id = full_node.compressed_node;
-            w.push(name, full_node.clone(), skiped_ana);
+            w.push(name, full_node.clone());
 
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
@@ -392,10 +390,12 @@ pub struct JavaProc {
     #[cfg(feature = "tsg")]
     tsg: Option<(ErazedTSG, ErazedFcts)>,
     cache: crate::processing::caches::Java,
-    commits: std::collections::HashMap<git2::Oid, crate::Commit>,
+    commits: crate::processing::caches::OidMap<crate::Commit>,
 }
 
+#[cfg(feature = "tsg")]
 type ErazedFcts = Arc<dyn std::any::Any + Send + Sync>;
+#[cfg(feature = "tsg")]
 type ErazedTSG = Box<dyn std::any::Any + Send + Sync>;
 
 impl crate::processing::erased::Parametrized for JavaProcessorHolder {
@@ -404,88 +404,78 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
         &mut self,
         t: Self::T,
     ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
-        let l = self
-            .0
-            .iter()
-            .position(|x| &x.parameter == &t)
-            .unwrap_or_else(|| {
-                let l = self.0.len();
-                assert!(l <= 1);
-                let query = if let Some(q) = &t.query {
-                    use hyperast_tsquery::ArrayStr;
-                    Some(Query::new(q.iter()))
-                } else {
-                    None
-                };
-
-                #[cfg(feature = "tsg")]
-                let tsg = if let Some(q) = &t.tsg {
-                    let tsg = q.deref();
-                    type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
-                    type ExtQ<'hast, TS, Acc> = hyperast_tsquery::ExtendingStringQuery<
-                        M<'hast, TS, Acc>,
-                        tree_sitter::Language,
-                    >;
-
-                    let source: &str = tsg;
-                    let language = hyperast_gen_ts_java::language();
-
-                    let mut file = tree_sitter_graph::ast::File::<M<&SimpleStores, &Acc>>::new(
-                        language.clone(),
-                    );
-
-                    // let mty: &[_] = &[];
-                    // let query_source = ExtQ::new(language.clone(), Box::new(mty), source.len());
-                    let query_source = if let Some(p) = &t.query {
-                        ExtQ::new(language.clone(), Box::new(p.clone()), source.len())
-                    } else {
-                        let x: &[&str] = &[];
-                        ExtQ::new(language.clone(), Box::new(x), source.len())
-                    };
-                    tree_sitter_graph::parser::Parser::<ExtQ<_, _>>::with_ext(query_source, source)
-                        .parse_into_file(&mut file)
-                        .unwrap();
-                    use tree_sitter_graph::GenQuery;
-
-                    M::check(&mut file).unwrap();
-
-                    let mut functions = tree_sitter_graph::functions::Functions::<
-                        tree_sitter_graph::graph::Graph<
-                            hyperast_tsquery::stepped_query_imm::Node<
-                                hyperast::store::SimpleStores<
-                                    TStore,
-                                    &hyperast::store::nodes::legion::NodeStoreInner,
-                                    &hyperast::store::labels::LabelStore,
-                                >,
-                                &Acc,
-                            >,
-                        >,
-                    >::essentials();
-                    // TODO port those path functions to the generified variant in my fork
-                    // hyperast_tsquery::add_path_functions(&mut functions);
-                    let functions = functions.as_any();
-
-                    Some((file.as_any(), functions))
-                } else {
-                    // crate::java_processor::TSG
-                    None
-                };
-                let r = JavaProc {
-                    parameter: t,
-                    height_counts: vec![],
-                    query,
-                    #[cfg(feature = "tsg")]
-                    tsg,
-                    cache: Default::default(),
-                    commits: Default::default(),
-                };
-                self.0.push(r);
-
-                l
-            });
         use crate::processing::erased::{
             ConfigParametersHandle, ParametrizedCommitProc, ParametrizedCommitProcessorHandle,
         };
+        if let Some(l) = self.0.iter().position(|x| &x.parameter == &t) {
+            return ParametrizedCommitProcessorHandle(
+                self.erased_handle(),
+                ConfigParametersHandle(l),
+            );
+        }
+        let l = self.0.len();
+        let query = t.query.as_ref().map(|q| {
+            use hyperast_tsquery::ArrayStr;
+            Query::new(q.iter())
+        });
+
+        #[cfg(feature = "tsg")]
+        let tsg = if let Some(q) = &t.tsg {
+            use std::ops::Deref;
+            let tsg = q.deref();
+            type M<'hast, TS, Acc> = hyperast_tsquery::QueryMatcher<TS, Acc>;
+            type ExtQ<'hast, TS, Acc> =
+                hyperast_tsquery::ExtendingStringQuery<M<'hast, TS, Acc>, tree_sitter::Language>;
+
+            let source: &str = tsg;
+            let language = hyperast_gen_ts_java::language();
+
+            let mut file =
+                tree_sitter_graph::ast::File::<M<&SimpleStores, &Acc>>::new(language.clone());
+
+            let query_source = if let Some(p) = &t.query {
+                ExtQ::new(language.clone(), Box::new(p.clone()), source.len())
+            } else {
+                let x: &[&str] = &[];
+                ExtQ::new(language.clone(), Box::new(x), source.len())
+            };
+            tree_sitter_graph::parser::Parser::<ExtQ<_, _>>::with_ext(query_source, source)
+                .parse_into_file(&mut file)
+                .unwrap();
+            use tree_sitter_graph::GenQuery;
+
+            M::check(&mut file).unwrap();
+
+            let functions = tree_sitter_graph::functions::Functions::<
+                tree_sitter_graph::graph::Graph<
+                    hyperast_tsquery::stepped_query_imm::Node<
+                        hyperast::store::SimpleStores<
+                            TStore,
+                            &hyperast::store::nodes::legion::NodeStoreInner,
+                            &hyperast::store::labels::LabelStore,
+                        >,
+                        &Acc,
+                    >,
+                >,
+            >::essentials();
+            // TODO port those path functions to the generified variant in my fork
+            // hyperast_tsquery::add_path_functions(&mut functions);
+            let functions = functions.as_any();
+
+            Some((file.as_any(), functions))
+        } else {
+            None
+        };
+        let r = JavaProc {
+            parameter: t,
+            height_counts: vec![],
+            query,
+            #[cfg(feature = "tsg")]
+            tsg,
+            cache: Default::default(),
+            commits: Default::default(),
+        };
+        self.0.push(r);
         ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
     }
 }
@@ -556,7 +546,6 @@ impl crate::processing::erased::ParametrizedCommitProc2 for JavaProcessorHolder 
         &mut self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &mut Self::Proc {
-        assert_eq!(0, parameters.0);
         &mut self.0[parameters.0]
     }
 
@@ -564,7 +553,6 @@ impl crate::processing::erased::ParametrizedCommitProc2 for JavaProcessorHolder 
         &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &Self::Proc {
-        assert_eq!(0, parameters.0);
         &self.0[parameters.0]
     }
 }
@@ -638,48 +626,38 @@ pub static TSG: &str = r#"
 }
 "#;
 
-fn sub_queries() -> &'static [&'static str] {
-    SUB_QUERIES
-}
-
 impl RepositoryProcessor {
     pub(crate) fn handle_java_file(
         &mut self,
         name: &ObjectName,
         text: &[u8],
     ) -> Result<java_tree_gen::FNode, ()> {
-        todo!() // not used much anyway apart from  check_random_files_reserialization
-        // crate::java::handle_java_file(&mut self.java_generator(text), name, text)
-    }
-
-    fn java_generator(
-        &mut self,
-        text: &[u8],
-    ) -> java_tree_gen::JavaTreeGen<crate::TStore, SimpleStores, hyperast_tsquery::Query> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
             "\n".as_bytes().to_vec()
         };
+        let mut md_cache = Default::default();
+        let stores = self
+            .main_stores
+            .mut_with_ts::<hyperast_gen_ts_java::types::TStore>();
 
-        let (precomp, _) = hyperast_tsquery::Query::with_precomputed(
-            "(_)",
-            hyperast_gen_ts_java::language(),
-            sub_queries(),
-        )
-        .unwrap();
-        unimplemented!()
-        // java_tree_gen::JavaTreeGen {
-        //     line_break,
-        //     stores: self.main_stores.mut_with_ts(),
-        //     md_cache: &mut self
-        //         .processing_systems
-        //         .mut_or_default::<JavaProcessorHolder>()
-        //         .get_caches_mut()
-        //         .md_cache, //java_md_cache,
-        //     more: precomp,
-        //     _p: Default::default(),
-        // }
+        let mut java_tree_gen = java_tree_gen::JavaTreeGen::<
+            hyperast_gen_ts_java::types::TStore,
+            _,
+            _,
+        >::new(stores, &mut md_cache)
+        .with_line_break(line_break);
+        crate::java::handle_java_file(&mut java_tree_gen, name, text)
+            .map(|x| x.node)
+            .map_err(|e| {
+                eprintln!(
+                    "{}\ntree size={}\tparsing time={:?}",
+                    e.error,
+                    e.tree.root_node().descendant_count(),
+                    e.parsing_time,
+                )
+            })
     }
 
     pub(crate) fn help_handle_java_folder<'a, 'b, 'c, 'd: 'c>(
@@ -701,7 +679,7 @@ impl RepositoryProcessor {
         name: &ObjectName,
         repository: &Repository,
         parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
-    ) -> Result<(java_tree_gen::Local, IsSkippedAna), crate::ParseErr> {
+    ) -> Result<(java_tree_gen::Local,), crate::ParseErr> {
         self.processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Java>()
             .handle2(oid, repository, name, parameters, |c, n, t| {
@@ -714,6 +692,7 @@ impl RepositoryProcessor {
                 let holder = c.mut_or_default::<JavaProcessorHolder>();
                 let java_proc = holder.with_parameters_mut(parameters.0);
                 let md_cache = &mut java_proc.cache.md_cache;
+                let dedup = &mut java_proc.cache.dedup;
                 let stores = self
                     .main_stores
                     .mut_with_ts::<hyperast_gen_ts_java::types::TStore>();
@@ -725,7 +704,10 @@ impl RepositoryProcessor {
                 let tsg = java_proc.tsg.as_ref();
                 let r = if let Some(tsg) = tsg {
                     #[cfg(not(feature = "tsg"))]
-                    panic!();
+                    {
+                        let _ = tsg;
+                        panic!();
+                    }
                     #[cfg(feature = "tsg")]
                     {
                         let spec: &tree_sitter_graph::ast::File<
@@ -742,8 +724,8 @@ impl RepositoryProcessor {
                             hyperast_gen_ts_java::types::TStore,
                             _,
                             _,
-                        >::with_preprocessing(
-                            stores, md_cache, more
+                        >::with_preprocessing_and_dedup(
+                            stores, dedup, md_cache, more
                         )
                         .with_line_break(line_break);
                         crate::java::handle_java_file(&mut java_tree_gen, n, t)
@@ -752,15 +734,19 @@ impl RepositoryProcessor {
                     let more = hyperast::scripting::Prepro::<_, _>::from_arc(precomp.clone());
                     // let mut java_tree_gen = java_tree_gen.with_more(more);
                     let mut java_tree_gen =
-                        java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
-                            .with_line_break(line_break);
+                        java_tree_gen::JavaTreeGen::with_preprocessing_and_dedup(
+                            stores, dedup, md_cache, more,
+                        )
+                        .with_line_break(line_break);
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else if let Some(more) = &java_proc.query {
                     let more = &more.0;
                     let more: hyperast_tsquery::PreparedQuerying<_, _, _> = more.into();
                     let mut java_tree_gen =
-                        java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
-                            .with_line_break(line_break);
+                        java_tree_gen::JavaTreeGen::with_preprocessing_and_dedup(
+                            stores, dedup, md_cache, more,
+                        )
+                        .with_line_break(line_break);
                     crate::java::handle_java_file::<_>(&mut java_tree_gen, n, t)
                 } else {
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(stores, md_cache)
@@ -790,7 +776,7 @@ impl RepositoryProcessor {
                     log::info!("native: {:?} {:?}", r.local.mcc, r.local.metrics);
                     log::info!("script: {:?}", dd.0);
                 }
-                Ok((r.local.clone(), false))
+                Ok((r.local.clone(),))
             })
     }
 
@@ -802,11 +788,11 @@ impl RepositoryProcessor {
         repository: &Repository,
         parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
     ) -> Result<(), crate::ParseErr> {
-        let (full_node, skiped_ana) = self.handle_java_blob(oid, name, repository, parameters)?;
+        let (full_node,) = self.handle_java_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         assert!(!w.primary.children_names.contains(&name));
         let id = full_node.compressed_node;
-        w.push(name, full_node, skiped_ana);
+        w.push(name, full_node);
         if let Some(acc) = &mut w.scripting_acc {
             // SAFETY: this side should be fine, issue when unerasing
             let store = unsafe { self.main_stores.erase_ts_unchecked() };
@@ -830,7 +816,7 @@ impl RepositoryProcessor {
         name: &ObjectName,
         oid: git2::Oid,
         handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
-    ) -> (java_tree_gen::Local, IsSkippedAna) {
+    ) -> (java_tree_gen::Local,) {
         JavaProcessor::<JavaAcc>::new(repository, self, dir_path, name, oid, &handle).process()
     }
 }
@@ -921,17 +907,12 @@ mod experiments {
                 }
             }
         }
-        fn post(
-            &mut self,
-            oid: Oid,
-            acc: JavaAcc,
-        ) -> Option<(legion_with_refs::Local, IsSkippedAna)> {
-            let skiped_ana = acc.skiped_ana;
+        fn post(&mut self, oid: Oid, acc: JavaAcc) -> Option<(legion_with_refs::Local,)> {
             let name = &acc.primary.name;
             // let key = (oid, name.as_bytes().into());
             let name = self.prepro.intern_label(name);
             let full_node = make(acc, self.prepro.main_stores_mut().mut_with_ts());
-            let full_node = (full_node, skiped_ana);
+            let full_node = (full_node,);
             todo!(
               // self.prepro
               // .processing_systems

@@ -1,5 +1,5 @@
 use mlua::prelude::*;
-use mlua::{Lua, MetaMethod, Result, UserData, UserDataFields, UserDataMethods};
+use mlua::{Lua, MetaMethod, UserData, UserDataFields, UserDataMethods};
 
 #[test]
 fn test_mlua() -> LuaResult<()> {
@@ -74,7 +74,7 @@ impl UserData for Rectangle {
 }
 
 impl<'lua> FromLua<'lua> for Rectangle {
-    fn from_lua(value: LuaValue<'lua>, lua: &'lua Lua) -> LuaResult<Self> {
+    fn from_lua(value: LuaValue<'lua>, _lua: &'lua Lua) -> LuaResult<Self> {
         let v = value.as_userdata().unwrap();
         Ok(Self {
             length: v.get("length")?,
@@ -84,7 +84,7 @@ impl<'lua> FromLua<'lua> for Rectangle {
 }
 
 #[test]
-fn test_userdata() -> Result<()> {
+fn test_userdata() -> mlua::Result<()> {
     let lua = Lua::new();
     let rect = Rectangle::default();
     lua.globals().set("rect", rect)?;
@@ -103,7 +103,7 @@ fn test_userdata() -> Result<()> {
 }
 
 #[test]
-fn test_userdata_scope() -> Result<()> {
+fn test_userdata_scope() -> mlua::Result<()> {
     let lua = Lua::new();
     let mut rect = Rectangle::default();
     lua.scope(|scope| {
@@ -124,7 +124,7 @@ fn test_userdata_scope() -> Result<()> {
 }
 
 #[test]
-fn test_function_call() -> Result<()> {
+fn test_function_call() -> mlua::Result<()> {
     let lua = Lua::new();
     let sum: mlua::Function = lua
         .load(
@@ -141,7 +141,7 @@ fn test_function_call() -> Result<()> {
 }
 
 #[test]
-fn test_scope_function_call() -> Result<()> {
+fn test_scope_function_call() -> mlua::Result<()> {
     let lua = Lua::new();
     let mut rect = Rectangle::default();
     lua.scope(|scope| {
@@ -167,7 +167,7 @@ fn test_scope_function_call() -> Result<()> {
 }
 
 #[test]
-fn test_scope_function_call2() -> Result<()> {
+fn test_scope_function_call2() -> mlua::Result<()> {
     let lua = Lua::new();
     let mut rect = Rectangle::default();
     let func: mlua::Function = lua
@@ -192,7 +192,7 @@ fn test_scope_function_call2() -> Result<()> {
 }
 
 #[test]
-fn test_scope_function_call_named() -> Result<()> {
+fn test_scope_function_call_named() -> mlua::Result<()> {
     let lua = Lua::new();
     lua.sandbox(true)?;
     // lua.set_memory_limit(260000)?; // fatal runtime error: Rust cannot catch foreign exceptions
@@ -219,7 +219,7 @@ fn test_scope_function_call_named() -> Result<()> {
     let finish = lua.globals().get::<_, mlua::Function>("finish")?;
     let compress = lua.globals().get::<_, mlua::Function>("compress")?;
     let mut m = mlua::Value::Nil;
-    lua.scope(|scope| {
+    lua.scope(|_scope| {
         // a = init.call(())?;
         acc.call::<_, ()>((1,))?;
         // let a = scope.create_userdata_ref_mut(&mut a)?;
@@ -235,7 +235,7 @@ fn test_scope_function_call_named() -> Result<()> {
 }
 
 #[test]
-fn test_pre_post_mcc_per_file() -> Result<()> {
+fn test_pre_post_mcc_per_file() -> mlua::Result<()> {
     let lua = Lua::new();
     lua.sandbox(true)?;
     // lua.set_memory_limit(260000)?; // fatal runtime error: Rust cannot catch foreign exceptions
@@ -246,7 +246,7 @@ fn test_pre_post_mcc_per_file() -> Result<()> {
     local path = []
     -- return false to stop descending
     function pre(s)
-        if s.is_directory() 
+        if s.is_directory()
         and c.mcc > 10 then
             path.push(s.name)
             return true
@@ -271,7 +271,7 @@ fn test_pre_post_mcc_per_file() -> Result<()> {
 }
 
 #[test]
-fn test_pre_post_max_mcc_file() -> Result<()> {
+fn test_pre_post_max_mcc_file() -> mlua::Result<()> {
     let lua = Lua::new();
     lua.sandbox(true)?;
     // lua.set_memory_limit(260000)?; // fatal runtime error: Rust cannot catch foreign exceptions
@@ -283,7 +283,7 @@ fn test_pre_post_max_mcc_file() -> Result<()> {
         local path = []
         -- return false to stop descending
         function pre(s)
-            if s.is_directory() 
+            if s.is_directory()
             and c.mcc > max_mcc then
                 path.push(s.name)
                 return true
@@ -304,9 +304,8 @@ fn test_pre_post_max_mcc_file() -> Result<()> {
     .exec()
 }
 
-
 #[test]
-fn test_pre_post_max_mcc_ratio() -> Result<()> {
+fn test_pre_post_max_mcc_ratio() -> mlua::Result<()> {
     let lua = Lua::new();
     lua.sandbox(true)?;
     // lua.set_memory_limit(260000)?; // fatal runtime error: Rust cannot catch foreign exceptions

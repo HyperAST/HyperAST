@@ -13,10 +13,8 @@ use backend::{
     },
     examples::{example_app, kv_store_app},
 };
-use dashmap::DashMap;
 use hyper_diff::matchers::mapping_store::VecStore;
-use hyperast::store::nodes::legion::NodeIdentifier;
-use hyperast_vcs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
+use hyperast_vcs_git::git::Forge;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 #[cfg(not(target_env = "msvc"))]
@@ -26,22 +24,8 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<NodeIdentifier>>;
-pub(crate) type MappingAloneCache =
-    DashMap<(NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
-pub(crate) type MappingAloneCacheRef<'a> =
-    dashmap::mapref::one::Ref<'a, (NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
-
-pub(crate) enum MappingStage {
-    Subtree,
-    Bottomup,
-    Decls,
-}
-
 type DS<T> = hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<T, u32>;
 pub type PersistableMappings<I> = hyper_diff::matchers::Mapping<DS<I>, DS<I>, VecStore<u32>>;
-pub(crate) type MappingCache =
-    DashMap<(NodeIdentifier, NodeIdentifier), PersistableMappings<NodeIdentifier>>;
 type SharedState = Arc<AppState>;
 
 #[tokio::main]
@@ -108,7 +92,6 @@ async fn main() {
     .await
     .unwrap();
 }
-pub(crate) use hyperast_vcs_git::no_space;
 /// axum handler for any request that fails to match the router routes.
 /// This implementation returns HTTP status code Not Found (404).
 pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
@@ -126,50 +109,3 @@ async fn shutdown_signal() {
         .expect("expect tokio signal ctrl-c");
     println!("signal shutdown");
 }
-
-// pub(crate) use hyperast::store::nodes::no_space;
-// #[test]
-// fn test_scripting() -> Result<(), Box<dyn std::error::Error>> {
-//     let backend = reqwest::blocking::Client::default();
-//     let req_build = backend.post(
-//         "http://localhost:8080/script/github/INRIA/spoon/4acedc53a13a727be3640fe234f7e261d2609d58",
-//     );
-//     use crate::scripting::ScriptContent;
-
-//     let script = ScriptContent {
-//         init: r##"#{depth:0, files: 0, type_decl: 0}"##.to_string(),
-//         filter: r##"
-// if is_directory() {
-//     children().map(|x| {[x, #{depth: s.depth + 1, files: s.files, type_decl: s.type_decl}]})
-// } else if is_file() {
-//     children().map(|x| {[x, #{depth: s.depth + 1, type_decl: s.type_decl}]})
-// } else {
-//     []
-// }"##
-//         .to_string(),
-//         accumulate: r##"
-// if is_directory() {
-//     p.files += s.files;
-//     p.type_decl += s.type_decl;
-// } else if is_file() {
-//     p.files += 1;
-//     p.type_decl += s.type_decl;
-// } else if is_type_decl() {
-//     p.type_decl += 1;
-// }"##
-//         .to_string(),
-//     };
-
-//     let req = req_build
-//         .timeout(Duration::from_secs(60 * 60))
-//         .header("content-type", "application/json")
-//         .body(serde_json::to_string(&script).unwrap())
-//         .build()?;
-//     let resp = backend.execute(req)?;
-//     println!("{:#?}", resp.text()?);
-//     Ok(())
-// }
-
-static CASE_BIG1: &'static str = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
-
-static CASE_BIG2: &'static str = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;

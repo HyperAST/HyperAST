@@ -1,30 +1,32 @@
+#![allow(unused)]
+
 pub const QUERY_MAIN_METH: (&str, &str) = (
     r#"(program
-  (class_declaration 
-    name: (_) @name
-    body: (_
-      (method_declaration
-        (modifiers
-          "public"
-          "static"
+      (class_declaration
+        name: (identifier) @name
+        body: (class_body
+          (method_declaration
+            (modifiers
+              "public"
+              "static"
+            )
+            type: (void_type)
+            name: (identifier) (#EQ? "main")
+          )
         )
-        type: (void_type)
-        name: (_) (#EQ? "main")
       )
-    )
-  )
-)"#,
+    )"#,
     r#"(program
-  (class_declaration 
-    name: (_) @name
-    body: (_
+  (class_declaration
+    name: (identifier) @name
+    body: (class_body
       (method_declaration
         (modifiers
           "public"
           "static"
         )
         type: (void_type)
-        name: (_) @main (#eq? @main "main")
+        name: (identifier) @main (#eq? @main "main")
       )
     )
   )
@@ -37,14 +39,14 @@ pub const QUERY_MAIN_METH_SUBS: &[&str] = &[
       "public"
       "static"
     )
-    type: (void_type)
-    name: (_) (#EQ? "main")
+    (void_type)
+    (identifier) (#EQ? "main")
 )"#,
     r#"(method_declaration
-    name: (_) (#EQ? "main")
+    name: (identifier) (#EQ? "main")
 )"#,
     r#"(class_declaration
-    body: (_
+    body: (class_body
         (method_declaration)
     )
 )"#,
@@ -55,8 +57,8 @@ pub const QUERY_MAIN_METH_SUBS: &[&str] = &[
       "static"
     )
 )"#,
-    r#"(_ 
-  name: (_) (#EQ? "main")
+    r#"(method_declaration
+  name: (identifier) (#EQ? "main")
 )"#,
 ];
 
@@ -339,6 +341,7 @@ pub(crate) fn prep_baseline<'query, 'tree, P>(
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
+        // let size = tree.root_node().descendant_count();
         (query, tree, text)
     }
 }

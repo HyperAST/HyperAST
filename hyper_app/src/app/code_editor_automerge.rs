@@ -1,8 +1,8 @@
 //! NOTE Pretty adoc impl, would benefit from being merged with impl in egui_addon
 
-use super::{types::Languages, Lang};
+use super::{Lang, types::Languages};
 use egui::{Response, WidgetText};
-use egui_addon::{code_editor::EditorInfo, Languages as _};
+use egui_addon::{Languages as _, code_editor::EditorInfo};
 use egui_demo_lib::easy_mark::easy_mark;
 
 const TREE_SITTER: bool = false;
@@ -373,9 +373,10 @@ fn checkbox_heading(
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
             ui.painter().add(epaint::RectShape::new(
                 big_icon_rect.expand(visuals.expansion),
-                visuals.rounding,
+                visuals.corner_radius,
                 visuals.bg_fill,
                 visuals.bg_stroke,
+                egui::StrokeKind::Inside,
             ));
 
             if *checked {

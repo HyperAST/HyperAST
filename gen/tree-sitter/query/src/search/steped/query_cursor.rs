@@ -90,7 +90,7 @@ where
         let mut did_match = false;
         if self.on_visible_node {
             log::trace!(
-                "leave node. depth:{}, type:{}\n",
+                "leave node. depth:{}, type:{}",
                 self.depth,
                 self.cursor.current_node().str_symbol()
             );

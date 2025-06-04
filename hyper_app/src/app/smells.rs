@@ -97,25 +97,25 @@ impl Default for ComputeConfigQuery {
                 .into(),
             meta_simp: r#"(predicate
     (identifier) (#EQ? "EQ")
-    (parameters 
-        (string) @label 
+    (parameters
+        (string) @label
     )
 ) @pred
 (_
-    (named_node 
+    (named_node
         (identifier) (#EQ "expression_statement")
     ) @rm
     .
 )
 (_
-    (named_node 
+    (named_node
         (identifier) (#EQ "expression_statement")
     ) @rm
     .
     (named_node)
 )
 (_
-    (named_node 
+    (named_node
         (identifier) (#EQ "expression_statement")
     ) @rm
     .
@@ -249,7 +249,7 @@ pub(crate) fn show_config(ui: &mut egui::Ui, smells: &mut Config) {
                 ui.add(
                     egui::Slider::new(&mut conf.len, 1..=200)
                         .text("commits")
-                        .clamp_to_range(false)
+                        .clamping(egui::SliderClamping::Always)
                         .integer()
                         .logarithmic(true),
                 );
@@ -388,11 +388,9 @@ pub(super) fn show_central_panel(
 ) {
     if let Some(_x) = &mut smells.stats {
         todo!();
-        return;
     }
     if let Some(_examples) = &mut smells.queries {
         todo!();
-        return;
     }
     if let Some(promise) = smells_result {
         let Some(result) = promise.ready() else {
@@ -481,19 +479,24 @@ pub(super) fn show_central_panel(
                                     t
                                 };
                                 rect.bottom_mut().sub_assign(B);
-                                let line_pos_1 =
-                                    ui.painter().round_pos_to_pixels(rect.left_bottom());
-                                let line_pos_2 =
-                                    ui.painter().round_pos_to_pixels(rect.right_bottom());
+
+                                let line_pos_1 = egui::emath::GuiRounding::round_to_pixels(
+                                    rect.left_bottom(),
+                                    ui.pixels_per_point(),
+                                );
+                                let line_pos_2 = egui::emath::GuiRounding::round_to_pixels(
+                                    rect.right_bottom(),
+                                    ui.pixels_per_point(),
+                                );
                                 ui.painter().line_segment(
                                     [line_pos_1, line_pos_2],
                                     ui.visuals().window_stroke(),
                                 );
                                 rect.bottom_mut().sub_assign(B);
-                                let mut ui = ui.child_ui(
-                                    rect,
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    None,
+                                let mut ui = ui.new_child(
+                                    egui::UiBuilder::new()
+                                        .max_rect(rect)
+                                        .layout(egui::Layout::top_down(egui::Align::Min)),
                                 );
                                 ui.set_clip_rect(rect.intersect(ui.clip_rect()));
                                 ui.push_id(
@@ -631,12 +634,23 @@ pub(crate) fn show_examples(
                     t
                 };
                 rect.bottom_mut().sub_assign(B);
-                let line_pos_1 = ui.painter().round_pos_to_pixels(rect.left_bottom());
-                let line_pos_2 = ui.painter().round_pos_to_pixels(rect.right_bottom());
+
+                let line_pos_1 = egui::emath::GuiRounding::round_to_pixels(
+                    rect.left_bottom(),
+                    ui.pixels_per_point(),
+                );
+                let line_pos_2 = egui::emath::GuiRounding::round_to_pixels(
+                    rect.right_bottom(),
+                    ui.pixels_per_point(),
+                );
                 ui.painter()
                     .line_segment([line_pos_1, line_pos_2], ui.visuals().window_stroke());
                 rect.bottom_mut().sub_assign(B);
-                let mut ui = ui.child_ui(rect, egui::Layout::top_down(egui::Align::Min), None);
+                let mut ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
                 ui.set_clip_rect(rect.intersect(ui.clip_rect()));
                 ui.push_id(id.with(i), |ui| {
                     let example = &examples.examples[i];
@@ -664,6 +678,10 @@ fn show_query_with_example(
             );
             let clip_rect = ui2.clip_rect();
             let bad_ex_cont = &bad_query.examples[..bad_query.examples.len().min(12)];
+            if bad_ex_cont.is_empty() {
+                ui2.label(format!("{}", bad_query.examples.len()));
+                return;
+            }
             MultiSplitter::with_orientation(MultiSplitterOrientation::Horizontal)
                 .ratios(if bad_ex_cont.len() <= 8 {
                     vec![1.0 / bad_ex_cont.len() as f32; bad_ex_cont.len() - 1]
@@ -709,8 +727,8 @@ pub(crate) fn show_query(
     let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
-        let mut layout_job =
-            egui_extras::syntax_highlighting::highlight(ui.ctx(), ui.style(), &theme, code, language);
+        use egui_extras::syntax_highlighting::highlight;
+        let mut layout_job = highlight(ui.ctx(), ui.style(), &theme, code, language);
         // syntax_highlighter::highlight(ui.ctx(), &theme, code, language);
         if false {
             layout_job.wrap.max_width = wrap_width;
@@ -989,7 +1007,7 @@ fn show_either_side<MH: MakeHighlights>(
             ui.painter().set(noop, egui::Shape::Vec(shapes));
         }
         if let Some(selected_node) = &code.range {
-            let ui = &mut ui.child_ui(aa.inner_rect, *ui.layout(), None);
+            let ui = &mut ui.new_child(egui::UiBuilder::new().max_rect(aa.inner_rect));
             ui.set_clip_rect(aa.inner_rect.intersect(ui.clip_rect()));
             let mut rect = egui_addon::egui_utils::highlight_byte_range_aux(
                 ui,
@@ -1024,7 +1042,13 @@ fn show_either_side<MH: MakeHighlights>(
                 };
                 egui::Stroke::new(3., color)
             };
-            ui.painter().rect(rect, 1., color.multiply(0.1), stroke);
+            ui.painter().rect(
+                rect,
+                1.,
+                color.multiply(0.1),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
         }
     };
 }

@@ -271,7 +271,12 @@ impl<IdN: Copy, Idx: PrimInt> TreePathMut<IdN, Idx> for StructuralPosition<IdN, 
     fn inc(&mut self, node: IdN) {
         use num::one;
         *self.parents.last_mut().unwrap() = node;
-        *self.offsets.last_mut().unwrap() += one();
+        *self.offsets.last_mut().unwrap() = self
+            .offsets
+            .last_mut()
+            .unwrap()
+            .checked_add(&one())
+            .expect("Idx is too small");
     }
 
     fn dec(&mut self, node: IdN) {

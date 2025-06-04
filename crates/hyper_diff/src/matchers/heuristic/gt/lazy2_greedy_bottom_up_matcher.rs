@@ -178,7 +178,6 @@ where
         let stores = internal.hyperast;
         // allow using another internal mapping store
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
-        let node_store = internal.hyperast.node_store();
         let mapping = &mut internal.mapping;
         let src_arena = &mut mapping.src_arena;
         let dst_arena = &mut mapping.dst_arena;

@@ -4,29 +4,32 @@ version = "0.3.0"
 edition = "2024"
 
 [dependencies]
-egui = { version = "0.29.0", default-features = false }
-eframe = { version = "0.29.0", default-features = false, features = [
+egui = { version = "0.31.1", default-features = false }
+eframe = { version = "0.31.1", default-features = false, features = [
     # "accesskit",   # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     # "wgpu",        # Use the wgpu rendering backend. Alternative: "glow".
     "glow",        # Use the glow rendering backend. Alternative: "wgpu".
     "persistence", # Enable restoring app state when restarting the app.
 ] }
-epaint = { version = "0.29.0", default-features = false }
-egui_demo_lib = { version = "0.29.0", default-features = false, features = [
+epaint = { version = "0.31.1", default-features = false }
+egui_demo_lib = { version = "0.31.1", default-features = false, features = [
     "syntect",
 ] }
-egui_extras = { version = "0.29.0", default-features = false, features = [
+egui_extras = { version = "0.31.1", default-features = false, features = [
     "http",
     "file",
     "image",
     "svg",
 ] }
-re_ui = "0.20.2"
-egui_tiles = "0.10.0"
-egui_commonmark = "0.18.0"
-egui_plot = "0.29.0"
-egui_double_slider = "0.2.0"
+re_ui = "0.23.2"
+re_log = "0.23.2"
+egui_tiles = "0.12.0"
+egui_commonmark = "0.20.0"
+# egui_plot = "0.32.1"
+egui_plot = { version = "0.32.1", git = "https://github.com/emilk/egui_plot", rev = "45159daa475170cd3cb3cd228377ad54aab691ad" }
+
+egui_double_slider = "0.7.1"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }

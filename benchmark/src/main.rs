@@ -1,22 +1,6 @@
 pub mod write_serializer;
 
-use std::{
-    env,
-    fs::File,
-    io::{self, BufWriter, Write},
-    path::PathBuf,
-    str::FromStr,
-    time::Instant,
-};
-
-use hyperast_vcs_git::{
-    git::{fetch_github_repository, retrieve_commit},
-    preprocessed::PreProcessedRepository,
-};
-use hyperast_gen_ts_java::utils::memusage_linux; // TODO move that to a more code crate
 use serde::{Deserialize, Serialize};
-
-use crate::write_serializer::{WriteJson, WritePartialJson};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -25,13 +9,34 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
+#[cfg(feature = "impact")]
 // WARN there is a big impact of the buff writer capacity
 const BUFF_WRITER_CAPACITY: usize = 4 * 8 * 1024;
 
 fn main() {
-    benchmark_main()
+    benchmark_impact()
 }
-fn benchmark_main() {
+#[cfg(not(feature = "impact"))]
+fn benchmark_impact() {
+    panic!("reference analysis backend is disabled");
+}
+#[cfg(feature = "impact")]
+fn benchmark_impact() {
+    use std::{
+        env,
+        fs::File,
+        io::{self, BufWriter, Write},
+        path::PathBuf,
+        str::FromStr,
+        time::Instant,
+    };
+
+    use crate::write_serializer::{WriteJson, WritePartialJson};
+    use hyperast_gen_ts_java::utils::memusage_linux; // TODO move that to a more code crate
+    use hyperast_vcs_git::{
+        git::{fetch_github_repository, retrieve_commit},
+        preprocessed::PreProcessedRepository,
+    };
     // let f = env_logger::fmt::BufferWriter
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .format(|buf, record| {
@@ -64,13 +69,8 @@ fn benchmark_main() {
         }
     });
 
-    if cfg!(feature = "impact") {
-        #[cfg(feature = "impact")]
-        multi_commit_ref_ana::<50>(repo_name, before, after, dir_path, out);
-        // single_commit_ref_ana(repo_name, after, dir_path, out);
-} else {
-        panic!("no ref ana backend enabled");
-    }
+    multi_commit_ref_ana::<50>(repo_name, before, after, dir_path, out);
+    // single_commit_ref_ana(repo_name, after, dir_path, out);
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]

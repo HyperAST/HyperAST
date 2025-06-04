@@ -6,21 +6,19 @@ use crate::tree::simple_tree::Tree;
 use crate::tree::tree_path::CompressedTreePath;
 use crate::{
     actions::{
-        action_vec::{apply_actions, TestActions},
-        script_generator2::ScriptGenerator,
         Actions,
+        action_vec::{TestActions, apply_actions},
+        script_generator2::ScriptGenerator,
     },
     decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::{
-        action_generator2_tests::{make_delete, make_insert, make_move, make_update, Fmt},
+        action_generator2_tests::{Fmt, make_delete, make_insert, make_move, make_update},
         simple_examples::{example_delete_action, example_move_action, example_rename_action},
     },
-    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
+    tree::simple_tree::{DisplayTree, NS, vpair_to_stores},
 };
 use hyperast::types::{DecompressedFrom, LabelStore, Labeled, NodeStore};
-
-type IdD = u16;
 
 #[test]
 fn test_no_actions() {
