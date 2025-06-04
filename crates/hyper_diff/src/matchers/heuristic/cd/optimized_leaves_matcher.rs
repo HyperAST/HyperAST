@@ -15,11 +15,7 @@ use hyperast::{PrimInt, types::HyperType};
 use hyperast::{nodes::TextSerializer, types::HashKind};
 use num_traits::ToPrimitive;
 use std::fmt::Debug;
-use std::{
-    cmp::Ordering,
-    collections::{BinaryHeap, HashMap},
-    hash::Hash,
-};
+use std::{cmp::Ordering, collections::HashMap, hash::Hash};
 use str_distance::DistanceMetric;
 
 use super::OptimizedLeavesMatcherConfig;
@@ -414,110 +410,6 @@ where
         println!("Statement level matcher complete: {:?} \n", total_time);
     }
 
-    /// Execute naive approach without type grouping - compare all leaves
-    // fn execute_naive(&mut self) {
-    //     let start_time = std::time::Instant::now();
-    //     println!("=== NAIVE MATCHER START ===");
-
-    //     let collect_start = std::time::Instant::now();
-    //     let dst_leaves = self.collect_statement_leaves_dst();
-    //     let src_leaves = self.collect_statement_leaves_src();
-    //     let collect_time = collect_start.elapsed();
-    //     println!(
-    //         "✓ Statement leaf collection: {:?} (src: {}, dst: {})",
-    //         collect_time,
-    //         src_leaves.len(),
-    //         dst_leaves.len()
-    //     );
-
-    //     let total_comparisons = src_leaves.len() * dst_leaves.len();
-    //     println!("✓ Total comparisons needed: {}", total_comparisons);
-
-    //     let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
-
-    //     let comparison_start = std::time::Instant::now();
-    //     let mut comparison_count = 0;
-    //     for src in &src_leaves {
-    //         for dst in &dst_leaves {
-    //             comparison_count += 1;
-    //             // no need to check for equal types since all are only statements
-    //             let sim = self.compute_label_similarity_simple(&src, &dst);
-    //             if sim > self.config.base_config.label_sim_threshold {
-    //                 leaves_mappings.push(MappingWithSimilarity {
-    //                     src: src.clone(),
-    //                     dst: dst.clone(),
-    //                     sim,
-    //                 });
-    //             }
-    //         }
-    //     }
-    //     let comparison_time = comparison_start.elapsed();
-    //     println!(
-    //         "✓ Simple similarity calculations: {:?} ({} comparisons, {} candidates)",
-    //         comparison_time,
-    //         comparison_count,
-    //         leaves_mappings.len()
-    //     );
-
-    //     let sort_start = std::time::Instant::now();
-    //     // Sort mappings by similarity
-    //     leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
-    //     let sort_time = sort_start.elapsed();
-    //     println!("✓ Sorting candidates: {:?}", sort_time);
-
-    //     let mapping_start = std::time::Instant::now();
-    //     let mut mapped_count = 0;
-    //     // Process mappings in order
-    //     for mapping in leaves_mappings {
-    //         if self
-    //             .mappings
-    //             .link_if_both_unmapped(mapping.src.shallow().clone(), mapping.dst.shallow().clone())
-    //         {
-    //             mapped_count += 1;
-    //         }
-    //     }
-    //     let mapping_time = mapping_start.elapsed();
-    //     println!(
-    //         "✓ Creating mappings: {:?} ({} mappings created)",
-    //         mapping_time, mapped_count
-    //     );
-
-    //     let total_time = start_time.elapsed();
-    //     println!("=== NAIVE MATCHER COMPLETE: {:?} ===\n", total_time);
-    // }
-
-    // /// Collect all destination leaf nodes
-    // fn collect_leaves_dst(&mut self) -> Vec<M::Dst> {
-    //     self.dst_arena
-    //         .iter_df_post::<true>()
-    //         .filter(|t| {
-    //             let id = self.dst_arena.decompress_to(&t);
-    //             self.dst_arena.children(&id).is_empty()
-    //         })
-    //         .collect()
-    // }
-
-    // /// Collect all source leaf nodes
-    // fn collect_leaves_src(&mut self) -> Vec<M::Src> {
-    //     self.src_arena
-    //         .iter_df_post::<true>()
-    //         .filter(|t| {
-    //             let id = self.src_arena.decompress_to(&t);
-    //             self.src_arena.children(&id).is_empty()
-    //         })
-    //         .collect()
-    // }
-
-    // fn node_is_statement(
-    //     arena: &mut Dsrc,
-    //     stores: HAST,
-    //     node: &<Dsrc as LazyDecompressed<M::Src>>::IdD,
-    // ) -> bool {
-    //     let original = arena.original(node);
-    //     let node_type = stores.resolve_type(&original);
-    //     node_type.is_statement()
-    // }
-
     fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
         let src_root = self.src_arena.starter();
 
@@ -576,84 +468,6 @@ where
         let nodes: Vec<_> = iter.collect();
         nodes
     }
-
-    // /// Check if mapping between two nodes is allowed (same type, both unmapped)
-    // fn is_mapping_allowed(&self, src_tree: &Dsrc::IdD, dst_tree: &Ddst::IdD) -> bool {
-    //     if self.mappings.is_src(src_tree.shallow()) || self.mappings.is_dst(dst_tree.shallow()) {
-    //         return false;
-    //     }
-
-    //     let original_src = self.src_arena.original(src_tree);
-    //     let original_dst = self.dst_arena.original(dst_tree);
-
-    //     let src_type = self.stores.resolve_type(&original_src);
-    //     let dst_type = self.stores.resolve_type(&original_dst);
-
-    //     src_type == dst_type
-    // }
-
-    // /// Compute label similarity without caching (fallback method)
-    // fn compute_label_similarity_simple(&self, src_tree: &Dsrc::IdD, dst_tree: &Ddst::IdD) -> f64 {
-    //     let original_src = self.src_arena.original(src_tree);
-    //     let original_dst = self.dst_arena.original(dst_tree);
-
-    //     let src_node = self.stores.node_store().resolve(&original_src);
-    //     let dst_node = self.stores.node_store().resolve(&original_dst);
-
-    //     let src_label_id = src_node.try_get_label();
-    //     let dst_label_id = dst_node.try_get_label();
-
-    //     match (src_label_id, dst_label_id) {
-    //         (Some(src_label_id), Some(dst_label_id)) => {
-    //             let src_label = self.stores.label_store().resolve(&src_label_id);
-    //             let dst_label = self.stores.label_store().resolve(&dst_label_id);
-    //             let dist =
-    //                 str_distance::QGram::new(3).normalized(src_label.chars(), dst_label.chars());
-    //             1.0 - dist
-    //         }
-    //         _ => 0.0,
-    //     }
-    // }
-
-    // /// Exact implementation of lazy_2 cached label similarity computation
-    // fn compute_cached_label_similarity(
-    //     &self,
-    //     src_leaf: &M::Src,
-    //     dst_leaf: &M::Dst,
-    //     src_tree: &Dsrc::IdD,
-    //     dst_tree: &Ddst::IdD,
-    //     label_cache: &mut HashMap<(HAST::IdN, HAST::IdN), f64, RandomState>,
-    //     src_label_cache: &HashMap<M::Src, Option<(HAST::IdN, String)>, RandomState>,
-    //     dst_label_cache: &HashMap<M::Dst, Option<(HAST::IdN, String)>, RandomState>,
-    //     qgram: &str_distance::QGram,
-    // ) -> f64 {
-    //     // Get the original node IDs
-    //     let original_src = self.src_arena.original(src_tree);
-    //     let original_dst = self.dst_arena.original(dst_tree);
-
-    //     // Check if similarity is already cached
-    //     if let Some(sim) = label_cache.get(&(original_src.clone(), original_dst.clone())) {
-    //         return *sim;
-    //     }
-
-    //     // Get cached label data
-    //     let src_label_data = src_label_cache.get(src_leaf);
-    //     let dst_label_data = dst_label_cache.get(dst_leaf);
-
-    //     let similarity = match (src_label_data, dst_label_data) {
-    //         (Some(Some((_, src_label))), Some(Some((_, dst_label)))) => {
-    //             // Use the pre-computed QGram object
-    //             let dist = qgram.normalized(src_label.chars(), dst_label.chars());
-    //             1.0 - dist
-    //         }
-    //         _ => 0.0,
-    //     };
-
-    //     // Cache the result
-    //     label_cache.insert((original_src, original_dst), similarity);
-
-    //     similarity
-    // }
 }
 
 #[cfg(test)]

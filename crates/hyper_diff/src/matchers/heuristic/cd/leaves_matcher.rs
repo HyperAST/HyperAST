@@ -3,12 +3,15 @@ use crate::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice,
         PostOrder, PostOrderIterable,
     },
-    matchers::mapping_store::MonoMappingStore,
+    matchers::{
+        heuristic::cd::iterator::{CustomIteratorConfig, DecompressedCustomPostOrderIterator},
+        mapping_store::{MappingStore, MonoMappingStore},
+    },
 };
-use hyperast::PrimInt;
 use hyperast::types::{
     DecompressedFrom, HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs,
 };
+use hyperast::{PrimInt, types::HyperType};
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use str_distance::DistanceMetric;
@@ -92,17 +95,8 @@ where
         let start_time = std::time::Instant::now();
 
         let collect_start = std::time::Instant::now();
-        let dst_leaves: Vec<M::Dst> = self
-            .dst_arena
-            .iter_df_post::<true>()
-            .filter(|t| self.dst_arena.children(t).is_empty())
-            .collect();
-
-        let src_leaves: Vec<M::Src> = self
-            .src_arena
-            .iter_df_post::<true>()
-            .filter(|t| self.src_arena.children(t).is_empty())
-            .collect();
+        let dst_leaves = self.get_dst_nodes();
+        let src_leaves = self.get_src_nodes();
         let collect_time = collect_start.elapsed();
         println!(
             "✓ Leaf collection: {:?} (src: {}, dst: {})",
@@ -169,50 +163,47 @@ where
         let total_time = start_time.elapsed();
     }
 
-    // fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
-    //     let src_root = self.src_arena.starter();
+    fn get_src_nodes(&self) -> Vec<<M as MappingStore>::Src> {
+        let iter = DecompressedCustomPostOrderIterator::new(
+            &self.src_arena,
+            self.stores,
+            self.src_arena.root(),
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            |arena: &Dsrc, stores: HAST, node: &<M as MappingStore>::Src| -> bool {
+                if arena.children(node).is_empty() {
+                    return true;
+                }
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                return node_type.is_statement();
+            },
+        );
+        iter.collect::<Vec<_>>()
+    }
 
-    //     let iter = CustomPostOrderIterator::new(
-    //         &mut self.src_arena,
-    //         self.stores,
-    //         src_root,
-    //         CustomIteratorConfig {
-    //             yield_leaves: false,
-    //             yield_inner: true,
-    //         },
-    //         |arena: &mut Dsrc,
-    //          stores: HAST,
-    //          node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
-    //          -> bool {
-    //             let original = arena.original(node);
-    //             let node_type = stores.resolve_type(&original);
-    //             node_type.is_statement()
-    //         },
-    //     );
-    //     let nodes: Vec<_> = iter.collect();
-    //     nodes
-    // }
-
-    // fn collect_statement_leaves_dst(&mut self) -> Vec<<Ddst as LazyDecompressed<M::Dst>>::IdD> {
-    //     let dst_root = self.dst_arena.starter();
-
-    //     let iter = CustomPostOrderIterator::new(
-    //         &mut self.dst_arena,
-    //         self.stores,
-    //         dst_root,
-    //         CustomIteratorConfig {
-    //             yield_leaves: false,
-    //             yield_inner: true,
-    //         },
-    //         |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
-    //             let original = arena.original(node);
-    //             let node_type = stores.resolve_type(&original);
-    //             node_type.is_statement()
-    //         },
-    //     );
-    //     let nodes: Vec<_> = iter.collect();
-    //     nodes
-    // }
+    fn get_dst_nodes(&self) -> Vec<<M as MappingStore>::Dst> {
+        let iter = DecompressedCustomPostOrderIterator::new(
+            &self.dst_arena,
+            self.stores,
+            self.dst_arena.root(),
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            |arena: &Ddst, stores: HAST, node: &<M as MappingStore>::Dst| -> bool {
+                if arena.children(node).is_empty() {
+                    return true;
+                }
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                return node_type.is_statement();
+            },
+        );
+        iter.collect::<Vec<_>>()
+    }
 
     fn is_mapping_allowed(&self, src_tree: &M::Src, dst_tree: &M::Dst) -> bool {
         let src_linked = self.mappings.get_src(dst_tree).is_some();

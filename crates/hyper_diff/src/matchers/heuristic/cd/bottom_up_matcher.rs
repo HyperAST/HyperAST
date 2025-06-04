@@ -3,10 +3,15 @@ use crate::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice,
         PostOrder, PostOrderIterable,
     },
-    matchers::{Mapper, Mapping, mapping_store::MonoMappingStore, similarity_metrics},
+    matchers::{
+        Mapper, Mapping,
+        heuristic::cd::iterator::{CustomIteratorConfig, DecompressedCustomPostOrderIterator},
+        mapping_store::{MappingStore, MonoMappingStore},
+        similarity_metrics,
+    },
 };
-use hyperast::PrimInt;
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, WithHashs};
+use hyperast::types::{DecompressedFrom, HyperAST, HyperType, NodeId, WithHashs};
+use hyperast::{PrimInt, types::LabelStore};
 use std::fmt::Debug;
 
 use super::BottomUpMatcherConfig;
@@ -68,11 +73,11 @@ where
     }
 
     pub fn execute(&mut self) {
-        for s in self.src_arena.iter_df_post::<true>() {
+        for s in self.get_src_nodes() {
             let src_tree = s;
             let number_of_leaves = self.number_of_leaves_src(&src_tree);
 
-            for dst_tree in self.dst_arena.iter_df_post::<true>() {
+            for dst_tree in self.get_dst_nodes() {
                 let mapping_allowed = self.is_mapping_allowed(&src_tree, &dst_tree);
                 let src_is_leaf = self.src_arena.children(&src_tree).is_empty();
                 let dst_is_leaf = self.dst_arena.children(&dst_tree).is_empty();
@@ -96,6 +101,48 @@ where
             }
         }
         ()
+    }
+
+    fn get_src_nodes(&self) -> Vec<<M as MappingStore>::Src> {
+        let iter = DecompressedCustomPostOrderIterator::new(
+            &self.src_arena,
+            self.stores,
+            self.src_arena.root(),
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            |arena: &Dsrc, stores: HAST, node: &<M as MappingStore>::Src| -> bool {
+                if arena.children(node).is_empty() {
+                    return true;
+                }
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                return node_type.is_statement();
+            },
+        );
+        iter.collect::<Vec<_>>()
+    }
+
+    fn get_dst_nodes(&self) -> Vec<<M as MappingStore>::Dst> {
+        let iter = DecompressedCustomPostOrderIterator::new(
+            &self.dst_arena,
+            self.stores,
+            self.dst_arena.root(),
+            CustomIteratorConfig {
+                yield_leaves: false,
+                yield_inner: true,
+            },
+            |arena: &Ddst, stores: HAST, node: &<M as MappingStore>::Dst| -> bool {
+                if arena.children(node).is_empty() {
+                    return true;
+                }
+                let original = arena.original(node);
+                let node_type = stores.resolve_type(&original);
+                return node_type.is_statement();
+            },
+        );
+        iter.collect::<Vec<_>>()
     }
 
     fn number_of_leaves_src(&self, src_tree: &M::Src) -> usize {
