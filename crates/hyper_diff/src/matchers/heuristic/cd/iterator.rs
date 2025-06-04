@@ -27,7 +27,7 @@
 
 use hyperast::types::{HyperAST, HyperType, TypeStore, WithHashs};
 
-use crate::decompressed_tree_store::LazyDecompressedTreeStore;
+use crate::decompressed_tree_store::{DecompressedTreeStore, LazyDecompressedTreeStore};
 
 /// Configuration for the custom post-order iterator.
 ///
@@ -122,7 +122,6 @@ where
             if children_processed {
                 // This node's children have all been processed, so we can yield it
 
-                // Check if this matches our custom leaf predicate
                 let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
 
                 if is_custom_leaf {
@@ -180,10 +179,134 @@ where
     }
 }
 
+/// Iterator for fully decompressed trees (no lazy decompression needed)
+pub struct DecompressedCustomPostOrderIterator<'a, D, HAST, IdD, F> {
+    arena: &'a D,
+    stores: HAST,
+    stack: Vec<(IdD, bool)>, // (node, children_processed)
+    config: CustomIteratorConfig,
+    is_leaf_fn: F,
+}
+
+/// Custom post-order iterator for fully decompressed AST traversal with logical leaf detection.
+///
+/// This iterator is similar to `CustomPostOrderIterator` but works with fully decompressed trees
+/// (`DecompressedTreeStore`) instead of lazy ones (`LazyDecompressedTreeStore`). Since the tree
+/// is already fully decompressed, it only needs immutable access to the arena.
+impl<'a, D, HAST, IdD, F> DecompressedCustomPostOrderIterator<'a, D, HAST, IdD, F>
+where
+    D: DecompressedTreeStore<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
+    <HAST::TS as TypeStore>::Ty: HyperType,
+    F: Fn(&D, HAST, &IdD) -> bool,
+{
+    /// Create a new iterator for a fully decompressed tree
+    pub fn new(
+        arena: &'a D,
+        stores: HAST,
+        root: IdD,
+        config: CustomIteratorConfig,
+        is_leaf_fn: F,
+    ) -> Self {
+        Self {
+            arena,
+            stores,
+            stack: vec![(root, false)],
+            config,
+            is_leaf_fn,
+        }
+    }
+}
+
+impl<'a, D, HAST, IdD, F> Iterator for DecompressedCustomPostOrderIterator<'a, D, HAST, IdD, F>
+where
+    D: DecompressedTreeStore<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    IdD: std::fmt::Debug + Clone,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
+    <HAST::TS as TypeStore>::Ty: HyperType,
+    F: Fn(&D, HAST, &IdD) -> bool,
+{
+    type Item = IdD;
+
+    /// Creates a new custom post-order iterator for fully decompressed trees.
+    ///
+    /// - `arena`: The decompressed tree store to traverse (immutable access).
+    /// - `stores`: The HyperAST stores.
+    /// - `root`: The root node to start traversal from.
+    /// - `config`: Iterator configuration (which nodes to yield).
+    /// - `is_leaf_fn`: Predicate function to determine logical leaves.
+    ///
+    /// The iterator will traverse the tree in post-order, treating nodes for which
+    /// `is_leaf_fn` returns true as logical leaves (i.e., their children are not traversed).
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((node, children_processed)) = self.stack.pop() {
+            if children_processed {
+                // This node's children have all been processed, so we can yield it
+
+                let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
+
+                if is_custom_leaf {
+                    if self.config.yield_leaves {
+                        return Some(node);
+                    } else {
+                        continue;
+                    }
+                } else {
+                    if self.config.yield_inner {
+                        return Some(node);
+                    } else {
+                        continue;
+                    }
+                }
+            } else {
+                // This node's children haven't been processed yet
+
+                // Check if this matches our custom leaf predicate
+                let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
+
+                if is_custom_leaf {
+                    // Custom leaf - don't process children, yield immediately if configured
+                    if self.config.yield_leaves {
+                        return Some(node);
+                    } else {
+                        continue;
+                    }
+                } else {
+                    // Not a custom leaf - get children from the fully decompressed tree
+                    let children = self.arena.children(&node);
+
+                    if children.is_empty() {
+                        // No children - this is a regular leaf
+                        if self.config.yield_inner {
+                            return Some(node);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        // Has children - push back with children_processed=true, then push children
+                        self.stack.push((node, true));
+
+                        // Push children in reverse order so they're processed left-to-right
+                        for child in children.into_iter().rev() {
+                            self.stack.push((child, false));
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+    use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+    use crate::decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder};
     use crate::matchers::Decompressible;
     use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
@@ -221,9 +344,11 @@ mod tests {
     macro_rules! iterator_test {
         (
             $test_name:ident,
+            $test_name_decomp:ident,
             tree = $tree:expr,
             config = $config:expr,
             is_leaf_fn = $is_leaf_fn:expr,
+            is_leaf_fn_decomp = $is_leaf_fn_decomp:expr,
             expected = $expected:expr
         ) => {
             #[test]
@@ -252,6 +377,28 @@ mod tests {
 
                 assert_labels(&nodes, &stores, $expected);
             }
+
+            #[test]
+            fn $test_name_decomp() {
+                let (stores, src, _dst) = vpair_to_stores(($tree, tree!(0, "")));
+
+                let src_arena =
+                    Decompressible::<_, CompletePostOrder<u16, u16>>::decompress(&stores, &src);
+
+                let root = src_arena.root();
+
+                let config = $config;
+
+                let is_leaf_fn = $is_leaf_fn_decomp;
+
+                let iterator = DecompressedCustomPostOrderIterator::new(
+                    &src_arena, &stores, root, config, is_leaf_fn,
+                );
+
+                let nodes: Vec<_> = iterator.collect();
+
+                assert_labels(&nodes, &stores, $expected);
+            }
         };
     }
 
@@ -261,22 +408,6 @@ mod tests {
         node: &u16,
     ) -> bool {
         arena.decompress_children(node).is_empty()
-    }
-
-    fn always_false(
-        _arena: &mut Decompressible<&Store, &mut LazyPostOrder<u16, u16>>,
-        _stores: &Store,
-        _node: &u16,
-    ) -> bool {
-        false
-    }
-
-    fn always_true(
-        _arena: &mut Decompressible<&Store, &mut LazyPostOrder<u16, u16>>,
-        _stores: &Store,
-        _node: &u16,
-    ) -> bool {
-        true
     }
 
     fn label_statement(
@@ -291,9 +422,34 @@ mod tests {
         label.starts_with("statement")
     }
 
+    fn decompressed_no_children(
+        arena: &Decompressible<&Store, CompletePostOrder<u16, u16>>,
+        _stores: &Store,
+        node: &u16,
+    ) -> bool {
+        println!(
+            "[DecompressedNoChildren] Node has {:?} children: {:?}",
+            arena.descendants_count(node),
+            arena.descendants(node)
+        );
+        arena.descendants(node).len() == 0
+    }
+
+    fn decompressed_label_statement(
+        _arena: &Decompressible<&Store, CompletePostOrder<u16, u16>>,
+        stores: &Store,
+        node: &u16,
+    ) -> bool {
+        let node_ref = stores.node_store.resolve(&node);
+        let label_id = node_ref.get_label_unchecked();
+        let label = stores.label_store.resolve(&label_id);
+        label.starts_with("statement")
+    }
+
     // Example usage:
     iterator_test!(
         test_iterator_default_config,
+        test_iterator_default_config_decomp,
         tree = tree!(
             0, "root"; [
                 tree!(0, "l"; [
@@ -305,11 +461,13 @@ mod tests {
         ),
         config = CustomIteratorConfig::default(),
         is_leaf_fn = no_children,
+        is_leaf_fn_decomp = decompressed_no_children,
         expected = &["l.l", "l.r", "l", "r", "root"]
     );
 
     iterator_test!(
         test_iterator_leaves_only,
+        test_iterator_leaves_only_decomp,
         tree = tree!(
             0, "root"; [
                 tree!(0, "l"; [
@@ -324,11 +482,37 @@ mod tests {
             yield_inner: false
         },
         is_leaf_fn = no_children,
+        is_leaf_fn_decomp = decompressed_no_children,
         expected = &["l.l", "l.r", "r"]
     );
 
     iterator_test!(
+        test_iterator_inner_only,
+        test_iterator_inner_only_decomp,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"),
+                    tree!(0, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"),
+                    tree!(0, "r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: false,
+            yield_inner: true
+        },
+        is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
+        expected = &["r.r", "r", "root"]
+    );
+
+    iterator_test!(
         test_iterator_custom_leaves,
+        test_iterator_custom_leaves_decomp,
         tree = tree!(
             0, "root"; [
                 tree!(0, "statement_l"; [
@@ -346,11 +530,13 @@ mod tests {
             yield_inner: false
         },
         is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
         expected = &["statement_l", "statement_r.l"]
     );
 
     iterator_test!(
         test_iterator_nested_statements_only_highest,
+        test_iterator_nested_statements_only_highest_decomp,
         tree = tree!(
             0, "root"; [
                 tree!(0, "statement_l"; [
@@ -377,6 +563,7 @@ mod tests {
             yield_inner: false
         },
         is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
         expected = &["statement_l", "statement_r.l"]
     );
 }
