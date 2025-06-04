@@ -118,7 +118,7 @@ where
                 }
                 let original = arena.original(node);
                 let node_type = stores.resolve_type(&original);
-                return node_type.is_statement();
+                node_type.is_statement()
             },
         );
         iter.collect::<Vec<_>>()
@@ -139,7 +139,7 @@ where
                 }
                 let original = arena.original(node);
                 let node_type = stores.resolve_type(&original);
-                return node_type.is_statement();
+                node_type.is_statement()
             },
         );
         iter.collect::<Vec<_>>()
@@ -149,7 +149,14 @@ where
         self.src_arena
             .descendants(src_tree)
             .iter()
-            .filter(|tree| self.src_arena.children(tree).is_empty())
+            .filter(|node| {
+                if self.src_arena.children(node).is_empty() {
+                    return true;
+                }
+                let original = self.src_arena.original(node);
+                let node_type = self.stores.resolve_type(&original);
+                node_type.is_statement()
+            })
             .count()
     }
 

@@ -193,29 +193,24 @@ where
     /// Execute with up to statement level iteration
     fn execute_statement_level(&mut self) {
         let dst_nodes = self.collect_statement_inner_dst();
-        let src_nodes = self.collect_statement_inner_src();
+        let src_nodes = self.collect_statement_inner_src(false, true);
+
+        let leaf_counts = self.get_leaf_counts(&src_nodes);
 
         for src in &src_nodes {
-            let number_of_leaves = self
-                .src_arena
-                .descendants(&src)
-                .iter()
-                .filter(|t| {
-                    let id = self.src_arena.decompress_to(&t);
-                    self.src_arena.children(&id).is_empty()
-                })
-                .count();
+            let threshold = if leaf_counts.get(src.shallow()).unwrap_or(&0)
+                > &self.config.base_config.max_leaves
+            {
+                self.config.base_config.sim_threshold_large_trees
+            } else {
+                self.config.base_config.sim_threshold_small_trees
+            };
 
             for dst in &dst_nodes {
                 if self.is_mapping_allowed(&src, &dst) {
                     // no need to check if both are leaves since we only iterate over inner nodes
 
                     let similarity = self.compute_similarity(&src, &dst);
-                    let threshold = if number_of_leaves > self.config.base_config.max_leaves {
-                        self.config.base_config.sim_threshold_large_trees
-                    } else {
-                        self.config.base_config.sim_threshold_small_trees
-                    };
 
                     if similarity >= threshold {
                         self.mappings.link(*src.shallow(), *dst.shallow());
@@ -226,7 +221,38 @@ where
         }
     }
 
-    fn collect_statement_inner_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
+    fn get_leaf_counts(
+        &mut self,
+        nodes: &[<Dsrc as LazyDecompressed<M::Src>>::IdD],
+    ) -> HashMap<M::Src, usize> {
+        let src_leaves = self.collect_statement_inner_src(true, false);
+
+        let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
+
+        for src in &src_leaves {
+            leaf_counts.insert(*src.shallow(), 1);
+        }
+
+        // Process nodes in post-order so children are processed before parents
+        for src in nodes {
+            let leaf_count = self
+                .src_arena
+                .children(&src)
+                .iter()
+                .map(|child| leaf_counts.get(child).copied().unwrap_or(0))
+                .sum();
+
+            leaf_counts.insert(*src.shallow(), leaf_count);
+        }
+
+        leaf_counts
+    }
+
+    fn collect_statement_inner_src(
+        &mut self,
+        leaves: bool,
+        inner: bool,
+    ) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
         let src_root = self.src_arena.starter();
 
         let iter = CustomPostOrderIterator::new(
@@ -234,8 +260,8 @@ where
             self.stores,
             src_root,
             CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
+                yield_leaves: leaves,
+                yield_inner: inner,
             },
             |arena: &mut Dsrc,
              stores: HAST,
