@@ -137,7 +137,7 @@ where
                         &self.internal.mappings,
                     );
 
-                    if (similarity > max && similarity >= similarity_threshold) {
+                    if similarity > max && similarity >= similarity_threshold {
                         max = similarity;
                         best = Some(candidate);
                     }
@@ -159,10 +159,4 @@ where
             }
         }
     }
-
-    // fn last_chance_match(&mut self, src: &M::Src, dst: &M::Dst) {
-    //     self.internal.lcs_equal_matching(src, dst);
-    //     self.internal.lcs_structure_matching(src, dst);
-    //     self.internal.histogram_matching(src, dst);
-    // }
 }
