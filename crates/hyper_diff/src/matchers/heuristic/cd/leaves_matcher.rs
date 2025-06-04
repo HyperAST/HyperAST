@@ -98,7 +98,7 @@ where
         let dst_leaves = self.get_dst_nodes();
         let src_leaves = self.get_src_nodes();
         let collect_time = collect_start.elapsed();
-        println!(
+        log::trace!(
             "✓ Leaf collection: {:?} (src: {}, dst: {})",
             collect_time,
             src_leaves.len(),
@@ -107,7 +107,7 @@ where
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
         let total_comparisons = src_leaves.len() * dst_leaves.len();
-        println!("✓ Total comparisons needed: {}", total_comparisons);
+        log::trace!("✓ Total comparisons needed: {}", total_comparisons);
 
         let comparison_start = std::time::Instant::now();
         let mut comparison_count = 0;
@@ -129,7 +129,7 @@ where
             }
         }
         let comparison_time = comparison_start.elapsed();
-        println!(
+        log::trace!(
             "✓ Similarity calculations: {:?} ({} total, {} allowed, {} candidates)",
             comparison_time,
             comparison_count,
@@ -141,7 +141,7 @@ where
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
         let sort_time = sort_start.elapsed();
-        println!("✓ Sorting candidates: {:?}", sort_time);
+        log::trace!("✓ Sorting candidates: {:?}", sort_time);
 
         let mapping_start = std::time::Instant::now();
         let mut mapped_count = 0;
@@ -155,9 +155,10 @@ where
             }
         }
         let mapping_time = mapping_start.elapsed();
-        println!(
+        log::trace!(
             "✓ Creating mappings: {:?} ({} mappings created)",
-            mapping_time, mapped_count
+            mapping_time,
+            mapped_count
         );
 
         let total_time = start_time.elapsed();
@@ -281,7 +282,7 @@ mod tests {
         let src_fmt = |src: u16| result.src_arena.original(&src).to_string();
         let dst_fmt = |dst: u16| result.dst_arena.original(&dst).to_string();
         let display_vec = result.mapping.mappings.display(&src_fmt, &dst_fmt);
-        println!("Mappings:\n{}", display_vec);
+        log::trace!("Mappings:\n{}", display_vec);
 
         assert!(result.mapping.mappings.src_to_dst.len() > 0);
     }
@@ -290,17 +291,17 @@ mod tests {
     fn test_leaves_matcher() {
         let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
 
-        println!(
+        log::trace!(
             "Src Tree:\n{}",
             DisplayTree::new(&stores.label_store, &stores.node_store, src)
         );
 
-        println!(
+        log::trace!(
             "Dst Tree:\n{}",
             DisplayTree::new(&stores.label_store, &stores.node_store, dst)
         );
-        println!("Src Tree:\n{}", SyntaxSerializer::new(&stores, src));
-        println!("Dst Tree:\n{}", SyntaxSerializer::new(&stores, dst));
+        log::trace!("Src Tree:\n{}", SyntaxSerializer::new(&stores, src));
+        log::trace!("Dst Tree:\n{}", SyntaxSerializer::new(&stores, dst));
 
         let mapping = Mapper {
             hyperast: &stores,
@@ -318,17 +319,17 @@ mod tests {
         let result = LeavesMatcher::match_it(mapping);
 
         assert_eq!(2, result.mappings.len());
-        println!("Mappings: {:?}", result.mappings);
+        log::trace!("Mappings: {:?}", result.mappings);
         assert!(HyperAST::resolve(&stores, &dst).child(&0).is_some());
         assert!(HyperAST::resolve(&stores, &dst).child(&1).is_some());
         assert!(HyperAST::resolve(&stores, &src).child(&0).is_some());
         assert!(HyperAST::resolve(&stores, &src).child(&1).is_some());
 
-        println!(
+        log::trace!(
             "Src Children: {:?}",
             HyperAST::resolve(&stores, &src).children()
         );
-        println!(
+        log::trace!(
             "Dst Children: {:?}",
             HyperAST::resolve(&stores, &dst).children()
         );

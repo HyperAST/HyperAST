@@ -150,11 +150,11 @@ where
         let collect_start = std::time::Instant::now();
         let dst_leaves = self.collect_statement_leaves_dst();
         let src_leaves = self.collect_statement_leaves_src();
-        println!("src_leaves count: {:?}", src_leaves.len());
-        println!("node count: {:?}", self.src_arena.len());
+        log::trace!("src_leaves count: {:?}", src_leaves.len());
+        log::trace!("node count: {:?}", self.src_arena.len());
 
         let collect_time = collect_start.elapsed();
-        println!(
+        log::trace!(
             "✓ Statement leaf collection: {:?} (src: {}, dst: {})",
             collect_time,
             src_leaves.len(),
@@ -163,10 +163,10 @@ where
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
         let total_comparisons = src_leaves.len() * dst_leaves.len();
-        println!("✓ Total comparisons needed: {}", total_comparisons);
+        log::trace!("✓ Total comparisons needed: {}", total_comparisons);
 
         let comparison_start = std::time::Instant::now();
-        println!("✓ Using label caching optimization");
+        log::trace!("✓ Using label caching optimization");
         let cache_build_start = std::time::Instant::now();
         let mut src_text_cache: HashMap<
             &<Dsrc as LazyDecompressed<M::Src>>::IdD,
@@ -194,7 +194,7 @@ where
 
         for (src_idx, src) in src_leaves.iter().enumerate() {
             if src_idx % 100 == 0 && src_idx > 0 {
-                println!(
+                log::trace!(
                     "  → Processing src leaf {}/{} ({:.1}%)",
                     src_idx,
                     src_leaves.len(),
@@ -254,7 +254,7 @@ where
                         } else {
                             // let text =
                             //     TextSerializer::new(&self.stores, src_original.clone()).to_string();
-                            // println!("src_label_id is None:\n{}", text);
+                            // log::trace!("src_label_id is None:\n{}", text);
                             None
                         }
                         .unwrap_or_default();
@@ -263,7 +263,7 @@ where
                         let dst_label = if let Some(dst_label_id) = dst_node.try_get_label() {
                             Some(self.stores.label_store().resolve(&dst_label_id).to_string())
                         } else {
-                            // println!("dst_label_id is None");
+                            // log::trace!("dst_label_id is None");
                             None
                         }
                         .unwrap_or_default();
@@ -325,26 +325,27 @@ where
             }
         }
         let cache_build_time = cache_build_start.elapsed();
-        println!(
+        log::trace!(
             "✓ Cached text serialization & comparison: {:?}",
             cache_build_time
         );
-        println!("  → Hash computation time: {:?}", hash_computation_time);
-        println!("  → Text serialization time: {:?}", text_serialization_time);
-        println!(
+        log::trace!("  → Hash computation time: {:?}", hash_computation_time);
+        log::trace!("  → Text serialization time: {:?}", text_serialization_time);
+        log::trace!(
             "  → Similarity computation time: {:?}",
             similarity_computation_time
         );
-        println!(
+        log::trace!(
             "  → Cache hits: {}, Cache misses: {}",
-            cache_hits, cache_misses
+            cache_hits,
+            cache_misses
         );
-        println!("  → Characters compared: {}", characters_compared);
+        log::trace!("  → Characters compared: {}", characters_compared);
 
-        println!("  → Exact matches (hash): {}", exact_matches);
-        println!("  → Similarity checks performed: {}", similarity_checks);
-        println!("  → Skipped dst nodes: {}", skipped_dst);
-        println!(
+        log::trace!("  → Exact matches (hash): {}", exact_matches);
+        log::trace!("  → Similarity checks performed: {}", similarity_checks);
+        log::trace!("  → Skipped dst nodes: {}", skipped_dst);
+        log::trace!(
             "  → Avg time per similarity check: {:?}",
             if similarity_checks > 0 {
                 similarity_computation_time / similarity_checks
@@ -352,7 +353,7 @@ where
                 std::time::Duration::ZERO
             }
         );
-        println!(
+        log::trace!(
             "  → Avg time per text serialization: {:?}",
             if cache_misses > 0 {
                 text_serialization_time / cache_misses
@@ -362,7 +363,7 @@ where
         );
 
         let comparison_time = comparison_start.elapsed();
-        println!(
+        log::trace!(
             "✓ All comparisons: {:?} ({} candidates found)",
             comparison_time,
             leaves_mappings.len()
@@ -372,7 +373,7 @@ where
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
         let sort_time = sort_start.elapsed();
-        println!("✓ Sorting candidates: {:?}", sort_time);
+        log::trace!("✓ Sorting candidates: {:?}", sort_time);
 
         let mapping_start = std::time::Instant::now();
         let mut mapped_count = 0;
@@ -401,13 +402,14 @@ where
             }
         }
         let mapping_time = mapping_start.elapsed();
-        println!(
+        log::trace!(
             "✓ Creating mappings: {:?} ({} mappings created)",
-            mapping_time, mapped_count
+            mapping_time,
+            mapped_count
         );
 
         let total_time = start_time.elapsed();
-        println!("Statement level matcher complete: {:?} \n", total_time);
+        log::trace!("Statement level matcher complete: {:?} \n", total_time);
     }
 
     fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
