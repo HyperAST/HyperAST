@@ -1,8 +1,39 @@
+//! # Custom Post-Order Iterator for Coarse-Grained (Statement-Level) Traversal
+//!
+//! This module provides a configurable post-order iterator for traversing ASTs
+//! in a way that mimics the coarse-grained, statement-level analysis of the original
+//! ChangeDistiller algorithm, while operating over a fine-grained HyperAST.
+//!
+//! ## Motivation
+//!
+//! The original ChangeDistiller algorithm analyzes code at the statement level, treating
+//! statements as atomic units and ignoring their internal structure. In contrast, HyperAST
+//! preserves the complete fine-grained AST, including all syntactic elements. To bridge
+//! these approaches, this iterator allows certain nodes (e.g., statement nodes) to be
+//! treated as logical leaves, regardless of their actual children, enabling coarse-grained
+//! analysis atop a fine-grained tree.
+//!
+//! ## Features
+//! - **Configurable Leaf Detection:** A predicate function determines whether a node is
+//!   considered a logical leaf (e.g., a statement node), allowing flexible adaptation to
+//!   different analysis granularities.
+//! - **Hierarchical Traversal:** Performs post-order traversal, but stops descent at
+//!   logical leaves as defined by the predicate.
+//! - **Flexible Iteration Modes:** Configurable to yield all nodes, only logical leaves,
+//!   or only inner nodes, supporting both leaves and bottom-up matching phases efficiently.
+//!
+//! For more details and diagrams, see the associated paper section on coarse-grained
+//! statement-level implementation.
+
 use hyperast::types::{HyperAST, HyperType, TypeStore, WithHashs};
 
 use crate::decompressed_tree_store::LazyDecompressedTreeStore;
 
-/// Configuration for the generic iterator
+/// Configuration for the custom post-order iterator.
+///
+/// Controls whether the iterator yields logical leaves, inner nodes, or both.
+/// This enables flexible traversal strategies for different matching phases.
+
 #[derive(Debug, Clone, Copy)]
 pub struct CustomIteratorConfig {
     /// Whether to yield nodes that match the leaf predicate
@@ -32,6 +63,14 @@ pub struct CustomPostOrderIterator<'a, D, HAST, IdS, IdD, F> {
     _phantom: std::marker::PhantomData<IdS>,
 }
 
+/// Custom post-order iterator for AST traversal with logical leaf detection.
+///
+/// This iterator traverses the tree in post-order, but uses a user-provided predicate
+/// to determine which nodes should be treated as logical leaves (e.g., statement nodes).
+/// When a node matches the predicate, its children are not traversed, mimicking
+/// coarse-grained statement-level analysis while preserving the underlying fine-grained structure.
+///
+/// The iterator can be configured to yield all nodes, only logical leaves, or only inner nodes.
 impl<'a, D, HAST, IdD, F> CustomPostOrderIterator<'a, D, HAST, IdD, D::IdD, F>
 where
     D: LazyDecompressedTreeStore<HAST, IdD>,
@@ -71,6 +110,16 @@ where
 {
     type Item = D::IdD;
 
+    /// Creates a new custom post-order iterator.
+    ///
+    /// - `arena`: The decompressed tree store to traverse.
+    /// - `stores`: The HyperAST stores.
+    /// - `root`: The root node to start traversal from.
+    /// - `config`: Iterator configuration (which nodes to yield).
+    /// - `is_leaf_fn`: Predicate function to determine logical leaves.
+    ///
+    /// The iterator will traverse the tree in post-order, treating nodes for which
+    /// `is_leaf_fn` returns true as logical leaves (i.e., their children are not traversed).
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if self.red {
@@ -124,67 +173,74 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decompressed_tree_store::LazyDecompressed;
     use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
     use crate::matchers::Decompressible;
+    use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
-    use hyperast::PrimInt;
-    use hyperast::store::SimpleStores;
-    use hyperast::test_utils::simple_tree::{LS, NS, TStore, Tree};
-    use hyperast::types::{DecompressedFrom, LabelStore, Labeled, NodeId, NodeStore};
 
-    // Helper function to create test data
-    // fn create_test_arena(
-    //     example_fn: fn() -> (
-    //         crate::tree::simple_tree::SimpleTree<u8>,
-    //         crate::tree::simple_tree::SimpleTree<u8>,
-    //     ),
-    // ) -> (
-    //     SimpleStores<TStore, NS<Tree>, LS<u16>>,
-    //     Box<
-    //         crate::matchers::Decompressible<
-    //             &'static SimpleStores<TStore, NS<hyperast::test_utils::simple_tree::Tree>, LS<u16>>,
-    //             crate::decompressed_tree_store::lazy_post_order::LazyPostOrder<u16, u16>,
-    //         >,
-    //     >,
-    // ) {
-    //     let (stores, src, _dst) = vpair_to_stores(example_fn());
-    //     let src_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &src);
-    //     (stores, Box::new(src_arena))
-    // }
+    use hyperast::types::{DecompressedFrom, LabelStore, Labeled, NodeStore};
 
-    // #[test]
-    // fn test_iterator_default_config() {
-    //     let (stores, src, _dst) =
-    //         vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
-    //     let mut src_arena: <Decompressible<
-    //         &SimpleStores<TStore, NS<Tree>, LS<u16>>,
-    //         LazyPostOrder<_, u16>,
-    //     > as DecompressedFrom<&SimpleStores<TStore, NS<Tree>, LS<u16>>>>::Out =
-    //         Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &src);
+    #[test]
+    fn test_iterator_default_config() {
+        let (stores, src, _dst) = vpair_to_stores((
+            tree!(
+                0, "a"; [
+                    tree!(1, "b"; [
+                        tree!(2, "d"),
+                        tree!(2, "e"),
+                    ]),
+                    tree!(1, "c"),
+            ]),
+            tree!(
+                0, "a"; [
+                    tree!(1, "c"),
+                    tree!(1, "b"; [
+                        tree!(2, "e"),
+                        tree!(2, "d"),
+                    ]),
+            ]),
+        ));
+        let mut src_arena = Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(&stores, &src);
+        let mut src_arena_mut = src_arena.as_mut();
 
-    //     let root = src_arena.root();
+        let root = src_arena_mut.root();
 
-    //     // Test with default config (yield both leaves and inner nodes)
-    //     let config = CustomIteratorConfig::default();
+        // Test with default config (yield both leaves and inner nodes)
+        let config = CustomIteratorConfig::default();
 
-    //     // Use actual leaves predicate - nodes with no children
-    //     let is_leaf_fn = |arena: &mut _, _stores, node: &_| {
-    //         Decompressible::<_, LazyPostOrder<_, u16>>::decompress_children(arena, node).is_empty()
-    //     };
+        // Use actual leaves predicate - nodes with no children
+        let is_leaf_fn =
+            |arena: &mut Decompressible<_, &mut LazyPostOrder<u16, u16>>, _stores, node: &_| {
+                arena.decompress_children(node).is_empty()
+            };
 
-    //     let iterator =
-    //         CustomPostOrderIterator::new(&mut src_arena, &stores, root, config, is_leaf_fn);
+        let iterator =
+            CustomPostOrderIterator::new(&mut src_arena_mut, &stores, root, config, is_leaf_fn);
 
-    //     let nodes: Vec<_> = iterator.collect();
+        let nodes: Vec<_> = iterator.collect();
 
-    //     // Should visit all nodes in post-order
-    //     assert!(!nodes.is_empty());
+        // Print labels
+        println!(
+            "Labels: {:?}",
+            nodes
+                .iter()
+                .map(|node| {
+                    let n = stores.node_store.resolve(node);
+                    let l_id = n.get_label_unchecked();
+                    stores.label_store.resolve(l_id)
+                })
+                .collect::<Vec<_>>()
+        );
 
-    //     // The root should be the last element in post-order traversal
-    //     let last_node = nodes.last().unwrap();
-    //     assert_eq!(*last_node, root);
-    // }
+        // Should visit all nodes in post-order
+        assert_eq!(nodes.len(), 3);
+
+        println!("Nodes: {:?}", nodes);
+
+        // The root should be the last element in post-order traversal
+        let last_node = nodes.last().unwrap();
+        assert_eq!(*last_node, root);
+    }
 
     // #[test]
     // fn test_iterator_only_leaves() {
