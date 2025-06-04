@@ -25,27 +25,40 @@ use str_distance::DistanceMetric;
 use super::OptimizedLeavesMatcherConfig;
 
 /// A mapping candidate with similarity score for priority queue ordering
-struct MappingWithSimilarity<M: MonoMappingStore> {
-    src: M::Src,
-    dst: M::Dst,
+struct MappingWithSimilarity<
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    M: MonoMappingStore,
+> {
+    src: Dsrc::IdD,
+    dst: Ddst::IdD,
     sim: f64,
 }
 
-impl<M: MonoMappingStore> PartialEq for MappingWithSimilarity<M> {
+impl<Dsrc: LazyDecompressed<M::Src>, Ddst: LazyDecompressed<M::Dst>, M: MonoMappingStore> PartialEq
+    for MappingWithSimilarity<Dsrc, Ddst, M>
+{
     fn eq(&self, other: &Self) -> bool {
         self.sim == other.sim
     }
 }
 
-impl<M: MonoMappingStore> Eq for MappingWithSimilarity<M> {}
+impl<Dsrc: LazyDecompressed<M::Src>, Ddst: LazyDecompressed<M::Dst>, M: MonoMappingStore> Eq
+    for MappingWithSimilarity<Dsrc, Ddst, M>
+{
+}
 
-impl<M: MonoMappingStore> PartialOrd for MappingWithSimilarity<M> {
+impl<Dsrc: LazyDecompressed<M::Src>, Ddst: LazyDecompressed<M::Dst>, M: MonoMappingStore> PartialOrd
+    for MappingWithSimilarity<Dsrc, Ddst, M>
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.sim.partial_cmp(&other.sim)
     }
 }
 
-impl<M: MonoMappingStore> Ord for MappingWithSimilarity<M> {
+impl<Dsrc: LazyDecompressed<M::Src>, Ddst: LazyDecompressed<M::Dst>, M: MonoMappingStore> Ord
+    for MappingWithSimilarity<Dsrc, Ddst, M>
+{
     fn cmp(&self, other: &Self) -> Ordering {
         self.sim.partial_cmp(&other.sim).unwrap_or(Ordering::Equal)
     }
@@ -272,142 +285,77 @@ where
         let mut comparison_count = 0;
         let mut similarity_calculations = 0;
 
-        if self.config.use_binary_heap {
-            let mut best_mappings = BinaryHeap::new();
+        let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
 
-            // Only compare leaves of the same type
-            for (node_type, src_leaves) in src_leaves_by_type.iter() {
-                if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
-                    for &src_leaf in src_leaves {
-                        let src = self.src_arena.decompress_to(&src_leaf);
+        // Only compare leaves of the same type
+        for (node_type, src_leaves) in src_leaves_by_type.iter() {
+            if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
+                for &src_leaf in src_leaves {
+                    let src = self.src_arena.decompress_to(&src_leaf);
 
-                        for &dst_leaf in dst_leaves {
-                            let dst = self.dst_arena.decompress_to(&dst_leaf);
-                            comparison_count += 1;
+                    for &dst_leaf in dst_leaves {
+                        let dst = self.dst_arena.decompress_to(&dst_leaf);
+                        comparison_count += 1;
 
-                            if !self.mappings.is_src(src.shallow())
-                                && !self.mappings.is_dst(dst.shallow())
-                            {
-                                similarity_calculations += 1;
-                                let sim = self.compute_cached_label_similarity(
-                                    &src_leaf,
-                                    &dst_leaf,
-                                    &src,
-                                    &dst,
-                                    &mut label_cache,
-                                    &src_label_cache,
-                                    &dst_label_cache,
-                                    &qgram,
-                                );
+                        if !self.mappings.is_src(src.shallow())
+                            && !self.mappings.is_dst(dst.shallow())
+                        {
+                            similarity_calculations += 1;
+                            let sim = self.compute_cached_label_similarity(
+                                &src_leaf,
+                                &dst_leaf,
+                                &src,
+                                &dst,
+                                &mut label_cache,
+                                &src_label_cache,
+                                &dst_label_cache,
+                                &qgram,
+                            );
 
-                                if sim > self.config.base_config.label_sim_threshold {
-                                    best_mappings.push(MappingWithSimilarity::<M> {
-                                        src: src_leaf,
-                                        dst: dst_leaf,
-                                        sim,
-                                    });
-                                }
+                            if sim > self.config.base_config.label_sim_threshold {
+                                leaves_mappings.push(MappingWithSimilarity {
+                                    src: src.clone(),
+                                    dst: dst.clone(),
+                                    sim,
+                                });
                             }
                         }
                     }
                 }
             }
-
-            let comparison_time = comparison_start.elapsed();
-            println!(
-                "✓ Binary heap comparisons: {:?} ({} total, {} similarities calculated)",
-                comparison_time, comparison_count, similarity_calculations
-            );
-
-            let mapping_start = std::time::Instant::now();
-            let mut mapped_count = 0;
-            // Process mappings in order
-            while let Some(mapping) = best_mappings.pop() {
-                if self
-                    .mappings
-                    .link_if_both_unmapped(mapping.src, mapping.dst)
-                {
-                    mapped_count += 1;
-                }
-            }
-            let mapping_time = mapping_start.elapsed();
-            println!(
-                "✓ Binary heap mapping: {:?} ({} mappings created)",
-                mapping_time, mapped_count
-            );
-        } else {
-            let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
-
-            // Only compare leaves of the same type
-            for (node_type, src_leaves) in src_leaves_by_type.iter() {
-                if let Some(dst_leaves) = dst_leaves_by_type.get(node_type) {
-                    for &src_leaf in src_leaves {
-                        let src = self.src_arena.decompress_to(&src_leaf);
-
-                        for &dst_leaf in dst_leaves {
-                            let dst = self.dst_arena.decompress_to(&dst_leaf);
-                            comparison_count += 1;
-
-                            if !self.mappings.is_src(src.shallow())
-                                && !self.mappings.is_dst(dst.shallow())
-                            {
-                                similarity_calculations += 1;
-                                let sim = self.compute_cached_label_similarity(
-                                    &src_leaf,
-                                    &dst_leaf,
-                                    &src,
-                                    &dst,
-                                    &mut label_cache,
-                                    &src_label_cache,
-                                    &dst_label_cache,
-                                    &qgram,
-                                );
-
-                                if sim > self.config.base_config.label_sim_threshold {
-                                    leaves_mappings.push(MappingWithSimilarity {
-                                        src: src_leaf,
-                                        dst: dst_leaf,
-                                        sim,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            let comparison_time = comparison_start.elapsed();
-            println!(
-                "✓ Vector comparisons: {:?} ({} total, {} similarities calculated, {} candidates)",
-                comparison_time,
-                comparison_count,
-                similarity_calculations,
-                leaves_mappings.len()
-            );
-
-            let sort_start = std::time::Instant::now();
-            // Sort mappings by similarity
-            leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
-            let sort_time = sort_start.elapsed();
-            println!("✓ Vector sorting: {:?}", sort_time);
-
-            let mapping_start = std::time::Instant::now();
-            let mut mapped_count = 0;
-            // Process mappings in order
-            for mapping in leaves_mappings {
-                if self
-                    .mappings
-                    .link_if_both_unmapped(mapping.src, mapping.dst)
-                {
-                    mapped_count += 1;
-                }
-            }
-            let mapping_time = mapping_start.elapsed();
-            println!(
-                "✓ Vector mapping: {:?} ({} mappings created)",
-                mapping_time, mapped_count
-            );
         }
+
+        let comparison_time = comparison_start.elapsed();
+        println!(
+            "✓ Vector comparisons: {:?} ({} total, {} similarities calculated, {} candidates)",
+            comparison_time,
+            comparison_count,
+            similarity_calculations,
+            leaves_mappings.len()
+        );
+
+        let sort_start = std::time::Instant::now();
+        // Sort mappings by similarity
+        leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
+        let sort_time = sort_start.elapsed();
+        println!("✓ Vector sorting: {:?}", sort_time);
+
+        let mapping_start = std::time::Instant::now();
+        let mut mapped_count = 0;
+        // Process mappings in order
+        for mapping in leaves_mappings {
+            if self
+                .mappings
+                .link_if_both_unmapped(mapping.src.shallow().clone(), mapping.dst.shallow().clone())
+            {
+                mapped_count += 1;
+            }
+        }
+        let mapping_time = mapping_start.elapsed();
+        println!(
+            "✓ Vector mapping: {:?} ({} mappings created)",
+            mapping_time, mapped_count
+        );
 
         let total_time = start_time.elapsed();
         println!("=== TYPE GROUPING MATCHER COMPLETE: {:?} ===\n", total_time);
@@ -429,7 +377,7 @@ where
             dst_leaves.len()
         );
 
-        let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+        let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
         let total_comparisons = src_leaves.len() * dst_leaves.len();
         println!("✓ Total comparisons needed: {}", total_comparisons);
 
@@ -465,8 +413,19 @@ where
                     let dst_label_hash = WithHashs::hash(&dst_node, &HashKind::label());
 
                     if src_label_hash == dst_label_hash {
-                        self.mappings
-                            .link_if_both_unmapped(*src.shallow(), *dst.shallow());
+                        leaves_mappings.push(MappingWithSimilarity {
+                            src: src.clone(),
+                            dst: dst.clone(),
+                            sim: f64::MAX,
+                        });
+                        // self.mappings
+                        //     .link(src.shallow().clone(), dst.shallow().clone());
+
+                        // let src = self.src_arena.descendants(src);
+                        // let dst = self.dst_arena.descendants(dst);
+                        // src.iter()
+                        //     .zip(dst.iter())
+                        //     .for_each(|(src, dst)| self.mappings.link(*src, *dst));
 
                         ignore_dst.set(dst_idx, true);
                         break;
@@ -499,8 +458,8 @@ where
                             .normalized(src_text.chars(), dst_text.chars());
                     if sim > self.config.base_config.label_sim_threshold {
                         leaves_mappings.push(MappingWithSimilarity {
-                            src: src.shallow().clone(),
-                            dst: dst.shallow().clone(),
+                            src: src.clone(),
+                            dst: dst.clone(),
                             sim,
                         });
                     }
@@ -529,8 +488,8 @@ where
                             .normalized(src_text.chars(), dst_text.chars());
                     if sim > self.config.base_config.label_sim_threshold {
                         leaves_mappings.push(MappingWithSimilarity {
-                            src: src.shallow().clone(),
-                            dst: dst.shallow().clone(),
+                            src: src.clone(),
+                            dst: dst.clone(),
                             sim,
                         });
                     }
@@ -557,8 +516,15 @@ where
         for mapping in leaves_mappings {
             if self
                 .mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst)
+                .link_if_both_unmapped(mapping.src.shallow().clone(), mapping.dst.shallow().clone())
             {
+                let src = self.src_arena.descendants(&mapping.src);
+                let dst = self.dst_arena.descendants(&mapping.dst);
+
+                src.iter()
+                    .zip(dst.iter())
+                    .for_each(|(src, dst)| self.mappings.link(*src, *dst));
+
                 mapped_count += 1;
             }
         }
@@ -594,7 +560,7 @@ where
         let total_comparisons = src_leaves.len() * dst_leaves.len();
         println!("✓ Total comparisons needed: {}", total_comparisons);
 
-        let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
+        let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
 
         let comparison_start = std::time::Instant::now();
         let mut comparison_count = 0;
@@ -605,8 +571,8 @@ where
                 let sim = self.compute_label_similarity_simple(&src, &dst);
                 if sim > self.config.base_config.label_sim_threshold {
                     leaves_mappings.push(MappingWithSimilarity {
-                        src: src.shallow().clone(),
-                        dst: dst.shallow().clone(),
+                        src: src.clone(),
+                        dst: dst.clone(),
                         sim,
                     });
                 }
@@ -632,7 +598,7 @@ where
         for mapping in leaves_mappings {
             if self
                 .mappings
-                .link_if_both_unmapped(mapping.src, mapping.dst)
+                .link_if_both_unmapped(mapping.src.shallow().clone(), mapping.dst.shallow().clone())
             {
                 mapped_count += 1;
             }
@@ -694,6 +660,10 @@ where
              stores: HAST,
              node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
              -> bool {
+                if arena.decompress_children(node).is_empty() {
+                    return true;
+                }
+
                 let original = arena.original(node);
                 let node_type = stores.resolve_type(&original);
                 node_type.is_statement()
@@ -715,6 +685,9 @@ where
                 yield_inner: true,
             },
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
+                if arena.decompress_children(node).is_empty() {
+                    return true;
+                }
                 let original = arena.original(node);
                 let node_type = stores.resolve_type(&original);
                 node_type.is_statement()

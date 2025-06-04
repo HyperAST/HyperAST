@@ -241,6 +241,9 @@ where
              stores: HAST,
              node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
              -> bool {
+                if arena.decompress_children(node).is_empty() {
+                    return true;
+                }
                 let original = arena.original(node);
                 let node_type = stores.resolve_type(&original);
                 node_type.is_statement()
@@ -262,6 +265,9 @@ where
                 yield_inner: false,
             },
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
+                if arena.decompress_children(node).is_empty() {
+                    return true;
+                }
                 let original = arena.original(node);
                 let node_type = stores.resolve_type(&original);
                 node_type.is_statement()
