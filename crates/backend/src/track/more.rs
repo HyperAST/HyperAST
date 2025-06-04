@@ -22,7 +22,7 @@ fn lazy_mapping<'a>(
 > {
     use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
     use hyper_diff::matchers::heuristic::gt::{
-        lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+        lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher,
         lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
     };
     use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
@@ -58,7 +58,7 @@ fn lazy_mapping<'a>(
         dbg!(&subtree_matcher_t, &subtree_mappings_s);
         let bottomup_prepare_t = 0.;
         let now = Instant::now();
-        let mapper = GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper);
+        let mapper = LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper);
         dbg!(&now.elapsed().as_secs_f64());
         let bottomup_matcher_t = now.elapsed().as_secs_f64();
         let bottomup_mappings_s = mapper.mappings().len();
@@ -103,11 +103,11 @@ fn lazy_subtree_mapping<'a, 'b>(
     mapping_store::MultiVecStore<u32>,
 > {
     use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+    use hyper_diff::matchers::Mapping;
     use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
     use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
     use hyper_diff::matchers::mapping_store::MappingStore;
     use hyper_diff::matchers::mapping_store::VecStore;
-    use hyper_diff::matchers::Mapping;
 
     let hyperast = &repositories.processor.main_stores;
     let src = &src_tr;
@@ -127,7 +127,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         loop {
             match (cached_decomp(src), cached_decomp(dst)) {
                 (Some(decompress_src), Some(decompress_dst)) => {
-                    break (decompress_src, decompress_dst)
+                    break (decompress_src, decompress_dst);
                 }
                 (None, None) => {
                     dbg!();

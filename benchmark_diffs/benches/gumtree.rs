@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    fs::File,
     path::Path,
     time::{Duration, Instant},
 };
@@ -9,12 +10,14 @@ use hyper_diff::{
     actions::Actions,
     algorithms::{self, DiffResult, MappingDurations},
 };
-use hyperast::store::SimpleStores;
+use hyperast::{store::SimpleStores, types::LabelStore};
 use hyperast_benchmark_diffs::{
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
     preprocess::{JavaPreprocessFileSys, parse_dir_pair, parse_string_pair},
 };
+use hyperast_gen_ts_java::{legion_with_refs::Local, types::TStore};
+use hyperast_vcs_git::no_space::NoSpaceNodeStoreWrapper;
 
 // Load the content of A1.java and A2.java
 const A1_CONTENT: &str = include_str!("../src/A1.java");
@@ -31,18 +34,17 @@ enum GumtreeVariant {
 impl fmt::Display for GumtreeVariant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GumtreeVariant::Greedy => write!(f, "Gumtree Greedy"),
-            GumtreeVariant::Stable => write!(f, "Gumtree Stable"),
-            GumtreeVariant::GreedyLazy => write!(f, "Lazy Gumtree Greedy"),
-            GumtreeVariant::StableLazy => write!(f, "Lazy Gumtree Stable"),
+            GumtreeVariant::Greedy => write!(f, "Greedy"),
+            GumtreeVariant::Stable => write!(f, "Stable"),
+            GumtreeVariant::GreedyLazy => write!(f, "Lazy Greedy"),
+            GumtreeVariant::StableLazy => write!(f, "Lazy Stable"),
         }
     }
 }
 
 #[derive(Clone, Copy)]
 enum DataSet {
-    Defects4j,
-    Defects4jSmall,
+    Defects4j(&'static str),
     BugsInPy,
     GhJava,
     GhPython,
@@ -51,8 +53,7 @@ enum DataSet {
 impl DataSet {
     pub fn name(&self) -> &str {
         match self {
-            DataSet::Defects4j => "defects4j",
-            DataSet::Defects4jSmall => "defects4j-small",
+            DataSet::Defects4j(project) => "defects4j",
             DataSet::BugsInPy => "bugsinpy",
             DataSet::GhJava => "gh-java",
             DataSet::GhPython => "gh-python",
@@ -61,11 +62,26 @@ impl DataSet {
 }
 
 fn diff_benchmark(c: &mut Criterion) {
+    let gumtree_dataset_dir = std::env::var("GUMTREE_DATASET_DIR").unwrap();
+    let root = Path::new(&gumtree_dataset_dir);
+    let [src, dst] = dataset_roots(root, DataSet::Defects4j("Jsoup"));
+
+    let stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let md_cache = Default::default();
+    let mut java_gen = JavaPreprocessFileSys {
+        main_stores: stores,
+        java_md_cache: md_cache,
+    };
+    let now = Instant::now();
+    let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
+    let parse_t = now.elapsed().as_secs_f64();
+
+    let stores = hyperast_vcs_git::no_space::as_nospaces2(&java_gen.main_stores);
+
     let mut group = c.benchmark_group("Gumtree");
-    //group
+    group.sample_size(10);
     //.significance_level(0.1)
     //.sampling_mode(SamplingMode::Flat);
-    //.sample_size(1)
     //.measurement_time(Duration::from_secs(12));
     for variant in [
         GumtreeVariant::Greedy,
@@ -75,18 +91,10 @@ fn diff_benchmark(c: &mut Criterion) {
     ] {
         group.bench_function(format!("{}", &variant), |b| {
             b.iter(|| {
-                //benchmark_gumtree_small_file(&variant);
-                run(variant, DataSet::Defects4jSmall);
+                black_box(run(&stores, &src_tr, &dst_tr, variant));
             })
         });
     }
-}
-
-pub fn run(variant: GumtreeVariant, dataset: DataSet) {
-    let gumtree_dataset_dir = std::env::var("GUMTREE_DATASET_DIR").unwrap();
-    let root = Path::new(&gumtree_dataset_dir);
-    let [src, dst] = dataset_roots(root, dataset);
-    black_box(run_dir(&src, &dst, variant));
 }
 
 pub fn dataset_roots(root: &Path, dataset: DataSet) -> [std::path::PathBuf; 2] {
@@ -106,30 +114,18 @@ pub fn dataset_roots(root: &Path, dataset: DataSet) -> [std::path::PathBuf; 2] {
     let dst = data_root.join("after");
     assert!(src.exists(), "probably using the wrong format");
     assert!(dst.exists(), "probably using the wrong format");
+    if let DataSet::Defects4j(project) = dataset {
+        return [src, dst].map(|path| path.join(project));
+    }
     [src, dst]
 }
 
-pub fn run_dir(src: &Path, dst: &Path, variant: GumtreeVariant) -> Option<String> {
-    let stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-    let md_cache = Default::default();
-    let mut java_gen = JavaPreprocessFileSys {
-        main_stores: stores,
-        java_md_cache: md_cache,
-    };
-    let now = Instant::now();
-    let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
-    let parse_t = now.elapsed().as_secs_f64();
-
-    let stores = hyperast_vcs_git::no_space::as_nospaces2(&java_gen.main_stores);
-
-    dbg!(&parse_t);
-    dbg!(&src_tr.metrics.size);
-    dbg!(&dst_tr.metrics.size);
-    let buggy_s = src_tr.metrics.size;
-    let fixed_s = dst_tr.metrics.size;
-
-    let gt_out_format = "COMPRESSED"; // JSON
-
+pub fn run(
+    stores: &SimpleStores<TStore, NoSpaceNodeStoreWrapper, &hyperast::store::labels::LabelStore>,
+    src_tr: &Local,
+    dst_tr: &Local,
+    variant: GumtreeVariant,
+) {
     let diff = match variant {
         GumtreeVariant::Greedy => algorithms::gumtree::diff,
         GumtreeVariant::Stable => algorithms::gumtree_stable::diff,
@@ -143,7 +139,7 @@ pub fn run_dir(src: &Path, dst: &Path, variant: GumtreeVariant) -> Option<String
         actions: hast_actions,
         prepare_gen_t,
         gen_t,
-    } = diff(&stores, &src_tr.compressed_node, &dst_tr.compressed_node);
+    } = diff(stores, &src_tr.compressed_node, &dst_tr.compressed_node);
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
     let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];

@@ -5,7 +5,7 @@ use hyperast::types::{self, HyperAST};
 
 use hyper_diff::decompressed_tree_store::hidding_wrapper;
 use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
 pub use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
 use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
 use hyper_diff::matchers::mapping_store::MappingStore;
@@ -89,7 +89,7 @@ pub fn full<HAST: HyperAST + Copy>(
         DefaultMultiMappingStore<_>,
     >(mapper);
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, &mm);
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper);
+    LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper);
 }
 
 pub fn bottom_up_hiding<'a, 'b, 's: 'a, HAST: 's + HyperAST + Copy>(
@@ -143,7 +143,7 @@ pub fn bottom_up_hiding<'a, 'b, 's: 'a, HAST: 's + HyperAST + Copy>(
                 mappings,
             },
         };
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 200, 1, 2>::execute(&mut mapper);
+        LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 200, 1, 2>::execute(&mut mapper);
         // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 100>::execute(
         //     &mut mapper,
         //     hyperast.label_store(),
@@ -171,7 +171,7 @@ pub fn bottom_up<'store, 'a, 'b, HAST: HyperAST + Copy>(
 {
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
 
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper);
+    LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper);
 }
 
 pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST + Copy>(
@@ -191,7 +191,7 @@ pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST + Copy>(
         'store + types::WithHashs + types::WithStats,
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 2000, 1, 100>::execute(mapper);
+    LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 2000, 1, 100>::execute(mapper);
 }
 
 pub fn full2<'a, 'b, 's: 'a, HAST: 's + HyperAST + Copy>(

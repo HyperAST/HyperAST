@@ -9,7 +9,7 @@ use crate::{
     matchers::{
         Decompressible, Mapper,
         heuristic::gt::{
-            lazy_marriage_bottom_up_matcher::MarriageBottomUpMatcher,
+            lazy_marriage_bottom_up_matcher::LazyMarriageBottomUpMatcher,
             lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
@@ -57,7 +57,7 @@ where
     let bottomup_prepare_t = 0.; // nothing to prepare
 
     let now = Instant::now();
-    let mapper = MarriageBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = LazyMarriageBottomUpMatcher::<_, _, _, _, VecStore<_>, 300>::match_it(mapper);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
     tr!(bottomup_matcher_t, bottomup_mappings_s);

@@ -260,7 +260,7 @@ pub fn windowed_commits_compare(
                         dst_s,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        summarized_lazy.actions.map_or(-1,|x|x as isize),
+                        summarized_lazy.actions.map_or(-1, |x| x as isize),
                         gt_counts.actions,
                         valid.missing_mappings,
                         valid.additional_mappings,
@@ -333,11 +333,11 @@ mod test {
     use super::*;
 
     use hyper_diff::{
-        decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
+        decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
         matchers::{
+            Decompressible,
             heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::{DefaultMultiMappingStore, VecStore},
-            Decompressible,
         },
     };
     use hyperast::{
@@ -345,7 +345,7 @@ mod test {
         types::{HyperASTShared, WithChildren},
     };
 
-    use crate::postprocess::{print_mappings, SimpleJsonPostProcess};
+    use crate::postprocess::{SimpleJsonPostProcess, print_mappings};
 
     #[test]
     fn issue_mappings_pomxml_spoon_pom() {
@@ -643,8 +643,8 @@ mod test {
         // modify filter_mappings to extract redundant mappings
         // the store it alongside other mappings
         dbg!();
-        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 2>::execute(&mut mapper);
+        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
+        LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 2>::execute(&mut mapper);
         // This one matches everingthing as it should but it is much slower
         // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 10_000, 1, 2>::execute(
         //     &mut mapper,

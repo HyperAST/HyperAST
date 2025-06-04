@@ -7,10 +7,10 @@ use crate::decompressed_tree_store::{
     Shallow, ShallowDecompressedTreeStore,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use crate::matchers::{Decompressible, Mapper};
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats};
+use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::PrimInt;
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats};
 use num_traits::{cast, one};
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -20,7 +20,7 @@ use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 ///
 /// it will allow to make use complex types as const generics
 /// ie. make the different threshold neater
-pub struct GreedyBottomUpMatcher<
+pub struct LazyGreedyBottomUpMatcher<
     Dsrc,
     Ddst,
     HAST: HyperAST + Copy,
@@ -39,16 +39,16 @@ const SLICE: bool = true;
 
 /// TODO PostOrder might not be necessary
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST,
-        M,
-        MZs,
-        const SIZE_THRESHOLD: usize,
-        const SIM_THRESHOLD_NUM: u64,
-        const SIM_THRESHOLD_DEN: u64,
-    >
-    GreedyBottomUpMatcher<
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST,
+    M,
+    MZs,
+    const SIZE_THRESHOLD: usize,
+    const SIM_THRESHOLD_NUM: u64,
+    const SIM_THRESHOLD_DEN: u64,
+>
+    LazyGreedyBottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,

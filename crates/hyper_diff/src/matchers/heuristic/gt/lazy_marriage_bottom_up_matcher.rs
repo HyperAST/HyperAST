@@ -17,7 +17,7 @@ use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 ///
 /// it will allow to make use complex types as const generics
 /// ie. make the different threshold neater
-pub struct MarriageBottomUpMatcher<
+pub struct LazyMarriageBottomUpMatcher<
     Dsrc,
     Ddst,
     HAST: HyperAST + Copy,
@@ -45,7 +45,7 @@ impl<
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
 >
-    MarriageBottomUpMatcher<
+    LazyMarriageBottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,

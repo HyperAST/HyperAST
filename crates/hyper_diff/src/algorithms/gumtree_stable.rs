@@ -45,7 +45,7 @@ where
     let subtree_mappings_s = mapper.mappings().len();
     //dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let now = Instant::now();
-    let mapper = MarriageBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = MarriageBottomUpMatcher::<_, _, _, _, 300>::match_it(mapper);
     //dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
