@@ -721,7 +721,6 @@ impl hyperast::types::LLang<TType> for Java {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }
-
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
@@ -966,6 +965,7 @@ pub enum Type {
     Superclass,
     SuperInterfaces,
     TypeList,
+    Permits_,
     ClassBody,
     StaticInitializer,
     ConstructorDeclaration,
@@ -1001,6 +1001,7 @@ pub enum Type {
     FormalParameter,
     ReceiverParameter,
     SpreadParameter,
+    Throws_,
     LocalVariableDeclaration,
     MethodDeclaration,
     CompactConstructorDeclaration,
@@ -1293,7 +1294,7 @@ impl Type {
             238u16 => Type::Superclass,
             239u16 => Type::SuperInterfaces,
             240u16 => Type::TypeList,
-            241u16 => Type::Permits,
+            241u16 => Type::Permits_,
             242u16 => Type::ClassBody,
             243u16 => Type::StaticInitializer,
             244u16 => Type::ConstructorDeclaration,
@@ -1329,7 +1330,7 @@ impl Type {
             274u16 => Type::FormalParameter,
             275u16 => Type::ReceiverParameter,
             276u16 => Type::SpreadParameter,
-            277u16 => Type::Throws,
+            277u16 => Type::Throws_,
             278u16 => Type::LocalVariableDeclaration,
             279u16 => Type::MethodDeclaration,
             280u16 => Type::CompactConstructorDeclaration,
@@ -1377,9 +1378,11 @@ impl Type {
             TStore::SPACES => Type::Spaces,
             TStore::_ERROR => Type::_ERROR,
             TStore::ERROR => Type::ERROR,
-            x => panic!("{} {:?}", x, crate::language().node_kind_for_id(x)),
+            x => panic!("{}", x),
         }
     }
+
+    #[allow(unreachable_patterns)]
     pub fn from_str(t: &str) -> Option<Type> {
         Some(match t {
             "end" => Type::End,
@@ -1623,6 +1626,7 @@ impl Type {
             "superclass" => Type::Superclass,
             "super_interfaces" => Type::SuperInterfaces,
             "type_list" => Type::TypeList,
+            "permits" => Type::Permits_,
             "class_body" => Type::ClassBody,
             "static_initializer" => Type::StaticInitializer,
             "constructor_declaration" => Type::ConstructorDeclaration,
@@ -1658,6 +1662,7 @@ impl Type {
             "formal_parameter" => Type::FormalParameter,
             "receiver_parameter" => Type::ReceiverParameter,
             "spread_parameter" => Type::SpreadParameter,
+            "throws" => Type::Throws_,
             "local_variable_declaration" => Type::LocalVariableDeclaration,
             "method_declaration" => Type::MethodDeclaration,
             "compact_constructor_declaration" => Type::CompactConstructorDeclaration,
@@ -1951,6 +1956,7 @@ impl Type {
             Type::Superclass => "superclass",
             Type::SuperInterfaces => "super_interfaces",
             Type::TypeList => "type_list",
+            Type::Permits_ => "permits",
             Type::ClassBody => "class_body",
             Type::StaticInitializer => "static_initializer",
             Type::ConstructorDeclaration => "constructor_declaration",
@@ -1986,6 +1992,7 @@ impl Type {
             Type::FormalParameter => "formal_parameter",
             Type::ReceiverParameter => "receiver_parameter",
             Type::SpreadParameter => "spread_parameter",
+            Type::Throws_ => "throws",
             Type::LocalVariableDeclaration => "local_variable_declaration",
             Type::MethodDeclaration => "method_declaration",
             Type::CompactConstructorDeclaration => "compact_constructor_declaration",
@@ -2029,8 +2036,8 @@ impl Type {
             Type::FormalParametersRepeat1 => "formal_parameters_repeat1",
             Type::ReceiverParameterRepeat1 => "receiver_parameter_repeat1",
             Type::TypeIdentifier => "type_identifier",
-            Type::Spaces => "Spaces",
             Type::Directory => "Directory",
+            Type::Spaces => "Spaces",
             Type::_ERROR => "_ERROR",
             Type::ERROR => "ERROR",
         }
@@ -2270,6 +2277,17 @@ impl Type {
             Type::TypeIdentifier => true,
             _ => false,
         }
+    }
+}
+
+#[test]
+fn test_tslanguage_and_type_identity() {
+    let l = crate::language();
+    assert_eq!(l.node_kind_count(), S_T_L.len());
+    for id in 0..l.node_kind_count() {
+        let kind = l.node_kind_for_id(id as u16).unwrap();
+        let ty = Type::from_u16(id as u16);
+        assert_eq!(ty.to_str(), kind);
     }
 }
 
@@ -2515,6 +2533,7 @@ const S_T_L: &'static [Type] = &[
     Type::Superclass,
     Type::SuperInterfaces,
     Type::TypeList,
+    Type::Permits_,
     Type::ClassBody,
     Type::StaticInitializer,
     Type::ConstructorDeclaration,
@@ -2550,6 +2569,7 @@ const S_T_L: &'static [Type] = &[
     Type::FormalParameter,
     Type::ReceiverParameter,
     Type::SpreadParameter,
+    Type::Throws_,
     Type::LocalVariableDeclaration,
     Type::MethodDeclaration,
     Type::CompactConstructorDeclaration,
@@ -2593,7 +2613,4 @@ const S_T_L: &'static [Type] = &[
     Type::FormalParametersRepeat1,
     Type::ReceiverParameterRepeat1,
     Type::TypeIdentifier,
-    Type::Spaces,
-    Type::Directory,
-    Type::ERROR,
 ];

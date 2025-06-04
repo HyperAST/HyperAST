@@ -430,6 +430,17 @@ impl TryFrom<&str> for Type {
     }
 }
 
+impl Type {
+    pub(crate) fn is_repeat(&self) -> bool {
+        *self == Type::ProgramRepeat1
+            || *self == Type::_StringRepeat1
+            || *self == Type::ParametersRepeat1
+            || *self == Type::ListRepeat1
+            || *self == Type::GroupingRepeat1
+            || *self == Type::NamedNodeRepeat1
+    }
+}
+
 impl hyperast::types::LLang<hyperast::types::TypeU16<Self>> for TsQuery {
     type I = u16;
 
@@ -456,10 +467,9 @@ impl Into<TypeU16<TsQuery>> for Type {
 
 impl Into<u16> for Type {
     fn into(self) -> u16 {
-        self as u8 as u16
+        self as u16
     }
 }
-
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
@@ -472,6 +482,7 @@ pub enum Type {
     Plus,
     QMark,
     Identifier,
+    Identifier_,
     Inderscore,
     At,
     Comment,
@@ -526,7 +537,7 @@ impl Type {
             6u16 => Type::Plus,
             7u16 => Type::QMark,
             8u16 => Type::Identifier,
-            9u16 => Type::Identifier,
+            9u16 => Type::Identifier_,
             10u16 => Type::Inderscore,
             11u16 => Type::At,
             12u16 => Type::Comment,
@@ -571,6 +582,7 @@ impl Type {
             x => panic!("{}", x),
         }
     }
+    #[allow(unreachable_patterns)]
     pub fn from_str(t: &str) -> Option<Type> {
         Some(match t {
             "end" => Type::End,
@@ -582,6 +594,7 @@ impl Type {
             "+" => Type::Plus,
             "?" => Type::QMark,
             "identifier" => Type::Identifier,
+            "identifier" => Type::Identifier_,
             "_" => Type::Inderscore,
             "@" => Type::At,
             "comment" => Type::Comment,
@@ -637,6 +650,7 @@ impl Type {
             Type::Plus => "+",
             Type::QMark => "?",
             Type::Identifier => "identifier",
+            Type::Identifier_ => "identifier",
             Type::Inderscore => "_",
             Type::At => "@",
             Type::Comment => "comment",
@@ -674,13 +688,12 @@ impl Type {
             Type::ListRepeat1 => "list_repeat1",
             Type::GroupingRepeat1 => "grouping_repeat1",
             Type::NamedNodeRepeat1 => "named_node_repeat1",
-            Type::Spaces => "Spaces",
             Type::Directory => "Directory",
+            Type::Spaces => "Spaces",
             Type::_ERROR => "_ERROR",
             Type::ERROR => "ERROR",
         }
     }
-
     pub fn is_hidden(&self) -> bool {
         match self {
             Type::End => true,
@@ -706,13 +719,11 @@ impl Type {
             _ => false,
         }
     }
-    pub fn is_repeat(&self) -> bool {
-        todo!("generate this with polyglote")
-    }
     pub fn is_named(&self) -> bool {
         match self {
             Type::EscapeSequence => true,
             Type::Identifier => true,
+            Type::Identifier_ => true,
             Type::Comment => true,
             Type::PredicateType => true,
             Type::Program => true,
@@ -732,6 +743,17 @@ impl Type {
     }
 }
 
+#[test]
+fn test_tslanguage_and_type_identity() {
+    let l = crate::language();
+    assert_eq!(l.node_kind_count(), S_T_L.len());
+    for id in 0..l.node_kind_count() {
+        let kind = l.node_kind_for_id(id as u16).unwrap();
+        let ty = Type::from_u16(id as u16);
+        assert_eq!(ty.to_str(), kind);
+    }
+}
+
 const S_T_L: &'static [Type] = &[
     Type::End,
     Type::Dot,
@@ -742,6 +764,7 @@ const S_T_L: &'static [Type] = &[
     Type::Plus,
     Type::QMark,
     Type::Identifier,
+    Type::Identifier_,
     Type::Inderscore,
     Type::At,
     Type::Comment,
