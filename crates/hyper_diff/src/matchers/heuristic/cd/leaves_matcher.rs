@@ -25,12 +25,15 @@ struct MappingWithSimilarity<M: MonoMappingStore> {
     sim: f64,
 }
 
+use super::LeavesMatcherMetrics;
+
 pub struct LeavesMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
     pub config: LeavesMatcherConfig,
+    pub metrics: LeavesMatcherMetrics,
 }
 
 impl<
@@ -59,31 +62,45 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn with_config(
+    pub fn with_config_and_metrics(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
         config: LeavesMatcherConfig,
-    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+    ) -> (
+        crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        LeavesMatcherMetrics,
+    ) {
         let mut matcher = Self {
             stores: mapping.hyperast,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
             mappings: mapping.mapping.mappings,
             config,
+            metrics: LeavesMatcherMetrics::default(),
         };
-        // Rest of the code remains the same
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
+        let start = std::time::Instant::now();
         matcher.execute();
-        // Return the mapper
-        crate::matchers::Mapper {
-            hyperast: mapping.hyperast,
-            mapping: crate::matchers::Mapping {
-                src_arena: matcher.src_arena,
-                dst_arena: matcher.dst_arena,
-                mappings: matcher.mappings,
+        matcher.metrics.total_time = start.elapsed();
+        (
+            crate::matchers::Mapper {
+                hyperast: mapping.hyperast,
+                mapping: crate::matchers::Mapping {
+                    src_arena: matcher.src_arena,
+                    dst_arena: matcher.dst_arena,
+                    mappings: matcher.mappings,
+                },
             },
-        }
+            matcher.metrics,
+        )
+    }
+
+    pub fn with_config(
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        config: LeavesMatcherConfig,
+    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+        LeavesMatcher::with_config_and_metrics(mapping, config).0
     }
 
     pub fn match_it(
@@ -93,18 +110,10 @@ where
     }
 
     fn execute(&mut self) {
-        let start_time = std::time::Instant::now();
-
         let collect_start = std::time::Instant::now();
         let dst_leaves = self.get_dst_nodes();
         let src_leaves = self.get_src_nodes();
         let collect_time = collect_start.elapsed();
-        log::trace!(
-            "✓ Leaf collection: {:?} (src: {}, dst: {})",
-            collect_time,
-            src_leaves.len(),
-            dst_leaves.len()
-        );
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
         let total_comparisons = src_leaves.len() * dst_leaves.len();
@@ -162,7 +171,11 @@ where
             mapped_count
         );
 
-        let total_time = start_time.elapsed();
+        // Track metrics
+        self.metrics.total_comparisons = comparison_count;
+        self.metrics.successful_matches = mapped_count;
+        self.metrics.similarity_time = comparison_time;
+        // The baseline matcher does not track the other fields, so leave them as default.
     }
 
     fn get_src_nodes(&self) -> Vec<<M as MappingStore>::Src> {

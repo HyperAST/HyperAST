@@ -1,13 +1,15 @@
 use super::MappingDurations;
 use super::{DiffResult, PreparedMappingDurations};
+use crate::actions::action_vec::ActionsVec;
 use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 use crate::matchers::heuristic::cd::bottom_up_matcher::BottomUpMatcher;
 use crate::matchers::heuristic::cd::leaves_matcher::LeavesMatcher;
 use crate::matchers::heuristic::cd::optimized_bottom_up_matcher::OptimizedBottomUpMatcher;
 use crate::matchers::heuristic::cd::optimized_leaves_matcher::OptimizedLeavesMatcher;
 use crate::matchers::heuristic::cd::{
-    BottomUpMatcherConfig, LeavesMatcherConfig, OptimizedBottomUpMatcherConfig,
-    OptimizedDiffConfig, OptimizedLeavesMatcherConfig,
+    BottomUpMatcherConfig, BottomUpMatcherMetrics, CDResult, LeavesMatcherConfig,
+    LeavesMatcherMetrics, OptimizedBottomUpMatcherConfig, OptimizedDiffConfig,
+    OptimizedLeavesMatcherConfig,
 };
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
@@ -19,7 +21,11 @@ use crate::{
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
-use std::{fmt::Debug, time::Instant};
+use serde::Serialize;
+use std::{
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
@@ -42,10 +48,31 @@ where
     HAST::Label: Debug + Copy + Eq,
     for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
+    diff_optimized_verbose(hyperast, src, dst, config).into_diff_result()
+}
+
+/// Verbose version that returns detailed metrics
+pub fn diff_optimized_verbose<HAST: HyperAST + Copy>(
+    hyperast: HAST,
+    src: &HAST::IdN,
+    dst: &HAST::IdN,
+    config: OptimizedDiffConfig,
+) -> CDResult<
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
+    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
+    PreparedMappingDurations<2>,
+>
+where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
+    HAST::Idx: hyperast::PrimInt,
+    HAST::Label: Debug + Copy + Eq,
+    for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
+{
     if config.use_lazy_decompression {
-        diff_with_lazy_decompression(hyperast, src, dst, config)
+        diff_with_lazy_decompression_verbose(hyperast, src, dst, config)
     } else {
-        diff_with_complete_decompression(hyperast, src, dst, config)
+        diff_with_complete_decompression_verbose(hyperast, src, dst, config)
     }
 }
 
@@ -126,6 +153,28 @@ where
     HAST::Label: Debug + Copy + Eq,
     for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
+    diff_with_lazy_decompression_verbose(hyperast, src, dst, config).into_diff_result()
+}
+
+/// Execute diff with lazy decompression (verbose version)
+fn diff_with_lazy_decompression_verbose<HAST: HyperAST + Copy>(
+    hyperast: HAST,
+    src: &HAST::IdN,
+    dst: &HAST::IdN,
+    config: OptimizedDiffConfig,
+) -> CDResult<
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
+    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
+    PreparedMappingDurations<2>,
+>
+where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
+    HAST::Idx: hyperast::PrimInt,
+    HAST::Label: Debug + Copy + Eq,
+    for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
+{
+    let start = Instant::now();
     log::debug!(
         "Starting Optimized ChangeDistiller Algorithm with lazy decompression. Preparing subtrees"
     );
@@ -142,13 +191,16 @@ where
             mappings: mapper_owned.mapping.mappings,
         },
     };
-    let subtree_prepare_t = now.elapsed().as_secs_f64();
+    let subtree_prepare_time = now.elapsed();
+    let subtree_prepare_t = subtree_prepare_time.as_secs_f64();
     log::debug!("Subtree prepare time: {}", subtree_prepare_t);
 
     log::debug!("Starting OptimizedLeavesMatcher");
-    let now = Instant::now();
-    let mapper = OptimizedLeavesMatcher::with_config(mapper, config.leaves_matcher);
-    let leaves_matcher_t = now.elapsed().as_secs_f64();
+    let leaves_start = Instant::now();
+    let (mapper, leaves_matcher_metrics) =
+        OptimizedLeavesMatcher::with_config_and_metrics(mapper, config.leaves_matcher);
+    let leaves_matcher_time = leaves_start.elapsed();
+    let leaves_matcher_t = leaves_matcher_time.as_secs_f64();
     let leaves_mappings_s = mapper.mappings().len();
     log::debug!(
         "LeavesMatcher time: {}, Leaves mappings: {}",
@@ -157,9 +209,11 @@ where
     );
 
     log::debug!("Starting OptimizedBottomUpMatcher");
-    let now = Instant::now();
-    let mapper = OptimizedBottomUpMatcher::with_config(mapper, config.bottom_up_matcher);
-    let bottomup_matcher_t = now.elapsed().as_secs_f64();
+    let bottomup_start = Instant::now();
+    let (mapper, bottomup_matcher_metrics) =
+        OptimizedBottomUpMatcher::with_config_and_metrics(mapper, config.bottom_up_matcher);
+    let bottomup_matcher_time = bottomup_start.elapsed();
+    let bottomup_matcher_t = bottomup_matcher_time.as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
     log::debug!(
         "Bottom-up matcher time: {}, Bottom-up mappings: {}",
@@ -233,7 +287,10 @@ where
         (None, 0.0, 0.0, mapper)
     };
 
-    DiffResult {
+    let start = Instant::now();
+
+    CDResult {
+        total_time: start.elapsed(),
         mapping_durations: PreparedMappingDurations {
             mappings: MappingDurations([leaves_matcher_t, bottomup_matcher_t]),
             preparation: [subtree_prepare_t, 0.0],
@@ -242,6 +299,13 @@ where
         actions,
         prepare_gen_t,
         gen_t,
+
+        // Detailed timing metrics from actual measurements
+        leaves_matcher_metrics,
+        bottomup_matcher_metrics,
+
+        produced_mappings: bottomup_mappings_s,
+        subtree_prepare_time,
     }
 }
 
@@ -263,19 +327,44 @@ where
     HAST::Label: Debug + Copy + Eq,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
+    diff_with_complete_decompression_verbose(hyperast, src, dst, config).into_diff_result()
+}
+
+/// Execute diff with complete decompression (verbose baseline algorithm)
+fn diff_with_complete_decompression_verbose<HAST: HyperAST + Copy>(
+    hyperast: HAST,
+    src: &HAST::IdN,
+    dst: &HAST::IdN,
+    config: OptimizedDiffConfig,
+) -> CDResult<
+    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
+    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
+    PreparedMappingDurations<2>,
+>
+where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
+    HAST::Idx: hyperast::PrimInt,
+    HAST::Label: Debug + Copy + Eq,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
+{
+    let start = Instant::now();
     log::debug!(
         "Starting Optimized ChangeDistiller Algorithm with complete decompression. Preparing subtrees"
     );
     let now = Instant::now();
     let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
         hyperast.decompress_pair(src, dst).into();
-    let subtree_prepare_t = now.elapsed().as_secs_f64();
+    let subtree_prepare_time = now.elapsed();
+    let subtree_prepare_t = subtree_prepare_time.as_secs_f64();
     log::debug!("Subtree prepare time: {}", subtree_prepare_t);
 
     log::debug!("Starting LeavesMatcher (baseline)");
-    let now = Instant::now();
-    let mapper = LeavesMatcher::with_config(mapper, config.leaves_matcher.base_config);
-    let leaves_matcher_t = now.elapsed().as_secs_f64();
+    let leaves_start = Instant::now();
+    let (mapper, leaves_matcher_metrics) =
+        LeavesMatcher::with_config_and_metrics(mapper, config.leaves_matcher.base_config);
+    let leaves_matcher_time = leaves_start.elapsed();
+    let leaves_matcher_t = leaves_matcher_time.as_secs_f64();
     let leaves_mappings_s = mapper.mappings().len();
     log::debug!(
         "LeavesMatcher time: {}, Leaves mappings: {}",
@@ -284,9 +373,11 @@ where
     );
 
     log::debug!("Starting BottomUpMatcher (baseline)");
-    let now = Instant::now();
-    let mapper = BottomUpMatcher::with_config(mapper, config.bottom_up_matcher.base_config);
-    let bottomup_matcher_t = now.elapsed().as_secs_f64();
+    let bottomup_start = Instant::now();
+    let (mapper, bottomup_matcher_metrics) =
+        BottomUpMatcher::with_config_and_metrics(mapper, config.bottom_up_matcher.base_config);
+    let bottomup_matcher_time = bottomup_start.elapsed();
+    let bottomup_matcher_t = bottomup_matcher_time.as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
     log::debug!(
         "Bottom-up matcher time: {}, Bottom-up mappings: {}",
@@ -314,7 +405,9 @@ where
         (None, 0.0, 0.0, mapper)
     };
 
-    DiffResult {
+    let total_time = start.elapsed();
+
+    CDResult {
         mapping_durations: PreparedMappingDurations {
             mappings: MappingDurations([leaves_matcher_t, bottomup_matcher_t]),
             preparation: [subtree_prepare_t, 0.0],
@@ -323,6 +416,15 @@ where
         actions,
         prepare_gen_t,
         gen_t,
+        total_time,
+
+        // Detailed timing metrics - baseline algorithm has limited metrics
+        leaves_matcher_metrics,
+
+        bottomup_matcher_metrics,
+
+        produced_mappings: bottomup_mappings_s,
+        subtree_prepare_time,
     }
 }
 

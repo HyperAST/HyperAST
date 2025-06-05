@@ -5,7 +5,10 @@ use crate::{
         ShallowDecompressedTreeStore,
     },
     matchers::{
-        heuristic::cd::iterator::{CustomIteratorConfig, CustomPostOrderIterator},
+        heuristic::cd::{
+            LeavesMatcherMetrics,
+            iterator::{CustomIteratorConfig, CustomPostOrderIterator},
+        },
         mapping_store::MonoMappingStore,
     },
 };
@@ -66,6 +69,7 @@ pub struct OptimizedLeavesMatcher<Dsrc, Ddst, HAST, M> {
     pub dst_arena: Ddst,
     pub mappings: M,
     pub config: OptimizedLeavesMatcherConfig,
+    pub metrics: LeavesMatcherMetrics,
 }
 
 impl<
@@ -108,27 +112,45 @@ where
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
         config: OptimizedLeavesMatcherConfig,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+        Self::with_config_and_metrics(mapping, config).0
+    }
+
+    /// Create matcher with custom configuration and return metrics
+    pub fn with_config_and_metrics(
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        config: OptimizedLeavesMatcherConfig,
+    ) -> (
+        crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        LeavesMatcherMetrics,
+    ) {
         let mut matcher = Self {
             stores: mapping.hyperast,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
             mappings: mapping.mapping.mappings,
             config,
+            metrics: LeavesMatcherMetrics::default(),
         };
 
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
-        matcher.execute();
 
-        crate::matchers::Mapper {
+        let start_time = std::time::Instant::now();
+        matcher.execute();
+        matcher.metrics.total_time = start_time.elapsed();
+
+        let metrics = matcher.metrics.clone();
+        let mapper = crate::matchers::Mapper {
             hyperast: mapping.hyperast,
             mapping: crate::matchers::Mapping {
                 src_arena: matcher.src_arena,
                 dst_arena: matcher.dst_arena,
                 mappings: matcher.mappings,
             },
-        }
+        };
+
+        (mapper, metrics)
     }
 
     /// Create matcher with default optimized configuration
@@ -191,6 +213,7 @@ where
         let mut exact_matches = 0;
         let mut similarity_checks = 0;
         let mut skipped_dst = 0;
+        let total_comparisons = src_leaves.len() * dst_leaves.len();
 
         for (src_idx, src) in src_leaves.iter().enumerate() {
             if src_idx % 100 == 0 && src_idx > 0 {
@@ -410,6 +433,19 @@ where
 
         let total_time = start_time.elapsed();
         log::trace!("Statement level matcher complete: {:?} \n", total_time);
+
+        // Update metrics
+        self.metrics.total_comparisons += total_comparisons;
+        self.metrics.successful_matches += mapped_count;
+        self.metrics.hash_computation_time += hash_computation_time;
+        self.metrics.text_serialization_time += text_serialization_time;
+        self.metrics.similarity_time += similarity_computation_time;
+        self.metrics.characters_compared += characters_compared;
+        self.metrics.cache_hits += cache_hits;
+        self.metrics.cache_misses += cache_misses as usize;
+        self.metrics.exact_matches += exact_matches;
+        self.metrics.similarity_checks += similarity_checks as usize;
+        self.metrics.skipped_dst += skipped_dst;
     }
 
     fn collect_statement_leaves_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {

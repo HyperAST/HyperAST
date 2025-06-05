@@ -1,3 +1,9 @@
+use std::time::Duration;
+
+use serde::{Serialize, Serializer};
+
+use crate::{actions::action_vec::ActionsVec, algorithms::DiffResult};
+
 pub mod bottom_up_matcher;
 pub mod iterator;
 pub mod lazy_bottom_up_matcher;
@@ -124,4 +130,110 @@ impl Default for OptimizedBottomUpMatcherConfig {
             statement_level_iteration: true,
         }
     }
+}
+
+/// Detailed metrics collected during leaves matching
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct LeavesMatcherMetrics {
+    #[serde(serialize_with = "duration_as_millis")]
+    pub total_time: Duration,
+    /// Total number of leaf-to-leaf comparisons attempted (including both successful and unsuccessful).
+    pub total_comparisons: usize,
+    /// Number of successful matches found between source and destination leaves.
+    pub successful_matches: usize,
+    /// Total time spent computing hashes for leaves (for hash-based optimizations).
+    #[serde(serialize_with = "duration_as_millis")]
+    pub hash_computation_time: Duration,
+    /// Total time spent serializing leaf node text for comparison.
+    #[serde(serialize_with = "duration_as_millis")]
+    pub text_serialization_time: Duration,
+    /// Total time spent performing string similarity calculations.
+    #[serde(serialize_with = "duration_as_millis")]
+    pub similarity_time: Duration,
+    /// Total number of characters compared during similarity checks.
+    pub characters_compared: usize,
+    /// Number of times a cached label or serialized node was successfully reused.
+    pub cache_hits: usize,
+    /// Number of times a cache lookup failed and a value had to be recomputed.
+    pub cache_misses: usize,
+    /// Number of exact matches found based on identical label-hash.
+    pub exact_matches: usize,
+    /// Number of expensive similarity checks performed (may be less than total comparisons if some are skipped).
+    pub similarity_checks: usize,
+    /// Number of destination leaves skipped due to pre-matching.
+    pub skipped_dst: usize,
+}
+
+/// Detailed metrics collected during bottom-up matching
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct BottomUpMatcherMetrics {
+    #[serde(serialize_with = "duration_as_millis")]
+    pub total_time: Duration,
+    pub total_comparisons: usize,
+    pub successful_matches: usize,
+    #[serde(serialize_with = "duration_as_millis")]
+    pub similarity_time: Duration,
+}
+
+/// Detailed metrics and result from Change Distiller algorithm
+#[derive(Debug)]
+pub struct CDResult<A, M, MD> {
+    pub mapping_durations: MD,
+    pub mapper: M,
+    pub actions: Option<ActionsVec<A>>,
+    pub prepare_gen_t: f64,
+    pub gen_t: f64,
+    pub total_time: Duration,
+
+    pub produced_mappings: usize,
+    pub subtree_prepare_time: Duration,
+
+    pub leaves_matcher_metrics: LeavesMatcherMetrics,
+    pub bottomup_matcher_metrics: BottomUpMatcherMetrics,
+}
+
+impl<A, M, MD> CDResult<A, M, MD> {
+    /// Convert CDResult to standard DiffResult for backward compatibility
+    pub fn into_diff_result(self) -> DiffResult<A, M, MD> {
+        DiffResult {
+            mapping_durations: self.mapping_durations,
+            mapper: self.mapper,
+            actions: self.actions,
+            prepare_gen_t: self.prepare_gen_t,
+            gen_t: self.gen_t,
+        }
+    }
+}
+
+/// Serializable version of detailed CDResult metrics
+#[derive(Debug, Serialize)]
+pub struct DiffResultSummary {
+    mappings: usize,
+    actions: Option<usize>,
+    prepare_gen_t: f64,
+    gen_t: f64,
+
+    leaves: LeavesMatcherMetrics,
+    bottomup: BottomUpMatcherMetrics,
+}
+
+impl<A, M, MD> Into<DiffResultSummary> for CDResult<A, M, MD> {
+    fn into(self) -> DiffResultSummary {
+        DiffResultSummary {
+            mappings: self.produced_mappings,
+            actions: self.actions.as_ref().map(|x| x.0.len()),
+            prepare_gen_t: self.prepare_gen_t,
+            gen_t: self.gen_t,
+
+            leaves: self.leaves_matcher_metrics,
+            bottomup: self.bottomup_matcher_metrics,
+        }
+    }
+}
+
+fn duration_as_millis<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_f32(duration.as_secs_f32() * 1000.0)
 }

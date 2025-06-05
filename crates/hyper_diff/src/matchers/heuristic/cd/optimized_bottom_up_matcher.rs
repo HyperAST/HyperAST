@@ -4,7 +4,10 @@ use crate::{
         LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
         ShallowDecompressedTreeStore,
     },
-    matchers::{Mapper, Mapping, mapping_store::MonoMappingStore, similarity_metrics},
+    matchers::{
+        Mapper, Mapping, heuristic::cd::BottomUpMatcherMetrics, mapping_store::MonoMappingStore,
+        similarity_metrics,
+    },
 };
 use ahash::RandomState;
 use hyperast::types::{HyperAST, HyperType, NodeId, WithHashs};
@@ -25,6 +28,7 @@ pub struct OptimizedBottomUpMatcher<Dsrc, Ddst, HAST, M: MonoMappingStore> {
     pub dst_arena: Ddst,
     pub mappings: M,
     pub config: OptimizedBottomUpMatcherConfig,
+    pub metrics: BottomUpMatcherMetrics,
 }
 
 impl<
@@ -70,12 +74,38 @@ where
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
             config,
+            metrics: BottomUpMatcherMetrics::default(),
+        };
+        matcher
+            .mappings
+            .topit(matcher.src_arena.len(), matcher.dst_arena.len());
+        let start_time = std::time::Instant::now();
+        matcher.execute();
+        matcher.metrics.total_time = start_time.elapsed();
+        matcher.into()
+    }
+
+    /// Create matcher with custom configuration and return metrics
+    pub fn with_config_and_metrics(
+        mapping: Mapper<HAST, Dsrc, Ddst, M>,
+        config: OptimizedBottomUpMatcherConfig,
+    ) -> (Mapper<HAST, Dsrc, Ddst, M>, BottomUpMatcherMetrics) {
+        let mut matcher = Self {
+            stores: mapping.hyperast,
+            mappings: mapping.mapping.mappings,
+            src_arena: mapping.mapping.src_arena,
+            dst_arena: mapping.mapping.dst_arena,
+            config,
+            metrics: BottomUpMatcherMetrics::default(),
         };
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
         matcher.execute();
-        matcher.into()
+
+        let metrics = matcher.metrics.clone();
+        let mapper = matcher.into();
+        (mapper, metrics)
     }
 
     /// Create matcher with default optimized configuration
@@ -151,6 +181,10 @@ where
         }
 
         // Process nodes by type, comparing only nodes with matching types
+        let mut total_comparisons = 0;
+        let mut successful_matches = 0;
+        let mut similarity_time = std::time::Duration::ZERO;
+
         for (node_type, src_nodes) in src_nodes_by_type.iter() {
             if let Some(dst_nodes) = dst_nodes_by_type.get(node_type) {
                 for src in src_nodes {
@@ -172,22 +206,32 @@ where
                             continue;
                         }
 
+                        total_comparisons += 1;
+
                         // Use range-based similarity computation for optimal performance
+                        let sim_start = std::time::Instant::now();
                         let similarity = similarity_metrics::SimilarityMeasure::range(
                             &self.src_arena.descendants_range(src),
                             &self.dst_arena.descendants_range(dst),
                             &self.mappings,
                         )
                         .chawathe();
+                        similarity_time += sim_start.elapsed();
 
                         if similarity >= threshold {
                             self.mappings.link(*src.shallow(), *dst.shallow());
+                            successful_matches += 1;
                             break;
                         }
                     }
                 }
             }
         }
+
+        // Update metrics
+        self.metrics.total_comparisons += total_comparisons;
+        self.metrics.successful_matches += successful_matches;
+        self.metrics.similarity_time += similarity_time;
     }
 
     /// Execute with up to statement level iteration
@@ -196,6 +240,10 @@ where
         let src_nodes = self.collect_statement_inner_src(false, true);
 
         let leaf_counts = self.get_leaf_counts(&src_nodes);
+
+        let mut total_comparisons = 0;
+        let mut successful_matches = 0;
+        let mut similarity_time = std::time::Duration::ZERO;
 
         for src in &src_nodes {
             let threshold = if leaf_counts.get(src.shallow()).unwrap_or(&0)
@@ -209,16 +257,25 @@ where
             for dst in &dst_nodes {
                 if self.is_mapping_allowed(&src, &dst) {
                     // no need to check if both are leaves since we only iterate over inner nodes
+                    total_comparisons += 1;
 
+                    let sim_start = std::time::Instant::now();
                     let similarity = self.compute_similarity(&src, &dst);
+                    similarity_time += sim_start.elapsed();
 
                     if similarity >= threshold {
                         self.mappings.link(*src.shallow(), *dst.shallow());
+                        successful_matches += 1;
                         break;
                     }
                 }
             }
         }
+
+        // Update metrics
+        self.metrics.total_comparisons += total_comparisons;
+        self.metrics.successful_matches += successful_matches;
+        self.metrics.similarity_time += similarity_time;
     }
 
     fn get_leaf_counts(
@@ -305,6 +362,10 @@ where
 
     /// Execute naive approach without optimizations - compare all nodes
     fn execute_naive(&mut self) {
+        let mut total_comparisons = 0;
+        let mut successful_matches = 0;
+        let mut similarity_time = std::time::Duration::ZERO;
+
         for s in self.src_arena.iter_df_post::<true>() {
             let src = self.src_arena.decompress_to(&s);
             let number_of_leaves = self
@@ -325,7 +386,12 @@ where
                     let dst_is_leaf = self.dst_arena.children(&dst).is_empty();
 
                     if !(src_is_leaf || dst_is_leaf) {
+                        total_comparisons += 1;
+
+                        let sim_start = std::time::Instant::now();
                         let similarity = self.compute_similarity(&src, &dst);
+                        similarity_time += sim_start.elapsed();
+
                         let threshold = if number_of_leaves > self.config.base_config.max_leaves {
                             self.config.base_config.sim_threshold_large_trees
                         } else {
@@ -334,12 +400,18 @@ where
 
                         if similarity >= threshold {
                             self.mappings.link(*src.shallow(), *dst.shallow());
+                            successful_matches += 1;
                             break;
                         }
                     }
                 }
             }
         }
+
+        // Update metrics
+        self.metrics.total_comparisons += total_comparisons;
+        self.metrics.successful_matches += successful_matches;
+        self.metrics.similarity_time += similarity_time;
     }
 
     /// Check if mapping between two nodes is allowed (same type, both unmapped)

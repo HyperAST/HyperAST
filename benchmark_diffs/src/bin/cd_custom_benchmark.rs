@@ -1,6 +1,9 @@
 use clap::{Parser, command};
 use hyper_diff::algorithms;
-use hyper_diff::matchers::heuristic::cd::{BottomUpMatcherConfig, LeavesMatcherConfig};
+use hyper_diff::matchers::heuristic::cd::{
+    BottomUpMatcherConfig, BottomUpMatcherMetrics, CDResult, DiffResultSummary,
+    LeavesMatcherConfig, LeavesMatcherMetrics,
+};
 use hyper_diff::{
     OptimizedBottomUpMatcherConfig, OptimizedDiffConfig, OptimizedLeavesMatcherConfig,
 };
@@ -90,17 +93,6 @@ struct MeasurementResult {
 
     // Metadata
     timestamp: u64,
-}
-
-/// Serializable version of ResultsSummary
-#[derive(Debug, Serialize)]
-struct DiffResultSummary {
-    mappings: usize,
-    actions: Option<usize>,
-    prepare_gen_t: f64,
-    gen_t: f64,
-    leaves_matcher_t: f64,
-    bottom_up_matcher_t: f64,
 }
 
 /// Create various optimization configurations for comprehensive benchmarking
@@ -214,7 +206,7 @@ fn run_single_measurement(
 ) -> Result<(Duration, DiffResultSummary), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
-    let diff_result = algorithms::change_distiller_optimized::diff_optimized(
+    let cd_result = algorithms::change_distiller_optimized::diff_optimized_verbose(
         &input.stores,
         &input.src,
         &input.dst,
@@ -222,18 +214,8 @@ fn run_single_measurement(
     );
 
     let duration = start.elapsed();
-    let summary = diff_result.summarize();
 
-    let diff_summary = DiffResultSummary {
-        mappings: summary.mappings,
-        actions: summary.actions,
-        prepare_gen_t: summary.prepare_gen_t,
-        gen_t: summary.gen_t,
-        leaves_matcher_t: summary.mapping_durations.mappings.0[0],
-        bottom_up_matcher_t: summary.mapping_durations.mappings.0[1],
-    };
-
-    Ok((duration, diff_summary))
+    Ok((duration, cd_result.into()))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

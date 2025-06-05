@@ -4064,6 +4064,8 @@ dependencies = [
  "log",
  "logging_timer",
  "num-traits",
+ "serde",
+ "serde_json",
  "specs",
  "str-distance",
 ]

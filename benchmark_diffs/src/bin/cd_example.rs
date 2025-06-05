@@ -1,6 +1,8 @@
 use criterion::{Criterion, SamplingMode, criterion_group, criterion_main};
 use hyper_diff::algorithms;
-use hyper_diff::matchers::heuristic::cd::{BottomUpMatcherConfig, LeavesMatcherConfig};
+use hyper_diff::matchers::heuristic::cd::{
+    BottomUpMatcherConfig, DiffResultSummary, LeavesMatcherConfig,
+};
 use hyper_diff::{
     OptimizedBottomUpMatcherConfig, OptimizedDiffConfig, OptimizedLeavesMatcherConfig,
 };
@@ -242,7 +244,7 @@ fn main() {
         let input = common::preprocess(&(&input.0, &input.1));
         for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
             iteration += 1;
-            println!("--------------------------------------------------------------------");
+            println!("\n\n--------------------------------------------------------------------");
             println!(
                 "Progress: {}/{} (Test case {} of {}, Config {} of {})",
                 iteration,
@@ -256,13 +258,14 @@ fn main() {
                 "CD Single - {} - {} loc {} nodes",
                 opt_config.name, input.loc, input.node_count,
             );
-            let result = algorithms::change_distiller_optimized::diff_optimized(
+            let result = algorithms::change_distiller_optimized::diff_optimized_verbose(
                 &input.stores,
                 &input.src,
                 &input.dst,
                 opt_config.config.clone(),
             );
-            println!("Result: {:#?}\n\n", result.summarize());
+            let summary: DiffResultSummary = result.into();
+            println!("Result: {:#?}\n\n", summary);
         }
     }
 }

@@ -5,7 +5,10 @@ use crate::{
     },
     matchers::{
         Mapper, Mapping,
-        heuristic::cd::iterator::{CustomIteratorConfig, DecompressedCustomPostOrderIterator},
+        heuristic::cd::{
+            BottomUpMatcherMetrics,
+            iterator::{CustomIteratorConfig, DecompressedCustomPostOrderIterator},
+        },
         mapping_store::{MappingStore, MonoMappingStore},
         similarity_metrics,
     },
@@ -22,6 +25,7 @@ pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub dst_arena: Ddst,
     pub mappings: M,
     pub config: BottomUpMatcherConfig,
+    pub metrics: BottomUpMatcherMetrics,
 }
 
 impl<
@@ -50,22 +54,33 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn with_config(
+    pub fn with_config_and_metrics(
         mapping: Mapper<HAST, Dsrc, Ddst, M>,
         config: BottomUpMatcherConfig,
-    ) -> Mapper<HAST, Dsrc, Ddst, M> {
+    ) -> (Mapper<HAST, Dsrc, Ddst, M>, BottomUpMatcherMetrics) {
         let mut matcher = Self {
             stores: mapping.hyperast,
             mappings: mapping.mapping.mappings,
             src_arena: mapping.mapping.src_arena,
             dst_arena: mapping.mapping.dst_arena,
             config,
+            metrics: BottomUpMatcherMetrics::default(),
         };
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
+        let start = std::time::Instant::now();
         matcher.execute();
-        matcher.into()
+        matcher.metrics.total_time = start.elapsed();
+        let metrics = matcher.metrics.clone();
+        (matcher.into(), metrics)
+    }
+
+    pub fn with_config(
+        mapping: Mapper<HAST, Dsrc, Ddst, M>,
+        config: BottomUpMatcherConfig,
+    ) -> Mapper<HAST, Dsrc, Ddst, M> {
+        Self::with_config_and_metrics(mapping, config).0
     }
 
     pub fn match_it(mapping: Mapper<HAST, Dsrc, Ddst, M>) -> Mapper<HAST, Dsrc, Ddst, M> {
