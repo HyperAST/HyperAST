@@ -12,7 +12,7 @@ members = [
     "hyper_app",
     "benchmark_diffs",
     "benchmark_smells",
-    "benchmark", "dat",
+    "benchmark",
 ]
 exclude = ["crates/ref-mining-evaluation", "hyperast_wasm"]
 default-members = [

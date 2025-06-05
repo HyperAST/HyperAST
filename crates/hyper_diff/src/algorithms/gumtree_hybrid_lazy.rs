@@ -18,6 +18,7 @@ use crate::{
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
+use std::cmp::max;
 use crate::matchers::heuristic::gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
 
 #[allow(type_alias_bounds)]
@@ -27,10 +28,12 @@ type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::Id
 type M = VecStore<u32>;
 type MM = DefaultMultiMappingStore<u32>;
 
-pub fn diff_hybrid_lazy<HAST: HyperAST + Copy, const MAX_SIZE_THRESHOLD: usize, const MIN_HEIGHT_THRESHOLD: usize>(
+const DEFAULT_MIN_HEIGHT: usize = 1;
+pub fn diff_hybrid_lazy<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
+    max_size: usize,
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, M>,
@@ -50,7 +53,7 @@ where
     tr!(subtree_prepare_t);
 
     let now = Instant::now();
-    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M, MIN_HEIGHT_THRESHOLD>::match_it::<MM>(mapper);
+    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M, DEFAULT_MIN_HEIGHT>::match_it::<MM>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     tr!(subtree_matcher_t, subtree_mappings_s);
@@ -58,7 +61,7 @@ where
     let bottomup_prepare_t = 0.; // nothing to prepare
 
     let now = Instant::now();
-    let mapper = LazyHybridBottomUpMatcher::<_, _, _, _, M, MAX_SIZE_THRESHOLD>::match_it(mapper);
+    let mapper = LazyHybridBottomUpMatcher::<_, _, _, _, M>::match_it(mapper, max_size);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
     tr!(bottomup_matcher_t, bottomup_mappings_s);

@@ -33,11 +33,11 @@ pub struct LazyHybridBottomUpMatcher<
     HAST,
     M: MonoMappingStore,
     MZs: MonoMappingStore = M,
-    const SIZE_THRESHOLD: usize = 1000,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     internal: BottomUpMatcher<Dsrc, Ddst, HAST, M>,
+    max_size: usize,
     _phantom: PhantomData<*const MZs>,
 }
 
@@ -50,7 +50,6 @@ impl<
     HAST: HyperAST,
     M: MonoMappingStore,
     MZs: MonoMappingStore,
-    const SIZE_THRESHOLD: usize,  // = 1000,
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
@@ -60,7 +59,6 @@ impl<
         HAST,
         M,
         MZs,
-        SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
     >
@@ -94,7 +92,6 @@ impl<
     MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = <Ddst as LazyDecompressed<M::Dst>>::IdD> + Default,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
-    const SIZE_THRESHOLD: usize,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
 >
@@ -104,7 +101,6 @@ impl<
         HAST,
         M,
         MZs,
-        SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
     >
@@ -118,7 +114,7 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
+    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M, max_size: usize) -> Self {
         Self {
             internal: BottomUpMatcher {
                 stores,
@@ -126,12 +122,14 @@ where
                 dst_arena,
                 mappings,
             },
+            max_size,
             _phantom: Default::default(),
         }
     }
 
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        max_size: usize,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             internal: BottomUpMatcher {
@@ -140,6 +138,7 @@ where
                 dst_arena: mapping.mapping.dst_arena,
                 mappings: mapping.mapping.mappings,
             },
+            max_size,
             _phantom: Default::default(),
         };
         matcher.internal.mappings.topit(
@@ -229,8 +228,8 @@ where
     /// Uses ZS (optimal) if the number of descendents is below SIZE_THRESHOLD
     /// Uses simple recovery otherwise
     fn last_chance_match_hybrid(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
-        if self.internal.src_arena.descendants_count(&src) < SIZE_THRESHOLD
-            && self.internal.dst_arena.descendants_count(&dst) < SIZE_THRESHOLD
+        if self.internal.src_arena.descendants_count(&src) < self.max_size
+            && self.internal.dst_arena.descendants_count(&dst) < self.max_size
         {
             self.last_chance_match_zs(src, dst);
         } else {
@@ -421,7 +420,7 @@ where
         let dst_arena = &mut mapping.dst_arena;
         let src_s = src_arena.descendants_count(&src);
         let dst_s = dst_arena.descendants_count(&dst);
-        if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
+        if !(src_s < cast(self.max_size).unwrap() || dst_s < cast(self.max_size).unwrap()) {
             return;
         }
         let src_offset;
