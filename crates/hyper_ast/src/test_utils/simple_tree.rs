@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
-use num::{cast, NumCast, PrimInt, ToPrimitive};
+use num::{NumCast, PrimInt, ToPrimitive, cast};
 
 use crate::types::{HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Shared, Stored, Typed, WithChildren, WithStats};
 
@@ -684,6 +684,10 @@ impl Display for Ty {
 impl HyperType for Ty {
     fn as_shared(&self) -> crate::types::Shared {
         Shared::Identifier
+    }
+
+    fn as_abstract(&self) -> crate::types::Abstracts {
+        todo!()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

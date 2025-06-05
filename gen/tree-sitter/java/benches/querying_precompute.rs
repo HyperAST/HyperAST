@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
@@ -58,18 +58,14 @@ fn prep_precomputed<'store>(
     hyperast::store::defaults::NodeIdentifier,
 ) {
     use hyperast_gen_ts_java::legion_with_refs;
+    use hyperast_gen_ts_java::types::TStore;
     let (precomp, query) =
         hyperast_tsquery::Query::with_precomputed(query, hyperast_gen_ts_java::language(), precomp)
             .unwrap();
 
-    let mut stores =
-        hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
-    let more = hyperast_tsquery::PreparedQuerying::<
-        _,
-        hyperast_gen_ts_java::types::TStore,
-        _,
-    >::from(&precomp);
+    let more = hyperast_tsquery::PreparedQuerying::<_, _, _>::from(&precomp);
     let mut java_tree_gen = JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, more);
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
@@ -98,12 +94,16 @@ fn compare_querying_group(c: &mut Criterion) {
     // let queries: Vec<_> = QUERIES.iter().enumerate().collect();
 
     for (_i, p) in QUERIES.into_iter().map(|x| (x, codes.as_ref())).enumerate() {
-        let i = p.0 .3;
+        let i = p.0.3;
+        let mut compute_size = true;
         // group.throughput(Throughput::Bytes((p.0.len() + p.1.len()) as u64));
         group.bench_with_input(BenchmarkId::new("baseline", i), &p, |b, (q, f)| {
             b.iter(|| {
                 for p in f.into_iter() {
                     let (q, t, text) = prep_baseline(q.2)(p);
+                    if compute_size {
+                        compute_size = false;
+                    }
                     let mut cursor = tree_sitter::QueryCursor::default();
                     black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
                 }
@@ -254,5 +254,9 @@ fn compare_querying_group(c: &mut Criterion) {
     group.finish()
 }
 
-criterion_group!(querying, compare_querying_group);
+criterion_group!(
+    name = querying;
+    config = Criterion::default().significance_level(0.9).sample_size(10).configure_from_args();
+    targets = compare_querying_group
+);
 criterion_main!(querying);

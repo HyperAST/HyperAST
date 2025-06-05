@@ -70,15 +70,17 @@ impl MultiSplitter {
         } = self;
 
         {
-            debug_assert!((0.0..=1.0).contains(
-                &ratios
-                    .iter()
-                    .map(|ratio| {
-                        debug_assert!((0.0..=1.0).contains(ratio));
-                        *ratio
-                    })
-                    .sum::<f32>()
-            ));
+            debug_assert!(
+                (0.0..=1.0).contains(
+                    &ratios
+                        .iter()
+                        .map(|ratio| {
+                            debug_assert!((0.0..=1.0).contains(ratio));
+                            *ratio
+                        })
+                        .sum::<f32>()
+                )
+            );
         }
 
         let (rect, _splitter_response) =
@@ -130,14 +132,27 @@ impl MultiSplitter {
                     rect
                 };
                 *orientation.m(&mut remaining_rect.min) = *orientation.m(&mut patition_rect.max);
-                let line_pos_1 = ui.painter().round_pos_to_pixels(line_pos_1);
-                let line_pos_2 = ui.painter().round_pos_to_pixels(line_pos_2);
-                let cui = ui.child_ui(patition_rect, Layout::top_down(Align::Min), None);
+
+                let line_pos_1 =
+                    egui::emath::GuiRounding::round_to_pixels(line_pos_1, ui.pixels_per_point());
+                let line_pos_2 =
+                    egui::emath::GuiRounding::round_to_pixels(line_pos_1, ui.pixels_per_point());
+                let cui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(patition_rect)
+                        .layout(Layout::top_down(Align::Min)),
+                );
                 (cui, [line_pos_1, line_pos_2])
             })
             .unzip();
 
-        uis.push(ui.child_ui(remaining_rect, Layout::top_down(Align::Min), None));
+        uis.push(
+            ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(remaining_rect)
+                    .layout(Layout::top_down(Align::Min)),
+            ),
+        );
 
         let body_returned = add_contents(&mut uis);
 

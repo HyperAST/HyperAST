@@ -1,3 +1,4 @@
+#![allow(unused)]
 /// historic regression test for static analysis
 pub(super) static CASE_1: &'static str = "
 class A {

@@ -1,4 +1,3 @@
-use hyperast::utils::memusage_linux;
 use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
 #[cfg(not(target_env = "msvc"))]
@@ -85,7 +84,6 @@ fn print_pos(
             })
             .collect::<String>();
 
-        let mu = memusage_linux();
         // TODO
         println!(
             "{oid},{},{},{}{}",
@@ -104,7 +102,7 @@ fn bench_conditional_logic() {
     let limit = 4000;
     let around = |s| {
         format!(
-            r#"(if_statement 
+            r#"(if_statement
         consequence: (_
             (expression_statement
                 (method_invocation

@@ -7,10 +7,10 @@ use crate::decompressed_tree_store::{
     Shallow, ShallowDecompressedTreeStore,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use crate::matchers::{Decompressible, Mapper};
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats};
+use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::PrimInt;
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs, WithStats};
 use num_traits::{cast, one};
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -39,15 +39,15 @@ const SLICE: bool = true;
 
 /// TODO PostOrder might not be necessary
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST,
-        M,
-        MZs,
-        const SIZE_THRESHOLD: usize,
-        const SIM_THRESHOLD_NUM: u64,
-        const SIM_THRESHOLD_DEN: u64,
-    >
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST,
+    M,
+    MZs,
+    const SIZE_THRESHOLD: usize,
+    const SIM_THRESHOLD_NUM: u64,
+    const SIM_THRESHOLD_DEN: u64,
+>
     GreedyBottomUpMatcher<
         Dsrc,
         Ddst,
@@ -178,7 +178,6 @@ where
         let stores = internal.hyperast;
         // allow using another internal mapping store
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
-        let node_store = internal.hyperast.node_store();
         let mapping = &mut internal.mapping;
         let src_arena = &mut mapping.src_arena;
         let dst_arena = &mut mapping.dst_arena;

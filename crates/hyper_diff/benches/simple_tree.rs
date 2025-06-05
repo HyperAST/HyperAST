@@ -8,25 +8,6 @@ use hyperast::test_utils::simple_tree::{SimpleTree, vpair_to_stores};
 fn compare_simple_tree_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("SimpleTree");
 
-    const PAIRS: [(&[u8], &[u8]); 5] = [
-        ("abaaacdefg".as_bytes(), "abcdefg".as_bytes()),
-        (
-            "za".as_bytes(),
-            "qvvsdflflvjehrgipuerpq".as_bytes(),
-        ),
-        (
-            "abaaeqrogireiuvnlrpgacdefg".as_bytes(),
-            "aaaa".as_bytes(),
-        ),
-        (
-            "abaaeqrogireiuvnlrpgacdefgabaaeqrogireiuvnlrpgacdefg".as_bytes(),
-            "qvvsdflflvjehrgipuerpqqvvsdflflvjehrgipuerpq".as_bytes(),
-        ),
-        (
-            "abaaeqro64646s468gireiuvnlrpg137zfaèàç-_éèàaç_è'ç(-cdefgrgeedbdsfdg6546465".as_bytes(),
-            "qvvsdflflvjehrgegrhdbeoijovirejvoirzejvoerivjeorivjeroivjeroivjerovijrevoierjvoierjoipuerpq".as_bytes(),
-        ),
-    ];
     type ST<K> = SimpleTree<K>;
 
     pub(crate) fn example_gt_java_code() -> (ST<u8>, ST<u8>) {
@@ -70,18 +51,8 @@ fn compare_simple_tree_group(c: &mut Criterion) {
     }
     let (stores, src, dst) = vpair_to_stores(example_gt_java_code());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
-    let label_store = &stores.label_store;
-    let node_store = &stores.node_store;
-    // println!(
-    //     "src tree:\n{:?}",
-    //     DisplayTree::new(label_store, node_store, src)
-    // );
-    // println!(
-    //     "dst tree:\n{:?}",
-    //     DisplayTree::new(label_store, node_store, dst)
-    // );
 
-    let pairs = PAIRS.into_iter().map(|x| (src, dst));
+    let pairs = &[(src, dst)];
 
     for (i, p) in pairs.into_iter().enumerate() {
         group.bench_with_input(BenchmarkId::new("zs", i), &p, |b, p| {

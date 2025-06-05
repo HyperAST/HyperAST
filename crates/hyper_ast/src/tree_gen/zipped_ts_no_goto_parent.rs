@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::{P, parser::Visibility, utils_ts::*};
 use crate::store::nodes::compo;
 use crate::store::{
@@ -120,18 +121,6 @@ impl<T: Debug> Debug for Acc<T> {
 impl<T> tree_gen::WithChildren<NodeIdentifier> for Acc<T> {
     fn children(&self) -> &[NodeIdentifier] {
         &self.simple.children
-    }
-}
-
-impl<T> tree_gen::WithRole<crate::types::Role> for Acc<T> {
-    fn role_at(&self, o: usize) -> Option<crate::types::Role> {
-        todo!()
-        // self.role
-        //     .offsets
-        //     .iter()
-        //     .position(|x| *x as usize == o)
-        //     .and_then(|x| self.role.roles.get(x))
-        //     .cloned()
     }
 }
 
@@ -377,7 +366,9 @@ where
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let node = cursor.node();
-        let kind = TS::obtain_type(&node);
+        let Some(kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         if HIDDEN_NODES {
             // if kind.is_repeat() {
             //     return PreResult::Ignore;
@@ -395,7 +386,6 @@ where
         {
             if let Some(r) = cursor.0.field_name() {
                 if let Ok(r) = TryInto::<crate::types::Role>::try_into(r) {
-                    // acc.role.current = Some(r);
                     log::warn!("not retrieving roles");
                 } else {
                     log::error!("cannot convert role: {}", r)

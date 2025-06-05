@@ -1,3 +1,4 @@
+#![allow(unused)]
 use core::fmt;
 use std::fmt::Debug;
 
@@ -5,8 +6,8 @@ use hyperast::{
     position::{TreePath, TreePathMut},
     store::defaults::NodeIdentifier,
     types::{
-        AnyType, Children, HyperAST, HyperType, NodeId, NodeStore, Tree, TypeTrait, Typed,
-        TypedHyperAST, TypedNodeStore, TypedTree, WithChildren, AAAA,
+        AAAA, AnyType, Children, HyperAST, HyperType, NodeId, NodeStore, Tree, TypeTrait, Typed,
+        TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
     },
 };
 use num::ToPrimitive;
@@ -43,17 +44,17 @@ impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'a, 
 
 impl<'a, T, HAST> Iterator for IterDeclarations<'a, T, HAST>
 where
-    // T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-    // HAST: TypedHyperAST<crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
-    // HAST::TS: JavaEnabledTypeStore<HAST::T>,
-    // for<'t> <HAST::TT<'t> as Typed>::Type: Copy + Send + Sync,
-    // HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
-    // HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
-    // for<'b> <HAST::NS as hyperast::types::TyNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
-    //     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
-    // // for<'t> <HAST as hyperast::types::AstLending<'t, HAST::IdN>>::RT:
-    // // // <HAST::NS as hyperast::types::NodStore<HAST::IdN>>::R<'a>:
-    // //     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+// T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
+// HAST: TypedHyperAST<crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
+// HAST::TS: JavaEnabledTypeStore<HAST::T>,
+// for<'t> <HAST::TT<'t> as Typed>::Type: Copy + Send + Sync,
+// HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
+// HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
+// for<'b> <HAST::NS as hyperast::types::TyNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
+//     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+// // for<'t> <HAST as hyperast::types::AstLending<'t, HAST::IdN>>::RT:
+// // // <HAST::NS as hyperast::types::NodStore<HAST::IdN>>::R<'a>:
+// //     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
 {
     type Item = T;
 

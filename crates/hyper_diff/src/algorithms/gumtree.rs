@@ -115,6 +115,7 @@ fn check_oneshot_decompressed_against_lazy<HAST: HyperAST + Copy>(
         "naive:\t{:?}",
         &mapper.llds.iter().take(20).collect::<Vec<_>>()
     );
+    #[allow(type_alias_bounds)]
     type DS<HAST: HyperASTShared> = Decompressible<
         HAST,
         crate::decompressed_tree_store::lazy_post_order::LazyPostOrder<HAST::IdN, u32>,

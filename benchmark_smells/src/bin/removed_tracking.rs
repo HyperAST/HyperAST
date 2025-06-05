@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::collections::HashSet;
 
 use hyperast::{
@@ -9,18 +10,17 @@ use hyperast::{
     utils::memusage_linux,
 };
 use hyperast_benchmark_smells::{
-    diffing,
-    github_ranges::{format_pos_as_github_url, Pos, PositionWithContext},
+    DATASET, diffing,
+    github_ranges::{Pos, PositionWithContext, format_pos_as_github_url},
     simple::count_matches,
-    DATASET,
 };
 use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
 use hyper_diff::{
     decompressed_tree_store::{
-        lazy_post_order::LazyPostOrder, DecompressedWithParent, ShallowDecompressedTreeStore,
+        DecompressedWithParent, ShallowDecompressedTreeStore, lazy_post_order::LazyPostOrder,
     },
-    matchers::{mapping_store::MonoMappingStore, Decompressible},
+    matchers::{Decompressible, mapping_store::MonoMappingStore},
 };
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -56,7 +56,7 @@ fn main() {
         "(class_declaration)",
         "(method_declaration)",
         // an "@Test" annotation without parameters
-        r#"(marker_annotation 
+        r#"(marker_annotation
         name: (identifier) (#EQ? "Test")
     )"#,
         "(constructor_declaration)",
@@ -331,9 +331,9 @@ fn conditional_test_logic() {
     let repo_name = "INRIA/spoon";
     let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
     let limit = 2;
-    let query = r#"(if_statement consequence: (_ 
-    (_ (method_invocation 
-         name: (identifier) (#EQ? "assertEquals") 
+    let query = r#"(if_statement consequence: (_
+    (_ (method_invocation
+         name: (identifier) (#EQ? "assertEquals")
   ))
     ))"#;
     removed_tracking(repo_name, commit, limit, query, [].as_slice());
@@ -355,7 +355,7 @@ fn assertion_roulette_dubbo() {
             )"#,
         "(class_declaration)",
         "(method_declaration)",
-        r#"(marker_annotation 
+        r#"(marker_annotation
         name: (identifier) (#EQ? "Test")
     )"#,
     ]

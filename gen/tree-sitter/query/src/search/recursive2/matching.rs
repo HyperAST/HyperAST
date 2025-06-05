@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::collections::VecDeque;
 use std::ops::Deref;
 
@@ -28,11 +29,11 @@ pub struct MatchingIter<
 }
 
 impl<
-        'store,
-        HAST: TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
-        PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
-    > MatchingIter<'store, HAST, TIdN, PM>
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
+    PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
+> MatchingIter<'store, HAST, TIdN, PM>
 {
     pub fn new(slf: PM, code_store: &'store HAST, root: HAST::IdN) -> Self {
         Self {
@@ -46,11 +47,11 @@ impl<
 }
 
 impl<
-        'store,
-        HAST: TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId, // <IdN = HAST::IdN>,
-        PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
-    > Iterator for MatchingIter<'store, HAST, TIdN, PM>
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId, // <IdN = HAST::IdN>,
+    PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
+> Iterator for MatchingIter<'store, HAST, TIdN, PM>
 where
     HAST::IdN: std::fmt::Debug,
 {
@@ -71,11 +72,11 @@ where
     }
 }
 impl<
-        'store,
-        HAST: TypedHyperAST<TIdN>,
-        TIdN: 'store + hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
-        PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
-    > MatchingIter<'store, HAST, TIdN, PM>
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId, //<IdN = HAST::IdN>,
+    PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
+> MatchingIter<'store, HAST, TIdN, PM>
 where
     HAST::IdN: std::fmt::Debug,
 {
@@ -825,11 +826,7 @@ where
 }
 
 fn quant_from_bool(b: bool) -> tree_sitter::CaptureQuantifier {
-    if b {
-        Quant::One
-    } else {
-        Quant::Zero
-    }
+    if b { Quant::One } else { Quant::Zero }
 }
 
 struct ChildIt<'store, HAST, IdN> {
@@ -880,6 +877,7 @@ where
         todo!()
     }
     fn short_path(&self) -> impl Iterator<Item = HAST::Idx> {
+        #[allow(unreachable_code)]
         vec![todo!()].into_iter()
     }
 }

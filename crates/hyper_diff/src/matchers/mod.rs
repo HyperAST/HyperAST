@@ -106,7 +106,7 @@ pub struct Mapper<HAST, Dsrc, Ddst, M> {
 }
 
 impl<HAST: Copy, Dsrc, Ddst, M> Mapper<HAST, Dsrc, Ddst, M> {
-    fn split<'a>(
+    pub fn split_mut<'a>(
         &'a mut self,
     ) -> Mapping<Decompressible<HAST, &'a mut Dsrc>, Decompressible<HAST, &'a mut Ddst>, &'a mut M>
     {

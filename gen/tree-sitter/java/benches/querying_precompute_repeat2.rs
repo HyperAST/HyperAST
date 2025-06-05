@@ -3,10 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use criterion::{
-    AxisScale, BenchmarkId, Criterion, PlotConfiguration, black_box, criterion_group,
-    criterion_main,
-};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::{JavaTreeGen, tree_sitter_parse};
@@ -108,9 +105,8 @@ fn preps_precomputed(
 
 fn compare_querying_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("QueryingRepeat2.2Spoon");
-    group.sample_size(10);
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    group.plot_config(plot_config);
+    // let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    // group.plot_config(plot_config);
 
     let codes = "../../../../spoon/src/main/java"; // spoon dataset (only source code to avoid including resources), could add tests if necessary
     let codes = Path::new(&codes).to_owned();
@@ -193,7 +189,7 @@ fn compare_querying_group(c: &mut Criterion) {
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
-                    debug_assert_eq!(count as u64, parameter.0.4);
+                    assert_eq!(count as u64, parameter.0.4);
                 })
             },
         );
@@ -218,7 +214,7 @@ fn bench_baseline(
                 let mut cursor = tree_sitter::QueryCursor::default();
                 count += black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
             }
-            debug_assert_eq!(count as u64, parameter.0.4);
+            assert_eq!(count as u64, parameter.0.4);
         })
     });
 }
@@ -249,5 +245,9 @@ fn bench_rust_baseline(
     );
 }
 
-criterion_group!(querying, compare_querying_group);
+criterion_group!(
+    name = querying;
+    config = Criterion::default().configure_from_args();
+    targets = compare_querying_group
+);
 criterion_main!(querying);

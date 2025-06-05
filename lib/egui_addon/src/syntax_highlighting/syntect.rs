@@ -88,7 +88,7 @@ impl CodeTheme {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::widgets::global_dark_light_mode_buttons(ui);
+        egui::global_theme_preference_buttons(ui);
 
         for theme in SyntectTheme::all() {
             if theme.is_dark() == self.dark_mode {

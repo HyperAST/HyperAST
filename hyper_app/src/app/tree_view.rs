@@ -1,5 +1,5 @@
 use super::{
-    code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
+    code_aspects::{HightLightHandle, remote_fetch_labels, remote_fetch_nodes_by_ids},
     long_tracking::TARGET_COLOR,
 };
 use crate::app::syntax_highlighting::{self as syntax_highlighter, syntax_highlighting_async};
@@ -15,7 +15,7 @@ use std::{
     fmt::Debug,
     num::NonZeroU32,
     ops::ControlFlow,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{Arc, atomic::AtomicUsize},
     time::Duration,
 };
 mod cache;
@@ -144,11 +144,15 @@ pub(crate) mod store {
         type I = LabelIdentifier;
 
         fn get_or_insert<U: Borrow<str>>(&mut self, _node: U) -> Self::I {
-            todo!("TODO remove this method from trait as it cannot be implemented on immutable/append_only label stores")
+            todo!(
+                "TODO remove this method from trait as it cannot be implemented on immutable/append_only label stores"
+            )
         }
 
         fn get<U: Borrow<str>>(&self, _node: U) -> Option<Self::I> {
-            todo!("TODO remove this method from trait as it cannot be implemented efficiently for all stores")
+            todo!(
+                "TODO remove this method from trait as it cannot be implemented efficiently for all stores"
+            )
         }
 
         fn resolve(&self, id: &Self::I) -> &str {
@@ -868,7 +872,7 @@ impl<'a> FetchedViewImpl<'a> {
 
         let interact = show.header_returned.interact(egui::Sense::click_and_drag());
 
-        if interact.drag_released() {
+        if interact.drag_stopped() {
             node_menu(ui, interact, kind)
                 .or(show.body_returned)
                 .unwrap_or_default()
@@ -1141,7 +1145,7 @@ impl<'a> FetchedViewImpl<'a> {
                 // })
                 ;
                 let interact = monospace.interact(egui::Sense::click_and_drag());
-                action = if interact.drag_released() {
+                action = if interact.drag_stopped() {
                     node_menu(ui, interact, kind).unwrap_or_default()
                 } else if interact.clicked() {
                     Action::Clicked(self.path.to_vec())
@@ -1195,7 +1199,7 @@ impl<'a> FetchedViewImpl<'a> {
                 //     monospace.interact(egui::Sense::click()),
                 //     indent.inner.interact(egui::Sense::click()),
                 // );
-                action = if monospace.drag_released() {
+                action = if monospace.drag_stopped() {
                     node_menu(ui, monospace, kind).unwrap_or_default()
                 } else if monospace.clicked() {
                     Action::Clicked(self.path.to_vec())
@@ -1237,7 +1241,7 @@ impl<'a> FetchedViewImpl<'a> {
                     let interact =
                         ui.add(egui::Label::new(rt).sense(egui::Sense::click_and_drag()));
                     ui.label(label);
-                    if interact.drag_released() {
+                    if interact.drag_stopped() {
                         node_menu(ui, interact, kind).unwrap_or_default()
                     } else if interact.clicked() {
                         Action::Clicked(self.path.to_vec())
@@ -1824,7 +1828,7 @@ impl<'a> FetchedViewImpl<'a> {
 fn node_menu(ui: &mut egui::Ui, interact: egui::Response, kind: AnyType) -> Option<Action> {
     let mut act = None;
     let popup_id = interact.id.with("popup");
-    if interact.secondary_clicked() || interact.double_clicked() || interact.drag_released() {
+    if interact.secondary_clicked() || interact.double_clicked() || interact.drag_stopped() {
         ui.memory_mut(|mem| mem.open_popup(popup_id));
     }
     egui::popup_below_widget(
@@ -2085,8 +2089,8 @@ pub(crate) fn make_pp_code(
             }
         }
     }
-    use std::sync::atomic::Ordering;
     use std::sync::Mutex;
+    use std::sync::atomic::Ordering;
     #[derive(Default)]
     struct Layouter {
         ctx: egui::Context,

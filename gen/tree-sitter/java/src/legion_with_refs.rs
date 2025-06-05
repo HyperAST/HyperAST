@@ -5,6 +5,7 @@ use crate::{
     types::{TStore, Type},
 };
 use hyperast::store::nodes::compo;
+use hyperast::store::nodes::legion::DedupMap;
 use hyperast::store::{
     defaults::LabelIdentifier,
     nodes::{
@@ -40,8 +41,8 @@ use hyperast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
+use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::{collections::HashMap, fmt::Debug, vec};
 
 #[cfg(feature = "impact")]
 mod reference_analysis;
@@ -56,9 +57,9 @@ pub use crate::impact::partial_analysis::PartialAnalysis;
 pub struct PartialAnalysis;
 impl PartialAnalysis {
     pub fn init<F: FnMut(&str) -> LabelIdentifier>(
-        kind: &Type,
-        label: Option<&str>,
-        mut intern_label: F,
+        _kind: &Type,
+        _label: Option<&str>,
+        mut _intern_label: F,
     ) -> Self {
         Self
     }
@@ -86,13 +87,14 @@ pub struct JavaTreeGen<
 > {
     // TODO replace with Arc<[u8]>
     pub line_break: Vec<u8>,
+    pub dedup: Option<&'stores mut DedupMap>,
     pub stores: &'stores mut S,
     pub md_cache: &'cache mut MDCache,
     pub more: More,
     pub _p: PhantomData<TS>,
 }
 
-pub type MDCache = HashMap<NodeIdentifier, MD>;
+pub type MDCache = hashbrown::HashMap<NodeIdentifier, MD>;
 
 // NOTE only keep compute intensive metadata (where space/time tradeoff is worth storing)
 // eg. decls refs, maybe hashes but not size and height
@@ -334,8 +336,10 @@ where
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let node = &cursor.node();
-        let kind = TS::obtain_type(node);
+        let node = cursor.node();
+        let Some(kind) = TS::try_obtain_type(&node) else {
+            return PreResult::Skip;
+        };
         if should_get_hidden_nodes() {
             if kind.is_repeat() {
                 return PreResult::Ignore;
@@ -349,7 +353,7 @@ where
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let mut acc = self.pre(text, node, stack, global);
+        let mut acc = self.pre(text, &node, stack, global);
         // TODO replace with wrapper
         if !stack
             .parent()
@@ -486,6 +490,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore, X>
     pub fn new(stores: &'stores mut SimpleStores<TS>, md_cache: &'cache mut MDCache) -> Self {
         Self {
             line_break: "\n".as_bytes().to_vec(),
+            dedup: None,
             stores,
             md_cache,
             more: Default::default(),
@@ -502,28 +507,12 @@ impl<'stores, 'cache, 'acc, TS, More>
     ) -> JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, false> {
         JavaTreeGen {
             line_break: self.line_break,
+            dedup: self.dedup,
             stores: self.stores,
             md_cache: self.md_cache,
             more: self.more,
             _p: self._p,
         }
-    }
-}
-
-impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDDEN_NODES: bool>
-    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
-{
-    pub fn _generate_file<'b: 'stores>(
-        &mut self,
-        name: &[u8],
-        text: &'b [u8],
-        cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<StatsGlobalData, Local>
-    where
-        More: tree_gen::Prepro<SimpleStores<TS>, Scope = hyperast::scripting::Acc>
-            + tree_gen::PreproTSG<SimpleStores<TS>, Acc = Acc<More::Scope>>,
-    {
-        todo!()
     }
 }
 
@@ -537,6 +526,34 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More>
     ) -> Self {
         Self {
             line_break: "\n".as_bytes().to_vec(),
+            dedup: None,
+            stores,
+            md_cache,
+            more: more.into(),
+            _p: Default::default(),
+        }
+    }
+}
+impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, true>
+{
+    /// Replaces the default dedup map when deriving different data.
+    /// Be cautious when replacing the default dedup map,
+    /// as it breaks the referential equlity being equivalent to the structural equality.
+    /// Otherwise, everything else is great !
+    /// In the future use multiple dedup maps when we can guarantee valid nesting,
+    ///   e.g., additional Derived Data on files can reuse subtrees of things inside files, but directories and files must be added without merging with the others
+    ///    (it should also be possible to compute markers to provide similar guarantees, e.g. a DD only on classes can reuse children that do not contain classes).
+    /// Could also make the eq consider the derived data, but to avoid breaking the incrementality we would still need some kind of marker for each context
+    pub fn with_preprocessing_and_dedup(
+        stores: &'stores mut SimpleStores<TS>,
+        dedup: &'stores mut DedupMap,
+        md_cache: &'cache mut MDCache,
+        more: More,
+    ) -> Self {
+        Self {
+            line_break: "\n".as_bytes().to_vec(),
+            dedup: Some(dedup),
             stores,
             md_cache,
             more: more.into(),
@@ -554,16 +571,18 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
     ) -> JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, M, HIDDEN_NODES> {
         JavaTreeGen {
             line_break: self.line_break,
+            dedup: self.dedup,
             stores: self.stores,
             md_cache: self.md_cache,
-            more: more,
+            more,
             _p: self._p,
         }
     }
 
     pub fn with_line_break(self, line_break: Vec<u8>) -> Self {
         JavaTreeGen {
-            line_break: self.line_break,
+            line_break,
+            dedup: self.dedup,
             stores: self.stores,
             md_cache: self.md_cache,
             more: self.more,
@@ -610,7 +629,9 @@ where
             true
         };
 
-        let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
+        let dedup = &mut self.stores.node_store.dedup;
+        let dedup = self.dedup.as_mut().map_or(dedup, |x| &mut x.0);
+        let insertion = (self.stores.node_store.inner).prepare_insertion(dedup, &hashable, eq);
 
         let mut hashs = hbuilder.build();
         hashs.structt = 0;
@@ -763,11 +784,11 @@ where
         full_node
     }
 
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
+    fn build_ana(&mut self, _kind: &Type) -> Option<PartialAnalysis> {
         if !ANA {
             return None;
         }
-        let label_store = &mut self.stores.label_store;
+        let _label_store = &mut self.stores.label_store;
         #[cfg(feature = "impact")]
         {
             build_ana(kind, label_store)
@@ -794,6 +815,8 @@ where
         mut acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let stores = &mut self.stores;
+        let more = &mut self.more;
         let kind = acc.simple.kind;
         let interned_kind = TS::intern(kind);
         let own_line_count = label.as_ref().map_or(0, |l| {
@@ -807,19 +830,18 @@ where
             // Some notable type can contain very different labels,
             // they might benefit from a particular storing (like a blob storage, even using git's object database )
             // eg. acc.simple.kind == Type::Comment and acc.simple.kind.is_literal()
-            self.stores.label_store.get_or_insert(label.as_str())
+            stores.label_store.get_or_insert(label.as_str())
         });
         let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
+        let node_store = &mut stores.node_store;
         #[cfg(feature = "subtree-stats")]
-        self.stores
-            .node_store
-            .inner
-            .stats()
-            .add_height_non_dedup(metrics.height);
+        (node_store.inner.stats()).add_height_non_dedup(metrics.height);
         // &metrics.hashs.structt,
 
-        let insertion = self.stores.node_store.prepare_insertion(hashable, eq);
+        let dedup = self.dedup.as_mut();
+        let dedup = dedup.map_or(&mut node_store.dedup, |x| &mut x.0);
+        let insertion = node_store.inner.prepare_insertion(dedup, hashable, eq);
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
             let md = self.md_cache.get(&compressed_node).unwrap();
@@ -842,7 +864,7 @@ where
                 &mut acc.ana,
                 &label,
                 &acc.simple.children,
-                &mut self.stores.label_store,
+                &mut stores.label_store,
                 &insertion,
             );
             let metrics = metrics.map_hashs(|h| h.build());
@@ -851,14 +873,12 @@ where
             let vacant = insertion.vacant();
             let node_store: &_ = vacant.1.1;
             let stores = SimpleStores {
-                type_store: self.stores.type_store.clone(),
-                label_store: &self.stores.label_store,
+                type_store: stores.type_store.clone(),
+                label_store: &stores.label_store,
                 node_store,
             };
             if More::ENABLED {
-                acc.precomp_queries |=
-                    self.more
-                        .match_precomp_queries(stores, &acc, label.as_deref());
+                acc.precomp_queries |= more.match_precomp_queries(stores, &acc, label.as_deref());
             }
             let children_is_empty = acc.simple.children.is_empty();
 
@@ -876,9 +896,7 @@ where
                 //     &'static hyperast::store::nodes::legion::NodeStoreInner,
                 //     &'static hyperast::store::labels::LabelStore,
                 // > = unsafe { std::mem::transmute(stores.clone()) };
-                self.more
-                    .compute_tsg(stores, &acc, label.as_deref())
-                    .unwrap();
+                more.compute_tsg(stores, &acc, label.as_deref()).unwrap();
             }
 
             let current_role = Option::take(&mut acc.role.current);
@@ -893,8 +911,7 @@ where
                 acc.ana.as_ref(),
             );
             #[cfg(feature = "subtree-stats")]
-            vacant.1.1.stats()
-                .add_height_dedup(metrics.height, metrics.hashs);
+            (vacant.1.1.stats()).add_height_dedup(metrics.height, metrics.hashs);
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
 
@@ -912,13 +929,10 @@ where
                 let ss = if let Some(label) = &label {
                     acc.prepro
                         .unwrap()
-                        .finish_with_label(self.more.scripts(), &subtr, label)
+                        .finish_with_label(more.scripts(), &subtr, label)
                         .unwrap()
                 } else {
-                    acc.prepro
-                        .unwrap()
-                        .finish(self.more.scripts(), &subtr)
-                        .unwrap()
+                    acc.prepro.unwrap().finish(more.scripts(), &subtr).unwrap()
                 };
                 dyn_builder.add(ss);
             }
@@ -1055,7 +1069,7 @@ where
             acc.push(full_node);
         }
         let post = {
-            let node_store = &mut self.stores.node_store;
+            let node_store = &mut self.stores.node_store.inner;
             let label_store = &mut self.stores.label_store;
             let label_id = l;
             let label = label_id.map(|l| label_store.resolve(&l));
@@ -1071,7 +1085,9 @@ where
 
             let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
-            let insertion = node_store.prepare_insertion(&hashable, eq);
+            let dedup = &mut self.stores.node_store.dedup;
+            let dedup = self.dedup.as_mut().map_or(dedup, |x| &mut x.0);
+            let insertion = node_store.prepare_insertion(dedup, &hashable, eq);
 
             let local = if let Some(id) = insertion.occupied_id() {
                 let md = self.md_cache.get(&id).unwrap();

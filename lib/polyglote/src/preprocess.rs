@@ -224,8 +224,6 @@ pub(crate) struct Hidden;
 #[derive(Debug)]
 pub(crate) struct SubType;
 #[derive(Debug)]
-pub(crate) struct Field;
-#[derive(Debug)]
 pub(crate) struct Child;
 #[derive(Debug)]
 pub(crate) struct MultipleChildren;

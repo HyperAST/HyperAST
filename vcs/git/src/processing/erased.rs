@@ -1,6 +1,7 @@
 use std::{any::Any, marker::PhantomData, ops::Deref};
 
 #[derive(Clone)]
+#[allow(unused)]
 pub struct ConfigParameters(std::rc::Rc<dyn std::any::Any>);
 pub trait Parametrized: ParametrizedCommitProc {
     type T: 'static;
@@ -24,7 +25,7 @@ impl<T: CommitProcExt> Eq for ParametrizedCommitProcessor2Handle<T> {}
 
 impl<T: CommitProcExt> PartialEq for ParametrizedCommitProcessor2Handle<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 .0 == other.0 .0 && self.1 == other.1
+        self.0.0 == other.0.0 && self.1 == other.1
     }
 }
 
@@ -35,6 +36,7 @@ impl<T: CommitProcExt> Clone for ParametrizedCommitProcessor2Handle<T> {
 }
 impl<T: CommitProcExt> Copy for ParametrizedCommitProcessor2Handle<T> {}
 impl<T: CommitProcExt> ParametrizedCommitProcessor2Handle<T> {
+    #[allow(unused)]
     fn recover_handle(&self) -> ParametrizedCommitProcessorHandle {
         ParametrizedCommitProcessorHandle(
             CommitProcessorHandle(std::any::TypeId::of::<T::Holder>()),
@@ -116,6 +118,7 @@ impl<T: ParametrizedCommitProc2> ParametrizedCommitProc for T {
 }
 
 #[test]
+#[allow(unused)]
 fn t() {
     #[derive(Clone, PartialEq, Eq)]
     struct S(u8);
@@ -215,7 +218,7 @@ fn t() {
     let hh = h.mut_or_default::<P0>().register_param(S(42));
     // You can easily store hh in any collection.
     // You can easily add a method to CommitProc.
-    h.by_id(&hh.0 .0).unwrap().get_mut(hh.1).p();
+    h.by_id(&hh.0.0).unwrap().get_mut(hh.1).p();
 }
 
 pub type ProcessorMap = spreaded::ProcessorMap<Box<dyn spreaded::ErasableProcessor>>;
@@ -302,6 +305,7 @@ mod spreaded {
         //     r.unwrap()
         // }
     }
+    #[allow(unused)]
     #[test]
     fn a() {
         #[derive(Clone, PartialEq, Eq)]

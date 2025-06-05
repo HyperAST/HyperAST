@@ -14,6 +14,7 @@ pub struct TreeToQuery<
     stores: &'a HAST,
     root: HAST::IdN,
     matcher: crate::search::PreparedMatcher<TIdN::Ty, C>,
+    #[allow(unused)] // TODO remove entire file, now there is tsq_ser_meta2
     converter: C,
     phantom: PhantomData<TIdN>,
 }

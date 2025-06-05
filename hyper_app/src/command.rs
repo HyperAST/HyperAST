@@ -93,7 +93,6 @@ pub enum UICommand {
     RestartWithWebGpu,
 
     // NOTE: could take inspiration from zed on (kb) interations
-
     NewQuery,
 
     // Compute commands:
@@ -119,7 +118,7 @@ pub enum UICommand {
     /// can be conceptually mapped to `git blame`
     /// NOTE: do not need to compute anything if [`UICommand::ComputeTrackingMappingPast`] was ran on current commit.
     TrackPast,
-    ShowCommitMetadata
+    ShowCommitMetadata,
 }
 
 impl UICommand {
@@ -135,33 +134,48 @@ impl UICommand {
         match self {
             Self::SaveResults => ("Save Results…", "Save all results and associated config"),
             Self::SaveLayout => ("Save Current Layout…", "Save current layout"),
-            Self::ResetLayout => ("Reset Current Layout…", "Reset current layout to last recorded state"),
-            Self::PersistApp => ("Persist App…", "Enable persistance and save persited state to storage"),
+            Self::ResetLayout => (
+                "Reset Current Layout…",
+                "Reset current layout to last recorded state",
+            ),
+            Self::PersistApp => (
+                "Persist App…",
+                "Enable persistance and save persited state to storage",
+            ),
             // Self::SaveRecording => ("Save recording…", "Save all data to a Rerun data file (.rrd)"),
 
             // Self::SaveRecordingSelection => (
             //     "Save current time selection…",
             //     "Save data for the current loop selection to a Rerun data file (.rrd)",
             // ),
+            Self::SaveBlueprint => (
+                "Save blueprint…",
+                "Save the current viewer setup as a Rerun blueprint file (.rbl)",
+            ),
 
-            Self::SaveBlueprint => ("Save blueprint…", "Save the current viewer setup as a Rerun blueprint file (.rbl)"),
-
-            Self::Open => ("Open…", "Open any supported files (.rrd, images, meshes, …)"),
+            Self::Open => (
+                "Open…",
+                "Open any supported files (.rrd, images, meshes, …)",
+            ),
 
             Self::CloseCurrentRecording => (
                 "Close current recording",
                 "Close the current recording (unsaved data will be lost)",
             ),
 
-            Self::CloseAllRecordings => ("Close all recordings",
-                "Close all open current recording (unsaved data will be lost)",),
+            Self::CloseAllRecordings => (
+                "Close all recordings",
+                "Close all open current recording (unsaved data will be lost)",
+            ),
 
             #[cfg(not(target_arch = "wasm32"))]
             Self::Quit => ("Quit", "Close the Rerun Viewer"),
 
-            Self::OpenWebHelp => ("Help", "Visit the help page on our website, with troubleshooting tips and more"),
+            Self::OpenWebHelp => (
+                "Help",
+                "Visit the help page on our website, with troubleshooting tips and more",
+            ),
             // Self::OpenRerunDiscord => ("Rerun Discord", "Visit the Rerun Discord server, where you can ask questions and get help"),
-
             Self::ResetViewer => (
                 "Reset Viewer",
                 "Reset the Viewer to how it looked the first time you ran it, forgetting all stored blueprints and UI state",
@@ -169,9 +183,8 @@ impl UICommand {
 
             Self::ClearAndGenerateBlueprint => (
                 "Clear and generate new blueprint",
-                "Clear the current blueprint and generate a new one based on heuristics."
+                "Clear the current blueprint and generate a new one based on heuristics.",
             ),
-
 
             #[cfg(not(target_arch = "wasm32"))]
             Self::OpenProfiler => (
@@ -184,7 +197,10 @@ impl UICommand {
                 "View and track current RAM usage inside Rerun Viewer",
             ),
 
-            Self::TogglePanelStateOverrides => ("Toggle panel state overrides", "Toggle panel state between app blueprint and overrides"),
+            Self::TogglePanelStateOverrides => (
+                "Toggle panel state overrides",
+                "Toggle panel state between app blueprint and overrides",
+            ),
             Self::ToggleTopPanel => ("Toggle top panel", "Toggle the top panel"),
             Self::ToggleBlueprintPanel => ("Toggle blueprint panel", "Toggle the left panel"),
             Self::ToggleSelectionPanel => ("Toggle selection panel", "Toggle the right panel"),
@@ -202,7 +218,6 @@ impl UICommand {
                 "View and change global egui style settings",
             ),
 
-
             #[cfg(not(target_arch = "wasm32"))]
             Self::ToggleFullscreen => (
                 "Toggle fullscreen",
@@ -212,7 +227,7 @@ impl UICommand {
             #[cfg(target_arch = "wasm32")]
             Self::ToggleFullscreen => (
                 "Toggle fullscreen",
-                "Toggle between full viewport dimensions and initial dimensions"
+                "Toggle between full viewport dimensions and initial dimensions",
             ),
 
             #[cfg(not(target_arch = "wasm32"))]
@@ -229,9 +244,7 @@ impl UICommand {
             Self::SelectionNext => ("Next selection", "Go to next selection"),
             Self::ToggleCommandPalette => ("Command palette…", "Toggle the Command Palette"),
 
-            Self::PlaybackTogglePlayPause => {
-                ("Toggle play/pause", "Either play or pause the time")
-            }
+            Self::PlaybackTogglePlayPause => ("Toggle play/pause", "Either play or pause the time"),
             Self::PlaybackFollow => ("Follow", "Follow on from end of timeline"),
             Self::PlaybackStepBack => (
                 "Step time back",
@@ -269,87 +282,51 @@ impl UICommand {
                 "Prints the state of the entire primary cache to the console and clipboard. WARNING: this may be A LOT of text.",
             ),
 
-
             #[cfg(target_arch = "wasm32")]
             Self::CopyDirectLink => (
                 "Copy direct link",
-                "Copy a link to the viewer with the URL parameter set to the current .rrd data source."
+                "Copy a link to the viewer with the URL parameter set to the current .rrd data source.",
             ),
 
             #[cfg(target_arch = "wasm32")]
             Self::RestartWithWebGl => (
                 "Restart with WebGL",
-                "Reloads the webpage and force WebGL for rendering. All data will be lost."
+                "Reloads the webpage and force WebGL for rendering. All data will be lost.",
             ),
             #[cfg(target_arch = "wasm32")]
             Self::RestartWithWebGpu => (
                 "Restart with WebGPU",
-                "Reloads the webpage and force WebGPU for rendering. All data will be lost."
+                "Reloads the webpage and force WebGPU for rendering. All data will be lost.",
             ),
 
-            UICommand::NewQuery => (
-                "Create new query",
-                "Create a new tree-sitter query"
-            ),
-            
-            UICommand::RunQuery => (
-                "Run current code query",
-                "TODO desc. RunQuery"
-            ),
+            UICommand::NewQuery => ("Create new query", "Create a new tree-sitter query"),
+
+            UICommand::RunQuery => ("Run current code query", "TODO desc. RunQuery"),
             UICommand::ComputeTrackingMappingFuture => (
                 "ComputeTrackingMappingFuture",
-                "TODO desc. ComputeTrackingMappingFuture"
+                "TODO desc. ComputeTrackingMappingFuture",
             ),
             UICommand::ComputeTrackingMappingPast => (
                 "ComputeTrackingMappingPast",
-                "TODO desc. ComputeTrackingMappingPast"
+                "TODO desc. ComputeTrackingMappingPast",
             ),
-            UICommand::ComputeMappingFuture => (
-                "ComputeMappingFuture",
-                "TODO desc. ComputeMappingFuture"
-            ),
-            UICommand::ComputeMappingPast => (
-                "ComputeMappingPast",
-                "TODO desc. ComputeMappingPast"
-            ),
-            UICommand::ComputeDiffFuture => (
-                "ComputeDiffFuture",
-                "TODO desc. ComputeDiffFuture"
-            ),
-            UICommand::ComputeDiffPast => (
-                "ComputeDiffPast",
-                "TODO desc. ComputeDiffPast"
-            ),
-            UICommand::FindAllReferences => (
-                "FindAllReferences",
-                "TODO desc. FindAllReferences"
-            ),
-            UICommand::FindDeclaration => (
-                "FindDeclaration",
-                "TODO desc. FindDeclaration"
-            ),
-            UICommand::GotoDeclaration => (
-                "GotoDeclaration",
-                "TODO desc. GotoDeclaration"
-            ),
-            UICommand::ShowReferences => (
-                "ShowReferences",
-                "TODO desc. ShowReferences"
-            ),
-            UICommand::TrackFuture => (
-                "TrackFuture",
-                "TODO desc. TrackFuture"
-            ),
-            UICommand::TrackPast => (
-                "TrackPast",
-                "TODO desc. TrackPast"
-            ),
-            UICommand::ShowCommitMetadata => (
-                "ShowCommitMetadata",
-                "TODO desc. ShowCommitMetadata"
-            ),
-
-            
+            UICommand::ComputeMappingFuture => {
+                ("ComputeMappingFuture", "TODO desc. ComputeMappingFuture")
+            }
+            UICommand::ComputeMappingPast => {
+                ("ComputeMappingPast", "TODO desc. ComputeMappingPast")
+            }
+            UICommand::ComputeDiffFuture => ("ComputeDiffFuture", "TODO desc. ComputeDiffFuture"),
+            UICommand::ComputeDiffPast => ("ComputeDiffPast", "TODO desc. ComputeDiffPast"),
+            UICommand::FindAllReferences => ("FindAllReferences", "TODO desc. FindAllReferences"),
+            UICommand::FindDeclaration => ("FindDeclaration", "TODO desc. FindDeclaration"),
+            UICommand::GotoDeclaration => ("GotoDeclaration", "TODO desc. GotoDeclaration"),
+            UICommand::ShowReferences => ("ShowReferences", "TODO desc. ShowReferences"),
+            UICommand::TrackFuture => ("TrackFuture", "TODO desc. TrackFuture"),
+            UICommand::TrackPast => ("TrackPast", "TODO desc. TrackPast"),
+            UICommand::ShowCommitMetadata => {
+                ("ShowCommitMetadata", "TODO desc. ShowCommitMetadata")
+            }
         }
     }
 
@@ -450,9 +427,6 @@ impl UICommand {
             #[cfg(target_arch = "wasm32")]
             Self::RestartWithWebGpu => None,
 
-            #[cfg(target_arch = "wasm32 ")]
-            Self::ViewportMode(_) => None,
-            
             // TODO
             UICommand::NewQuery => None,
             UICommand::RunQuery => None,
@@ -469,8 +443,6 @@ impl UICommand {
             UICommand::TrackFuture => None,
             UICommand::TrackPast => None,
             UICommand::ShowCommitMetadata => None,
-
-            
         }
     }
 

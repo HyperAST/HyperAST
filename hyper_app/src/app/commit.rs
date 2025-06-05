@@ -55,7 +55,7 @@ impl CommitMetadata {
                 wasm_rs_dbg::dbg!(&text);
                 if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
                     wasm_rs_dbg::dbg!(&text);
-                    ui.output_mut(|mem| mem.copied_text = text.to_string());
+                    ui.ctx().copy_text(text.to_string());
                 }
             }
         }
@@ -155,31 +155,6 @@ pub struct MergePr {
     pub(crate) number: i64,
 }
 
-pub(super) fn fetch_merge_pr(
-    ctx: &egui::Context,
-    api_addr: &str,
-    commit: &Commit,
-) -> Promise<Result<MergePr, String>> {
-    let ctx = ctx.clone();
-    let (sender, promise) = Promise::new();
-    let url = format!(
-        "http://{}/pr/github/{}/{}/{}",
-        api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
-    );
-
-    wasm_rs_dbg::dbg!(&url);
-    let request = ehttp::Request::get(&url);
-
-    ehttp::fetch(request, move |response| {
-        ctx.request_repaint(); // wake up UI thread
-        let resource = response
-            .and_then(|response| Resource::<MergePr>::from_response(&ctx, response))
-            .and_then(|x| x.content.ok_or("No content".into()));
-        sender.send(resource);
-    });
-    promise
-}
-
 impl Resource<MergePr> {
     fn from_response(_ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
         let text = response.text();
@@ -193,7 +168,7 @@ impl Resource<MergePr> {
     }
 }
 
-pub(super) fn fetch_merge_pr2(
+pub(super) fn fetch_merge_pr(
     ctx: &egui::Context,
     api_addr: &str,
     commit: &Commit,
@@ -215,7 +190,6 @@ pub(super) fn fetch_merge_pr2(
     let request = ehttp::Request::get(&url);
 
     ehttp::fetch(request, move |response| {
-        let mut md = md;
         ctx.request_repaint(); // wake up UI thread
         let resource = response
             .and_then(|response| Resource::<MergePr>::from_response(&ctx, response))
@@ -857,6 +831,7 @@ pub(crate) fn compute_commit_layout_timed(
     r
 }
 
+#[allow(unused)] // TODO check if mod is still needed
 mod commits_layouting {
     use std::collections::HashMap;
 

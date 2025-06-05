@@ -50,54 +50,159 @@ macro_rules! role_impl {
 }
 
 role_impl!(
+    // Name => "name",
+    // Scope => "scope",
+    // Body => "body",
+    // SuperType => "super_type",
+    // Interfaces => "interfaces",
+    // Constructor => "constructor",
+    // Object => "object",
+    // Arguments => "arguments",
+    // TypeArguments => "type_arguments",
+    // Type => "type",
+    // Declarator => "declarator",
+    // Value => "value",
+    // TypeParameters => "type_parameters",
+    // Parameters => "parameters",
+    // Condition => "condition",
+    // Init => "init",
+    // Update => "update",
+    // Alternative => "alternative",
+    // Resources => "resources",
+    // Field => "field",
+    // Left => "left",
+    // Right => "right",
+    // Superclass => "superclass",
+    // Element => "element",
+    // Consequence => "consequence",
+    // Key => "key",
+    // Function => "function",
+    // Operator => "operator",
+    // Operand => "operand",
+    // Dimensions => "dimensions",
+    // Array => "array",
+    // Index => "index",
+    // Indices => "indices",
+    // Argument => "argument",
+    // Initializer => "initializer",
+    // Path => "path",
+    // DefaultValue => "default_value",
+    // DefaultType => "default_type",
+    // Message => "message",
+    // Size => "size",
+    // Member => "member",
+    // Captures => "captures",
+    // Directive => "directive",
+    // Pattern => "pattern",
+    // Designator => "designator",
+    // Base => "base",
+    // Label => "label",
+    // Placement => "placement",
+
+    // // TsQuery
+    Quantifier => "quantifier",
     Name => "name",
-    Scope => "scope",
-    Body => "body",
-    SuperType => "super_type",
-    Interfaces => "interfaces",
-    Constructor => "constructor",
-    Object => "object",
-    Arguments => "arguments",
-    TypeArguments => "type_arguments",
+    Supertype => "supertype",
     Type => "type",
-    Declarator => "declarator",
-    Value => "value",
-    TypeParameters => "type_parameters",
     Parameters => "parameters",
-    Condition => "condition",
-    Init => "init",
+
+    // // Xml
+    Root => "root",
+    Content => "content",
+
+    // // Java
+    Provider => "provider",
     Update => "update",
-    Alternative => "alternative",
-    Resources => "resources",
-    Field => "field",
-    Left => "left",
-    Right => "right",
-    Superclass => "superclass",
-    Element => "element",
-    Consequence => "consequence",
-    Key => "key",
-    Function => "function",
-    Operator => "operator",
-    Operand => "operand",
-    Dimensions => "dimensions",
+    // Parameters => "parameters",
     Array => "array",
-    Index => "index",
-    Indices => "indices",
-    Argument => "argument",
-    Initializer => "initializer",
-    Path => "path",
-    DefaultValue => "default_value",
-    DefaultType => "default_type",
-    Message => "message",
-    Size => "size",
-    Member => "member",
-    Captures => "captures",
-    Directive => "directive",
+    Init => "init",
+    Permits => "permits",
+    TypeParameters => "type_parameters",
+    Object => "object",
+    Operand => "operand",
+    Left => "left",
+    Element => "element",
     Pattern => "pattern",
-    Designator => "designator",
-    Base => "base",
+    // Name => "name",
+    Field => "field",
+    Right => "right",
+    Operator => "operator",
+    Index => "index",
+    // Type => "type",
+    Resources => "resources",
+    Scope => "scope",
+    Dimensions => "dimensions",
+    Declarator => "declarator",
+    Consequence => "consequence",
+    TypeArguments => "type_arguments",
+    TemplateProcessor => "template_processor",
+    Modifiers => "modifiers",
+    TemplateArgument => "template_argument",
+    Constructor => "constructor",
+    Arguments => "arguments",
+    Module => "module",
+    Superclass => "superclass",
+    Alternative => "alternative",
+    Interfaces => "interfaces",
+    Key => "key",
+    Value => "value",
+    Body => "body",
+    Condition => "condition",
+    Package => "package",
+    Provided => "provided",
+    Modules => "modules",
+
+    // // Cpp
+    // Size => "size",
     Label => "label",
+    Member => "member",
+    Function => "function",
+    // Argument => "argument",
+    InputOperands => "input_operands",
+    // Alternative => "alternative",
+    // Consequence => "consequence",
+    // Value => "value",
+    Register => "register",
+    DefaultType => "default_type",
+    Filter => "filter",
+    Start => "start",
+    // Pattern => "pattern",
+    // Parameters => "parameters",
+    // Field => "field",
+    Length => "length",
+    Constraint => "constraint",
+    Path => "path",
+    // Declarator => "declarator",
+    // Right => "right",
+    Designator => "designator",
     Placement => "placement",
+    // Scope => "scope",
+    // Update => "update",
+    End => "end",
+    // Type => "type",
+    // Body => "body",
+    DefaultValue => "default_value",
+    // Name => "name",
+    Prefix => "prefix",
+    Clobbers => "clobbers",
+    // Left => "left",
+    // Operand => "operand",
+    Message => "message",
+    Base => "base",
+    OutputOperands => "output_operands",
+    AssemblyCode => "assembly_code",
+    Requirements => "requirements",
+    Initializer => "initializer",
+    Indices => "indices",
+    Captures => "captures",
+    Delimiter => "delimiter",
+    Directive => "directive",
+    Symbol => "symbol",
+    // Arguments => "arguments",
+    GotoLabels => "goto_labels",
+    TemplateParameters => "template_parameters",
+    // Operator => "operator",
+    // Condition => "condition",
 );
 
 #[allow(unused)]
@@ -416,9 +521,12 @@ mod exp {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
-#[strum(serialize_all = "snake_case")]
-enum Abstract {
+/// set of possible abtract type of nodes
+pub type Abstracts = enumset::EnumSet<Abstract>;
+
+/// the posible abstract type that a node can have
+#[derive(Debug, Hash, Display, enumset::EnumSetType)]
+pub enum Abstract {
     Expression,
     Statement,
     Executable,
@@ -426,6 +534,17 @@ enum Abstract {
     Literal,
 }
 
+impl Abstract {
+    pub fn when(self, enable: bool) -> Abstracts {
+        if enable {
+            self.into()
+        } else {
+            Abstracts::empty()
+        }
+    }
+}
+
+/// exclusive shared type, you can use it in combination with `Abstract`
 #[derive(Debug, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
 #[strum(serialize_all = "snake_case")]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
@@ -484,8 +603,10 @@ impl<T> LangRef<T> for LangWrapper<T> {
 // trait object used to facilitate erasing node types
 pub trait HyperType: Display + Debug {
     fn as_shared(&self) -> Shared;
+    /// returns an union of all abstract types that apply
+    fn as_abstract(&self) -> Abstracts;
     fn as_any(&self) -> &dyn std::any::Any;
-    // returns the same address for the same type
+    /// returns the same "address" for the same type
     fn as_static(&self) -> &'static dyn HyperType;
     fn as_static_str(&self) -> &'static str;
     fn generic_eq(&self, other: &dyn HyperType) -> bool
@@ -524,6 +645,10 @@ impl HyperType for u8 {
     }
 
     fn as_shared(&self) -> Shared {
+        todo!()
+    }
+
+    fn as_abstract(&self) -> Abstracts {
         todo!()
     }
 
@@ -1241,12 +1366,10 @@ impl<L: LLang<Self, I = u16>> Display for TypeU16<L> {
 
 impl<L: LLang<Self, I = u16>> TypeU16<L> {
     pub fn e(&self) -> L::E {
-        debug_assert!(L::TE.len() <= u16::MAX as usize);
-        L::TE[self.0 as usize]
+        *self.s()
     }
     fn s(&self) -> &'static L::E {
-        debug_assert!(L::TE.len() <= u16::MAX as usize);
-        &L::TE[self.0 as usize]
+        <L as Lang<L::E>>::make(self.0)
     }
     pub fn new(e: L::E) -> Self {
         Self(<L as Lang<L::E>>::to_u16(e), std::marker::PhantomData)
@@ -1267,6 +1390,10 @@ where
 {
     fn as_shared(&self) -> Shared {
         self.e().as_shared()
+    }
+
+    fn as_abstract(&self) -> Abstracts {
+        self.e().as_abstract()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -1328,10 +1455,9 @@ where
     }
 }
 
-pub use crate::store::nodes::ErasedHolder;
 pub use crate::store::nodes::Compo;
 pub use crate::store::nodes::CompressedCompo;
-
+pub use crate::store::nodes::ErasedHolder;
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore {}
 
@@ -1518,6 +1644,10 @@ impl HyperType for AnyType {
 
     fn as_shared(&self) -> Shared {
         self.0.as_shared()
+    }
+
+    fn as_abstract(&self) -> Abstracts {
+        self.0.as_abstract()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -40,7 +40,7 @@ const-chunks = "0.3.0"
 winit = { version="0.30.10" , features = ["wayland-backend"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.5.0"
+jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
 
 # [build-dependencies]
 

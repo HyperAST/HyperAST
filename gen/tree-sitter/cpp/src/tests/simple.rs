@@ -28,36 +28,21 @@ pub(crate) fn cpp_preproc_call_decl_test() {
     //     hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node).to_string(),
     //     tree.root_node().to_sexp().to_string()
     // );
-    println!(
-        "{}",
-        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
-    );
-    println!(
-        "{}",
-        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
-    );
-    println!(
-        "{}",
-        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
-    );
-    println!(
-        "{}",
-        hyperast::nodes::SyntaxWithFieldsSerializer::new(&stores, x.compressed_node)
-    );
+    use hyperast::nodes;
+    let id = x.compressed_node;
+    println!("{}", nodes::SyntaxSerializer::new(&stores, id));
+    println!("{}", nodes::TextSerializer::new(&stores, id));
+    println!("{}", nodes::SexpSerializer::new(&stores, id));
+    println!("{}", nodes::SyntaxWithFieldsSerializer::new(&stores, id));
 
     let query = Q;
     let precomp: &[&str] = &["(translation_unit)"];
-    let (precomp, query) =
+    let (_, query) =
         hyperast_tsquery::Query::with_precomputed(query, crate::language(), precomp).unwrap();
     let mut stores = hyperast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut cpp_tree_gen = crate::legion::CppTreeGen::new(&mut stores, &mut md_cache);
-    //  {
-    //     line_break: "\n".as_bytes().to_vec(),
-    //     stores: &mut stores,
-    //     md_cache: &mut md_cache,
-    //     more: precomp,
-    // };
+
     let tree = match crate::legion::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
@@ -72,32 +57,33 @@ pub(crate) fn cpp_preproc_call_decl_test() {
     let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
     let mut matches = query.matches(cursor);
-    let Some(m) = matches.next() else {
+    let Some(_) = matches.next() else {
         panic!();
     };
 }
 
+#[allow(unused)]
 static Q2: &str = r#"
-(translation_unit 
-    (function_definition 
-        type: (primitive_type) 
-        declarator: (function_declarator 
-            declarator: (identifier) 
-            parameters: (parameter_list (parameter_declaration 
-                type: (primitive_type) 
-                declarator: (pointer_declarator declarator: (identifier))))) 
-        body: (compound_statement 
-            (preproc_call_declaration 
-                function: (identifier) 
+(translation_unit
+    (function_definition
+        type: (primitive_type)
+        declarator: (function_declarator
+            declarator: (identifier)
+            parameters: (parameter_list (parameter_declaration
+                type: (primitive_type)
+                declarator: (pointer_declarator declarator: (identifier)))))
+        body: (compound_statement
+            (preproc_call_declaration
+                function: (identifier)
                 arguments: (argument_list (string_literal (string_content)) (identifier))))))
 "#;
 
 static Q: &str = r#"
 (function_definition
-  body: (compound_statement 
-    (preproc_call_declaration 
-        function: 
-           (identifier) 
+  body: (compound_statement
+    (preproc_call_declaration
+        function:
+           (identifier)
         arguments: (argument_list (string_literal (string_content)) (identifier))
     )
   )
@@ -344,7 +330,7 @@ pub(crate) fn cpp_issue_stockfish_types_test() {
         let source_code1 = r#"
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
-        
+
 
 #define ENABLE_FULL_OPERATORS_ON(T)                             \
 inline T operator+(T d1, T d2) { return T(int(d1) + int(d2)); } \
@@ -687,6 +673,7 @@ int main() {
 
 "#;
 
+#[allow(unused)]
 pub(crate) const CODE_3: &str = r#"/*
 Stockfish, a UCI chess playing engine derived from Glaurung 2.1
 Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
@@ -782,6 +769,7 @@ return ch[pt];
 #endif // !defined(PIECE_H_INCLUDED)
 "#;
 
+#[allow(unused, non_upper_case_globals)]
 pub(crate) const CODE_OP_whole_save: &str = r#"/*
 Stockfish, a UCI chess playing engine derived from Glaurung 2.1
 Copyright (C) 2004-2008 Tord Romstad (Glaurung author)

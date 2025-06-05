@@ -28,6 +28,11 @@ hungarian = "1.1.1"
 
 hyperast_gen_ts_java = { workspace = true, features = ["impl"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+iai-callgrind = "0.14.0"
+
+[features]
+experimental = []
 
 [lib]
 bench = false
@@ -49,3 +54,15 @@ features = ["java"]
 name = "legion_tree"
 harness = false
 features = ["java"]
+
+[[bench]]
+name = "qgrams_iai"
+harness = false
+
+[[bench]]
+name = "hashmap_pitfalls"
+harness = false
+
+[[bench]]
+name = "hashmap_pitfalls_direct_indexing"
+harness = false

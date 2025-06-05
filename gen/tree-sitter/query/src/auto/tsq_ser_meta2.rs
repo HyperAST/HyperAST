@@ -2,10 +2,9 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 use hyperast::types;
+use hyperast::types::Childrn as _;
 use hyperast::types::HyperAST;
 use hyperast::types::HyperType as _;
-use hyperast::types::Children as _;
-use hyperast::types::Childrn as _;
 use hyperast::types::WithPrecompQueries;
 use hyperast::types::WithRoles;
 
@@ -23,12 +22,8 @@ pub struct TreeToQuery<
     meta: hyperast_tsquery::Query,
     phantom: std::marker::PhantomData<TIdN>,
 }
-impl<
-        'store,
-        'a,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId,
-    > TreeToQuery<'store, HAST, TIdN>
+impl<'store, 'a, HAST: types::TypedHyperAST<TIdN>, TIdN: hyperast::types::TypedNodeId>
+    TreeToQuery<'store, HAST, TIdN>
 {
     pub fn new(
         stores: &'store HAST,
@@ -45,12 +40,12 @@ impl<
 }
 
 impl<
-        'hast,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId + 'static,
-        const V: bool,
-        const PP: bool,
-    > Display for TreeToQuery<'hast, HAST, TIdN, V, PP>
+    'hast,
+    HAST: types::TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId + 'static,
+    const V: bool,
+    const PP: bool,
+> Display for TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
@@ -64,12 +59,12 @@ where
 }
 
 impl<
-        'hast,
-        HAST: types::TypedHyperAST<TIdN>,
-        TIdN: hyperast::types::TypedNodeId + 'static,
-        const V: bool,
-        const PP: bool,
-    > TreeToQuery<'hast, HAST, TIdN, V, PP>
+    'hast,
+    HAST: types::TypedHyperAST<TIdN>,
+    TIdN: hyperast::types::TypedNodeId + 'static,
+    const V: bool,
+    const PP: bool,
+> TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
     HAST::TS: hyperast::types::RoleStore,
@@ -236,14 +231,13 @@ where
         let pos = hyperast::position::structural_pos::CursorWithPersistance::new(*id);
         let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(self.stores, pos);
         let mut matches = self.meta.matches_immediate(cursor);
-        let Some(m) = matches.next_match() else {
-            return false;
-        };
         let Some(cid) = self.meta.capture_index_for_name("skip") else {
             return false;
         };
-        if let Some(_) = m.nodes_for_capture_index(cid).next() {
-            return true;
+        while let Some(m) = matches.next_match() {
+            if let Some(_) = m.nodes_for_capture_index(cid).next() {
+                return true;
+            }
         }
         false
     }

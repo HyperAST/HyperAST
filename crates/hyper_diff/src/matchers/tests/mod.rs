@@ -4,4 +4,8 @@
 #[cfg(test)]
 pub mod zs_tests;
 
+#[cfg(test)]
 pub mod gumtree_hybrid_tests;
+
+#[cfg(test)]
+pub mod instability;

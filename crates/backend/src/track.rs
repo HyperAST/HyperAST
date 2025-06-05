@@ -582,7 +582,6 @@ pub(crate) fn track_code_at_path_with_changes(
         path,
     } = path;
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let configs = state.clone();
     let repo_handle = state
         .repositories
         .write()
@@ -975,7 +974,6 @@ fn track_aux(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
-    let node_store = &stores.node_store;
 
     // let size = node_store.resolve(src_tr).size();
     log::debug!("tracking {file}");
@@ -1105,5 +1103,6 @@ fn track_aux2(
 
 mod compute;
 mod more;
+
 #[cfg(feature = "experimental")]
 mod my_dash;
