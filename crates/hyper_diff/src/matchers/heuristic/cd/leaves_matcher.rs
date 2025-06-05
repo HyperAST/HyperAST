@@ -8,10 +8,11 @@ use crate::{
         mapping_store::{MappingStore, MonoMappingStore},
     },
 };
-use hyperast::types::{
-    DecompressedFrom, HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs,
-};
 use hyperast::{PrimInt, types::HyperType};
+use hyperast::{
+    nodes::TextSerializer,
+    types::{DecompressedFrom, HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs},
+};
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use str_distance::DistanceMetric;
@@ -223,26 +224,14 @@ where
         src_type == dst_type
     }
 
-    fn compute_label_similarity(&self, src_tree: &M::Src, dst_tree: &M::Dst) -> f64 {
-        let original_src = self.src_arena.original(src_tree);
-        let original_dst = self.dst_arena.original(dst_tree);
+    fn compute_label_similarity(&self, src: &M::Src, dst: &M::Dst) -> f64 {
+        let original_src = self.src_arena.original(&src);
+        let src_text = TextSerializer::new(&self.stores, original_src).to_string();
+        let original_dst = self.dst_arena.original(&dst);
+        let dst_text = TextSerializer::new(&self.stores, original_dst).to_string();
 
-        let src_node = self.stores.node_store().resolve(&original_src);
-        let dst_node = self.stores.node_store().resolve(&original_dst);
-
-        let src_label_id = src_node.try_get_label();
-        let dst_label_id = dst_node.try_get_label();
-
-        match (src_label_id, dst_label_id) {
-            (Some(src_label_id), Some(dst_label_id)) => {
-                let src_label = self.stores.label_store().resolve(&src_label_id);
-                let dst_label = self.stores.label_store().resolve(&dst_label_id);
-                let dist =
-                    str_distance::QGram::new(3).normalized(src_label.chars(), dst_label.chars());
-                1.0 - dist
-            }
-            _ => 0.0,
-        }
+        let dist = str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
+        1.0 - dist
     }
 }
 
