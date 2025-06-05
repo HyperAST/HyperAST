@@ -1,32 +1,7 @@
 use crate::actions::Actions;
 use crate::algorithms;
 use crate::tests::simple_matcher_examples::*;
-use hyperast::test_utils::simple_tree::vpair_to_stores;
-
-// //Parses the provided bytes to a java syntax tree
-// fn preprocess_for_diff(
-//     src: &[u8],
-//     dst: &[u8],
-// ) -> (
-//     SimpleStores<TStore>,
-//     FullNode<StatsGlobalData, Local>,
-//     FullNode<StatsGlobalData, Local>,
-// ) {
-//     let mut stores = SimpleStores::<TStore>::default();
-//     let mut md_cache = Default::default(); // [cite: 133, 139]
-//     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
-//     let tree = match legion_with_refs::tree_sitter_parse(src) {
-//         Ok(t) => t,
-//         Err(t) => t,
-//     };
-//     let src = java_tree_gen.generate_file(b"", src, tree.walk());
-//     let tree = match legion_with_refs::tree_sitter_parse(dst) {
-//         Ok(t) => t,
-//         Err(t) => t,
-//     };
-//     let dst = java_tree_gen.generate_file(b"", dst, tree.walk());
-//     return (stores, src, dst);
-// }
+use hyperast::test_utils::simple_tree::{SimpleTree, vpair_to_stores};
 
 #[test]
 fn test_for_mappings() {
@@ -78,16 +53,39 @@ fn test_for_mappings() {
     );
 }
 
-#[test]
-fn test_gumtree_simple_java_simple() {
-    let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_simple());
+struct DiffInfo {
+    num_actions_normal: usize,
+    num_actions_lazy: usize,
+    num_matches_normal: usize,
+    num_matches_lazy: usize,
+}
 
-    // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_simple::diff(&stores, &src, &dst);
-    let actions = _diff_result.actions.expect("Expected a result");
+fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
+    let (stores, src, dst) = vpair_to_stores(example);
 
-    let hyperast_actions_len = actions.len();
-    let hyperast_matches_len = _diff_result
+    // Apply diff with both gumtree simple and simple_lazy
+    let _diff_result_normal = algorithms::gumtree_simple::diff(&stores, &src, &dst);
+    let _diff_result_lazy = algorithms::gumtree_simple_lazy::diff(&stores, &src, &dst);
+
+    // Get the number of generated actions
+    let num_actions_normal = _diff_result_normal
+        .actions
+        .expect("ASTs were not equal, but no actions were found")
+        .len();
+    let num_actions_lazy = _diff_result_lazy
+        .actions
+        .expect("ASTs were not equal, but no actions were found")
+        .len();
+
+    // Get the number of mappings found
+    let num_matches_normal = _diff_result_normal
+        .mapper
+        .mappings
+        .src_to_dst
+        .iter()
+        .filter(|a| **a != 0)
+        .count();
+    let num_matches_lazy = _diff_result_lazy
         .mapper
         .mappings
         .src_to_dst
@@ -95,6 +93,100 @@ fn test_gumtree_simple_java_simple() {
         .filter(|a| **a != 0)
         .count();
 
-    assert_eq!(hyperast_actions_len, 1, "Number of actions did not match");
-    assert_eq!(hyperast_matches_len, 5, "Number of matches did not match");
+    return DiffInfo {
+        num_actions_normal,
+        num_actions_lazy,
+        num_matches_normal,
+        num_matches_lazy,
+    };
+}
+
+#[test]
+fn test_gumtree_simple_java_simple() {
+    let diff_info = get_diff_info(example_from_gumtree_java_simple());
+
+    assert_eq!(
+        diff_info.num_matches_normal, diff_info.num_matches_lazy,
+        "Number of matches normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_matches_normal, 5,
+        "Number of matches did not match, normal"
+    );
+    assert_eq!(
+        diff_info.num_actions_normal, diff_info.num_actions_lazy,
+        "Number of actions normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_actions_normal, 1,
+        "Number of actions did not match"
+    );
+}
+
+#[test]
+fn test_gumtree_simple_java_method() {
+    let diff_info = get_diff_info(example_from_gumtree_java_method());
+
+    assert_eq!(
+        diff_info.num_matches_normal, diff_info.num_matches_lazy,
+        "Number of matches normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_matches_normal, 21,
+        "incorrect number of matches"
+    );
+    assert_eq!(
+        diff_info.num_actions_normal, diff_info.num_actions_lazy,
+        "Number of actions normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_actions_normal, 12,
+        "incorrect number of actions"
+    );
+}
+
+#[test]
+fn test_gumtree_simple_reorder_children() {
+    let diff_info = get_diff_info(example_reorder_children());
+
+    assert_eq!(
+        diff_info.num_matches_normal, diff_info.num_matches_lazy,
+        "Number of matches normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_matches_normal, 25,
+        "incorrect number of matches"
+    );
+
+    assert_eq!(
+        diff_info.num_actions_normal, diff_info.num_actions_lazy,
+        "Number of actions normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_actions_normal, 1,
+        "incorrect number of actions"
+    );
+}
+
+#[test]
+fn test_gumtree_simple_move_method() {
+    let diff_info = get_diff_info(example_move_method());
+
+    assert_eq!(
+        diff_info.num_matches_normal, diff_info.num_matches_lazy,
+        "Number of matches normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_matches_normal, 31,
+        "incorrect number of matches"
+    );
+
+    assert_eq!(
+        diff_info.num_actions_normal, diff_info.num_actions_lazy,
+        "Number of actions normal and lazy were not equal"
+    );
+    assert_eq!(
+        diff_info.num_actions_normal, 7,
+        "incorrect number of actions"
+    );
 }
