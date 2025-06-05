@@ -4090,6 +4090,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "const-chunks",
+ "criterion 0.4.0",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
  "hyper_diff",

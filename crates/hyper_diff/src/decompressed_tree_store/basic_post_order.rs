@@ -8,6 +8,7 @@ use hyperast::types::{self, Children, Childrn, HyperAST, WithChildren};
 use num_traits::{ToPrimitive, cast, one, zero};
 use std::fmt::Debug;
 
+#[derive(Clone)]
 pub struct BasicPostOrder<IdN, IdD> {
     /// Ids of subtrees in HyperAST
     pub(super) id_compressed: Box<[IdN]>,
