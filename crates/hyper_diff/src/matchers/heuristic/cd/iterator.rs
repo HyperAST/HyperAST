@@ -40,6 +40,58 @@ pub struct CustomIteratorConfig {
     pub yield_leaves: bool,
     /// Whether to yield nodes that don't match the leaf predicate (inner nodes)
     pub yield_inner: bool,
+    /// Whether to yield only the deepest logical leaves (no logical leaves as descendants)
+    pub deepest_leaf: bool,
+}
+
+impl CustomIteratorConfig {
+    pub fn shallow_leaves() -> Self {
+        Self {
+            yield_leaves: true,
+            yield_inner: false,
+            deepest_leaf: false,
+        }
+    }
+
+    pub fn deep_leaves() -> Self {
+        Self {
+            yield_leaves: true,
+            yield_inner: false,
+            deepest_leaf: true,
+        }
+    }
+
+    pub fn leaves(deep: bool) -> Self {
+        Self {
+            yield_leaves: true,
+            yield_inner: false,
+            deepest_leaf: deep,
+        }
+    }
+
+    pub fn shallow_inner() -> Self {
+        Self {
+            yield_leaves: false,
+            yield_inner: true,
+            deepest_leaf: false,
+        }
+    }
+
+    pub fn deep_inner() -> Self {
+        Self {
+            yield_leaves: false,
+            yield_inner: true,
+            deepest_leaf: true,
+        }
+    }
+
+    pub fn inner(deep: bool) -> Self {
+        Self {
+            yield_leaves: false,
+            yield_inner: true,
+            deepest_leaf: deep,
+        }
+    }
 }
 
 impl Default for CustomIteratorConfig {
@@ -47,6 +99,7 @@ impl Default for CustomIteratorConfig {
         Self {
             yield_leaves: true,
             yield_inner: true,
+            deepest_leaf: false,
         }
     }
 }
@@ -100,7 +153,7 @@ impl<'a, D, HAST, IdD, F> Iterator for CustomPostOrderIterator<'a, D, HAST, IdD,
 where
     D: LazyDecompressedTreeStore<HAST, IdD>,
     HAST: HyperAST + Copy,
-    D::IdD: std::fmt::Debug,
+    D::IdD: std::fmt::Debug + Clone,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     <HAST::TS as TypeStore>::Ty: HyperType,
     F: Fn(&mut D, HAST, &D::IdD) -> bool,
@@ -125,7 +178,9 @@ where
                 let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
 
                 if is_custom_leaf {
-                    if self.config.yield_leaves {
+                    // For logical leaves that had their children processed,
+                    // we only yield if deepest_leaf is false
+                    if self.config.yield_leaves && !self.config.deepest_leaf {
                         return Some(node);
                     } else {
                         continue;
@@ -143,7 +198,49 @@ where
                 // Check if this matches our custom leaf predicate
                 let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
 
-                if is_custom_leaf {
+                if is_custom_leaf && self.config.deepest_leaf {
+                    // When looking for deepest logical leaves, we need to check if this
+                    // logical leaf contains other logical leaves
+                    let children = self.arena.decompress_children(&node);
+
+                    if children.is_empty() {
+                        // No children - this is definitely a deepest logical leaf
+                        if self.config.yield_leaves {
+                            return Some(node);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        // Has children - need to check if any are logical leaves
+                        let mut has_logical_leaf_descendant = false;
+                        let mut to_check = children.clone();
+
+                        while let Some(child) = to_check.pop() {
+                            if (self.is_leaf_fn)(self.arena, self.stores, &child) {
+                                has_logical_leaf_descendant = true;
+                                break;
+                            }
+                            let child_children = self.arena.decompress_children(&child);
+                            to_check.extend(child_children);
+                        }
+
+                        if has_logical_leaf_descendant {
+                            // This logical leaf contains other logical leaves, so traverse its children
+                            self.stack.push((node, true));
+                            for child in children.into_iter().rev() {
+                                self.stack.push((child, false));
+                            }
+                            continue;
+                        } else {
+                            // No logical leaf descendants - this is a deepest logical leaf
+                            if self.config.yield_leaves {
+                                return Some(node);
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+                } else if is_custom_leaf {
                     // Custom leaf - don't process children, yield immediately if configured
                     if self.config.yield_leaves {
                         return Some(node);
@@ -248,7 +345,9 @@ where
                 let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
 
                 if is_custom_leaf {
-                    if self.config.yield_leaves {
+                    // For logical leaves that had their children processed,
+                    // we only yield if deepest_leaf is false
+                    if self.config.yield_leaves && !self.config.deepest_leaf {
                         return Some(node);
                     } else {
                         continue;
@@ -266,7 +365,49 @@ where
                 // Check if this matches our custom leaf predicate
                 let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
 
-                if is_custom_leaf {
+                if is_custom_leaf && self.config.deepest_leaf {
+                    // When looking for deepest logical leaves, we need to check if this
+                    // logical leaf contains other logical leaves
+                    let children = self.arena.children(&node);
+
+                    if children.is_empty() {
+                        // No children - this is definitely a deepest logical leaf
+                        if self.config.yield_leaves {
+                            return Some(node);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        // Has children - need to check if any are logical leaves
+                        let mut has_logical_leaf_descendant = false;
+                        let mut to_check = children.clone();
+
+                        while let Some(child) = to_check.pop() {
+                            if (self.is_leaf_fn)(self.arena, self.stores, &child) {
+                                has_logical_leaf_descendant = true;
+                                break;
+                            }
+                            let child_children = self.arena.children(&child);
+                            to_check.extend(child_children);
+                        }
+
+                        if has_logical_leaf_descendant {
+                            // This logical leaf contains other logical leaves, so traverse its children
+                            self.stack.push((node, true));
+                            for child in children.into_iter().rev() {
+                                self.stack.push((child, false));
+                            }
+                            continue;
+                        } else {
+                            // No logical leaf descendants - this is a deepest logical leaf
+                            if self.config.yield_leaves {
+                                return Some(node);
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+                } else if is_custom_leaf {
                     // Custom leaf - don't process children, yield immediately if configured
                     if self.config.yield_leaves {
                         return Some(node);
@@ -312,7 +453,6 @@ mod tests {
     use crate::tests::tree;
     use crate::tree::simple_tree::vpair_to_stores;
     use ahash::HashMap;
-    use hyperast::types::WithChildren;
     use hyperast::{
         store::SimpleStores,
         test_utils::simple_tree::{LS, NS, TStore, Tree},
@@ -468,6 +608,28 @@ mod tests {
     );
 
     iterator_test!(
+        test_iterator_default_config_deepest,
+        test_iterator_default_config_deepest_decomp,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "l"; [
+                    tree!(1, "l.l"),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: true,
+            yield_inner: true,
+            deepest_leaf: true
+        },
+        is_leaf_fn = no_children,
+        is_leaf_fn_decomp = decompressed_no_children,
+        expected = &["l.l", "l.r", "l", "r", "root"]
+    );
+
+    iterator_test!(
         test_iterator_leaves_only,
         test_iterator_leaves_only_decomp,
         tree = tree!(
@@ -481,7 +643,8 @@ mod tests {
         ),
         config = CustomIteratorConfig {
             yield_leaves: true,
-            yield_inner: false
+            yield_inner: false,
+            deepest_leaf: false
         },
         is_leaf_fn = no_children,
         is_leaf_fn_decomp = decompressed_no_children,
@@ -505,7 +668,8 @@ mod tests {
         ),
         config = CustomIteratorConfig {
             yield_leaves: false,
-            yield_inner: true
+            yield_inner: true,
+            deepest_leaf: false
         },
         is_leaf_fn = label_statement,
         is_leaf_fn_decomp = decompressed_label_statement,
@@ -529,7 +693,32 @@ mod tests {
         ),
         config = CustomIteratorConfig {
             yield_leaves: true,
-            yield_inner: false
+            yield_inner: false,
+            deepest_leaf: false
+        },
+        is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
+        expected = &["statement_l", "statement_r.l"]
+    );
+    iterator_test!(
+        test_iterator_custom_leaves_deepest,
+        test_iterator_custom_leaves_deepest_decomp,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"),
+                    tree!(0, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"),
+                    tree!(0, "r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: true,
+            yield_inner: false,
+            deepest_leaf: true
         },
         is_leaf_fn = label_statement,
         is_leaf_fn_decomp = decompressed_label_statement,
@@ -543,9 +732,9 @@ mod tests {
             0, "root"; [
                 tree!(0, "statement_l"; [
                     tree!(0, "l.l"; [
-                        tree!(0, "l.l.l"; [
+                        tree!(0, "statement_l.l.l"; [
                             tree!(1, "l.l.l.l"),
-                            tree!(1, "l.l.l.r"),
+                            tree!(1, "statement_l.l.l.r"),
                         ]),
                         tree!(1, "l.l.r"),
                     ]),
@@ -554,7 +743,42 @@ mod tests {
                 tree!(0, "r"; [
                     tree!(0, "statement_r.l"; [
                         tree!(1, "r.l.l"),
-                        tree!(1, "r.l.r"),
+                        tree!(1, "statement_r.l.r"),
+                    ]),
+                    tree!(1, "statement_r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: true,
+            yield_inner: false,
+            deepest_leaf: false
+        },
+        is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
+        expected = &["statement_l", "statement_r.l", "statement_r.r"]
+    );
+
+    // Test with deepest_leaf = true (new behavior)
+    iterator_test!(
+        test_deepest_logical_leaves,
+        test_deepest_logical_leaves_decomp,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"; [
+                        tree!(0, "statement_l.l.l"; [
+                            tree!(1, "l.l.l.l"),
+                            tree!(1, "statement_l.l.l.r"),
+                        ]),
+                        tree!(1, "l.l.r"),
+                    ]),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"; [
+                        tree!(1, "r.l.l"),
+                        tree!(1, "statement_r.l.r"),
                     ]),
                     tree!(1, "r.r"),
                 ]),
@@ -562,11 +786,12 @@ mod tests {
         ),
         config = CustomIteratorConfig {
             yield_leaves: true,
-            yield_inner: false
+            yield_inner: false,
+            deepest_leaf: true,
         },
         is_leaf_fn = label_statement,
         is_leaf_fn_decomp = decompressed_label_statement,
-        expected = &["statement_l", "statement_r.l"]
+        expected = &["statement_l.l.l.r", "statement_r.l.r"]
     );
 
     #[test]
@@ -607,6 +832,7 @@ mod tests {
             CustomIteratorConfig {
                 yield_leaves: true,
                 yield_inner: false,
+                deepest_leaf: false,
             },
             label_statement,
         )
@@ -619,6 +845,7 @@ mod tests {
             CustomIteratorConfig {
                 yield_leaves: false,
                 yield_inner: true,
+                deepest_leaf: false,
             },
             label_statement,
         )

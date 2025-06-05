@@ -13,8 +13,8 @@ use crate::{
         similarity_metrics,
     },
 };
+use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, HyperType, NodeId, WithHashs};
-use hyperast::{PrimInt, types::LabelStore};
 use std::fmt::Debug;
 
 use super::BottomUpMatcherConfig;
@@ -123,10 +123,7 @@ where
             &self.src_arena,
             self.stores,
             self.src_arena.root(),
-            CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
-            },
+            CustomIteratorConfig::deep_inner(),
             |arena: &Dsrc, stores: HAST, node: &<M as MappingStore>::Src| -> bool {
                 if arena.children(node).is_empty() {
                     return true;
@@ -144,10 +141,7 @@ where
             &self.dst_arena,
             self.stores,
             self.dst_arena.root(),
-            CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
-            },
+            CustomIteratorConfig::deep_inner(),
             |arena: &Ddst, stores: HAST, node: &<M as MappingStore>::Dst| -> bool {
                 if arena.children(node).is_empty() {
                     return true;

@@ -59,6 +59,22 @@ pub struct OptimizedDiffConfig {
     pub bottom_up_matcher: OptimizedBottomUpMatcherConfig,
 }
 
+impl OptimizedDiffConfig {
+    // fn baseline() -> Self {
+    //     Self {
+    //         use_lazy_decompression: false,
+    //         use_ranged_similarity: false,
+    //         calculate_script: false,
+    //         leaves_matcher: OptimizedLeavesMatcherConfig {
+    //             base_config: LeavesMatcherConfig::default(),
+    //             enable_label_caching: false,
+    //             enable_deep_leaves: false,
+    //         },
+    //         bottom_up_matcher: OptimizedBottomUpMatcherConfig::default(),
+    //     }
+    // }
+}
+
 impl Default for OptimizedDiffConfig {
     /// Create a default configuration with all optimizations enabled except script calculation
     fn default() -> Self {
@@ -79,6 +95,9 @@ pub struct OptimizedLeavesMatcherConfig {
     pub base_config: LeavesMatcherConfig,
     /// Cache label strings to avoid repeated resolution. This is automatically enabled when using type grouping.
     pub enable_label_caching: bool,
+
+    /// Regard the lowest level of logical leaves
+    // pub enable_deep_leaves: bool,
     /// Group leaves by type before comparison. This automatically enables label caching.
     #[deprecated]
     pub enable_type_grouping: bool,

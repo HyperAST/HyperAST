@@ -183,10 +183,7 @@ where
             &self.src_arena,
             self.stores,
             self.src_arena.root(),
-            CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
-            },
+            CustomIteratorConfig::deep_leaves(),
             |arena: &Dsrc, stores: HAST, node: &<M as MappingStore>::Src| -> bool {
                 if arena.children(node).is_empty() {
                     return true;
@@ -204,10 +201,7 @@ where
             &self.dst_arena,
             self.stores,
             self.dst_arena.root(),
-            CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
-            },
+            CustomIteratorConfig::deep_leaves(),
             |arena: &Ddst, stores: HAST, node: &<M as MappingStore>::Dst| -> bool {
                 if arena.children(node).is_empty() {
                     return true;

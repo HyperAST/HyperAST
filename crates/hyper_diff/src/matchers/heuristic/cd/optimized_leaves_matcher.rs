@@ -172,23 +172,13 @@ where
         let collect_start = std::time::Instant::now();
         let dst_leaves = self.collect_statement_leaves_dst();
         let src_leaves = self.collect_statement_leaves_src();
-        log::trace!("src_leaves count: {:?}", src_leaves.len());
-        log::trace!("node count: {:?}", self.src_arena.len());
 
         let collect_time = collect_start.elapsed();
-        log::trace!(
-            "✓ Statement leaf collection: {:?} (src: {}, dst: {})",
-            collect_time,
-            src_leaves.len(),
-            dst_leaves.len()
-        );
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
         let total_comparisons = src_leaves.len() * dst_leaves.len();
-        log::trace!("✓ Total comparisons needed: {}", total_comparisons);
 
         let comparison_start = std::time::Instant::now();
-        log::trace!("✓ Using label caching optimization");
         let cache_build_start = std::time::Instant::now();
         let mut src_text_cache: HashMap<
             &<Dsrc as LazyDecompressed<M::Src>>::IdD,
@@ -216,14 +206,7 @@ where
         let total_comparisons = src_leaves.len() * dst_leaves.len();
 
         for (src_idx, src) in src_leaves.iter().enumerate() {
-            if src_idx % 100 == 0 && src_idx > 0 {
-                log::trace!(
-                    "  → Processing src leaf {}/{} ({:.1}%)",
-                    src_idx,
-                    src_leaves.len(),
-                    (src_idx as f64 / src_leaves.len() as f64) * 100.0
-                );
-            }
+            if src_idx % 100 == 0 && src_idx > 0 {}
 
             let hash_start = std::time::Instant::now();
             let src_original = self.src_arena.original(src);
@@ -277,7 +260,6 @@ where
                         } else {
                             // let text =
                             //     TextSerializer::new(&self.stores, src_original.clone()).to_string();
-                            // log::trace!("src_label_id is None:\n{}", text);
                             None
                         }
                         .unwrap_or_default();
@@ -286,7 +268,6 @@ where
                         let dst_label = if let Some(dst_label_id) = dst_node.try_get_label() {
                             Some(self.stores.label_store().resolve(&dst_label_id).to_string())
                         } else {
-                            // log::trace!("dst_label_id is None");
                             None
                         }
                         .unwrap_or_default();
@@ -347,56 +328,9 @@ where
                 }
             }
         }
-        let cache_build_time = cache_build_start.elapsed();
-        log::trace!(
-            "✓ Cached text serialization & comparison: {:?}",
-            cache_build_time
-        );
-        log::trace!("  → Hash computation time: {:?}", hash_computation_time);
-        log::trace!("  → Text serialization time: {:?}", text_serialization_time);
-        log::trace!(
-            "  → Similarity computation time: {:?}",
-            similarity_computation_time
-        );
-        log::trace!(
-            "  → Cache hits: {}, Cache misses: {}",
-            cache_hits,
-            cache_misses
-        );
-        log::trace!("  → Characters compared: {}", characters_compared);
 
-        log::trace!("  → Exact matches (hash): {}", exact_matches);
-        log::trace!("  → Similarity checks performed: {}", similarity_checks);
-        log::trace!("  → Skipped dst nodes: {}", skipped_dst);
-        log::trace!(
-            "  → Avg time per similarity check: {:?}",
-            if similarity_checks > 0 {
-                similarity_computation_time / similarity_checks
-            } else {
-                std::time::Duration::ZERO
-            }
-        );
-        log::trace!(
-            "  → Avg time per text serialization: {:?}",
-            if cache_misses > 0 {
-                text_serialization_time / cache_misses
-            } else {
-                std::time::Duration::ZERO
-            }
-        );
-
-        let comparison_time = comparison_start.elapsed();
-        log::trace!(
-            "✓ All comparisons: {:?} ({} candidates found)",
-            comparison_time,
-            leaves_mappings.len()
-        );
-
-        let sort_start = std::time::Instant::now();
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
-        let sort_time = sort_start.elapsed();
-        log::trace!("✓ Sorting candidates: {:?}", sort_time);
 
         let mapping_start = std::time::Instant::now();
         let mut mapped_count = 0;
@@ -417,7 +351,6 @@ where
                             .zip(dst.iter())
                             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
                     } else {
-                        log::trace!("Skipping mapping due to different number of descendants");
                     }
                 }
 
@@ -425,16 +358,11 @@ where
             }
         }
         let mapping_time = mapping_start.elapsed();
-        log::trace!(
-            "✓ Creating mappings: {:?} ({} mappings created)",
-            mapping_time,
-            mapped_count
-        );
 
         let total_time = start_time.elapsed();
-        log::trace!("Statement level matcher complete: {:?} \n", total_time);
 
         // Update metrics
+        self.metrics.total_time = total_time;
         self.metrics.total_comparisons += total_comparisons;
         self.metrics.successful_matches += mapped_count;
         self.metrics.hash_computation_time += hash_computation_time;
@@ -455,10 +383,7 @@ where
             &mut self.src_arena,
             self.stores,
             src_root,
-            CustomIteratorConfig {
-                yield_leaves: true,
-                yield_inner: false,
-            },
+            CustomIteratorConfig::deep_leaves(),
             |arena: &mut Dsrc,
              stores: HAST,
              node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
@@ -486,10 +411,7 @@ where
             &mut self.dst_arena,
             self.stores,
             dst_root,
-            CustomIteratorConfig {
-                yield_leaves: true,
-                yield_inner: false,
-            },
+            CustomIteratorConfig::deep_leaves(),
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
                 if arena.decompress_children(node).is_empty() {
                     return true;

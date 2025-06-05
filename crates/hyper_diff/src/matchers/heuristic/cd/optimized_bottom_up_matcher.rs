@@ -44,8 +44,8 @@ where
     HAST::Label: Eq,
     HAST::IdN: Debug + NodeId<IdN = HAST::IdN>,
     <HAST::TS as TypeStore>::Ty: Hash + Eq + Clone + HyperType,
-    Dsrc::IdD: std::fmt::Debug,
-    Ddst::IdD: std::fmt::Debug,
+    Dsrc::IdD: std::fmt::Debug + Clone,
+    Ddst::IdD: std::fmt::Debug + Clone,
     Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
         + DecompressedWithParent<HAST, Dsrc::IdD>
         + PostOrder<HAST, Dsrc::IdD, M::Src>
@@ -316,10 +316,7 @@ where
             &mut self.src_arena,
             self.stores,
             src_root,
-            CustomIteratorConfig {
-                yield_leaves: leaves,
-                yield_inner: inner,
-            },
+            CustomIteratorConfig::deep_inner(),
             |arena: &mut Dsrc,
              stores: HAST,
              node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
@@ -343,10 +340,7 @@ where
             &mut self.dst_arena,
             self.stores,
             dst_root,
-            CustomIteratorConfig {
-                yield_leaves: false,
-                yield_inner: true,
-            },
+            CustomIteratorConfig::deep_inner(),
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
                 if arena.decompress_children(node).is_empty() {
                     return true;
