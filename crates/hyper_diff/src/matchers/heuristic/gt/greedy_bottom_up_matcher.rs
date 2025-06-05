@@ -8,7 +8,7 @@ use crate::matchers::{Decompressible, Mapper, Mapping};
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
-use num_traits::{cast, one};
+use num_traits::{cast, one, ToPrimitive};
 use std::fmt::Debug;
 
 /// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
@@ -141,7 +141,7 @@ where
                 break;
             }
             if !(mapper.mappings.is_src(&a) || !Self::src_has_children(mapper, a)) {
-                let candidates = mapper.get_dst_candidates(&a);
+                let candidates = Self::get_dst_candidates(mapper, &a);
                 let mut best = None;
                 let mut max: f64 = -1.;
                 for cand in candidates {
@@ -169,6 +169,40 @@ where
             mapper.mapping.dst_arena.root(),
         );
         Self::last_chance_match_zs(mapper, mapper.src_arena.root(), mapper.dst_arena.root());
+    }
+
+    pub(in crate::matchers) fn get_dst_candidates(mapper: &mut Mapper<HAST, Dsrc, Ddst, M>, src: &M::Src) -> Vec<M::Dst> {
+        let mut seeds = vec![];
+        let s = mapper.src_arena.original(src);
+        for c in mapper.src_arena.descendants(src) {
+            if mapper.mappings.is_src(&c) {
+                let m = mapper.mappings.get_dst_unchecked(&c);
+                seeds.push(m);
+            }
+        }
+        let mut candidates = vec![];
+        let mut visited = bitvec::bitbox![0;mapper.dst_arena.len()];
+
+        let t = mapper.hyperast.resolve_type(&s);
+        for mut seed in seeds {
+            loop {
+                let Some(parent) = mapper.dst_arena.parent(&seed) else {
+                    break;
+                };
+                if visited[parent.to_usize().unwrap()] {
+                    break;
+                }
+                visited.set(parent.to_usize().unwrap(), true);
+                let p = &mapper.dst_arena.original(&parent);
+                if mapper.hyperast.resolve_type(p) == t
+                    && !(mapper.mappings.is_dst(&parent) || parent == mapper.dst_arena.root())
+                {
+                    candidates.push(parent);
+                }
+                seed = parent;
+            }
+        }
+        candidates
     }
 
     fn src_has_children(mapper: &mut Mapper<HAST, Dsrc, Ddst, M>, src: M::Src) -> bool {

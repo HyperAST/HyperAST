@@ -29,6 +29,7 @@ pub mod diff_output;
 pub mod other_tools;
 pub mod postprocess;
 pub mod preprocess;
+pub mod preprocess_repo;
 
 use std::{env, fs, io, path, time};
 

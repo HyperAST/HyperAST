@@ -37,10 +37,11 @@ fn test_gumtree_hybrid_java_simple() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_simple());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid_lazy::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid_lazy(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -60,10 +61,11 @@ fn test_gumtree_hybrid_java_method() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid_lazy::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid_lazy(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -82,10 +84,11 @@ fn test_gumtree_hybrid_reorder_children() {
     let (stores, src, dst) = vpair_to_stores(example_reorder_children());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid_lazy::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid_lazy(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -104,10 +107,11 @@ fn test_gumtree_hybrid_move_method() {
     let (stores, src, dst) = vpair_to_stores(example_move_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid_lazy::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid_lazy(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
