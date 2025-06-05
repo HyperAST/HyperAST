@@ -45,28 +45,6 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             },
         ),
         OptimizationConfig::new(
-            "Baseline Statement",
-            OptimizedDiffConfig {
-                use_lazy_decompression: false,
-                use_ranged_similarity: false,
-                calculate_script: false,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: false,
-                    enable_type_grouping: false,
-                    statement_level_iteration: true,
-                    use_binary_heap: false,
-                    reuse_qgram_object: false,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    enable_type_grouping: false,
-                    statement_level_iteration: true,
-                    enable_leaf_count_precomputation: false,
-                },
-            },
-        ),
-        OptimizationConfig::new(
             "Lazy Statement",
             OptimizedDiffConfig {
                 use_lazy_decompression: true,
@@ -111,7 +89,7 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             },
         ),
         OptimizationConfig::new(
-            "Lazy Grouping",
+            "Lazy Statement Label Cache Type Grouping",
             OptimizedDiffConfig {
                 use_lazy_decompression: true,
                 use_ranged_similarity: true,
@@ -120,13 +98,13 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
                     base_config: LeavesMatcherConfig::default(),
                     enable_label_caching: true,
                     enable_type_grouping: true,
-                    statement_level_iteration: false,
+                    statement_level_iteration: true,
                     use_binary_heap: false,
                     reuse_qgram_object: false,
                 },
                 bottom_up_matcher: OptimizedBottomUpMatcherConfig {
                     base_config: BottomUpMatcherConfig::default(),
-                    statement_level_iteration: false,
+                    statement_level_iteration: true,
                     enable_type_grouping: true,
                     enable_leaf_count_precomputation: true,
                 },
@@ -236,13 +214,25 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
 
     let total_iterations = test_inputs.len() * optimization_configs.len();
 
+    // This lets us skip the first n test cases
     let skip = 0;
+    // This lets us only run every nth test case
+    let interval = 10;
+
     let mut iteration = skip;
+    let mut interval_counter = 0;
 
     for (input_idx, input) in test_inputs.iter().enumerate() {
         if input_idx < skip {
             continue;
         }
+        if interval_counter == 0 {
+            interval_counter = interval;
+        } else {
+            interval_counter -= 1;
+            continue;
+        }
+
         let input = common::preprocess(input);
         for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
             iteration += 1;

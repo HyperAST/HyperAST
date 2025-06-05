@@ -45,16 +45,16 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             },
         ),
         OptimizationConfig::new(
-            "Baseline Statement",
+            "Lazy Fine grained",
             OptimizedDiffConfig {
-                use_lazy_decompression: false,
-                use_ranged_similarity: false,
+                use_lazy_decompression: true,
+                use_ranged_similarity: true,
                 calculate_script: false,
                 leaves_matcher: OptimizedLeavesMatcherConfig {
                     base_config: LeavesMatcherConfig::default(),
                     enable_label_caching: false,
                     enable_type_grouping: false,
-                    statement_level_iteration: true,
+                    statement_level_iteration: false,
                     use_binary_heap: false,
                     reuse_qgram_object: false,
                 },
@@ -242,6 +242,7 @@ fn main() {
         let input = common::preprocess(input);
         for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
             iteration += 1;
+            println!("--------------------------------------------------------------------");
             println!(
                 "Progress: {}/{} (Test case {} of {}, Config {} of {})",
                 iteration,
