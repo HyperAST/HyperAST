@@ -96,3 +96,22 @@ where
         gen_t,
     }
 }
+
+pub fn lazy_top_down<'a, HAST: HyperAST + Copy + 'a>(
+    mapper_owned: &'a mut (DS<HAST>, DS<HAST>),
+) -> Mapper<
+    HAST,
+    Decompressible<HAST, &'a mut LazyPostOrder<<HAST as HyperASTShared>::IdN, u32>>,
+    Decompressible<HAST, &'a mut LazyPostOrder<<HAST as HyperASTShared>::IdN, u32>>,
+    VecStore<u32>,
+>
+where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
+    HAST::Label: Clone + Copy + Eq + Debug,
+    HAST::Idx: hyperast::PrimInt,
+    for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
+{
+    let mapper = Mapper::with_mut_decompressible(mapper_owned);
+    LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper)
+}
