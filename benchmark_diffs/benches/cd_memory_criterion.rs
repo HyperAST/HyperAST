@@ -154,7 +154,7 @@ fn benchmark_memory_criterion(c: &mut Criterion<PeakMemory>) {
     group.sampling_mode(SamplingMode::Flat);
 
     for (input_idx, (buggy, fixed)) in test_inputs.iter().enumerate() {
-        let parsed_input = common::preprocess(&(buggy.clone(), fixed.clone()));
+        let parsed_input = common::preprocess(&(buggy, fixed));
         let file_name = buggy.split('/').last().unwrap().to_string();
         for alg in algorithms.iter() {
             let bench_name = format!(

@@ -1549,6 +1549,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -4125,6 +4126,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "chrono",
+ "clap 4.5.39",
  "const-chunks",
  "criterion 0.4.0",
  "env_logger 0.11.8",
@@ -4134,6 +4136,7 @@ dependencies = [
  "hyperast_gen_ts_java",
  "hyperast_gen_ts_xml",
  "hyperast_vcs_git",
+ "indicatif",
  "log",
  "md5",
  "memory-stats",

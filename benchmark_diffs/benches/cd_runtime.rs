@@ -233,7 +233,7 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
             continue;
         }
 
-        let input = common::preprocess(input);
+        let input = common::preprocess(&(&input.0, &input.1));
         for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
             iteration += 1;
             println!(

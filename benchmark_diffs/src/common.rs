@@ -345,6 +345,21 @@ pub fn get_all_cases() -> Vec<(String, String)> {
     get_all_cases_from_paths(&paths)
 }
 
+pub fn get_all_cases_with_paths() -> Vec<(String, String, String)> {
+    let paths = get_all_case_paths();
+    paths
+        .into_iter()
+        .map(|(buggy_path, fixed_path)| {
+            let buggy_content = std::fs::read_to_string(&buggy_path)
+                .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
+            let fixed_content = std::fs::read_to_string(&fixed_path)
+                .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
+
+            (buggy_path, buggy_content, fixed_content)
+        })
+        .collect()
+}
+
 use tabled::{Table, Tabled};
 
 #[derive(Tabled)]
@@ -430,7 +445,7 @@ pub struct Input {
     pub node_count: usize,
 }
 
-pub fn preprocess(input: &(String, String)) -> Input {
+pub fn preprocess(input: &(&String, &String)) -> Input {
     let (src, dst) = input;
     let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();

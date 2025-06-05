@@ -239,7 +239,7 @@ fn main() {
         if input_idx < skip {
             continue;
         }
-        let input = common::preprocess(input);
+        let input = common::preprocess(&(&input.0, &input.1));
         for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
             iteration += 1;
             println!("--------------------------------------------------------------------");
