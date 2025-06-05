@@ -383,7 +383,7 @@ where
             &mut self.src_arena,
             self.stores,
             src_root,
-            CustomIteratorConfig::deep_leaves(),
+            CustomIteratorConfig::leaves(self.config.enable_deep_leaves),
             |arena: &mut Dsrc,
              stores: HAST,
              node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
@@ -411,7 +411,7 @@ where
             &mut self.dst_arena,
             self.stores,
             dst_root,
-            CustomIteratorConfig::deep_leaves(),
+            CustomIteratorConfig::leaves(self.config.enable_deep_leaves),
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
                 if arena.decompress_children(node).is_empty() {
                     return true;
@@ -481,6 +481,8 @@ mod tests {
             base_config: super::super::LeavesMatcherConfig::default(),
             enable_label_caching: false,
             enable_type_grouping: false,
+            enable_deep_leaves: false,
+
             statement_level_iteration: false,
             use_binary_heap: false,
             reuse_qgram_object: false,

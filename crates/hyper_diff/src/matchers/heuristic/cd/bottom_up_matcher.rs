@@ -1,4 +1,5 @@
 use crate::{
+    OptimizedBottomUpMatcherConfig,
     decompressed_tree_store::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice,
         PostOrder, PostOrderIterable,
@@ -17,14 +18,12 @@ use hyperast::PrimInt;
 use hyperast::types::{DecompressedFrom, HyperAST, HyperType, NodeId, WithHashs};
 use std::fmt::Debug;
 
-use super::BottomUpMatcherConfig;
-
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(super) stores: HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
-    pub config: BottomUpMatcherConfig,
+    pub config: OptimizedBottomUpMatcherConfig,
     pub metrics: BottomUpMatcherMetrics,
 }
 
@@ -56,7 +55,7 @@ where
 {
     pub fn with_config_and_metrics(
         mapping: Mapper<HAST, Dsrc, Ddst, M>,
-        config: BottomUpMatcherConfig,
+        config: OptimizedBottomUpMatcherConfig,
     ) -> (Mapper<HAST, Dsrc, Ddst, M>, BottomUpMatcherMetrics) {
         let mut matcher = Self {
             stores: mapping.hyperast,
@@ -78,13 +77,13 @@ where
 
     pub fn with_config(
         mapping: Mapper<HAST, Dsrc, Ddst, M>,
-        config: BottomUpMatcherConfig,
+        config: OptimizedBottomUpMatcherConfig,
     ) -> Mapper<HAST, Dsrc, Ddst, M> {
         Self::with_config_and_metrics(mapping, config).0
     }
 
     pub fn match_it(mapping: Mapper<HAST, Dsrc, Ddst, M>) -> Mapper<HAST, Dsrc, Ddst, M> {
-        Self::with_config(mapping, BottomUpMatcherConfig::default())
+        Self::with_config(mapping, OptimizedBottomUpMatcherConfig::default())
     }
 
     pub fn execute(&mut self) {
@@ -104,10 +103,10 @@ where
                         &self.mappings,
                     );
 
-                    if (number_of_leaves > self.config.max_leaves
-                        && similarity >= self.config.sim_threshold_large_trees)
-                        || (number_of_leaves <= self.config.max_leaves
-                            && similarity >= self.config.sim_threshold_small_trees)
+                    if (number_of_leaves > self.config.base.max_leaves
+                        && similarity >= self.config.base.sim_threshold_large_trees)
+                        || (number_of_leaves <= self.config.base.max_leaves
+                            && similarity >= self.config.base.sim_threshold_small_trees)
                     {
                         self.mappings.link(src_tree, dst_tree);
                         break;
@@ -123,7 +122,7 @@ where
             &self.src_arena,
             self.stores,
             self.src_arena.root(),
-            CustomIteratorConfig::deep_inner(),
+            CustomIteratorConfig::inner(self.config.enable_deep_leaves),
             |arena: &Dsrc, stores: HAST, node: &<M as MappingStore>::Src| -> bool {
                 if arena.children(node).is_empty() {
                     return true;
@@ -141,7 +140,7 @@ where
             &self.dst_arena,
             self.stores,
             self.dst_arena.root(),
-            CustomIteratorConfig::deep_inner(),
+            CustomIteratorConfig::inner(self.config.enable_deep_leaves),
             |arena: &Ddst, stores: HAST, node: &<M as MappingStore>::Dst| -> bool {
                 if arena.children(node).is_empty() {
                     return true;

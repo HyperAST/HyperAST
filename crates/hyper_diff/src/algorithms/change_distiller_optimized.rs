@@ -113,25 +113,7 @@ where
     HAST::Label: Debug + Copy + Eq,
     for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
-    let config = OptimizedDiffConfig {
-        use_lazy_decompression: false,
-        use_ranged_similarity: false,
-        calculate_script: true,
-        leaves_matcher: OptimizedLeavesMatcherConfig {
-            base_config: LeavesMatcherConfig::default(),
-            enable_label_caching: false,
-            enable_type_grouping: false,
-            use_binary_heap: false,
-            statement_level_iteration: true,
-            reuse_qgram_object: false,
-        },
-        bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-            base_config: BottomUpMatcherConfig::default(),
-            enable_type_grouping: false,
-            statement_level_iteration: true,
-            enable_leaf_count_precomputation: false,
-        },
-    };
+    let config = OptimizedDiffConfig::baseline();
     diff_optimized(hyperast, src, dst, config)
 }
 
@@ -362,7 +344,7 @@ where
     log::debug!("Starting LeavesMatcher (baseline)");
     let leaves_start = Instant::now();
     let (mapper, leaves_matcher_metrics) =
-        LeavesMatcher::with_config_and_metrics(mapper, config.leaves_matcher.base_config);
+        LeavesMatcher::with_config_and_metrics(mapper, config.leaves_matcher);
     let leaves_matcher_time = leaves_start.elapsed();
     let leaves_matcher_t = leaves_matcher_time.as_secs_f64();
     let leaves_mappings_s = mapper.mappings().len();
@@ -375,7 +357,7 @@ where
     log::debug!("Starting BottomUpMatcher (baseline)");
     let bottomup_start = Instant::now();
     let (mapper, bottomup_matcher_metrics) =
-        BottomUpMatcher::with_config_and_metrics(mapper, config.bottom_up_matcher.base_config);
+        BottomUpMatcher::with_config_and_metrics(mapper, config.bottom_up_matcher);
     let bottomup_matcher_time = bottomup_start.elapsed();
     let bottomup_matcher_t = bottomup_matcher_time.as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
@@ -465,14 +447,16 @@ mod tests {
             leaves_matcher: OptimizedLeavesMatcherConfig {
                 base_config: LeavesMatcherConfig::default(),
                 enable_label_caching: true,
+                enable_deep_leaves: false,
                 enable_type_grouping: false,
                 use_binary_heap: true,
                 statement_level_iteration: true,
                 reuse_qgram_object: false,
             },
             bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                base_config: BottomUpMatcherConfig::default(),
+                base: BottomUpMatcherConfig::default(),
                 enable_type_grouping: true,
+                enable_deep_leaves: false,
                 statement_level_iteration: false,
                 enable_leaf_count_precomputation: false,
             },

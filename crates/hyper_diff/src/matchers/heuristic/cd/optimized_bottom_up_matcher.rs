@@ -101,7 +101,10 @@ where
         matcher
             .mappings
             .topit(matcher.src_arena.len(), matcher.dst_arena.len());
+
+        let start = std::time::Instant::now();
         matcher.execute();
+        matcher.metrics.total_time = start.elapsed();
 
         let metrics = matcher.metrics.clone();
         let mapper = matcher.into();
@@ -194,10 +197,10 @@ where
                     }
 
                     let number_of_leaves = *leaf_counts.get(src.shallow()).unwrap_or(&0);
-                    let threshold = if number_of_leaves > self.config.base_config.max_leaves {
-                        self.config.base_config.sim_threshold_large_trees
+                    let threshold = if number_of_leaves > self.config.base.max_leaves {
+                        self.config.base.sim_threshold_large_trees
                     } else {
-                        self.config.base_config.sim_threshold_small_trees
+                        self.config.base.sim_threshold_small_trees
                     };
 
                     for dst in dst_nodes {
@@ -246,13 +249,12 @@ where
         let mut similarity_time = std::time::Duration::ZERO;
 
         for src in &src_nodes {
-            let threshold = if leaf_counts.get(src.shallow()).unwrap_or(&0)
-                > &self.config.base_config.max_leaves
-            {
-                self.config.base_config.sim_threshold_large_trees
-            } else {
-                self.config.base_config.sim_threshold_small_trees
-            };
+            let threshold =
+                if leaf_counts.get(src.shallow()).unwrap_or(&0) > &self.config.base.max_leaves {
+                    self.config.base.sim_threshold_large_trees
+                } else {
+                    self.config.base.sim_threshold_small_trees
+                };
 
             for dst in &dst_nodes {
                 if self.is_mapping_allowed(&src, &dst) {
@@ -316,7 +318,7 @@ where
             &mut self.src_arena,
             self.stores,
             src_root,
-            CustomIteratorConfig::deep_inner(),
+            CustomIteratorConfig::inner(self.config.enable_deep_leaves),
             |arena: &mut Dsrc,
              stores: HAST,
              node: &<Dsrc as LazyDecompressed<M::Src>>::IdD|
@@ -340,7 +342,7 @@ where
             &mut self.dst_arena,
             self.stores,
             dst_root,
-            CustomIteratorConfig::deep_inner(),
+            CustomIteratorConfig::inner(self.config.enable_deep_leaves),
             |arena: &mut Ddst, stores: HAST, node: &<Ddst as LazyDecompressed<M::Dst>>::IdD| {
                 if arena.decompress_children(node).is_empty() {
                     return true;
@@ -386,10 +388,10 @@ where
                         let similarity = self.compute_similarity(&src, &dst);
                         similarity_time += sim_start.elapsed();
 
-                        let threshold = if number_of_leaves > self.config.base_config.max_leaves {
-                            self.config.base_config.sim_threshold_large_trees
+                        let threshold = if number_of_leaves > self.config.base.max_leaves {
+                            self.config.base.sim_threshold_large_trees
                         } else {
-                            self.config.base_config.sim_threshold_small_trees
+                            self.config.base.sim_threshold_small_trees
                         };
 
                         if similarity >= threshold {
@@ -573,8 +575,9 @@ mod tests {
         mappings.link(src_node_d, dst_node_d);
 
         let config = OptimizedBottomUpMatcherConfig {
-            base_config: super::super::BottomUpMatcherConfig::default(),
+            base: super::super::BottomUpMatcherConfig::default(),
             enable_type_grouping: false,
+            enable_deep_leaves: false,
             statement_level_iteration: false,
             enable_leaf_count_precomputation: false,
         };

@@ -1,4 +1,5 @@
 use crate::{
+    OptimizedLeavesMatcherConfig,
     decompressed_tree_store::{
         ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice,
         PostOrder, PostOrderIterable,
@@ -17,8 +18,6 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use str_distance::DistanceMetric;
 
-use super::LeavesMatcherConfig;
-
 struct MappingWithSimilarity<M: MonoMappingStore> {
     src: M::Src,
     dst: M::Dst,
@@ -32,7 +31,7 @@ pub struct LeavesMatcher<Dsrc, Ddst, HAST, M> {
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
-    pub config: LeavesMatcherConfig,
+    pub config: OptimizedLeavesMatcherConfig,
     pub metrics: LeavesMatcherMetrics,
 }
 
@@ -64,7 +63,7 @@ where
 {
     pub fn with_config_and_metrics(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
-        config: LeavesMatcherConfig,
+        config: OptimizedLeavesMatcherConfig,
     ) -> (
         crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
         LeavesMatcherMetrics,
@@ -98,7 +97,7 @@ where
 
     pub fn with_config(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
-        config: LeavesMatcherConfig,
+        config: OptimizedLeavesMatcherConfig,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
         LeavesMatcher::with_config_and_metrics(mapping, config).0
     }
@@ -106,7 +105,7 @@ where
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
-        Self::with_config(mapping, LeavesMatcherConfig::default())
+        Self::with_config(mapping, OptimizedLeavesMatcherConfig::default())
     }
 
     fn execute(&mut self) {
@@ -128,7 +127,7 @@ where
                 if self.is_mapping_allowed(&src_leaf, &dst_leaf) {
                     allowed_count += 1;
                     let sim = self.compute_label_similarity(&src_leaf, &dst_leaf);
-                    if sim > self.config.label_sim_threshold {
+                    if sim > self.config.base_config.label_sim_threshold {
                         leaves_mappings.push(MappingWithSimilarity {
                             src: src_leaf,
                             dst: dst_leaf,
@@ -183,7 +182,7 @@ where
             &self.src_arena,
             self.stores,
             self.src_arena.root(),
-            CustomIteratorConfig::deep_leaves(),
+            CustomIteratorConfig::leaves(self.config.enable_deep_leaves),
             |arena: &Dsrc, stores: HAST, node: &<M as MappingStore>::Src| -> bool {
                 if arena.children(node).is_empty() {
                     return true;
@@ -201,7 +200,7 @@ where
             &self.dst_arena,
             self.stores,
             self.dst_arena.root(),
-            CustomIteratorConfig::deep_leaves(),
+            CustomIteratorConfig::leaves(self.config.enable_deep_leaves),
             |arena: &Ddst, stores: HAST, node: &<M as MappingStore>::Dst| -> bool {
                 if arena.children(node).is_empty() {
                     return true;

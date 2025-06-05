@@ -60,19 +60,70 @@ pub struct OptimizedDiffConfig {
 }
 
 impl OptimizedDiffConfig {
-    // fn baseline() -> Self {
-    //     Self {
-    //         use_lazy_decompression: false,
-    //         use_ranged_similarity: false,
-    //         calculate_script: false,
-    //         leaves_matcher: OptimizedLeavesMatcherConfig {
-    //             base_config: LeavesMatcherConfig::default(),
-    //             enable_label_caching: false,
-    //             enable_deep_leaves: false,
-    //         },
-    //         bottom_up_matcher: OptimizedBottomUpMatcherConfig::default(),
-    //     }
-    // }
+    pub fn baseline() -> Self {
+        Self {
+            use_lazy_decompression: false,
+            use_ranged_similarity: false,
+            calculate_script: false,
+            leaves_matcher: OptimizedLeavesMatcherConfig {
+                base_config: LeavesMatcherConfig::default(),
+                enable_label_caching: false,
+                enable_type_grouping: false,
+                enable_deep_leaves: false,
+                statement_level_iteration: false,
+                use_binary_heap: false,
+                reuse_qgram_object: false,
+            },
+            bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+                base: BottomUpMatcherConfig::default(),
+                enable_type_grouping: false,
+                enable_deep_leaves: false,
+                statement_level_iteration: false,
+                enable_leaf_count_precomputation: false,
+            },
+        }
+    }
+
+    pub fn optimized() -> Self {
+        Self {
+            use_lazy_decompression: true,
+            use_ranged_similarity: true,
+            calculate_script: false,
+            leaves_matcher: OptimizedLeavesMatcherConfig {
+                base_config: LeavesMatcherConfig::default(),
+                enable_label_caching: false,
+                enable_type_grouping: false,
+                enable_deep_leaves: false,
+                statement_level_iteration: false,
+                use_binary_heap: false,
+                reuse_qgram_object: false,
+            },
+            bottom_up_matcher: OptimizedBottomUpMatcherConfig {
+                base: BottomUpMatcherConfig::default(),
+                enable_type_grouping: false,
+                enable_deep_leaves: false,
+                statement_level_iteration: false,
+                enable_leaf_count_precomputation: false,
+            },
+        }
+    }
+
+    pub fn with_statement_level_iteration(mut self, enable: bool) -> Self {
+        self.leaves_matcher.statement_level_iteration = enable;
+        self.bottom_up_matcher.statement_level_iteration = enable;
+        self
+    }
+
+    pub fn with_label_caching(mut self, enable: bool) -> Self {
+        self.leaves_matcher.enable_label_caching = enable;
+        self
+    }
+
+    pub fn with_deep_leaves(mut self, enable: bool) -> Self {
+        self.leaves_matcher.enable_deep_leaves = enable;
+        self.bottom_up_matcher.enable_deep_leaves = enable;
+        self
+    }
 }
 
 impl Default for OptimizedDiffConfig {
@@ -97,7 +148,7 @@ pub struct OptimizedLeavesMatcherConfig {
     pub enable_label_caching: bool,
 
     /// Regard the lowest level of logical leaves
-    // pub enable_deep_leaves: bool,
+    pub enable_deep_leaves: bool,
     /// Group leaves by type before comparison. This automatically enables label caching.
     #[deprecated]
     pub enable_type_grouping: bool,
@@ -117,6 +168,7 @@ impl Default for OptimizedLeavesMatcherConfig {
         Self {
             base_config: LeavesMatcherConfig::default(),
             enable_label_caching: true,
+            enable_deep_leaves: false,
             enable_type_grouping: false,
             statement_level_iteration: true,
             use_binary_heap: true,
@@ -129,7 +181,9 @@ impl Default for OptimizedLeavesMatcherConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptimizedBottomUpMatcherConfig {
     /// Base configuration (thresholds and max_leaves)
-    pub base_config: BottomUpMatcherConfig,
+    pub base: BottomUpMatcherConfig,
+    /// Regard the lowest level of logical leaves
+    pub enable_deep_leaves: bool,
     /// Group nodes by type before comparison
     #[deprecated]
     pub enable_type_grouping: bool,
@@ -143,7 +197,9 @@ impl Default for OptimizedBottomUpMatcherConfig {
     /// Create a default configuration with all optimizations enabled
     fn default() -> Self {
         Self {
-            base_config: BottomUpMatcherConfig::default(),
+            base: BottomUpMatcherConfig::default(),
+
+            enable_deep_leaves: false,
             enable_type_grouping: false,
             enable_leaf_count_precomputation: true,
             statement_level_iteration: true,

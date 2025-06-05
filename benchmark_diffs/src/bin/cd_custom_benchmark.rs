@@ -98,72 +98,40 @@ struct MeasurementResult {
 /// Create various optimization configurations for comprehensive benchmarking
 fn create_optimization_configs() -> Vec<OptimizationConfig> {
     vec![
-        // Baseline: No optimizations (equivalent to original change_distiller)
+        // OptimizationConfig::new("Baseline", OptimizedDiffConfig::baseline()),
         OptimizationConfig::new(
-            "Baseline",
-            OptimizedDiffConfig {
-                use_lazy_decompression: false,
-                use_ranged_similarity: false,
-                calculate_script: false,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: false,
-                    enable_type_grouping: false,
-                    statement_level_iteration: false,
-                    use_binary_heap: false,
-                    reuse_qgram_object: false,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    enable_type_grouping: false,
-                    statement_level_iteration: false,
-                    enable_leaf_count_precomputation: false,
-                },
-            },
+            "Baseline Statement",
+            OptimizedDiffConfig::baseline().with_statement_level_iteration(true),
         ),
         OptimizationConfig::new(
-            "Lazy Statement",
-            OptimizedDiffConfig {
-                use_lazy_decompression: true,
-                use_ranged_similarity: true,
-                calculate_script: false,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: false,
-                    enable_type_grouping: false,
-                    statement_level_iteration: true,
-                    use_binary_heap: false,
-                    reuse_qgram_object: false,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    statement_level_iteration: true,
-                    enable_type_grouping: false,
-                    enable_leaf_count_precomputation: true,
-                },
-            },
+            "Baseline Deep Statement",
+            OptimizedDiffConfig::baseline()
+                .with_statement_level_iteration(true)
+                .with_label_caching(true)
+                .with_deep_leaves(true),
         ),
         OptimizationConfig::new(
-            "Lazy Statement Label Cache",
-            OptimizedDiffConfig {
-                use_lazy_decompression: true,
-                use_ranged_similarity: true,
-                calculate_script: false,
-                leaves_matcher: OptimizedLeavesMatcherConfig {
-                    base_config: LeavesMatcherConfig::default(),
-                    enable_label_caching: true,
-                    enable_type_grouping: false,
-                    statement_level_iteration: true,
-                    use_binary_heap: false,
-                    reuse_qgram_object: false,
-                },
-                bottom_up_matcher: OptimizedBottomUpMatcherConfig {
-                    base_config: BottomUpMatcherConfig::default(),
-                    statement_level_iteration: true,
-                    enable_type_grouping: false,
-                    enable_leaf_count_precomputation: true,
-                },
-            },
+            "Optimized with Statement",
+            OptimizedDiffConfig::optimized().with_statement_level_iteration(true),
+        ),
+        OptimizationConfig::new(
+            "Optimized with Deep Statement",
+            OptimizedDiffConfig::optimized()
+                .with_statement_level_iteration(true)
+                .with_deep_leaves(true),
+        ),
+        OptimizationConfig::new(
+            "Optimized with Statement and Label Cache",
+            OptimizedDiffConfig::optimized()
+                .with_statement_level_iteration(true)
+                .with_label_caching(true),
+        ),
+        OptimizationConfig::new(
+            "Optimized with Deep Statement and Label Cache",
+            OptimizedDiffConfig::optimized()
+                .with_statement_level_iteration(true)
+                .with_label_caching(true)
+                .with_deep_leaves(true),
         ),
     ]
 }
