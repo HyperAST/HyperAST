@@ -7,6 +7,8 @@ pub enum HeuristicType {
     Lazy,
     Greedy,
 }
+
+#[derive(Clone, Copy)]
 pub enum Heuristic {
     Greedy,
     Simple,
@@ -47,29 +49,24 @@ pub enum DataSet {
 
 impl Display for DataSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataSet::GhJava(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                write!(f, "gh-java/{}", project_name)
-            }
-            DataSet::GhPython(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                write!(f, "gh-python/{}", project_name)
-            }
-            DataSet::Defects4J(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                write!(f, "defects4j/{}", project_name)
-            }
-            DataSet::BugsInPy(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                write!(f, "bugsinpy/{}", project_name)
-            }
-        }
+        let (dataset_name, project_opt) = self.parts();
+        let project_name = project_opt.unwrap_or_default();
+        write!(f, "{}/{}", dataset_name, project_name)
     }
 }
 
 impl DataSet {
-    pub fn get_path_dataset_project(&self) -> PathBuf {
+    /// Returns a tuple of (dataset_name, project_name_option)
+    fn parts(&self) -> (&'static str, Option<&'static str>) {
+        match self {
+            DataSet::GhJava(project) => ("gh-java", *project),
+            DataSet::GhPython(project) => ("gh-python", *project),
+            DataSet::Defects4J(project) => ("defects4j", *project),
+            DataSet::BugsInPy(project) => ("bugsinpy", *project),
+        }
+    }
+
+    pub fn get_path_dataset_project(&self) -> (PathBuf, PathBuf) {
         let dataset_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
@@ -77,36 +74,33 @@ impl DataSet {
             .unwrap()
             .join("datasets");
 
-        let project_subdir = match self {
-            DataSet::GhJava(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                format!("gh-java/{}", project_name)
-            }
-            DataSet::GhPython(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                format!("gh-python/{}", project_name)
-            }
-            DataSet::Defects4J(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                format!("defects4j/{}", project_name)
-            }
-            DataSet::BugsInPy(project_opt) => {
-                let project_name = project_opt.as_deref().unwrap_or_default();
-                format!("bugsinpy/{}", project_name)
-            }
-        };
+        let (dataset_name, opt_project_name) = self.parts();
+        let project_name = opt_project_name.unwrap_or_default();
 
-        let full_path = dataset_root.join(project_subdir);
+        let full_path_before = dataset_root
+        .join(dataset_name)
+            .join("before")
+            .join(project_name);
+        let full_path_after = dataset_root
+        .join(dataset_name)
+            .join("after")
+            .join(project_name);
+
         assert!(
             dataset_root.exists(),
             "Path to dataset did not exist, path was: {:?}",
             dataset_root.display()
         );
         assert!(
-            full_path.exists(),
-            "Path to dataset subset did not exist, path was: {:?}",
-            full_path.display()
+            full_path_before.exists(),
+            "Path to dataset before subset did not exist, path was: {:?}",
+            full_path_before.display()
         );
-        full_path
+        assert!(
+            full_path_after.exists(),
+            "Path to dataset before subset did not exist, path was: {:?}",
+            full_path_after.display()
+        );
+        (full_path_before, full_path_after)
     }
 }

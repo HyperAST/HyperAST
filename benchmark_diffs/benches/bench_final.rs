@@ -34,12 +34,8 @@ use crate::bench_utils::{DataSet, Heuristic, HeuristicType};
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 #[allow(type_alias_bounds)]
 type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
-type M = VecStore<u32>;
-type MM = DefaultMultiMappingStore<u32>;
 
-fn prepare_stores_java(dataset_path: PathBuf) -> (JavaPreprocessFileSys, Local, Local) {
-    assert!(dataset_path.join("before").exists());
-    assert!(dataset_path.join("after").exists());
+fn prepare_stores_java(dataset_paths: (PathBuf, PathBuf)) -> (JavaPreprocessFileSys, Local, Local) {
     let stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let md_cache = Default::default();
     let mut java_gen = JavaPreprocessFileSys {
@@ -47,8 +43,7 @@ fn prepare_stores_java(dataset_path: PathBuf) -> (JavaPreprocessFileSys, Local, 
         java_md_cache: md_cache,
     };
 
-    let (src, dst) = (dataset_path.join("before"), dataset_path.join("after"));
-    let (src, dst) = parse_dir_pair(&mut java_gen, &src, &dst);
+    let (src, dst) = parse_dir_pair(&mut java_gen, &dataset_paths.0, &dataset_paths.1);
     (java_gen, src, dst)
 }
 
@@ -90,7 +85,7 @@ where
 
 fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
     let mut group = c.benchmark_group("gh_java_group");
-    let dataset = DataSet::Defects4J(Some("drool"));
+    let dataset = DataSet::GhJava(Some("drool"));
 
     let (java_gen, src, dst) = prepare_stores_java(dataset.get_path_dataset_project());
     let stores = hyperast_vcs_git::no_space::as_nospaces2(&java_gen.main_stores);
@@ -101,11 +96,11 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
         &dst.clone().compressed_node,
     );
 
-    let mut mapper_owned = stores
+    let mut lazy_mapper = stores
         .clone()
         .decompress_pair(&src.clone().compressed_node, &dst.clone().compressed_node)
         .1;
-    let lazy_mapper = lazy_top_down(&mut mapper_owned);
+    let _ = lazy_top_down(&mut lazy_mapper);
 
     for heuristic in [
         Heuristic::Greedy,
@@ -113,14 +108,14 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
         Heuristic::LazyGreedy,
         Heuristic::LazySimple,
     ] {
+        let bench_id = BenchmarkId::new(format!("{}", heuristic), dataset);
         match heuristic.get_heuristic_type() {
-            HeuristicType::Lazy => group.bench_with_input(
-                BenchmarkId::new(format!("{}", heuristic), dataset),
-                &lazy_mapper.clone(),
-                |b, mapper| {
+            HeuristicType::Lazy => {
+                group.bench_with_input(bench_id, &lazy_mapper.clone(), |b, mapper| {
                     b.iter_batched(
-                        || lazy_mapper.clone(),
-                        |mapper| {
+                        || mapper.clone(),
+                        |mut mapper| {
+                            let mapper = lazy_top_down(&mut mapper);
                             let output = match heuristic {
                                 Heuristic::LazyGreedy => {
                                     LazyGreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper)
@@ -136,14 +131,12 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
                         },
                         criterion::BatchSize::SmallInput,
                     );
-                },
-            ),
-            HeuristicType::Greedy => group.bench_with_input(
-                BenchmarkId::new(format!("{}", heuristic), dataset),
-                &greedy_mapper.clone(),
-                |b, mapper| {
+                });
+            }
+            HeuristicType::Greedy => {
+                group.bench_with_input(bench_id, &greedy_mapper.clone(), |b, mapper| {
                     b.iter_batched(
-                        || greedy_mapper.clone(),
+                        || mapper.clone(),
                         |mapper| {
                             let output = match heuristic {
                                 Heuristic::Greedy => {
@@ -160,17 +153,21 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
                         },
                         criterion::BatchSize::SmallInput,
                     );
-                },
-            ),
-        };
-
-        group.finish();
+                });
+            }
+        }
     }
+    group.finish();
 }
 
+// Make sure the event_paranoid is set for this session, 0 or 1 should suffice.
+// sudo sysctl -w kernel.perf_event_paranoid=0
 criterion_group!(
     name = gh_java_all_heuristic;
-    config = Criterion::default().with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)));
+    config = Criterion::default()
+        .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
+        .sample_size(100)
+        .configure_from_args();
     targets = run_all_heuristics_gh_java
 );
 criterion_main!(gh_java_all_heuristic);
