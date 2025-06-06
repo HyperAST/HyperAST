@@ -141,22 +141,6 @@ impl<HAST: Copy, Dsrc, Ddst, M> Mapper<HAST, Dsrc, Ddst, M> {
         }
     }
 
-    pub(crate) fn with_mut_decompressible_owned(
-        mut owned: (Decompressible<HAST, Dsrc>, Decompressible<HAST, Ddst>),
-    ) -> Mapper<HAST, Decompressible<HAST, Dsrc>, Decompressible<HAST, Ddst>, M>
-    where
-        M: Default,
-    {
-        Mapper {
-            hyperast: owned.0.hyperast,
-            mapping: crate::matchers::Mapping {
-                src_arena: owned.0,
-                dst_arena: owned.1,
-                mappings: Default::default(),
-            },
-        }
-    }
-
     pub(crate) fn new(
         hyperast: HAST,
         mappings: M,

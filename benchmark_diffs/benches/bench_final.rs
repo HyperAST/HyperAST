@@ -1,8 +1,10 @@
 mod bench_utils;
+use std::path::Path;
 use std::{fmt::Debug, path::PathBuf};
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use criterion_perf_events::Perf;
+use hyper_diff::matchers::mapping_store::MappingStore;
 use perfcnt::linux::HardwareEventType as Hardware;
 use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 
@@ -28,6 +30,7 @@ use hyperast::{
 use hyperast_benchmark_diffs::preprocess::{JavaPreprocessFileSys, parse_dir_pair};
 use hyperast_gen_ts_java::legion_with_refs::Local;
 
+use crate::bench_utils::BenchInfo;
 use crate::bench_utils::{DataSet, Heuristic, HeuristicType};
 
 #[allow(type_alias_bounds)]
@@ -103,10 +106,10 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
     let _ = lazy_top_down(&mut lazy_mapper);
 
     for heuristic in [
+        Heuristic::LazySimple,
+        Heuristic::LazyGreedy,
         Heuristic::Greedy,
         Heuristic::Simple,
-        Heuristic::LazyGreedy,
-        Heuristic::LazySimple,
     ] {
         let bench_id = BenchmarkId::new(format!("{}", heuristic), dataset);
         match heuristic.get_heuristic_type() {
@@ -157,6 +160,42 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
             }
         }
     }
+
+    let num_matches_greedy_bottom_up =
+        GreedyBottomUpMatcher::<_, _, _, _>::match_it(greedy_mapper.clone())
+            .mappings
+            .len();
+    let num_matches_simple_bottom_up =
+        SimpleBottomUpMatcher::<_, _, _, _>::match_it(greedy_mapper.clone())
+            .mappings
+            .len();
+    let num_matches_lazy_greedy_bottom_up =
+        LazyGreedyBottomUpMatcher::<_, _, _, _>::match_it(lazy_top_down(&mut lazy_mapper.clone()))
+            .mappings
+            .len();
+    let num_matches_lazy_simple_bottom_up =
+        LazySimpleBottomUpMatcher::<_, _, _, _>::match_it(lazy_top_down(&mut lazy_mapper.clone()))
+            .mappings
+            .len();
+
+    let file_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("benchmark_diffs")
+        .join("benches")
+        .join("bench_stats")
+        .join(format!("{}", dataset));
+    let bench_info = BenchInfo {
+        dataset,
+        metrics_src: src.metrics.size,
+        metrics_dst: dst.metrics.size,
+        num_matches_greedy_top_down: greedy_mapper.mappings.len(),
+        num_matches_lazy_top_down: lazy_top_down(&mut lazy_mapper.clone()).mappings.len(),
+        num_matches_greedy_bottom_up: num_matches_greedy_bottom_up,
+        num_matches_simple_bottom_up: num_matches_simple_bottom_up,
+        num_matches_lazy_greedy_bottom_up: num_matches_lazy_greedy_bottom_up,
+        num_matches_lazy_simple_bottom_up: num_matches_lazy_simple_bottom_up,
+    };
+    bench_info.write_to_file(file_path);
+
     group.finish();
 }
 
@@ -166,7 +205,7 @@ criterion_group!(
     name = gh_java_all_heuristic;
     config = Criterion::default()
         .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
-        .sample_size(100)
+        .sample_size(10)
         .configure_from_args();
     targets = run_all_heuristics_gh_java
 );

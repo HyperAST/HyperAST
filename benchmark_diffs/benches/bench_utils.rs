@@ -1,7 +1,11 @@
 use std::{
     fmt::Display,
+    fs::File,
+    io::Write,
     path::{Path, PathBuf},
 };
+
+use serde::Serialize;
 
 pub enum HeuristicType {
     Lazy,
@@ -39,7 +43,7 @@ impl Heuristic {
 }
 
 /// Four subsets of the total dataset. The optional string is a specific project in the subset, None if we want all.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum DataSet {
     GhJava(Option<&'static str>),
     GhPython(Option<&'static str>),
@@ -78,11 +82,11 @@ impl DataSet {
         let project_name = opt_project_name.unwrap_or_default();
 
         let full_path_before = dataset_root
-        .join(dataset_name)
+            .join(dataset_name)
             .join("before")
             .join(project_name);
         let full_path_after = dataset_root
-        .join(dataset_name)
+            .join(dataset_name)
             .join("after")
             .join(project_name);
 
@@ -102,5 +106,29 @@ impl DataSet {
             full_path_after.display()
         );
         (full_path_before, full_path_after)
+    }
+}
+
+#[derive(Serialize)]
+pub struct BenchInfo {
+    pub(crate) dataset: DataSet,
+    pub(crate) metrics_src: u32,
+    pub(crate) metrics_dst: u32,
+    pub(crate) num_matches_greedy_top_down: usize,
+    pub(crate) num_matches_lazy_top_down: usize,
+    pub(crate) num_matches_greedy_bottom_up: usize,
+    pub(crate) num_matches_simple_bottom_up: usize,
+    pub(crate) num_matches_lazy_greedy_bottom_up: usize,
+    pub(crate) num_matches_lazy_simple_bottom_up: usize,
+}
+
+impl BenchInfo {
+    pub fn write_to_file(&self, file_path: PathBuf) {
+        let json_string =
+            serde_json::to_string_pretty(self).expect("couldnt serialize BenchInfo to json string");
+
+        let mut file = File::create(file_path).expect("Failed to create benchmark results file");
+        file.write_all(json_string.as_bytes())
+            .expect("Failed to write JSON to file");
     }
 }
