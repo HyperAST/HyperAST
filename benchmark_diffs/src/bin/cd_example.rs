@@ -63,7 +63,34 @@ fn main() {
         .is_test(true)
         .try_init();
 
-    let test_inputs = common::get_test_data_small();
+    let args: Vec<String> = std::env::args().collect();
+
+    let test_inputs = {
+        if !args.is_empty() {
+            // All args are going to be file paths. For each, if it's an absolute path, use as-is.
+            // If it's a relative path, leave as-is. For each, strip "defects4j/before" or "defects4j/after"
+            // from the paths if present, so that the paths are relative from there.
+            let paths: Vec<String> = args
+                .iter()
+                .skip(1)
+                .map(|arg| {
+                    if let Some(idx) = arg.find("defects4j/before") {
+                        let start = idx + "defects4j/before".len();
+                        arg[start..].trim_start_matches('/').to_string()
+                    } else if let Some(idx) = arg.find("defects4j/after") {
+                        let start = idx + "defects4j/after".len();
+                        arg[start..].trim_start_matches('/').to_string()
+                    } else {
+                        arg.to_string()
+                    }
+                })
+                .collect();
+            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+            common::get_test_data(&path_refs)
+        } else {
+            common::get_test_data_small()
+        }
+    };
     common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()

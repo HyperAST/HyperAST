@@ -251,7 +251,7 @@ pub fn get_test_data_mixed() -> Vec<(String, String)> {
     get_test_data(&mixed)
 }
 
-fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
+pub fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
