@@ -104,6 +104,7 @@ pub(crate) fn example_from_gumtree_java_method() -> (SimpleTree<u8>, SimpleTree<
     (src_tr, dst_tr)
 }
 
+#[allow(dead_code)]
 pub(crate) fn example_histogram_matching() -> (SimpleTree<u8>, SimpleTree<u8>) {
     // Parse the two Java files
     let src_tr = tree!(

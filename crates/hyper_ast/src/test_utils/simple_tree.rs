@@ -693,22 +693,27 @@ impl HyperType for Ty {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        todo!()
+        // Hotfix from Alexander
+        Box::leak(Box::new(self.clone()))
     }
 
     fn as_static_str(&self) -> &'static str {
         todo!()
     }
 
-    fn generic_eq(&self, _other: &dyn HyperType) -> bool
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized,
     {
-        todo!()
+        //Hotfix from Alexander
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other_concrete) => self == other_concrete,
+            _ => false,
+        }
     }
 
     fn is_file(&self) -> bool {

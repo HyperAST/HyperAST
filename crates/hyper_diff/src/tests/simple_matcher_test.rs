@@ -60,6 +60,27 @@ struct DiffInfo {
     num_matches_lazy: usize,
 }
 
+impl DiffInfo {
+    fn assert_correctness(&self, target_num_matches: usize, target_num_actions: usize) {
+        assert_eq!(
+            self.num_matches_normal, self.num_matches_lazy,
+            "Number of matches normal and lazy were not equal"
+        );
+        assert_eq!(
+            self.num_matches_normal, target_num_matches,
+            "Number of matches did not match, normal"
+        );
+        assert_eq!(
+            self.num_actions_normal, self.num_actions_lazy,
+            "Number of actions normal and lazy were not equal"
+        );
+        assert_eq!(
+            self.num_actions_normal, target_num_actions,
+            "Number of actions did not match"
+        );
+    }
+}
+
 fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
     let (stores, src, dst) = vpair_to_stores(example);
 
@@ -104,89 +125,23 @@ fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
 #[test]
 fn test_gumtree_simple_java_simple() {
     let diff_info = get_diff_info(example_from_gumtree_java_simple());
-
-    assert_eq!(
-        diff_info.num_matches_normal, diff_info.num_matches_lazy,
-        "Number of matches normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_matches_normal, 5,
-        "Number of matches did not match, normal"
-    );
-    assert_eq!(
-        diff_info.num_actions_normal, diff_info.num_actions_lazy,
-        "Number of actions normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_actions_normal, 1,
-        "Number of actions did not match"
-    );
+    diff_info.assert_correctness(5, 1);
 }
 
 #[test]
 fn test_gumtree_simple_java_method() {
     let diff_info = get_diff_info(example_from_gumtree_java_method());
-
-    assert_eq!(
-        diff_info.num_matches_normal, diff_info.num_matches_lazy,
-        "Number of matches normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_matches_normal, 21,
-        "incorrect number of matches"
-    );
-    assert_eq!(
-        diff_info.num_actions_normal, diff_info.num_actions_lazy,
-        "Number of actions normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_actions_normal, 12,
-        "incorrect number of actions"
-    );
+    diff_info.assert_correctness(21, 12);
 }
 
 #[test]
 fn test_gumtree_simple_reorder_children() {
     let diff_info = get_diff_info(example_reorder_children());
-
-    assert_eq!(
-        diff_info.num_matches_normal, diff_info.num_matches_lazy,
-        "Number of matches normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_matches_normal, 25,
-        "incorrect number of matches"
-    );
-
-    assert_eq!(
-        diff_info.num_actions_normal, diff_info.num_actions_lazy,
-        "Number of actions normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_actions_normal, 1,
-        "incorrect number of actions"
-    );
+    diff_info.assert_correctness(25, 1);
 }
 
 #[test]
 fn test_gumtree_simple_move_method() {
     let diff_info = get_diff_info(example_move_method());
-
-    assert_eq!(
-        diff_info.num_matches_normal, diff_info.num_matches_lazy,
-        "Number of matches normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_matches_normal, 31,
-        "incorrect number of matches"
-    );
-
-    assert_eq!(
-        diff_info.num_actions_normal, diff_info.num_actions_lazy,
-        "Number of actions normal and lazy were not equal"
-    );
-    assert_eq!(
-        diff_info.num_actions_normal, 7,
-        "incorrect number of actions"
-    );
+    diff_info.assert_correctness(31, 7);
 }
