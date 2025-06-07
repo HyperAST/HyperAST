@@ -230,7 +230,9 @@ where
             if src_list.len() == 1 {
                 if let Some(dst_list) = dst_types.get(src_type) {
                     if dst_list.len() == 1 {
-                        self.internal.mappings.link(src_list[0], dst_list[0]);
+                        if !self.internal.mappings.is_src(&src_list[0]) && !self.internal.mappings.is_dst(&dst_list[0]) {
+                            self.internal.mappings.link(src_list[0], dst_list[0]);
+                        }
                     }
                 }
             }
