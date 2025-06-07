@@ -322,9 +322,12 @@ where
                 if arena.decompress_children(node).is_empty() {
                     return true;
                 }
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                node_type.is_statement()
+                if self.config.statement_level_iteration {
+                    let original = arena.original(node);
+                    let node_type = stores.resolve_type(&original);
+                    return node_type.is_statement();
+                }
+                false
             },
         );
         let nodes: Vec<_> = iter.collect();
@@ -343,9 +346,12 @@ where
                 if arena.decompress_children(node).is_empty() {
                     return true;
                 }
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                node_type.is_statement()
+                if self.config.statement_level_iteration {
+                    let original = arena.original(node);
+                    let node_type = stores.resolve_type(&original);
+                    return node_type.is_statement();
+                }
+                false
             },
         );
         let nodes: Vec<_> = iter.collect();
