@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{actions::action_vec::ActionsVec, algorithms::DiffResult};
 
@@ -208,22 +208,34 @@ impl Default for OptimizedBottomUpMatcherConfig {
 }
 
 /// Detailed metrics collected during leaves matching
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LeavesMatcherMetrics {
-    #[serde(serialize_with = "duration_as_millis")]
+    #[serde(
+        serialize_with = "duration_as_millis",
+        deserialize_with = "duration_from_millis"
+    )]
     pub total_time: Duration,
     /// Total number of leaf-to-leaf comparisons attempted (including both successful and unsuccessful).
     pub total_comparisons: usize,
     /// Number of successful matches found between source and destination leaves.
     pub successful_matches: usize,
     /// Total time spent computing hashes for leaves (for hash-based optimizations).
-    #[serde(serialize_with = "duration_as_millis")]
+    #[serde(
+        serialize_with = "duration_as_millis",
+        deserialize_with = "duration_from_millis"
+    )]
     pub hash_computation_time: Duration,
     /// Total time spent serializing leaf node text for comparison.
-    #[serde(serialize_with = "duration_as_millis")]
+    #[serde(
+        serialize_with = "duration_as_millis",
+        deserialize_with = "duration_from_millis"
+    )]
     pub text_serialization_time: Duration,
     /// Total time spent performing string similarity calculations.
-    #[serde(serialize_with = "duration_as_millis")]
+    #[serde(
+        serialize_with = "duration_as_millis",
+        deserialize_with = "duration_from_millis"
+    )]
     pub similarity_time: Duration,
     /// Total number of characters compared during similarity checks.
     pub characters_compared: usize,
@@ -240,13 +252,19 @@ pub struct LeavesMatcherMetrics {
 }
 
 /// Detailed metrics collected during bottom-up matching
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BottomUpMatcherMetrics {
-    #[serde(serialize_with = "duration_as_millis")]
+    #[serde(
+        serialize_with = "duration_as_millis",
+        deserialize_with = "duration_from_millis"
+    )]
     pub total_time: Duration,
     pub total_comparisons: usize,
     pub successful_matches: usize,
-    #[serde(serialize_with = "duration_as_millis")]
+    #[serde(
+        serialize_with = "duration_as_millis",
+        deserialize_with = "duration_from_millis"
+    )]
     pub similarity_time: Duration,
 }
 
@@ -281,7 +299,7 @@ impl<A, M, MD> CDResult<A, M, MD> {
 }
 
 /// Serializable version of detailed CDResult metrics
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DiffResultSummary {
     mappings: usize,
     actions: Option<usize>,
@@ -311,4 +329,13 @@ where
     S: Serializer,
 {
     serializer.serialize_f32(duration.as_secs_f32() * 1000.0)
+}
+
+fn duration_from_millis<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let millis = f32::deserialize(deserializer)?;
+    let nanos = (millis * 1_000_000.0).round() as u64;
+    Ok(Duration::from_nanos(nanos))
 }

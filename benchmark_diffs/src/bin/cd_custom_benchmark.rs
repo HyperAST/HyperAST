@@ -9,9 +9,10 @@ use hyper_diff::{
 };
 use hyperast_benchmark_diffs::common::{self, Input};
 use indicatif::{ProgressBar, ProgressStyle};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
@@ -40,6 +41,10 @@ struct Args {
     /// Additional tag to include in filename
     #[arg(short, long)]
     tag: Option<String>,
+
+    /// Input file to resume from (previous benchmark output)
+    #[arg(short, long)]
+    input: Option<String>,
 }
 
 /// Configuration for different optimization combinations to benchmark
@@ -56,7 +61,7 @@ impl OptimizationConfig {
 }
 
 /// Metadata about the benchmark run
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct BenchmarkMetadata {
     timestamp: u64,
     runs_per_config: usize,
@@ -67,11 +72,12 @@ struct BenchmarkMetadata {
     interval: usize,
     tag: Option<String>,
     total_lines_of_code: usize,
+    base: Option<String>,
     cli_args: Vec<String>,
 }
 
 /// Individual measurement result
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct MeasurementResult {
     // Test case info
     test_case_index: usize,
@@ -98,7 +104,7 @@ struct MeasurementResult {
 /// Create various optimization configurations for comprehensive benchmarking
 fn create_optimization_configs() -> Vec<OptimizationConfig> {
     vec![
-        // OptimizationConfig::new("Baseline", OptimizedDiffConfig::baseline()),
+        OptimizationConfig::new("Baseline Deep Label", OptimizedDiffConfig::baseline()),
         OptimizationConfig::new(
             "Baseline Statement",
             OptimizedDiffConfig::baseline().with_statement_level_iteration(true),
@@ -109,6 +115,12 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
                 .with_statement_level_iteration(true)
                 .with_label_caching(true)
                 .with_deep_leaves(true),
+        ),
+        // Optimized
+        OptimizationConfig::new("Optimized Deep Label", OptimizedDiffConfig::optimized()),
+        OptimizationConfig::new(
+            "Optimized Deep Label Cache",
+            OptimizedDiffConfig::optimized().with_label_caching(true),
         ),
         OptimizationConfig::new(
             "Optimized with Statement",
@@ -186,6 +198,79 @@ fn run_single_measurement(
     Ok((duration, cd_result.into()))
 }
 
+/// Load existing results from input file and count completed runs per test case + config
+fn load_existing_results(
+    input_path: &str,
+) -> Result<
+    (
+        Option<BenchmarkMetadata>,
+        HashMap<(String, String), usize>,
+        Vec<String>,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let file = std::fs::File::open(input_path)?;
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+
+    let mut metadata: Option<BenchmarkMetadata> = None;
+    let mut completed_run_counts: HashMap<(String, String), usize> = HashMap::new();
+    let mut existing_lines = vec![];
+
+    // Helper closure to process a line as a measurement result
+    let mut process_measurement_line =
+        |line: &str| match serde_json::from_str::<MeasurementResult>(line) {
+            Ok(measurement) => {
+                let key = (measurement.file_name, measurement.config_name);
+                *completed_run_counts.entry(key).or_insert(0) += 1;
+            }
+            Err(err) => {
+                println!("Failed to parse line: {}", line);
+                println!("Error: {}", err);
+            }
+        };
+
+    if let Some(first_line_result) = lines.next() {
+        let first_line = first_line_result?;
+        match serde_json::from_str::<BenchmarkMetadata>(&first_line) {
+            Ok(parsed_metadata) => {
+                println!("Loaded metadata: {:?}", parsed_metadata);
+                metadata = Some(parsed_metadata);
+            }
+            Err(_) => {
+                // Not metadata, treat as measurement line
+                existing_lines.push(first_line.clone());
+                process_measurement_line(&first_line);
+            }
+        }
+    } else {
+        return Err("Input file is empty".into());
+    }
+
+    // Read all measurement results
+    for line_result in lines {
+        let line = line_result?;
+        existing_lines.push(line.clone());
+        process_measurement_line(&line);
+    }
+
+    Ok((metadata, completed_run_counts, existing_lines))
+}
+
+/// Calculate how many additional runs are needed for a test case + config
+fn runs_needed(
+    completed_run_counts: &HashMap<(String, String), usize>,
+    file_name: &str,
+    config_name: &str,
+    target_runs: usize,
+) -> usize {
+    let completed = completed_run_counts
+        .get(&(file_name.to_string(), config_name.to_string()))
+        .copied()
+        .unwrap_or(0);
+    target_runs.saturating_sub(completed)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
@@ -196,6 +281,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create output directory
     std::fs::create_dir_all(&args.output_dir)?;
+
+    // Load existing results if input file is provided
+    let (_, completed_run_counts, existing_lines) = if let Some(ref input_path) = args.input {
+        println!("Loading existing results from: {}", input_path);
+        let (metadata, counts, lines) = load_existing_results(input_path)?;
+        let total_completed: usize = counts.values().sum();
+        println!(
+            "Found {} completed measurements across {} test case/config combinations",
+            total_completed,
+            counts.len()
+        );
+        (Some(metadata), counts, lines)
+    } else {
+        (None, HashMap::new(), Vec::new())
+    };
 
     // Get test inputs and configurations
     let test_inputs = common::get_all_cases_with_paths();
@@ -214,20 +314,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|(_, (_, buggy, _))| buggy.lines().count())
         .sum();
 
-    // Create metadata
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
+    // Create or update metadata
     let metadata = BenchmarkMetadata {
-        timestamp,
+        timestamp: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
         runs_per_config: args.runs,
         warmup_runs: args.warmup,
         total_test_cases: filtered_test_cases.len(),
         total_configurations: optimization_configs.len(),
         skip: args.skip,
         interval: args.interval,
+        base: args.input.clone(),
         tag: args.tag.clone(),
         total_lines_of_code: total_lines,
         cli_args: std::env::args().collect(),
@@ -235,6 +334,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Generate filename and create output file
     let filename = generate_filename(&args, &metadata);
+
     let filepath = std::path::Path::new(&args.output_dir).join(&filename);
 
     let mut output_file = OpenOptions::new()
@@ -243,12 +343,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .truncate(true)
         .open(&filepath)?;
 
-    // Write metadata as first line
-    writeln!(output_file, "{}", serde_json::to_string(&metadata)?)?;
+    // Write existing lines first (if resuming)
+    if !existing_lines.is_empty() {
+        for line in &existing_lines {
+            writeln!(output_file, "{}", line)?;
+        }
+    } else {
+        // Write metadata as first line (if not resuming)
+        writeln!(output_file, "{}", serde_json::to_string(&metadata)?)?;
+    }
+
+    // Calculate how many runs still need to be done
+    let mut remaining_operations = 0;
+    for (_, (path, _, _)) in &filtered_test_cases {
+        for opt_config in &optimization_configs {
+            remaining_operations +=
+                runs_needed(&completed_run_counts, path, opt_config.name, args.runs);
+        }
+    }
 
     // Print summary
     println!("Custom Change Distiller Benchmark");
     println!("=================================");
+    if args.input.is_some() {
+        let total_completed: usize = completed_run_counts.values().sum();
+        println!("Mode: Resume from existing file");
+        println!("Completed measurements: {}", total_completed);
+    } else {
+        println!("Mode: Fresh start");
+    }
     println!(
         "Test cases: {} (after filtering)",
         filtered_test_cases.len()
@@ -257,12 +380,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Runs per config: {}", args.runs);
     println!("Warmup runs: {}", args.warmup);
     println!("Total lines of code: {}", total_lines);
+    println!("Remaining measurements: {}", remaining_operations);
     println!("Output file: {}", filepath.display());
     println!();
 
-    // Setup progress bar
-    let total_operations =
-        filtered_test_cases.len() * optimization_configs.len() * (args.warmup + args.runs);
+    // Setup progress bar - include warmup for remaining operations only
+    let total_warmup_operations = remaining_operations * args.warmup / args.runs;
+    let total_operations = remaining_operations + total_warmup_operations;
     let progress_bar = ProgressBar::new(total_operations as u64);
     progress_bar.set_style(
         ProgressStyle::default_bar()
@@ -276,7 +400,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let input = common::preprocess(&(before, after));
 
         for (config_idx, opt_config) in optimization_configs.iter().enumerate() {
-            // Warmup runs
+            // Check how many runs are needed for this config/test case combination
+            let needed_runs = runs_needed(&completed_run_counts, path, opt_config.name, args.runs);
+
+            if needed_runs == 0 {
+                // Skip this entire config/test case combination
+                continue;
+            }
+
+            // Warmup runs (only if we have measurements to do)
             for warmup_run in 0..args.warmup {
                 progress_bar.set_message(format!(
                     "Warmup {:2}/{:2} - Test {} - Config: {}",
@@ -294,12 +426,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 progress_bar.inc(1);
             }
 
-            // Measurement runs
-            for run_idx in 0..args.runs {
+            // Measurement runs (only the ones we need)
+            let completed_so_far = completed_run_counts
+                .get(&(path.to_string(), opt_config.name.to_string()))
+                .copied()
+                .unwrap_or(0);
+
+            for run_idx in 0..needed_runs {
                 progress_bar.set_message(format!(
                     "Run    {:2}/{:2} - Test {} - Config: {}",
                     run_idx + 1,
-                    args.runs,
+                    needed_runs,
                     test_idx + 1,
                     opt_config.name
                 ));
@@ -313,7 +450,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             node_count: input.node_count,
                             config_name: opt_config.name.to_string(),
                             config_index: config_idx,
-                            run_index: run_idx,
+                            run_index: completed_so_far + run_idx,
                             duration_nanos: duration.as_nanos() as u64,
                             duration_secs: duration.as_secs_f64(),
                             diff_summary,
