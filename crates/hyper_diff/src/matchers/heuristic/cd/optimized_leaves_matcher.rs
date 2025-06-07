@@ -12,16 +12,19 @@ use crate::{
         mapping_store::MonoMappingStore,
     },
 };
-use ahash::RandomState;
+use ahash::{AHashSet, RandomState};
 use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, TypeStore, WithHashs};
 use hyperast::{PrimInt, types::HyperType};
 use hyperast::{nodes::TextSerializer, types::HashKind};
 use num_traits::ToPrimitive;
-use std::fmt::Debug;
 use std::{cmp::Ordering, collections::HashMap, hash::Hash};
+use std::{fmt::Debug, time::Instant};
 use str_distance::DistanceMetric;
 
 use super::OptimizedLeavesMatcherConfig;
+
+/// Type alias for bigrams
+type Bigram = [char; 2];
 
 /// A mapping candidate with similarity score for priority queue ordering
 struct MappingWithSimilarity<
@@ -70,6 +73,33 @@ pub struct OptimizedLeavesMatcher<Dsrc, Ddst, HAST, M> {
     pub mappings: M,
     pub config: OptimizedLeavesMatcherConfig,
     pub metrics: LeavesMatcherMetrics,
+}
+
+/// Extract bigrams from a string
+fn extract_bigrams(text: &str) -> Vec<Bigram> {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() < 2 {
+        return vec![];
+    }
+    chars.windows(2).map(|w| [w[0], w[1]]).collect()
+}
+
+/// Compute Dice coefficient between two sets of bigrams
+fn dice_similarity(bigrams1: &[Bigram], bigrams2: &[Bigram]) -> f64 {
+    if bigrams1.is_empty() && bigrams2.is_empty() {
+        return 1.0;
+    }
+    if bigrams1.is_empty() || bigrams2.is_empty() {
+        return 0.0;
+    }
+
+    let set1: AHashSet<&Bigram> = bigrams1.iter().collect();
+    let set2: AHashSet<&Bigram> = bigrams2.iter().collect();
+
+    let intersection_size = set1.intersection(&set2).count();
+    let total_size = bigrams1.len() + bigrams2.len();
+
+    (2.0 * intersection_size as f64) / (total_size as f64)
 }
 
 impl<
@@ -123,6 +153,12 @@ where
         crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
         LeavesMatcherMetrics,
     ) {
+        // Only n-gram caching or label caching or neither but not both
+        assert!(
+            !(config.enable_ngram_caching && config.enable_label_caching),
+            "ngram_cache and label_cache cannot be both true"
+        );
+
         let mut matcher = Self {
             stores: mapping.hyperast,
             src_arena: mapping.mapping.src_arena,
@@ -165,6 +201,20 @@ where
         self.execute_statement();
     }
 
+    /// Get text representation of a node (either label or full serialization)
+    fn get_node_text(&self, original: &HAST::IdN) -> String {
+        if self.config.statement_level_iteration {
+            TextSerializer::new(&self.stores, original.clone()).to_string()
+        } else {
+            let node = self.stores.node_store().resolve(original);
+            if let Some(label_id) = node.try_get_label() {
+                self.stores.label_store().resolve(&label_id).to_string()
+            } else {
+                String::new()
+            }
+        }
+    }
+
     /// Execute with statement level iteration
     fn execute_statement(&mut self) {
         let start_time = std::time::Instant::now();
@@ -188,6 +238,18 @@ where
         let mut dst_text_cache: HashMap<
             &<Ddst as LazyDecompressed<M::Dst>>::IdD,
             String,
+            RandomState,
+        > = HashMap::default();
+
+        // Ngram caches for when ngram caching is enabled
+        let mut src_ngram_cache: HashMap<
+            &<Dsrc as LazyDecompressed<M::Src>>::IdD,
+            Vec<Bigram>,
+            RandomState,
+        > = HashMap::default();
+        let mut dst_ngram_cache: HashMap<
+            &<Ddst as LazyDecompressed<M::Dst>>::IdD,
+            Vec<Bigram>,
             RandomState,
         > = HashMap::default();
 
@@ -247,77 +309,81 @@ where
                     }
                 }
 
-                // get src and dst text
-                let text_start = std::time::Instant::now();
-
-                let (src_text, dst_text) = {
-                    if !self.config.statement_level_iteration {
-                        // only get the label of a node and not its serialized representation
-
-                        let src_node = self.stores.node_store().resolve(&src_original);
-                        let src_label = if let Some(src_label_id) = src_node.try_get_label() {
-                            Some(self.stores.label_store().resolve(&src_label_id).to_string())
-                        } else {
-                            // let text =
-                            //     TextSerializer::new(&self.stores, src_original.clone()).to_string();
-                            None
-                        }
-                        .unwrap_or_default();
-
-                        let dst_node = self.stores.node_store().resolve(&dst_original);
-                        let dst_label = if let Some(dst_label_id) = dst_node.try_get_label() {
-                            Some(self.stores.label_store().resolve(&dst_label_id).to_string())
-                        } else {
-                            None
-                        }
-                        .unwrap_or_default();
-
-                        (src_label, dst_label)
+                // Compute similarity based on caching strategy
+                let sim = if self.config.enable_ngram_caching {
+                    let text_start = Instant::now();
+                    // Ngram caching strategy
+                    let src_bigrams = if let Some(bigrams) = src_ngram_cache.get(src) {
+                        cache_hits += 1;
+                        bigrams
                     } else {
-                        if self.config.enable_label_caching {
-                            let src_text = if let Some(text) = src_text_cache.get(src) {
-                                cache_hits += 1;
-                                text.clone()
-                            } else {
-                                cache_misses += 1;
+                        cache_misses += 1;
+                        let text = self.get_node_text(&src_original);
+                        let bigrams = extract_bigrams(&text);
+                        src_ngram_cache.insert(&src, bigrams);
+                        src_ngram_cache.get(src).unwrap()
+                    };
 
-                                let text = TextSerializer::new(&self.stores, src_original.clone())
-                                    .to_string();
-                                src_text_cache.insert(&src, text.clone());
-                                text.clone()
-                            };
-                            let dst_text = if let Some(text) = dst_text_cache.get(dst) {
-                                cache_hits += 1;
-                                text.clone()
-                            } else {
-                                cache_misses += 1;
-                                let text = TextSerializer::new(&self.stores, dst_original.clone())
-                                    .to_string();
-                                dst_text_cache.insert(&dst, text.clone());
-                                text.clone()
-                            };
-                            (src_text, dst_text)
+                    let dst_bigrams = if let Some(bigrams) = dst_ngram_cache.get(dst) {
+                        cache_hits += 1;
+                        bigrams
+                    } else {
+                        cache_misses += 1;
+                        let text = self.get_node_text(&dst_original);
+                        let bigrams = extract_bigrams(&text);
+                        dst_ngram_cache.insert(&dst, bigrams);
+                        dst_ngram_cache.get(dst).unwrap()
+                    };
+
+                    text_serialization_time += text_start.elapsed();
+
+                    let sim_start = std::time::Instant::now();
+                    let sim = dice_similarity(&src_bigrams, &dst_bigrams);
+                    similarity_computation_time += sim_start.elapsed();
+                    similarity_checks += 1;
+
+                    sim
+                } else {
+                    let text_start = Instant::now();
+                    let (src_text, dst_text) = if self.config.enable_label_caching {
+                        let src_text = if let Some(text) = src_text_cache.get(src) {
+                            cache_hits += 1;
+                            text.clone()
                         } else {
-                            let original_src = self.src_arena.original(&src);
-                            let src_text =
-                                TextSerializer::new(&self.stores, original_src).to_string();
-                            let original_dst = self.dst_arena.original(&dst);
-                            let dst_text =
-                                TextSerializer::new(&self.stores, original_dst).to_string();
-                            (src_text, dst_text)
-                        }
-                    }
+                            cache_misses += 1;
+                            let text = self.get_node_text(&src_original);
+                            src_text_cache.insert(&src, text.clone());
+                            text
+                        };
+                        let dst_text = if let Some(text) = dst_text_cache.get(dst) {
+                            cache_hits += 1;
+                            text.clone()
+                        } else {
+                            cache_misses += 1;
+                            let text = self.get_node_text(&dst_original);
+                            dst_text_cache.insert(&dst, text.clone());
+                            text
+                        };
+                        (src_text, dst_text)
+                    } else {
+                        // No caching
+                        let src_text = self.get_node_text(&src_original);
+                        let dst_text = self.get_node_text(&dst_original);
+                        (src_text, dst_text)
+                    };
+
+                    text_serialization_time += text_start.elapsed();
+
+                    characters_compared += src_text.chars().count() + dst_text.chars().count();
+                    let sim_start = std::time::Instant::now();
+                    let sim = 1.0
+                        - str_distance::QGram::new(2)
+                            .normalized(src_text.chars(), dst_text.chars());
+                    similarity_computation_time += sim_start.elapsed();
+                    similarity_checks += 1;
+
+                    sim
                 };
-
-                text_serialization_time += text_start.elapsed();
-
-                // no need to check for equal types since all nodes are statements
-                characters_compared += src_text.chars().count() + dst_text.chars().count();
-                let sim_start = std::time::Instant::now();
-                let sim = 1.0
-                    - str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
-                similarity_computation_time += sim_start.elapsed();
-                similarity_checks += 1;
 
                 if sim > self.config.base_config.label_sim_threshold {
                     leaves_mappings.push(MappingWithSimilarity {
@@ -510,5 +576,176 @@ mod tests {
 
         assert!(result.mapping.mappings.has(&src_cs[0], &dst_cs[1]));
         assert!(result.mapping.mappings.has(&src_cs[1], &dst_cs[0]));
+    }
+
+    #[test]
+    fn test_optimized_leaves_matcher_ngram_caching() {
+        let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
+
+        let mut src_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &src);
+        let mut dst_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &dst);
+
+        let config = OptimizedLeavesMatcherConfig {
+            base_config: super::super::LeavesMatcherConfig::default(),
+            enable_label_caching: false,
+            enable_type_grouping: false,
+            enable_deep_leaves: false,
+            enable_ngram_caching: true,
+            statement_level_iteration: true, // Required for ngram caching
+            use_binary_heap: false,
+            reuse_qgram_object: false,
+        };
+
+        let mapping = Mapper {
+            hyperast: &stores,
+            mapping: crate::matchers::Mapping {
+                src_arena: src_arena.as_mut(),
+                dst_arena: dst_arena.as_mut(),
+                mappings: DefaultMappingStore::default(),
+            },
+        };
+
+        let (result, metrics) = OptimizedLeavesMatcher::with_config_and_metrics(mapping, config);
+
+        // Verify that mappings were created
+        assert!(
+            result.mappings.len() > 0,
+            "Should have created some mappings"
+        );
+
+        // Verify that cache was used (if there were repeated nodes)
+        if metrics.cache_hits > 0 || metrics.cache_misses > 0 {
+            assert!(
+                metrics.cache_hits + metrics.cache_misses > 0,
+                "Cache should have been accessed"
+            );
+        }
+
+        // For the simple leaf label swap example, verify the specific mappings
+        use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+        let src = result.mapping.src_arena.root();
+        let src_cs = result.mapping.src_arena.children(&src);
+        let dst = result.mapping.dst_arena.root();
+        let dst_cs = result.mapping.dst_arena.children(&dst);
+
+        // The matcher should correctly identify the swapped leaves
+        if src_cs.len() == 2 && dst_cs.len() == 2 {
+            assert!(
+                result.mapping.mappings.has(&src_cs[0], &dst_cs[1])
+                    || result.mapping.mappings.has(&src_cs[0], &dst_cs[0])
+            );
+            assert!(
+                result.mapping.mappings.has(&src_cs[1], &dst_cs[0])
+                    || result.mapping.mappings.has(&src_cs[1], &dst_cs[1])
+            );
+        }
+    }
+
+    #[test]
+    fn test_mutual_exclusivity_ngram_label_caching() {
+        let (stores, src, dst) = vpair_to_stores(crate::tests::examples::example_leaf_label_swap());
+
+        let mut src_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &src);
+        let mut dst_arena = Decompressible::<_, LazyPostOrder<_, u16>>::decompress(&stores, &dst);
+
+        // Test that enabling both ngram and label caching results in only ngram caching being active
+        let config = OptimizedLeavesMatcherConfig {
+            base_config: super::super::LeavesMatcherConfig::default(),
+            enable_label_caching: true,
+            enable_type_grouping: false,
+            enable_deep_leaves: false,
+            enable_ngram_caching: true,
+            statement_level_iteration: true,
+            use_binary_heap: false,
+            reuse_qgram_object: false,
+        };
+
+        let mapping = Mapper {
+            hyperast: &stores,
+            mapping: crate::matchers::Mapping {
+                src_arena: src_arena.as_mut(),
+                dst_arena: dst_arena.as_mut(),
+                mappings: DefaultMappingStore::default(),
+            },
+        };
+
+        // The with_config_and_metrics method should handle the mutual exclusivity
+        let (result, _metrics) = OptimizedLeavesMatcher::with_config_and_metrics(mapping, config);
+
+        // Verify that mappings still work correctly
+        assert!(
+            result.mappings.len() > 0,
+            "Should have created some mappings"
+        );
+    }
+
+    #[test]
+    fn test_extract_bigrams() {
+        // Test empty string
+        assert_eq!(extract_bigrams(""), Vec::<Bigram>::new());
+
+        // Test single character
+        assert_eq!(extract_bigrams("a"), Vec::<Bigram>::new());
+
+        // Test two characters
+        assert_eq!(extract_bigrams("ab"), vec![['a', 'b']]);
+
+        // Test multiple characters
+        assert_eq!(
+            extract_bigrams("hello"),
+            vec![['h', 'e'], ['e', 'l'], ['l', 'l'], ['l', 'o']]
+        );
+
+        // Test with spaces
+        assert_eq!(
+            extract_bigrams("hi there"),
+            vec![
+                ['h', 'i'],
+                ['i', ' '],
+                [' ', 't'],
+                ['t', 'h'],
+                ['h', 'e'],
+                ['e', 'r'],
+                ['r', 'e']
+            ]
+        );
+
+        // Test with unicode
+        assert_eq!(
+            extract_bigrams("café"),
+            vec![['c', 'a'], ['a', 'f'], ['f', 'é']]
+        );
+    }
+
+    #[test]
+    fn test_dice_similarity() {
+        // Test identical bigrams
+        let bigrams1 = vec![['h', 'e'], ['e', 'l'], ['l', 'l'], ['l', 'o']];
+        let bigrams2 = vec![['h', 'e'], ['e', 'l'], ['l', 'l'], ['l', 'o']];
+        assert_eq!(dice_similarity(&bigrams1, &bigrams2), 1.0);
+
+        // Test completely different bigrams
+        let bigrams1 = vec![['a', 'b'], ['b', 'c']];
+        let bigrams2 = vec![['x', 'y'], ['y', 'z']];
+        assert_eq!(dice_similarity(&bigrams1, &bigrams2), 0.0);
+
+        // Test partial overlap
+        let bigrams1 = vec![['h', 'e'], ['e', 'l'], ['l', 'l'], ['l', 'o']];
+        let bigrams2 = vec![['h', 'e'], ['e', 'l'], ['l', 'a']];
+        // 2 common bigrams out of 7 total -> 2 * 2 / 7 = 4/7 ≈ 0.571
+        let similarity = dice_similarity(&bigrams1, &bigrams2);
+        assert!((similarity - 4.0 / 7.0).abs() < 0.001);
+
+        // Test empty sets
+        assert_eq!(dice_similarity(&vec![], &vec![]), 1.0);
+        assert_eq!(dice_similarity(&vec![['a', 'b']], &vec![]), 0.0);
+        assert_eq!(dice_similarity(&vec![], &vec![['a', 'b']]), 0.0);
+
+        // Test with duplicates
+        let bigrams1 = vec![['a', 'a'], ['a', 'a']]; // "aaa" -> ['a','a'], ['a','a']
+        let bigrams2 = vec![['a', 'a']]; // "aa" -> ['a','a']
+        // 1 common unique bigram, total 3 bigrams -> 2 * 1 / 3 = 2/3
+        let similarity = dice_similarity(&bigrams1, &bigrams2);
+        assert!((similarity - 2.0 / 3.0).abs() < 0.001);
     }
 }

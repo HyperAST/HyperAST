@@ -174,6 +174,7 @@ where
         self.metrics.total_comparisons = comparison_count;
         self.metrics.successful_matches = mapped_count;
         self.metrics.similarity_time = comparison_time;
+        self.metrics.similarity_checks = allowed_count;
     }
 
     fn get_src_nodes(&self) -> Vec<<M as MappingStore>::Src> {
@@ -249,7 +250,7 @@ where
             self.metrics.characters_compared += src_text.chars().count() + dst_text.chars().count();
 
             let sim_start = std::time::Instant::now();
-            let dist = str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
+            let dist = str_distance::QGram::new(2).normalized(src_text.chars(), dst_text.chars());
 
             self.metrics.similarity_time += sim_start.elapsed();
 

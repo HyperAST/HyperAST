@@ -113,19 +113,32 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             "Baseline Deep Statement",
             OptimizedDiffConfig::baseline()
                 .with_statement_level_iteration()
-                .with_label_caching()
                 .with_deep_leaves(),
         ),
-        // Optimized
+        // Optimized Label
         OptimizationConfig::new("Optimized Deep Label", OptimizedDiffConfig::optimized()),
         OptimizationConfig::new(
             "Optimized Deep Label Cache",
             OptimizedDiffConfig::optimized().with_label_caching(),
         ),
+        // Optimized shallow statements
         OptimizationConfig::new(
             "Optimized with Statement",
             OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
+        OptimizationConfig::new(
+            "Optimized with Statement and Ngram Caching",
+            OptimizedDiffConfig::optimized()
+                .with_statement_level_iteration()
+                .with_ngram_caching(),
+        ),
+        OptimizationConfig::new(
+            "Optimized with Statement and Label Cache",
+            OptimizedDiffConfig::optimized()
+                .with_statement_level_iteration()
+                .with_label_caching(),
+        ),
+        // Optimized deep statements
         OptimizationConfig::new(
             "Optimized with Deep Statement",
             OptimizedDiffConfig::optimized()
@@ -133,10 +146,11 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
                 .with_deep_leaves(),
         ),
         OptimizationConfig::new(
-            "Optimized with Statement and Label Cache",
+            "Optimized with Deep Statement and Ngram Caching",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
-                .with_label_caching(),
+                .with_deep_leaves()
+                .with_ngram_caching(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement and Label Cache",
