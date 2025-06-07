@@ -214,7 +214,7 @@ where
             let src_label_hash = WithHashs::hash(&src_node, &HashKind::label());
             hash_computation_time += hash_start.elapsed();
 
-            for (dst_idx, dst) in dst_leaves.iter().enumerate() {
+            for dst in dst_leaves.iter() {
                 let dst_bit_idx = dst.shallow().to_usize().unwrap();
                 if ignore_dst[dst_bit_idx] {
                     skipped_dst += 1;

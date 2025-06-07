@@ -87,6 +87,10 @@ where
     }
 
     pub fn execute(&mut self) {
+        let mut total_comparisons = 0;
+        let mut successful_matches = 0;
+        let mut similarity_time = std::time::Duration::ZERO;
+
         for s in self.get_src_nodes() {
             let src_tree = s;
             let number_of_leaves = self.number_of_leaves_src(&src_tree);
@@ -97,11 +101,15 @@ where
                 let dst_is_leaf = self.dst_arena.children(&dst_tree).is_empty();
 
                 if mapping_allowed && !(src_is_leaf || dst_is_leaf) {
+                    total_comparisons += 1;
+
+                    let sim_start = std::time::Instant::now();
                     let similarity = similarity_metrics::chawathe_similarity(
                         &self.src_arena.descendants(&src_tree),
                         &self.dst_arena.descendants(&dst_tree),
                         &self.mappings,
                     );
+                    similarity_time += sim_start.elapsed();
 
                     if (number_of_leaves > self.config.base.max_leaves
                         && similarity >= self.config.base.sim_threshold_large_trees)
@@ -109,12 +117,17 @@ where
                             && similarity >= self.config.base.sim_threshold_small_trees)
                     {
                         self.mappings.link(src_tree, dst_tree);
+                        successful_matches += 1;
                         break;
                     }
                 }
             }
         }
-        ()
+
+        // Update metrics
+        self.metrics.total_comparisons = total_comparisons;
+        self.metrics.successful_matches = successful_matches;
+        self.metrics.similarity_time = similarity_time;
     }
 
     fn get_src_nodes(&self) -> Vec<<M as MappingStore>::Src> {

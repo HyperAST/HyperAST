@@ -174,7 +174,6 @@ where
         self.metrics.total_comparisons = comparison_count;
         self.metrics.successful_matches = mapped_count;
         self.metrics.similarity_time = comparison_time;
-        // The baseline matcher does not track the other fields, so leave them as default.
     }
 
     fn get_src_nodes(&self) -> Vec<<M as MappingStore>::Src> {
@@ -238,16 +237,25 @@ where
         src_type == dst_type
     }
 
-    fn compute_label_similarity(&self, src: &M::Src, dst: &M::Dst) -> f64 {
+    fn compute_label_similarity(&mut self, src: &M::Src, dst: &M::Dst) -> f64 {
         if self.config.statement_level_iteration {
+            let text_start = std::time::Instant::now();
             let original_src = self.src_arena.original(&src);
             let src_text = TextSerializer::new(&self.stores, original_src).to_string();
             let original_dst = self.dst_arena.original(&dst);
             let dst_text = TextSerializer::new(&self.stores, original_dst).to_string();
+            self.metrics.text_serialization_time += text_start.elapsed();
 
+            self.metrics.characters_compared += src_text.chars().count() + dst_text.chars().count();
+
+            let sim_start = std::time::Instant::now();
             let dist = str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
+
+            self.metrics.similarity_time += sim_start.elapsed();
+
             1.0 - dist
         } else {
+            let text_start = std::time::Instant::now();
             let original_src = self.src_arena.original(src);
             let original_dst = self.dst_arena.original(dst);
 
@@ -256,12 +264,20 @@ where
 
             let src_label_id = src_node.try_get_label();
             let dst_label_id = dst_node.try_get_label();
+            self.metrics.text_serialization_time += text_start.elapsed();
+
             match (src_label_id, dst_label_id) {
                 (Some(src_label_id), Some(dst_label_id)) => {
                     let src_label = self.stores.label_store().resolve(&src_label_id);
                     let dst_label = self.stores.label_store().resolve(&dst_label_id);
+                    self.metrics.characters_compared +=
+                        src_label.chars().count() + dst_label.chars().count();
+
+                    let sim_start = std::time::Instant::now();
                     let dist = str_distance::QGram::new(3)
                         .normalized(src_label.chars(), dst_label.chars());
+                    self.metrics.similarity_time += sim_start.elapsed();
+
                     1.0 - dist
                 }
                 _ => 0.0,
