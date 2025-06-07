@@ -7,7 +7,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyperast::types::{HyperAST, Tree, WithHashs};
+use hyperast::types::{HyperAST, NodeId, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -23,18 +23,20 @@ where
 }
 
 impl<
-        'a,
-        Dsrc: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstContiguousSiblings<HAST, IdD>,
-        Ddst: DecompressedTreeStore<HAST, IdD>
-            + DecompressedWithParent<HAST, IdD>
-            + BreadthFirstContiguousSiblings<HAST, IdD>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
+    'a,
+    Dsrc: DecompressedTreeStore<HAST, IdD>
+    + DecompressedWithParent<HAST, IdD>
+    + BreadthFirstContiguousSiblings<HAST, IdD>,
+    Ddst: DecompressedTreeStore<HAST, IdD>
+    + DecompressedWithParent<HAST, IdD>
+    + BreadthFirstContiguousSiblings<HAST, IdD>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore<Src = IdD, Dst = IdD>,
+> SimpleBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
-    for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
+        for<'b> <HAST as hyperast::types::AstLending<'b>>::RT: WithHashs,
+        HAST::Label: Eq,
+        HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     pub fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {
@@ -49,10 +51,10 @@ where
                 for cand in candidates {
                     let threshold = (1.0 as f64)
                         / (1.0 as f64
-                            + ((self.internal.src_arena.descendants(&cand).len() + t_size)
-                                .to_f64()
-                                .unwrap())
-                            .log10());
+                        + ((self.internal.src_arena.descendants(&cand).len() + t_size)
+                        .to_f64()
+                        .unwrap())
+                        .log10());
                     let sim = similarity_metrics::chawathe_similarity(
                         &self.internal.src_arena.descendants(&(i as IdD)),
                         &self.internal.dst_arena.descendants(&cand),
