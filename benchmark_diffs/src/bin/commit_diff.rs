@@ -357,7 +357,7 @@ impl DiffRunner {
                     &hyperast,
                     &src_tr,
                     &dst_tr,
-                    OptimizedDiffConfig::baseline().with_statement_level_iteration(true),
+                    OptimizedDiffConfig::baseline().with_statement_level_iteration(),
                 )
             }
             DiffAlgorithm::CDBaseDeepStatement => {
@@ -366,9 +366,9 @@ impl DiffRunner {
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::baseline()
-                        .with_statement_level_iteration(true)
-                        .with_label_caching(true)
-                        .with_deep_leaves(true),
+                        .with_statement_level_iteration()
+                        .with_label_caching()
+                        .with_deep_leaves(),
                 )
             }
             DiffAlgorithm::CDOptDeepLabel => {
@@ -384,7 +384,7 @@ impl DiffRunner {
                     &hyperast,
                     &src_tr,
                     &dst_tr,
-                    OptimizedDiffConfig::optimized().with_label_caching(true),
+                    OptimizedDiffConfig::optimized().with_label_caching(),
                 )
             }
             DiffAlgorithm::CDOptStatement => {
@@ -392,7 +392,7 @@ impl DiffRunner {
                     &hyperast,
                     &src_tr,
                     &dst_tr,
-                    OptimizedDiffConfig::optimized().with_statement_level_iteration(true),
+                    OptimizedDiffConfig::optimized().with_statement_level_iteration(),
                 )
             }
             DiffAlgorithm::CDOptDeepStatement => {
@@ -401,8 +401,8 @@ impl DiffRunner {
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::optimized()
-                        .with_statement_level_iteration(true)
-                        .with_deep_leaves(true),
+                        .with_statement_level_iteration()
+                        .with_deep_leaves(),
                 )
             }
             DiffAlgorithm::CDOptStatementLabelCache => {
@@ -411,8 +411,8 @@ impl DiffRunner {
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::optimized()
-                        .with_statement_level_iteration(true)
-                        .with_label_caching(true),
+                        .with_statement_level_iteration()
+                        .with_label_caching(),
                 )
             }
             DiffAlgorithm::CDOptDeepStatementLabelCache => {
@@ -421,9 +421,9 @@ impl DiffRunner {
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::optimized()
-                        .with_statement_level_iteration(true)
-                        .with_label_caching(true)
-                        .with_deep_leaves(true),
+                        .with_statement_level_iteration()
+                        .with_label_caching()
+                        .with_deep_leaves(),
                 )
             }
         };
@@ -461,7 +461,7 @@ impl DiffRunner {
 }
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
 
     let args = Args::parse();
 

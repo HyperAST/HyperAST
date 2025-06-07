@@ -107,43 +107,43 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
         OptimizationConfig::new("Baseline Deep Label", OptimizedDiffConfig::baseline()),
         OptimizationConfig::new(
             "Baseline Statement",
-            OptimizedDiffConfig::baseline().with_statement_level_iteration(true),
+            OptimizedDiffConfig::baseline().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
             "Baseline Deep Statement",
             OptimizedDiffConfig::baseline()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_label_caching()
+                .with_deep_leaves(),
         ),
         // Optimized
         OptimizationConfig::new("Optimized Deep Label", OptimizedDiffConfig::optimized()),
         OptimizationConfig::new(
             "Optimized Deep Label Cache",
-            OptimizedDiffConfig::optimized().with_label_caching(true),
+            OptimizedDiffConfig::optimized().with_label_caching(),
         ),
         OptimizationConfig::new(
             "Optimized with Statement",
-            OptimizedDiffConfig::optimized().with_statement_level_iteration(true),
+            OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_deep_leaves(),
         ),
         OptimizationConfig::new(
             "Optimized with Statement and Label Cache",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true),
+                .with_statement_level_iteration()
+                .with_label_caching(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement and Label Cache",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_label_caching()
+                .with_deep_leaves(),
         ),
     ]
 }
@@ -344,13 +344,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .open(&filepath)?;
 
     // Write existing lines first (if resuming)
+
+    writeln!(output_file, "{}", serde_json::to_string(&metadata)?)?;
     if !existing_lines.is_empty() {
         for line in &existing_lines {
             writeln!(output_file, "{}", line)?;
         }
-    } else {
-        // Write metadata as first line (if not resuming)
-        writeln!(output_file, "{}", serde_json::to_string(&metadata)?)?;
     }
 
     // Calculate how many runs still need to be done

@@ -68,6 +68,7 @@ impl OptimizedDiffConfig {
             leaves_matcher: OptimizedLeavesMatcherConfig {
                 base_config: LeavesMatcherConfig::default(),
                 enable_label_caching: false,
+                enable_ngram_caching: false,
                 enable_type_grouping: false,
                 enable_deep_leaves: false,
                 statement_level_iteration: false,
@@ -92,6 +93,8 @@ impl OptimizedDiffConfig {
             leaves_matcher: OptimizedLeavesMatcherConfig {
                 base_config: LeavesMatcherConfig::default(),
                 enable_label_caching: false,
+                enable_ngram_caching: false,
+
                 enable_type_grouping: false,
                 enable_deep_leaves: false,
                 statement_level_iteration: false,
@@ -108,20 +111,25 @@ impl OptimizedDiffConfig {
         }
     }
 
-    pub fn with_statement_level_iteration(mut self, enable: bool) -> Self {
-        self.leaves_matcher.statement_level_iteration = enable;
-        self.bottom_up_matcher.statement_level_iteration = enable;
+    pub fn with_statement_level_iteration(mut self) -> Self {
+        self.leaves_matcher.statement_level_iteration = true;
+        self.bottom_up_matcher.statement_level_iteration = true;
         self
     }
 
-    pub fn with_label_caching(mut self, enable: bool) -> Self {
-        self.leaves_matcher.enable_label_caching = enable;
+    pub fn with_label_caching(mut self) -> Self {
+        self.leaves_matcher.enable_label_caching = true;
         self
     }
 
-    pub fn with_deep_leaves(mut self, enable: bool) -> Self {
-        self.leaves_matcher.enable_deep_leaves = enable;
-        self.bottom_up_matcher.enable_deep_leaves = enable;
+    pub fn with_deep_leaves(mut self) -> Self {
+        self.leaves_matcher.enable_deep_leaves = true;
+        self.bottom_up_matcher.enable_deep_leaves = true;
+        self
+    }
+
+    pub fn with_ngram_caching(mut self) -> Self {
+        self.leaves_matcher.enable_ngram_caching = true;
         self
     }
 }
@@ -144,11 +152,13 @@ impl Default for OptimizedDiffConfig {
 pub struct OptimizedLeavesMatcherConfig {
     /// Base configuration (label similarity threshold)
     pub base_config: LeavesMatcherConfig,
-    /// Cache label strings to avoid repeated resolution. This is automatically enabled when using type grouping.
+    /// Cache label strings to avoid repeated resolution. This disables n-gram caching.
     pub enable_label_caching: bool,
 
     /// Regard the lowest level of logical leaves
     pub enable_deep_leaves: bool,
+    /// Cache n-gram strings to avoid repeated resolution. This disables label caching since we do not need to cache the labels aswell.
+    pub enable_ngram_caching: bool,
     /// Group leaves by type before comparison. This automatically enables label caching.
     #[deprecated]
     pub enable_type_grouping: bool,
@@ -167,8 +177,9 @@ impl Default for OptimizedLeavesMatcherConfig {
     fn default() -> Self {
         Self {
             base_config: LeavesMatcherConfig::default(),
-            enable_label_caching: true,
+            enable_label_caching: false,
             enable_deep_leaves: false,
+            enable_ngram_caching: false,
             enable_type_grouping: false,
             statement_level_iteration: true,
             use_binary_heap: true,

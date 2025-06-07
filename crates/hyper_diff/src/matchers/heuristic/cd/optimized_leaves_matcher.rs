@@ -482,6 +482,7 @@ mod tests {
             enable_label_caching: false,
             enable_type_grouping: false,
             enable_deep_leaves: false,
+            enable_ngram_caching: false,
 
             statement_level_iteration: false,
             use_binary_heap: false,

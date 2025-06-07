@@ -21,40 +21,46 @@ impl OptimizationConfig {
 /// Create various optimization configurations for comprehensive benchmarking
 fn create_optimization_configs() -> Vec<OptimizationConfig> {
     vec![
-        OptimizationConfig::new("Baseline", OptimizedDiffConfig::baseline()),
+        OptimizationConfig::new("Baseline Deep Label", OptimizedDiffConfig::baseline()),
         OptimizationConfig::new(
             "Baseline Statement",
-            OptimizedDiffConfig::baseline().with_statement_level_iteration(true),
+            OptimizedDiffConfig::baseline().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
             "Baseline Deep Statement",
             OptimizedDiffConfig::baseline()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_label_caching()
+                .with_deep_leaves(),
+        ),
+        // Optimized
+        OptimizationConfig::new("Optimized Deep Label", OptimizedDiffConfig::optimized()),
+        OptimizationConfig::new(
+            "Optimized Deep Label Cache",
+            OptimizedDiffConfig::optimized().with_label_caching(),
         ),
         OptimizationConfig::new(
             "Optimized with Statement",
-            OptimizedDiffConfig::optimized().with_statement_level_iteration(true),
+            OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_deep_leaves(),
         ),
         OptimizationConfig::new(
             "Optimized with Statement and Label Cache",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true),
+                .with_statement_level_iteration()
+                .with_label_caching(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement and Label Cache",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_label_caching()
+                .with_deep_leaves(),
         ),
     ]
 }
@@ -65,7 +71,7 @@ fn benchmark_optimized_change_distiller(c: &mut Criterion) {
         .is_test(true)
         .try_init();
 
-    let test_inputs = common::get_all_cases();
+    let test_inputs = common::get_test_data_small();
     common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()

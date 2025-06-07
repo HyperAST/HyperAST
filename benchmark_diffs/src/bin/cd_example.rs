@@ -22,37 +22,37 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
         OptimizationConfig::new("Baseline", OptimizedDiffConfig::baseline()),
         OptimizationConfig::new(
             "Baseline Statement",
-            OptimizedDiffConfig::baseline().with_statement_level_iteration(true),
+            OptimizedDiffConfig::baseline().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
             "Baseline Deep Statement",
             OptimizedDiffConfig::baseline()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_label_caching()
+                .with_deep_leaves(),
         ),
         OptimizationConfig::new(
             "Optimized with Statement",
-            OptimizedDiffConfig::optimized().with_statement_level_iteration(true),
+            OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_deep_leaves(),
         ),
         OptimizationConfig::new(
             "Optimized with Statement and Label Cache",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true),
+                .with_statement_level_iteration()
+                .with_label_caching(),
         ),
         OptimizationConfig::new(
             "Optimized with Deep Statement and Label Cache",
             OptimizedDiffConfig::optimized()
-                .with_statement_level_iteration(true)
-                .with_label_caching(true)
-                .with_deep_leaves(true),
+                .with_statement_level_iteration()
+                .with_label_caching()
+                .with_deep_leaves(),
         ),
     ]
 }

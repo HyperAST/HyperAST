@@ -448,6 +448,7 @@ mod tests {
                 base_config: LeavesMatcherConfig::default(),
                 enable_label_caching: true,
                 enable_deep_leaves: false,
+                enable_ngram_caching: false,
                 enable_type_grouping: false,
                 use_binary_heap: true,
                 statement_level_iteration: true,
