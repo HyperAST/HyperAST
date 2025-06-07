@@ -758,6 +758,39 @@ mod tests {
         is_leaf_fn_decomp = decompressed_label_statement,
         expected = &["statement_l", "statement_r.l", "statement_r.r"]
     );
+    iterator_test!(
+        test_iterator_nested_statements_inner,
+        test_iterator_nested_statements_inner_decomp,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"; [
+                        tree!(0, "statement_l.l.l"; [
+                            tree!(1, "l.l.l.l"),
+                            tree!(1, "statement_l.l.l.r"),
+                        ]),
+                        tree!(1, "l.l.r"),
+                    ]),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"; [
+                        tree!(1, "r.l.l"),
+                        tree!(1, "statement_r.l.r"),
+                    ]),
+                    tree!(1, "statement_r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: false,
+            yield_inner: true,
+            deepest_leaf: false
+        },
+        is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
+        expected = &["r", "root"]
+    );
 
     // Test with deepest_leaf = true (new behavior)
     iterator_test!(
@@ -792,6 +825,52 @@ mod tests {
         is_leaf_fn = label_statement,
         is_leaf_fn_decomp = decompressed_label_statement,
         expected = &["statement_l.l.l.r", "statement_r.l.r"]
+    );
+
+    // Test with deepest_leaf = true (new behavior)
+    iterator_test!(
+        test_deepest_logical_leaves_inner,
+        test_deepest_logical_leaves_inner_decomp,
+        tree = tree!(
+            0, "root"; [
+                tree!(0, "statement_l"; [
+                    tree!(0, "l.l"; [
+                        tree!(0, "statement_l.l.l"; [
+                            tree!(1, "l.l.l.l"),
+                            tree!(1, "statement_l.l.l.r"),
+                        ]),
+                        tree!(1, "l.l.r"),
+                    ]),
+                    tree!(1, "l.r"),
+                ]),
+                tree!(0, "r"; [
+                    tree!(0, "statement_r.l"; [
+                        tree!(1, "r.l.l"),
+                        tree!(1, "statement_r.l.r"),
+                    ]),
+                    tree!(1, "r.r"),
+                ]),
+            ]
+        ),
+        config = CustomIteratorConfig {
+            yield_leaves: false,
+            yield_inner: true,
+            deepest_leaf: true,
+        },
+        is_leaf_fn = label_statement,
+        is_leaf_fn_decomp = decompressed_label_statement,
+        expected = &[
+            "l.l.l.l",
+            "statement_l.l.l",
+            "l.l.r",
+            "l.l",
+            "statement_l",
+            "r.l.l",
+            "statement_r.l",
+            "r.r",
+            "r",
+            "root"
+        ]
     );
 
     #[test]
