@@ -240,7 +240,7 @@ where
     /// Execute with up to statement level iteration
     fn execute_statement_level(&mut self) {
         let dst_nodes = self.collect_statement_inner_dst();
-        let src_nodes = self.collect_statement_inner_src(false, true);
+        let src_nodes = self.collect_statement_inner_src();
 
         let leaf_counts = self.get_leaf_counts(&src_nodes);
 
@@ -284,7 +284,7 @@ where
         &mut self,
         nodes: &[<Dsrc as LazyDecompressed<M::Src>>::IdD],
     ) -> HashMap<M::Src, usize> {
-        let src_leaves = self.collect_statement_inner_src(true, false);
+        let src_leaves = self.collect_statement_inner_src();
 
         let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
 
@@ -307,11 +307,7 @@ where
         leaf_counts
     }
 
-    fn collect_statement_inner_src(
-        &mut self,
-        leaves: bool,
-        inner: bool,
-    ) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
+    fn collect_statement_inner_src(&mut self) -> Vec<<Dsrc as LazyDecompressed<M::Src>>::IdD> {
         let src_root = self.src_arena.starter();
 
         let iter = CustomPostOrderIterator::new(

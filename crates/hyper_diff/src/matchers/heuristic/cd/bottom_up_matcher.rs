@@ -127,9 +127,13 @@ where
                 if arena.children(node).is_empty() {
                     return true;
                 }
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                node_type.is_statement()
+                if self.config.statement_level_iteration {
+                    let original = arena.original(node);
+                    let node_type = stores.resolve_type(&original);
+                    node_type.is_statement()
+                } else {
+                    false
+                }
             },
         );
         iter.collect::<Vec<_>>()
@@ -145,9 +149,13 @@ where
                 if arena.children(node).is_empty() {
                     return true;
                 }
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                node_type.is_statement()
+                if self.config.statement_level_iteration {
+                    let original = arena.original(node);
+                    let node_type = stores.resolve_type(&original);
+                    node_type.is_statement()
+                } else {
+                    false
+                }
             },
         );
         iter.collect::<Vec<_>>()

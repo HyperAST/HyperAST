@@ -187,9 +187,13 @@ where
                 if arena.children(node).is_empty() {
                     return true;
                 }
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                return node_type.is_statement();
+                if self.config.statement_level_iteration {
+                    let original = arena.original(node);
+                    let node_type = stores.resolve_type(&original);
+                    node_type.is_statement()
+                } else {
+                    false
+                }
             },
         );
         iter.collect::<Vec<_>>()
@@ -205,9 +209,13 @@ where
                 if arena.children(node).is_empty() {
                     return true;
                 }
-                let original = arena.original(node);
-                let node_type = stores.resolve_type(&original);
-                return node_type.is_statement();
+                if self.config.statement_level_iteration {
+                    let original = arena.original(node);
+                    let node_type = stores.resolve_type(&original);
+                    node_type.is_statement()
+                } else {
+                    false
+                }
             },
         );
         iter.collect::<Vec<_>>()
@@ -231,13 +239,34 @@ where
     }
 
     fn compute_label_similarity(&self, src: &M::Src, dst: &M::Dst) -> f64 {
-        let original_src = self.src_arena.original(&src);
-        let src_text = TextSerializer::new(&self.stores, original_src).to_string();
-        let original_dst = self.dst_arena.original(&dst);
-        let dst_text = TextSerializer::new(&self.stores, original_dst).to_string();
+        if self.config.statement_level_iteration {
+            let original_src = self.src_arena.original(&src);
+            let src_text = TextSerializer::new(&self.stores, original_src).to_string();
+            let original_dst = self.dst_arena.original(&dst);
+            let dst_text = TextSerializer::new(&self.stores, original_dst).to_string();
 
-        let dist = str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
-        1.0 - dist
+            let dist = str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
+            1.0 - dist
+        } else {
+            let original_src = self.src_arena.original(src);
+            let original_dst = self.dst_arena.original(dst);
+
+            let src_node = self.stores.node_store().resolve(&original_src);
+            let dst_node = self.stores.node_store().resolve(&original_dst);
+
+            let src_label_id = src_node.try_get_label();
+            let dst_label_id = dst_node.try_get_label();
+            match (src_label_id, dst_label_id) {
+                (Some(src_label_id), Some(dst_label_id)) => {
+                    let src_label = self.stores.label_store().resolve(&src_label_id);
+                    let dst_label = self.stores.label_store().resolve(&dst_label_id);
+                    let dist = str_distance::QGram::new(3)
+                        .normalized(src_label.chars(), dst_label.chars());
+                    1.0 - dist
+                }
+                _ => 0.0,
+            }
+        }
     }
 }
 
