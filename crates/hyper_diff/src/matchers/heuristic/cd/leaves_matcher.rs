@@ -109,10 +109,8 @@ where
     }
 
     fn execute(&mut self) {
-        let collect_start = std::time::Instant::now();
-        let dst_leaves = self.get_dst_nodes();
         let src_leaves = self.get_src_nodes();
-        let collect_time = collect_start.elapsed();
+        let dst_leaves = self.get_dst_nodes();
 
         let mut leaves_mappings: Vec<MappingWithSimilarity<M>> = Vec::new();
         let total_comparisons = src_leaves.len() * dst_leaves.len();

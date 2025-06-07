@@ -268,8 +268,6 @@ where
         let total_comparisons = src_leaves.len() * dst_leaves.len();
 
         for (src_idx, src) in src_leaves.iter().enumerate() {
-            if src_idx % 100 == 0 && src_idx > 0 {}
-
             let hash_start = std::time::Instant::now();
             let src_original = self.src_arena.original(src);
             let src_node = self.stores.node_store().resolve(&src_original);
@@ -300,13 +298,11 @@ where
                     break;
                 }
 
-                // Skip comparison if the nodes are not the same type
-                if !self.config.statement_level_iteration {
-                    let src_type = self.stores.resolve_type(&src_original);
-                    let dst_type = self.stores.resolve_type(&dst_original);
-                    if src_type != dst_type {
-                        continue;
-                    }
+                // Check if types are the same. No need to check if they are already matched since we have no matching before this except for the dst which we excluded
+                let src_type = self.stores.resolve_type(&src_original);
+                let dst_type = self.stores.resolve_type(&dst_original);
+                if src_type != dst_type {
+                    continue;
                 }
 
                 // Compute similarity based on caching strategy
@@ -368,6 +364,7 @@ where
                     } else {
                         // No caching
                         let src_text = self.get_node_text(&src_original);
+
                         let dst_text = self.get_node_text(&dst_original);
                         (src_text, dst_text)
                     };
