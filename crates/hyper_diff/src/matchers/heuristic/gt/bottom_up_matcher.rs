@@ -5,7 +5,7 @@ use crate::{
 };
 use hyperast::PrimInt;
 use hyperast::types::{self, HashKind, HyperAST, NodeStore, Tree, TypeStore, WithHashs};
-use num_traits::{ToPrimitive, Zero};
+use num_traits::ToPrimitive;
 use std::{collections::HashMap, hash::Hash};
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(in crate::matchers) stores: HAST,
@@ -74,18 +74,24 @@ where
     pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
-        if !src.is_zero() && !dst.is_zero() {
+
+        let src_is_root = self.src_arena.parent(&src).is_none();
+        let dst_is_root = self.dst_arena.parent(&dst).is_none();
+        if src_is_root && dst_is_root {
             self.histogram_matching(src, dst);
-        } else if !(src.is_zero() || dst.is_zero()) {
-            if self.stores.resolve_type(
+        } else if !(src_is_root || dst_is_root) {
+            let src_type = self.stores.resolve_type(
                 &self
                     .src_arena
                     .original(&self.src_arena.parent(src).unwrap()),
-            ) == self.stores.resolve_type(
+            );
+            let dst_type = self.stores.resolve_type(
                 &self
                     .dst_arena
                     .original(&self.dst_arena.parent(dst).unwrap()),
-            ) {
+            );
+
+            if src_type == dst_type {
                 self.histogram_matching(src, dst)
             }
         }
@@ -157,23 +163,28 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
-        for c in self.src_arena.children(src) {
-            let t = &self.stores.resolve_type(&self.src_arena.original(&c));
-            if !src_histogram.contains_key(t) {
-                src_histogram.insert(*t, vec![]);
-            }
-            src_histogram.get_mut(t).unwrap().push(c);
-        }
+        // both src and dst -histogram have type Map<Type, List<ITree>>
+        let src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> = self
+            .src_arena
+            .children(src)
+            .into_iter()
+            .filter(|child| !self.mappings.is_src(&child))
+            .fold(HashMap::new(), |mut acc, child| {
+                let child_type = self.stores.resolve_type(&self.src_arena.original(&child));
+                acc.entry(child_type).or_insert_with(Vec::new).push(child);
+                acc
+            });
+        let dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> = self
+            .dst_arena
+            .children(dst)
+            .into_iter()
+            .filter(|child| !self.mappings.is_dst(&child))
+            .fold(HashMap::new(), |mut acc, child| {
+                let child_type = self.stores.resolve_type(&self.dst_arena.original(&child));
+                acc.entry(child_type).or_insert_with(Vec::new).push(child);
+                acc
+            });
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
-        for c in self.dst_arena.children(dst) {
-            let t = &self.stores.resolve_type(&self.dst_arena.original(&c));
-            if !dst_histogram.contains_key(t) {
-                dst_histogram.insert(*t, vec![]);
-            }
-            dst_histogram.get_mut(t).unwrap().push(c);
-        }
         for t in src_histogram.keys() {
             if dst_histogram.contains_key(t)
                 && src_histogram[t].len() == 1
@@ -181,9 +192,8 @@ where
             {
                 let t1 = src_histogram[t][0];
                 let t2 = dst_histogram[t][0];
-                if self.mappings.link_if_both_unmapped(t1, t2) {
-                    self.last_chance_match_histogram(&t1, &t2);
-                }
+                self.mappings.link(t1, t2);
+                self.last_chance_match_histogram(&t1, &t2);
             }
         }
     }
@@ -256,18 +266,24 @@ where
     pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
-        if !src.is_zero() && !dst.is_zero() {
+
+        let src_is_root = self.src_arena.parent(&src).is_none();
+        let dst_is_root = self.dst_arena.parent(&dst).is_none();
+        if src_is_root && dst_is_root {
             self.histogram_matching(src, dst); //self.histogramMaking(src, dst),
-        } else if !(src.is_zero() || dst.is_zero()) {
-            if self.hyperast.resolve_type(
+        } else if !(src_is_root || dst_is_root) {
+            let src_type = self.hyperast.resolve_type(
                 &self
                     .src_arena
                     .original(&self.src_arena.parent(src).unwrap()),
-            ) == self.hyperast.resolve_type(
+            );
+            let dst_type = self.hyperast.resolve_type(
                 &self
                     .dst_arena
                     .original(&self.dst_arena.parent(dst).unwrap()),
-            ) {
+            );
+
+            if src_type == dst_type {
                 self.histogram_matching(src, dst) //self.histogramMaking(src, dst),
             }
         }

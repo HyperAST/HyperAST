@@ -49,17 +49,6 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
-        Self {
-            internal: BottomUpMatcher {
-                stores,
-                src_arena,
-                dst_arena,
-                mappings,
-            },
-        }
-    }
-
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
@@ -86,21 +75,6 @@ where
         }
     }
 
-    pub fn matchh(store: HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M) -> Self {
-        let mut matcher = Self::new(
-            store,
-            Dsrc::decompress(store, src),
-            Ddst::decompress(store, dst),
-            mappings,
-        );
-        matcher.internal.mappings.topit(
-            matcher.internal.src_arena.len(),
-            matcher.internal.dst_arena.len(),
-        );
-        Self::execute(&mut matcher);
-        matcher
-    }
-
     pub fn execute<'b>(&mut self) {
         assert!(self.internal.src_arena.len() > 0);
         let similarity_threshold: f64 =
@@ -123,7 +97,7 @@ where
             {
                 let candidates = self.internal.get_dst_candidates(&node);
                 let mut best = None;
-                let mut max: f64 = -1.;
+                let mut max_similarity: f64 = -1.;
 
                 // Can be used to calculate an appropriate threshold. In Gumtree this is done when no threshold is provided.
                 // let tree_size = self.internal.src_arena.descendants_count(&tree);
@@ -137,8 +111,8 @@ where
                         &self.internal.mappings,
                     );
 
-                    if similarity > max && similarity >= similarity_threshold {
-                        max = similarity;
+                    if similarity > max_similarity && similarity >= similarity_threshold {
+                        max_similarity = similarity;
                         best = Some(candidate);
                     }
                 }
