@@ -111,6 +111,22 @@ where
             .iter()
             .all(|x| !self.mappings.is_dst(x))
     }
+    
+    pub(super) fn has_unmapped_src_children(&self, src: &M::Src) -> bool {
+        // look at descendants in mappings
+        self.src_arena
+            .descendants(src)
+            .iter()
+            .any(|x| !self.mappings.is_src(x))
+    }
+
+    pub(super) fn has_unmapped_dst_children(&self, dst: &M::Dst) -> bool {
+        // look at descendants in mappings
+        self.dst_arena
+            .descendants(dst)
+            .iter()
+            .any(|x| !self.mappings.is_dst(x))
+    }
 
     pub(crate) fn add_mapping_recursively(&mut self, src: &M::Src, dst: &M::Dst) {
         self.src_arena

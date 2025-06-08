@@ -122,11 +122,12 @@ where
                         .last_chance_match_histogram(&node, &best_candidate);
                     self.internal.mappings.link(node, best_candidate);
                 }
-            } else if self.internal.mappings.is_src(&node) && self.internal.are_srcs_unmapped(&node)
+            } else if self.internal.mappings.is_src(&node)
+                && self.internal.has_unmapped_src_children(&node)
             // Check if there are unmapped children in src or dst
             {
                 if let Some(dst) = self.internal.mappings.get_dst(&node) {
-                    if self.internal.are_dsts_unmapped(&dst) {
+                    if self.internal.has_unmapped_dst_children(&dst) {
                         self.internal.last_chance_match_histogram(&node, &dst);
                     }
                 }

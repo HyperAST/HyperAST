@@ -142,6 +142,7 @@ fn test_gumtree_simple_reorder_children() {
 
 #[test]
 fn test_gumtree_simple_move_method() {
+    // Here Gumtree Simple actually finds more matches than Gumtree Greedy
     let diff_info = get_diff_info(example_move_method());
     diff_info.assert_correctness(31, 7);
 }
