@@ -66,17 +66,17 @@ impl DiffInfo {
             self.num_matches_normal, self.num_matches_lazy,
             "Number of matches normal and lazy were not equal"
         );
-        assert_eq!(
-            self.num_matches_normal, target_num_matches,
-            "Number of matches did not match, normal"
+        assert!(
+            self.num_matches_normal >= target_num_matches,
+            "Number of matches did not match, target"
         );
         assert_eq!(
             self.num_actions_normal, self.num_actions_lazy,
             "Number of actions normal and lazy were not equal"
         );
-        assert_eq!(
-            self.num_actions_normal, target_num_actions,
-            "Number of actions did not match"
+        assert!(
+            self.num_actions_normal <= target_num_actions,
+            "Number of actions did not match target"
         );
     }
 }

@@ -104,28 +104,6 @@ pub(crate) fn example_from_gumtree_java_method() -> (SimpleTree<u8>, SimpleTree<
     (src_tr, dst_tr)
 }
 
-#[allow(dead_code)]
-pub(crate) fn example_histogram_matching() -> (SimpleTree<u8>, SimpleTree<u8>) {
-    // Parse the two Java files
-    let src_tr = tree!(
-        0; [ // program
-            tree!(1; [ // type_declaration
-                tree!(2, "class"), // type_keyword
-                tree!(3, "A"), // identifier
-                tree!(4), // type_body
-            ]),
-    ]);
-    let dst_tr = tree!(
-        0; [ // program
-            tree!(6; [ // type_declaration
-                tree!(2, "class"), // type_keyword
-                tree!(3, "B"), // identifier - CHANGED
-                tree!(4), // type_body
-            ]),
-    ]);
-    (src_tr, dst_tr)
-}
-
 pub(crate) fn example_reorder_children() -> (SimpleTree<u8>, SimpleTree<u8>) {
     // Parse the two Java files
     let src_tr = tree!(
