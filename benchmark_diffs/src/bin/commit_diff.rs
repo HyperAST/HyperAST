@@ -1,15 +1,15 @@
+use clap::{Parser, ValueEnum};
+use hyper_diff::OptimizedDiffConfig;
+use hyperast_vcs_git::{
+    git::Oid, multi_preprocessed::PreProcessedRepositories, processing::RepoConfig,
+};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::{
-    fmt::Display,
     fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
+    time::Instant,
 };
-
-use clap::{Parser, ValueEnum};
-use hyper_diff::OptimizedDiffConfig;
-use hyperast_vcs_git::git::Oid;
-use hyperast_vcs_git::preprocessed::PreProcessedRepository;
-use indicatif::{ProgressBar, ProgressStyle};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -19,9 +19,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 #[derive(Parser, Debug)]
-#[command(name = "simple_usecase")]
-#[command(about = "A simple diff benchmark tool for Git repositories")]
-#[command(version, long_about = None)]
+#[command(author, version, about, long_about = None)]
 struct Args {
     /// Repository name (e.g., "openjdk/jdk" or "INRIA/spoon")
     #[arg(
@@ -31,12 +29,12 @@ struct Args {
     )]
     repo_name: String,
 
-    /// Before commit hash (optional - if not provided, will traverse from after)
-    #[arg(long, short = 'b')]
-    before: Option<String>,
+    /// Before commit hash (starting point for traversal, if not provided, will traverse all commits)
+    #[arg(long, short = 'b', default_value = "")]
+    before: String,
 
-    /// After commit hash (starting point for traversal)
-    #[arg(long, short = 'a')]
+    /// After commit hash (optional - if not provided, will traverse from before)
+    #[arg(long, short = 'a', default_value = "")]
     after: String,
 
     /// Output CSV file path (optional)
@@ -52,7 +50,7 @@ struct Args {
     mode: ProcessingMode,
 
     /// Diff algorithm to use
-    #[arg(long, short = 'd', default_value = "gumtree-lazy")]
+    #[arg(long, short = 'd', default_value = "gt-lazy")]
     algorithm: DiffAlgorithm,
 
     /// Show detailed progress information
@@ -94,273 +92,241 @@ enum DiffAlgorithm {
     CDOptDeepStatementLabelCache,
 }
 
-impl std::fmt::Display for ProcessingMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProcessingMode::Incremental => write!(f, "incremental"),
-            ProcessingMode::Whole => write!(f, "whole"),
-        }
-    }
-}
-
-impl std::fmt::Display for DiffAlgorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DiffAlgorithm::GTBase => write!(f, "gt-base"),
-            DiffAlgorithm::GTLazy => write!(f, "gt-lazy"),
-            DiffAlgorithm::CDBaseDeepLabel => write!(f, "cd-base-deep-label"),
-            DiffAlgorithm::CDBaseStatement => write!(f, "cd-base-statement"),
-            DiffAlgorithm::CDBaseDeepStatement => write!(f, "cd-base-deep-statement"),
-            DiffAlgorithm::CDOptDeepLabel => write!(f, "cd-opt-deep-label"),
-            DiffAlgorithm::CDOptDeepLabelCache => write!(f, "cd-opt-deep-label-cache"),
-            DiffAlgorithm::CDOptStatement => write!(f, "cd-opt-statement"),
-            DiffAlgorithm::CDOptDeepStatement => write!(f, "cd-opt-deep-statement"),
-            DiffAlgorithm::CDOptStatementLabelCache => write!(f, "cd-opt-statement-label-cache"),
-            DiffAlgorithm::CDOptDeepStatementLabelCache => {
-                write!(f, "cd-opt-deep-statement-label-cache")
-            }
-        }
-    }
-}
-
-struct DiffRunner {
+struct DiffProcessor {
     args: Args,
-    preprocessed: PreProcessedRepository,
-    output_writer: Option<BufWriter<File>>,
+    preprocessed: PreProcessedRepositories,
+    repo: hyperast_vcs_git::processing::ConfiguredRepo2,
 }
 
-impl DiffRunner {
-    fn new(args: Args) -> Self {
-        let preprocessed = PreProcessedRepository::new(&args.repo_name);
-        let output_writer = args.output.as_ref().map(|path| {
-            let file = File::create(path).expect("Failed to create output file");
-            BufWriter::with_capacity(4 * 8 * 1024, file)
-        });
+impl DiffProcessor {
+    fn new(args: Args) -> anyhow::Result<Self> {
+        let repo_parts: Vec<&str> = args.repo_name.split('/').collect();
+        if repo_parts.len() != 2 {
+            anyhow::bail!("Repository name must be in format 'owner/repo'");
+        }
 
-        Self {
+        let mut preprocessed = PreProcessedRepositories::default();
+        let user = repo_parts[0];
+        let name = repo_parts[1];
+        let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
+        let repo = preprocessed.register_config(repo, RepoConfig::JavaMaven);
+        let repo = repo.fetch();
+
+        Ok(Self {
             args,
             preprocessed,
-            output_writer,
-        }
+            repo,
+        })
     }
 
-    fn run(mut self) {
-        log::info!(
-            "Starting benchmark with repository: {}",
-            self.args.repo_name
-        );
-        log::info!("Processing mode: {}", self.args.mode);
-        log::info!("Algorithm: {}", self.args.algorithm);
-
-        self.write_csv_header();
+    fn run(&mut self) -> anyhow::Result<()> {
+        self.setup_logging();
 
         match self.args.mode {
-            ProcessingMode::Incremental => self.run_incremental(),
-            ProcessingMode::Whole => self.run_whole(),
+            ProcessingMode::Incremental => {
+                self.process_incremental()?;
+            }
+            ProcessingMode::Whole => {
+                self.process_whole()?;
+            }
         }
 
-        if let Some(ref mut writer) = self.output_writer {
-            writer.flush().expect("Failed to flush output");
-        }
-
-        log::info!("Benchmark completed");
+        Ok(())
     }
 
-    fn write_csv_header(&mut self) {
-        if let Some(ref mut writer) = self.output_writer {
+    fn setup_logging(&self) {
+        if self.args.verbose {
+            env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Info)
+                .init();
+        } else {
+            env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Warn)
+                .init();
+        }
+    }
+
+    fn create_output_writer(&self) -> anyhow::Result<Option<BufWriter<File>>> {
+        if let Some(output_path) = &self.args.output {
+            let file = File::create(output_path)?;
+            let mut buf = BufWriter::with_capacity(4 * 8 * 1024, file);
             writeln!(
-                writer,
+                buf,
                 "input,src_s,dst_s,src_heap,dst_heap,src_t,dst_t,mappings,diff_t,changes"
-            )
-            .expect("Failed to write CSV header");
-            writer.flush().expect("Failed to flush output");
+            )?;
+            buf.flush()?;
+            Ok(Some(buf))
+        } else {
+            Ok(None)
         }
     }
 
-    fn run_incremental(&mut self) {
+    /// Process commits incrementally (interlace building and diffing)
+    fn process_incremental(&mut self) -> anyhow::Result<()> {
         let batch_id = format!(
             "{}:({},{})",
-            &self.preprocessed.name,
-            self.args.before.as_deref().unwrap_or(""),
-            &self.args.after
+            &self.repo.spec.url(),
+            self.args.before,
+            self.args.after
         );
+        log::info!("Processing batch: {}", batch_id);
 
-        log::info!("Batch ID: {}", batch_id);
+        let mut output_writer = self.create_output_writer()?;
 
-        let progress = ProgressBar::new(self.args.max_commits as u64);
-        progress.set_style(
+        let progress_bar = ProgressBar::new(self.args.max_commits as u64);
+        progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
-                )
-                .expect("Failed to set progress style")
+                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} commits ({eta})")
+                .expect("Failed to set progress bar template")
                 .progress_chars("#>-"),
         );
 
-        let current_commit = self.args.after.clone();
-        let before_commit = self.args.before.clone().unwrap_or(String::new());
+        let mut curr = self.args.after.clone();
 
-        for _ in 0..self.args.max_commits {
-            if current_commit == before_commit {
-                log::info!("Reached before commit, stopping");
+        for i in 0..self.args.max_commits {
+            if curr == self.args.before {
                 break;
             }
 
-            progress.set_message(format!("Processing commit {}", &current_commit[..8]));
-
-            let repo_name = self.preprocessed.name.clone();
-            let processing_ordered_commits = self.preprocessed.pre_process_with_limit(
-                &mut hyperast_vcs_git::git::fetch_github_repository(&repo_name),
-                "",
-                &current_commit,
-                "",
-                2,
-            );
+            let processing_ordered_commits = self
+                .preprocessed
+                .processor
+                .pre_process_with_limit(&self.repo, "", &curr, 2)?;
 
             if processing_ordered_commits.len() < 2 {
-                log::warn!("Not enough commits found, stopping");
+                log::warn!("Not enough commits found for diff");
                 break;
             }
 
             let oid_src = processing_ordered_commits[1];
             let oid_dst = processing_ordered_commits[0];
 
-            assert_eq!(current_commit, oid_dst.to_string());
+            progress_bar.set_message(format!("Processing {}/{}", oid_src, oid_dst));
 
-            if self.args.verbose {
-                log::info!("Computing diff between {} and {}", oid_src, oid_dst);
-            }
+            self.process_diff_pair(&oid_src, &oid_dst, &mut output_writer)?;
 
-            self.compute_and_record_diff(&oid_src, &oid_dst);
-            progress.inc(1);
+            curr = oid_src.to_string();
+            progress_bar.inc(1);
         }
-        progress.finish_with_message("Incremental processing completed");
+
+        progress_bar.finish_with_message("Incremental processing completed");
+        self.log_memory_usage();
+
+        Ok(())
     }
 
-    fn run_whole(&mut self) {
-        use hyperast_gen_ts_java::utils::memusage_linux;
-
-        let before_commit = self.args.before.as_deref().unwrap_or("");
+    /// Build all commits first, then compute diffs
+    fn process_whole(&mut self) -> anyhow::Result<()> {
         let batch_id = format!(
             "{}:({},{})",
-            &self.preprocessed.name, before_commit, &self.args.after
+            &self.repo.spec.url(),
+            self.args.before,
+            self.args.after
         );
 
-        log::info!("Batch ID: {}", batch_id);
+        let start_time = Instant::now();
+        use hyperast_gen_ts_java::utils::memusage_linux;
+        let mu = memusage_linux();
 
-        // Pre-process all commits
-        let memory_before = memusage_linux();
-        let processing_ordered_commits = self.preprocessed.pre_process_with_limit(
-            &mut hyperast_vcs_git::git::fetch_github_repository(&self.preprocessed.name),
-            before_commit,
+        let processing_ordered_commits = self.preprocessed.processor.pre_process_with_limit(
+            &self.repo,
+            &self.args.before,
             &self.args.after,
-            "",
-            self.args.max_commits.min(10), // Limit to prevent excessive memory usage
-        );
-        let hyperast_memory = memusage_linux() - memory_before;
+            self.args.max_commits,
+        )?;
 
-        log::info!("HyperAST memory usage: {} bytes", hyperast_memory);
+        let hyperast_size = memusage_linux() - mu;
         log::info!(
-            "Total commits processed: {}",
-            processing_ordered_commits.len()
+            "HyperAST built in {:?}, size: {} KB",
+            start_time.elapsed(),
+            hyperast_size
         );
+        log::info!("Processing batch: {}", batch_id);
+        log::info!("Found {} commits", processing_ordered_commits.len());
 
-        // Purge caches to measure their size
-        let memory_before_purge = memusage_linux();
-        self.preprocessed.purge_caches();
-        let cache_memory = memory_before_purge - memusage_linux();
-        log::info!("Cache memory freed: {} bytes", cache_memory);
+        let mut output_writer = self.create_output_writer()?;
 
-        // Compute diffs with progress tracking
+        // Calculate total number of diffs to process
         let total_diffs = processing_ordered_commits.len().saturating_sub(1);
-        let progress = ProgressBar::new(total_diffs as u64);
-        progress.set_style(
+        let progress_bar = ProgressBar::new(total_diffs as u64);
+        progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
-                )
-                .expect("Failed to set progress style")
+                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} diffs ({eta})")
+                .expect("Failed to set progress bar template")
                 .progress_chars("#>-"),
         );
 
-        let commits_to_process: Vec<_> = processing_ordered_commits.windows(2).collect();
-        for (i, window) in commits_to_process.iter().enumerate() {
-            let oid_src = window[0];
-            let oid_dst = window[1];
+        for i in 0..processing_ordered_commits.len().saturating_sub(1) {
+            let oid_src = &processing_ordered_commits[i];
+            let oid_dst = &processing_ordered_commits[i + 1];
 
-            progress.set_message(format!(
-                "Diff {}: {}..{}",
-                i + 1,
-                &oid_src.to_string()[..8],
-                &oid_dst.to_string()[..8]
-            ));
+            progress_bar.set_message(format!("Diffing {}/{}", oid_src, oid_dst));
 
-            if self.args.verbose {
-                log::info!("Computing diff between {} and {}", oid_src, oid_dst);
-            }
+            self.process_diff_pair(oid_src, oid_dst, &mut output_writer)?;
 
-            self.compute_and_record_diff(&oid_src, &oid_dst);
-            progress.inc(1);
+            progress_bar.inc(1);
         }
 
-        progress.finish_with_message("Whole processing completed");
+        progress_bar.finish_with_message("Whole processing completed");
+        self.log_memory_usage();
+
+        Ok(())
     }
 
-    fn compute_and_record_diff(&mut self, oid_src: &Oid, oid_dst: &Oid) {
-        use hyper_diff::algorithms::ComputeTime;
+    fn process_diff_pair(
+        &mut self,
+        oid_src: &Oid,
+        oid_dst: &Oid,
+        output_writer: &mut Option<BufWriter<File>>,
+    ) -> anyhow::Result<()> {
         use hyperast::types::WithStats;
         use hyperast_gen_ts_java::utils::memusage_linux;
 
         let stores = &self.preprocessed.processor.main_stores;
 
-        // Get source commit info
         let commit_src = self
             .preprocessed
-            .commits
-            .get_key_value(oid_src)
-            .expect("Source commit not found");
-        let time_src = commit_src.1.processing_time();
-        let src_tr = commit_src.1.ast_root;
-        let src_size = stores.node_store.resolve(src_tr).size();
+            .get_commit(&self.repo.config, oid_src)
+            .ok_or_else(|| anyhow::anyhow!("Failed to get commit {}", oid_src))?;
+        let time_src = commit_src.processing_time();
+        let src_tr = commit_src.ast_root;
+        let src_s = stores.node_store.resolve(src_tr).size();
 
-        // Get destination commit info
         let commit_dst = self
             .preprocessed
-            .commits
-            .get_key_value(oid_dst)
-            .expect("Destination commit not found");
-        let time_dst = commit_dst.1.processing_time();
-        let dst_tr = commit_dst.1.ast_root;
-        let dst_size = stores.node_store.resolve(dst_tr).size();
+            .get_commit(&self.repo.config, oid_dst)
+            .ok_or_else(|| anyhow::anyhow!("Failed to get commit {}", oid_dst))?;
+        let time_dst = commit_dst.processing_time();
+        let dst_tr = commit_dst.ast_root;
+        let dst_s = stores.node_store.resolve(dst_tr).size();
 
         let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
-        // Compute diff based on selected algorithm
-        let memory_before = memusage_linux();
+        let mu = memusage_linux();
         let diff_result = match self.args.algorithm {
-            DiffAlgorithm::GTBase => {
-                hyper_diff::algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr)
-            }
-            DiffAlgorithm::GTLazy => {
-                hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr)
-            }
-            DiffAlgorithm::CDBaseDeepLabel => {
+            DiffAlgorithm::GTBase => Box::new(hyper_diff::algorithms::gumtree::diff(
+                &hyperast, &src_tr, &dst_tr,
+            )),
+            DiffAlgorithm::GTLazy => Box::new(hyper_diff::algorithms::gumtree_lazy::diff(
+                &hyperast, &src_tr, &dst_tr,
+            )),
+            DiffAlgorithm::CDBaseDeepLabel => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::baseline(),
-                )
-            }
-            DiffAlgorithm::CDBaseStatement => {
+                ),
+            ),
+            DiffAlgorithm::CDBaseStatement => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::baseline().with_statement_level_iteration(),
-                )
-            }
-            DiffAlgorithm::CDBaseDeepStatement => {
+                ),
+            ),
+            DiffAlgorithm::CDBaseDeepStatement => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
@@ -369,33 +335,33 @@ impl DiffRunner {
                         .with_statement_level_iteration()
                         .with_label_caching()
                         .with_deep_leaves(),
-                )
-            }
-            DiffAlgorithm::CDOptDeepLabel => {
+                ),
+            ),
+            DiffAlgorithm::CDOptDeepLabel => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::optimized(),
-                )
-            }
-            DiffAlgorithm::CDOptDeepLabelCache => {
+                ),
+            ),
+            DiffAlgorithm::CDOptDeepLabelCache => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::optimized().with_label_caching(),
-                )
-            }
-            DiffAlgorithm::CDOptStatement => {
+                ),
+            ),
+            DiffAlgorithm::CDOptStatement => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
                     &dst_tr,
                     OptimizedDiffConfig::optimized().with_statement_level_iteration(),
-                )
-            }
-            DiffAlgorithm::CDOptDeepStatement => {
+                ),
+            ),
+            DiffAlgorithm::CDOptDeepStatement => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
@@ -403,9 +369,9 @@ impl DiffRunner {
                     OptimizedDiffConfig::optimized()
                         .with_statement_level_iteration()
                         .with_deep_leaves(),
-                )
-            }
-            DiffAlgorithm::CDOptStatementLabelCache => {
+                ),
+            ),
+            DiffAlgorithm::CDOptStatementLabelCache => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
@@ -413,9 +379,9 @@ impl DiffRunner {
                     OptimizedDiffConfig::optimized()
                         .with_statement_level_iteration()
                         .with_label_caching(),
-                )
-            }
-            DiffAlgorithm::CDOptDeepStatementLabelCache => {
+                ),
+            ),
+            DiffAlgorithm::CDOptDeepStatementLabelCache => Box::new(
                 hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
                     &hyperast,
                     &src_tr,
@@ -424,51 +390,88 @@ impl DiffRunner {
                         .with_statement_level_iteration()
                         .with_label_caching()
                         .with_deep_leaves(),
-                )
-            }
+                ),
+            ),
         };
-        let diff_memory = memusage_linux() - memory_before;
+        let summarized = diff_result.summarize();
 
-        let summarized_result = diff_result.summarize();
-        let total_diff_time = summarized_result.time();
+        use hyper_diff::algorithms::ComputeTime;
+        let total_diff_time: f64 = summarized.time();
+        let diff_memory = memusage_linux() - mu;
 
         if self.args.verbose {
-            log::info!("Diff memory usage: {} bytes", diff_memory);
-            log::debug!("Diff summary: {:?}", summarized_result);
+            log::info!(
+                "Diff computed - mappings: {}, time: {:.3}s, memory: {} KB",
+                summarized.mappings,
+                total_diff_time,
+                diff_memory
+            );
         }
 
-        // Write results to CSV
-        if let Some(ref mut writer) = self.output_writer {
+        if let Some(writer) = output_writer {
             writeln!(
                 writer,
                 "{}/{},{},{},{},{},{},{},{},{},{}",
                 oid_src,
                 oid_dst,
-                src_size,
-                dst_size,
-                Into::<isize>::into(&commit_src.1.memory_used()),
-                Into::<isize>::into(&commit_dst.1.memory_used()),
+                src_s,
+                dst_s,
+                Into::<isize>::into(&commit_src.memory_used()),
+                Into::<isize>::into(&commit_dst.memory_used()),
                 time_src,
                 time_dst,
-                summarized_result.mappings,
+                summarized.mappings,
                 total_diff_time,
-                summarized_result.actions.map_or(-1, |x| x as isize),
-            )
-            .expect("Failed to write CSV row");
-            writer.flush().expect("Failed to flush output");
+                summarized.actions.map_or(-1, |x| x as isize),
+            )?;
+            writer.flush()?;
         }
+
+        Ok(())
+    }
+
+    fn log_memory_usage(&mut self) {
+        use hyperast_gen_ts_java::utils::memusage_linux;
+        let mu = memusage_linux();
+        drop(&mut self.preprocessed);
+        let freed_memory = mu - memusage_linux();
+        log::info!("Memory freed: {} KB", freed_memory);
     }
 }
 
-fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
-
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     if args.verbose {
-        log::info!("Running with arguments: {:#?}", args);
+        println!("Starting diff processing with configuration:");
+        println!("  Repository: {}", args.repo_name);
+        println!(
+            "  Before: {}",
+            if args.before.is_empty() {
+                "HEAD"
+            } else {
+                &args.before
+            }
+        );
+        println!(
+            "  After: {}",
+            if args.after.is_empty() {
+                "latest"
+            } else {
+                &args.after
+            }
+        );
+        println!("  Mode: {:?}", args.mode);
+        println!("  Algorithm: {:?}", args.algorithm);
+        println!("  Max commits: {}", args.max_commits);
+        if let Some(ref output) = args.output {
+            println!("  Output: {}", output.display());
+        }
+        println!();
     }
 
-    let runner = DiffRunner::new(args);
-    runner.run();
+    let mut processor = DiffProcessor::new(args)?;
+    processor.run()?;
+
+    Ok(())
 }

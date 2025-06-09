@@ -4124,6 +4124,7 @@ dependencies = [
 name = "hyperast_benchmark_diffs"
 version = "0.3.0"
 dependencies = [
+ "anyhow",
  "bitvec",
  "byteorder",
  "cfg-if",
