@@ -213,18 +213,16 @@ where
         //!TODO is there a way to do it without decompressing children?
         let src_children: Vec<<Dsrc as LazyDecompressed<<M as MappingStore>::Src>>::IdD> = self
             .src_arena
-            .children(&src)
+            .decompress_children(&src)
             .into_iter()
-            .filter(|child| !self.mappings.is_src(child))
-            .map(|child| self.src_arena.decompress_to(&child))
+            .filter(|child| !self.mappings.is_src(child.shallow()))
             .collect();
 
         let dst_children: Vec<<Ddst as LazyDecompressed<<M as MappingStore>::Dst>>::IdD> = self
             .dst_arena
-            .children(&dst)
+            .decompress_children(&dst)
             .into_iter()
-            .filter(|child| !self.mappings.is_dst(child))
-            .map(|child| self.dst_arena.decompress_to(&child))
+            .filter(|child| !self.mappings.is_dst(child.shallow()))
             .collect();
 
         let lcs = longest_common_subsequence::<_, _, usize, _>(
@@ -246,11 +244,10 @@ where
     fn histogram_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
         let src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Dsrc::IdD>> = self
             .src_arena
-            .children(&src)
+            .decompress_children(&src)
             .into_iter()
-            .filter(|child| !self.mappings.is_src(&child))
+            .filter(|child| !self.mappings.is_src(&child.shallow()))
             .fold(HashMap::new(), |mut acc, child| {
-                let child = self.src_arena.decompress_to(&child);
                 let child_type = self.stores.resolve_type(&self.src_arena.original(&child));
                 acc.entry(child_type).or_insert_with(Vec::new).push(child);
                 acc
@@ -258,11 +255,10 @@ where
 
         let dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Ddst::IdD>> = self
             .dst_arena
-            .children(&dst)
+            .decompress_children(&dst)
             .into_iter()
-            .filter(|child| !self.mappings.is_dst(&child))
+            .filter(|child| !self.mappings.is_dst(&child.shallow()))
             .fold(HashMap::new(), |mut acc, child| {
-                let child = self.dst_arena.decompress_to(&child);
                 let child_type = self.stores.resolve_type(&self.dst_arena.original(&child));
                 acc.entry(child_type).or_insert_with(Vec::new).push(child);
                 acc

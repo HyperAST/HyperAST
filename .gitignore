@@ -19,3 +19,5 @@
 # Direnv
 /.direnv/
 /result
+
+/benchmark_diffs/benches/bench_stats

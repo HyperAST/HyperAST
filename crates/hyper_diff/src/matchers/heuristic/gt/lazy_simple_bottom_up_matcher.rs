@@ -49,8 +49,8 @@ impl<
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
     MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = <Ddst as LazyDecompressed<M::Dst>>::IdD> + Default,
-    const SIMILARITY_THRESHOLD_NUM: u64,  // 1
-    const SIMILARITY_THRESHOLD_DEN: u64,  // 2
+    const SIMILARITY_THRESHOLD_NUM: u64, // 1
+    const SIMILARITY_THRESHOLD_DEN: u64, // 2
 >
     LazySimpleBottomUpMatcher<
         Dsrc,
