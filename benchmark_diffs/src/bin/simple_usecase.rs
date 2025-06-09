@@ -186,8 +186,8 @@ fn whole(
     let mu = mu - memusage_linux();
     log::warn!("cache size: {mu}");
     log::warn!(
-        "commits: {:?}",
-        // preprocessed.commit_count(&repo.config),
+        "commits ({}): {:?}",
+        preprocessed.commit_count(&repo.config),
         processing_ordered_commits
     );
     let mut buf = out

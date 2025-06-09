@@ -105,6 +105,16 @@ impl PreProcessedRepositories {
         self.processor.purge_caches()
     }
 
+    pub fn commit_count(&self, config: &ParametrizedCommitProcessorHandle) -> usize {
+        let proc = self
+            .processor
+            .processing_systems
+            .by_id(&config.0)
+            .unwrap()
+            .get(config.1);
+        proc.commit_count()
+    }
+
     pub fn get_commit(
         &self,
         config: &ParametrizedCommitProcessorHandle,

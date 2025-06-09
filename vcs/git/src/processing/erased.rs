@@ -63,6 +63,7 @@ pub trait CommitProc {
         param_handle: ParametrizedCommitProcessorHandle,
     ) -> Box<dyn PreparedCommitProc + 'repo>;
 
+    fn commit_count(&self) -> usize;
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit>;
     fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         None
@@ -150,6 +151,10 @@ fn t() {
 
         fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
             unimplemented!("required for processing at the root of a project")
+        }
+
+        fn commit_count(&self) -> usize {
+            unimplemented!()
         }
     }
     impl ParametrizedCommitProc for P0 {
@@ -333,11 +338,15 @@ mod spreaded {
                 tree_oid: crate::preprocessed::CommitBuilder,
                 param_handle: ParametrizedCommitProcessorHandle,
             ) -> Box<dyn PreparedCommitProc> {
-                todo!()
+                unimplemented!()
             }
 
             fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
-                todo!()
+                unimplemented!()
+            }
+
+            fn commit_count(&self) -> usize {
+                unimplemented!()
             }
         }
         impl CommitProcExt for P {

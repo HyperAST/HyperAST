@@ -516,6 +516,10 @@ impl crate::processing::erased::CommitProc for JavaProc {
         self.commits.get(&commit_oid)
     }
 
+    fn commit_count(&self) -> usize {
+        self.commits.len()
+    }
+
     fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         dbg!(&self.parameter.query);
         // if self.parameter.query.is_none() {

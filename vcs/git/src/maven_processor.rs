@@ -651,6 +651,10 @@ impl crate::processing::erased::CommitProc for PomProc {
     fn get_commit(&self, _commit_oid: git2::Oid) -> Option<&crate::Commit> {
         unimplemented!("required for processing at the root of a project")
     }
+
+    fn commit_count(&self) -> usize {
+        unimplemented!()
+    }
 }
 
 impl crate::processing::erased::CommitProcExt for PomProc {
@@ -779,6 +783,10 @@ impl crate::processing::erased::CommitProc for MavenProc {
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
         self.commits.get(&commit_oid)
+    }
+
+    fn commit_count(&self) -> usize {
+        self.commits.len()
     }
 
     fn get_lang_handle(&self, lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
