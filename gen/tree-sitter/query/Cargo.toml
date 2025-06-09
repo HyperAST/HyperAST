@@ -34,7 +34,7 @@ env_logger = "0.11.3"
 hyperast_gen_ts_cpp = { workspace = true }
 tree-sitter-java = "0.23.0"
 hyperast_gen_ts_xml = { workspace = true }
-criterion = { version = "0.4", features = [
+criterion = { version = "0.5.1", features = [
     "rayon",
     "plotters",
     "cargo_bench_support",
