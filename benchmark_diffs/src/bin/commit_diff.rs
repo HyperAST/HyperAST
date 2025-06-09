@@ -1,9 +1,12 @@
 use clap::{Parser, ValueEnum};
-use hyper_diff::OptimizedDiffConfig;
+use hyper_diff::{
+    OptimizedDiffConfig, algorithms::ComputeTime, matchers::heuristic::cd::DiffResultSummary,
+};
 use hyperast_vcs_git::{
     git::Oid, multi_preprocessed::PreProcessedRepositories, processing::RepoConfig,
 };
 use indicatif::{ProgressBar, ProgressStyle};
+use serde::Serialize;
 use std::{
     fs::File,
     io::{BufWriter, Write},
@@ -82,12 +85,18 @@ enum DiffAlgorithm {
     CDOptDeepLabel,
     #[value(name = "cd-opt-deep-label-cache")]
     CDOptDeepLabelCache,
+    #[value(name = "cd-opt-deep-label-ngram-cache")]
+    CDOptDeepLabelNgramCache,
     #[value(name = "cd-opt-statement")]
     CDOptStatement,
-    #[value(name = "cd-opt-deep-statement")]
-    CDOptDeepStatement,
+    #[value(name = "cd-opt-statement-ngram-cache")]
+    CDOptStatementNgramCache,
     #[value(name = "cd-opt-statement-label-cache")]
     CDOptStatementLabelCache,
+    #[value(name = "cd-opt-deep-statement")]
+    CDOptDeepStatement,
+    #[value(name = "cd-opt-deep-statement-ngram-cache")]
+    CDOptDeepStatementNgramCache,
     #[value(name = "cd-opt-deep-statement-label-cache")]
     CDOptDeepStatementLabelCache,
 }
@@ -303,115 +312,223 @@ impl DiffProcessor {
         let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
         let mu = memusage_linux();
+        let diff_start = Instant::now();
         let diff_result = match self.args.algorithm {
-            DiffAlgorithm::GTBase => Box::new(hyper_diff::algorithms::gumtree::diff(
-                &hyperast, &src_tr, &dst_tr,
-            )),
-            DiffAlgorithm::GTLazy => Box::new(hyper_diff::algorithms::gumtree_lazy::diff(
-                &hyperast, &src_tr, &dst_tr,
-            )),
-            DiffAlgorithm::CDBaseDeepLabel => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::baseline(),
-                ),
-            ),
-            DiffAlgorithm::CDBaseStatement => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::baseline().with_statement_level_iteration(),
-                ),
-            ),
-            DiffAlgorithm::CDBaseDeepStatement => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::baseline()
-                        .with_statement_level_iteration()
-                        .with_label_caching()
-                        .with_deep_leaves(),
-                ),
-            ),
-            DiffAlgorithm::CDOptDeepLabel => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::optimized(),
-                ),
-            ),
-            DiffAlgorithm::CDOptDeepLabelCache => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::optimized().with_label_caching(),
-                ),
-            ),
-            DiffAlgorithm::CDOptStatement => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::optimized().with_statement_level_iteration(),
-                ),
-            ),
-            DiffAlgorithm::CDOptDeepStatement => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::optimized()
-                        .with_statement_level_iteration()
-                        .with_deep_leaves(),
-                ),
-            ),
-            DiffAlgorithm::CDOptStatementLabelCache => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::optimized()
-                        .with_statement_level_iteration()
-                        .with_label_caching(),
-                ),
-            ),
-            DiffAlgorithm::CDOptDeepStatementLabelCache => Box::new(
-                hyper_diff::algorithms::change_distiller_optimized::diff_optimized(
-                    &hyperast,
-                    &src_tr,
-                    &dst_tr,
-                    OptimizedDiffConfig::optimized()
-                        .with_statement_level_iteration()
-                        .with_label_caching()
-                        .with_deep_leaves(),
-                ),
-            ),
-        };
-        let summarized = diff_result.summarize();
+            DiffAlgorithm::GTBase => {
+                let diff_result =
+                    hyper_diff::algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr);
+                let summarized = diff_result.summarize();
+                format!(
+                    "{}/{},{},{},{},{},{},{},{},{},{}",
+                    oid_src,
+                    oid_dst,
+                    src_s,
+                    dst_s,
+                    Into::<isize>::into(&commit_src.memory_used()),
+                    Into::<isize>::into(&commit_dst.memory_used()),
+                    time_src,
+                    time_dst,
+                    summarized.mappings,
+                    diff_result.time(),
+                    summarized.actions.map_or(-1, |x| x as isize),
+                )
+            }
+            DiffAlgorithm::GTLazy => {
+                let diff_result =
+                    hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
+                let summarized = diff_result.summarize();
+                format!(
+                    "{}/{},{},{},{},{},{},{},{},{},{}",
+                    oid_src,
+                    oid_dst,
+                    src_s,
+                    dst_s,
+                    Into::<isize>::into(&commit_src.memory_used()),
+                    Into::<isize>::into(&commit_dst.memory_used()),
+                    time_src,
+                    time_dst,
+                    summarized.mappings,
+                    diff_result.time(),
+                    summarized.actions.map_or(-1, |x| x as isize),
+                )
+            }
+            DiffAlgorithm::CDBaseDeepLabel => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::baseline(),
+                    ),
+                ))
+                .unwrap()
+            }
 
-        use hyper_diff::algorithms::ComputeTime;
-        let total_diff_time: f64 = summarized.time();
+            DiffAlgorithm::CDBaseStatement => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::baseline().with_statement_level_iteration(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDBaseDeepStatement => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::baseline()
+                            .with_statement_level_iteration()
+                            .with_label_caching()
+                            .with_deep_leaves(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptDeepLabel => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptDeepLabelCache => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized().with_label_caching(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptStatement => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized().with_statement_level_iteration(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptDeepStatement => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized()
+                            .with_statement_level_iteration()
+                            .with_deep_leaves(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptStatementLabelCache => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized()
+                            .with_statement_level_iteration()
+                            .with_label_caching(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptDeepStatementLabelCache => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized()
+                            .with_statement_level_iteration()
+                            .with_label_caching()
+                            .with_deep_leaves(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptDeepLabelNgramCache => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized()
+                            .with_label_caching()
+                            .with_ngram_caching(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptStatementNgramCache => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized()
+                            .with_statement_level_iteration()
+                            .with_ngram_caching(),
+                    ),
+                ))
+                .unwrap()
+            }
+
+            DiffAlgorithm::CDOptDeepStatementNgramCache => {
+                serde_json::to_string(&Into::<DiffResultSummary>::into(
+                    hyper_diff::algorithms::change_distiller_optimized::diff_optimized_verbose(
+                        &hyperast,
+                        &src_tr,
+                        &dst_tr,
+                        OptimizedDiffConfig::optimized()
+                            .with_statement_level_iteration()
+                            .with_deep_leaves()
+                            .with_ngram_caching(),
+                    ),
+                ))
+                .unwrap()
+            }
+        };
+
         let diff_memory = memusage_linux() - mu;
 
         if self.args.verbose {
             log::info!(
-                "Diff computed - mappings: {}, time: {:.3}s, memory: {} KB",
-                summarized.mappings,
-                total_diff_time,
-                diff_memory
+                "Diff computed time: {:.3?}s, memory: {} KB\n{}",
+                diff_start.elapsed(),
+                diff_memory,
+                diff_result
             );
         }
 
         if let Some(writer) = output_writer {
             writeln!(
                 writer,
-                "{}/{},{},{},{},{},{},{},{},{},{}",
+                "{}/{}, src size: {}, dst size: {}, src memory: {}, dst memory: {}, src time: {}, dst time: {}, diff result: {}",
                 oid_src,
                 oid_dst,
                 src_s,
@@ -420,9 +537,7 @@ impl DiffProcessor {
                 Into::<isize>::into(&commit_dst.memory_used()),
                 time_src,
                 time_dst,
-                summarized.mappings,
-                total_diff_time,
-                summarized.actions.map_or(-1, |x| x as isize),
+                diff_result
             )?;
             writer.flush()?;
         }
