@@ -1551,6 +1551,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -4069,6 +4070,7 @@ dependencies = [
  "bitvec",
  "byteorder",
  "cfg-if",
+ "chrono",
  "const-chunks",
  "criterion 0.5.1",
  "criterion-perf-events",
