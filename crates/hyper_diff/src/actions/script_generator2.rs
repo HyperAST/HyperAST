@@ -663,7 +663,7 @@ where
     }
 
     pub fn del(&mut self) {
-        let root = *self.mid_root.last().unwrap();
+        let root = *self.mid_root.first().unwrap();
         struct Ele<IdD, Idx, W> {
             // id in arena
             id: IdD,
