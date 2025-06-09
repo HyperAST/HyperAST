@@ -104,21 +104,24 @@ struct MeasurementResult {
 /// Create various optimization configurations for comprehensive benchmarking
 fn create_optimization_configs() -> Vec<OptimizationConfig> {
     vec![
-        OptimizationConfig::new("Baseline Deep Label", OptimizedDiffConfig::baseline()),
+        OptimizationConfig::new("Baseline with Deep Label", OptimizedDiffConfig::baseline()),
         OptimizationConfig::new(
-            "Baseline Statement",
+            "Baseline with Statement",
             OptimizedDiffConfig::baseline().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
-            "Baseline Deep Statement",
+            "Baseline with Deep Statement",
             OptimizedDiffConfig::baseline()
                 .with_statement_level_iteration()
                 .with_deep_leaves(),
         ),
         // Optimized Label
-        OptimizationConfig::new("Optimized Deep Label", OptimizedDiffConfig::optimized()),
         OptimizationConfig::new(
-            "Optimized Deep Label Cache",
+            "Optimized with Deep Label",
+            OptimizedDiffConfig::optimized(),
+        ),
+        OptimizationConfig::new(
+            "Optimized with Deep Label and Label Cache",
             OptimizedDiffConfig::optimized().with_label_caching(),
         ),
         // Optimized shallow statements
@@ -127,7 +130,7 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
-            "Optimized with Statement and Ngram Caching",
+            "Optimized with Statement and Ngram Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_ngram_caching(),
@@ -146,7 +149,7 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
                 .with_deep_leaves(),
         ),
         OptimizationConfig::new(
-            "Optimized with Deep Statement and Ngram Caching",
+            "Optimized with Deep Statement and Ngram Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_deep_leaves()
