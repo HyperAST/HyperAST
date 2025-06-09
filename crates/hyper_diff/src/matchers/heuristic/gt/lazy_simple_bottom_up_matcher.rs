@@ -49,8 +49,8 @@ impl<
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
     MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = <Ddst as LazyDecompressed<M::Dst>>::IdD> + Default,
-    const SIMILARITY_THRESHOLD_NUM: u64,
-    const SIMILARITY_THRESHOLD_DEN: u64,
+    const SIMILARITY_THRESHOLD_NUM: u64,  // 1
+    const SIMILARITY_THRESHOLD_DEN: u64,  // 2
 >
     LazySimpleBottomUpMatcher<
         Dsrc,
@@ -101,6 +101,7 @@ where
     }
 
     pub fn execute(&mut self) {
+        assert!(self.internal.src_arena.len() > 0);
         let similarity_threshold: f64 =
             SIMILARITY_THRESHOLD_NUM as f64 / SIMILARITY_THRESHOLD_DEN as f64;
 
@@ -120,8 +121,8 @@ where
                 || !self.internal.src_has_children(decompressed_node))
             {
                 let candidates = self.internal.get_dst_candidates_lazily(&decompressed_node);
-                let mut best = None;
-                let mut max: f64 = -1.;
+                let mut best_candidate = None;
+                let mut max_similarity: f64 = -1.;
 
                 for candidate in candidates {
                     let similarity = similarity_metrics::chawathe_similarity(
@@ -130,13 +131,13 @@ where
                         &self.internal.mappings,
                     );
 
-                    if similarity > max && similarity >= similarity_threshold {
-                        max = similarity;
-                        best = Some(candidate);
+                    if similarity > max_similarity && similarity >= similarity_threshold {
+                        max_similarity = similarity;
+                        best_candidate = Some(candidate);
                     }
                 }
 
-                if let Some(best_candidate) = best {
+                if let Some(best_candidate) = best_candidate {
                     self.internal
                         .last_chance_match_histogram(decompressed_node, best_candidate);
                     self.internal

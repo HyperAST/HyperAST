@@ -244,41 +244,29 @@ where
 
     /// Matches all pairs of nodes whose types appear only once in src and dst (step 3 of simple recovery)
     fn histogram_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Dsrc::IdD>> =
-            HashMap::new();
-        for child in self.src_arena.children(&src) {
-            if self.mappings.is_src(&child) {
-                continue;
-            }
+        let src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Dsrc::IdD>> = self
+            .src_arena
+            .children(&src)
+            .into_iter()
+            .filter(|child| !self.mappings.is_src(&child))
+            .fold(HashMap::new(), |mut acc, child| {
+                let child = self.src_arena.decompress_to(&child);
+                let child_type = self.stores.resolve_type(&self.src_arena.original(&child));
+                acc.entry(child_type).or_insert_with(Vec::new).push(child);
+                acc
+            });
 
-            let child = self.src_arena.decompress_to(&child);
-            let child_type = &self.stores.resolve_type(&self.src_arena.original(&child));
-
-            // Add key if it doesn't exist yet
-            if !src_histogram.contains_key(child_type) {
-                src_histogram.insert(*child_type, vec![]);
-            }
-
-            src_histogram.get_mut(child_type).unwrap().push(child);
-        }
-
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Ddst::IdD>> =
-            HashMap::new();
-        for child in self.dst_arena.children(&dst) {
-            if self.mappings.is_dst(&child) {
-                continue;
-            }
-
-            let child = self.dst_arena.decompress_to(&child);
-            let child_type = &self.stores.resolve_type(&self.dst_arena.original(&child));
-
-            // Add key if it doesn't exist yet
-            if !dst_histogram.contains_key(child_type) {
-                dst_histogram.insert(*child_type, vec![]);
-            }
-
-            dst_histogram.get_mut(child_type).unwrap().push(child);
-        }
+        let dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Ddst::IdD>> = self
+            .dst_arena
+            .children(&dst)
+            .into_iter()
+            .filter(|child| !self.mappings.is_dst(&child))
+            .fold(HashMap::new(), |mut acc, child| {
+                let child = self.dst_arena.decompress_to(&child);
+                let child_type = self.stores.resolve_type(&self.dst_arena.original(&child));
+                acc.entry(child_type).or_insert_with(Vec::new).push(child);
+                acc
+            });
 
         for src_type in src_histogram.keys() {
             if dst_histogram.contains_key(src_type)

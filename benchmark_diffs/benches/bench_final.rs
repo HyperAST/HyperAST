@@ -88,7 +88,8 @@ where
 
 fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
     let mut group = c.benchmark_group("gh_java_group");
-    let dataset = DataSet::GhJava(Some("drool"));
+    // let dataset = DataSet::GhJava(Some("drool"));
+    let dataset = DataSet::BugsInPy(Some("httpie"));
 
     let (java_gen, src, dst) = prepare_stores_java(dataset.get_path_dataset_project());
     let stores = hyperast_vcs_git::no_space::as_nospaces2(&java_gen.main_stores);
@@ -106,8 +107,8 @@ fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
     let _ = lazy_top_down(&mut lazy_mapper);
 
     for heuristic in [
-        Heuristic::LazySimple,
         Heuristic::LazyGreedy,
+        Heuristic::LazySimple,
         Heuristic::Greedy,
         Heuristic::Simple,
     ] {
