@@ -173,24 +173,11 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((node, children_processed)) = self.stack.pop() {
             if children_processed {
-                // This node's children have all been processed, so we can yield it
-
-                let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
-
-                if is_custom_leaf {
-                    // For logical leaves that had their children processed,
-                    // we only yield if deepest_leaf is false
-                    if self.config.yield_leaves && !self.config.deepest_leaf {
-                        return Some(node);
-                    } else {
-                        continue;
-                    }
+                // This node's children have all been processed, so this node is an inner node
+                if self.config.yield_inner {
+                    return Some(node);
                 } else {
-                    if self.config.yield_inner {
-                        return Some(node);
-                    } else {
-                        continue;
-                    }
+                    continue;
                 }
             } else {
                 // This node's children haven't been processed yet
@@ -340,24 +327,11 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((node, children_processed)) = self.stack.pop() {
             if children_processed {
-                // This node's children have all been processed, so we can yield it
-
-                let is_custom_leaf = (self.is_leaf_fn)(self.arena, self.stores, &node);
-
-                if is_custom_leaf {
-                    // For logical leaves that had their children processed,
-                    // we only yield if deepest_leaf is false
-                    if self.config.yield_leaves && !self.config.deepest_leaf {
-                        return Some(node);
-                    } else {
-                        continue;
-                    }
+                // This node's children have all been processed, so this node is an inner node
+                if self.config.yield_inner {
+                    return Some(node);
                 } else {
-                    if self.config.yield_inner {
-                        return Some(node);
-                    } else {
-                        continue;
-                    }
+                    continue;
                 }
             } else {
                 // This node's children haven't been processed yet
