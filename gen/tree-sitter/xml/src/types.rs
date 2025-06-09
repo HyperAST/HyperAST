@@ -349,6 +349,10 @@ impl HyperType for Type {
         || self == &Type::Percent // "%",
     }
 
+    fn is_statement(&self) -> bool {
+        false
+    }
+
     fn is_hidden(&self) -> bool {
         self.is_hidden()
     }

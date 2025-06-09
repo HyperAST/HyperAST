@@ -616,9 +616,7 @@ pub trait HyperType: Display + Debug {
     fn is_directory(&self) -> bool;
     fn is_spaces(&self) -> bool;
     fn is_syntax(&self) -> bool;
-    fn is_statement(&self) -> bool {
-        todo!()
-    }
+    fn is_statement(&self) -> bool;
     fn is_hidden(&self) -> bool;
     fn is_named(&self) -> bool;
     fn is_supertype(&self) -> bool;
@@ -680,6 +678,10 @@ impl HyperType for u8 {
     }
 
     fn is_syntax(&self) -> bool {
+        todo!()
+    }
+
+    fn is_statement(&self) -> bool {
         todo!()
     }
 
@@ -1647,6 +1649,10 @@ impl HyperType for AnyType {
 
     fn is_syntax(&self) -> bool {
         self.0.is_syntax()
+    }
+
+    fn is_statement(&self) -> bool {
+        self.0.is_statement()
     }
 
     fn as_shared(&self) -> Shared {

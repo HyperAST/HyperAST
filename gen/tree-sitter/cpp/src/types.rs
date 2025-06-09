@@ -410,6 +410,13 @@ impl HyperType for Type {
         ||self == &Type::Using // "using",
     }
 
+    fn is_statement(&self) -> bool {
+        self.is_declarative_statement()
+            || self.is_structural_statement()
+            || self.is_simple_statement()
+            || self.is_block_related()
+    }
+
     fn as_shared(&self) -> hyperast::types::Shared {
         use hyperast::types::Shared;
         match self {

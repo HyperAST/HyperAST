@@ -727,6 +727,10 @@ impl HyperType for Ty {
         todo!()
     }
 
+    fn is_statement(&self) -> bool {
+        todo!()
+    }
+
     fn is_hidden(&self) -> bool {
         todo!()
     }

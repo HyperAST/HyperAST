@@ -230,6 +230,10 @@ impl HyperType for Type {
         todo!()
     }
 
+    fn is_statement(&self) -> bool {
+        todo!()
+    }
+
     fn as_shared(&self) -> hyperast::types::Shared {
         use hyperast::types::Shared;
 

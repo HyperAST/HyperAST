@@ -93,7 +93,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Eq for HashedNode<Id> where Id::
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Hash for HashedNode<Id> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.hashs.hash(&Default::default()).hash(state)
+        self.hashs.hash(&mut Default::default()).hash(state)
     }
 }
 // impl<'a, Id: TypedNodeId<IdN = NodeIdentifier, Ty=Type>> crate::types::Typed for HashedNode<Id> {
