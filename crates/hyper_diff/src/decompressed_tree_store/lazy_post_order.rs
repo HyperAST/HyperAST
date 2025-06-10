@@ -86,12 +86,11 @@ mod impl_ref {
         }
 
         fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
-            let store = self.hyperast;
             let mut r = *x;
             for d in p {
                 let a = self.original(&r);
-                let node = store.resolve(&a);
-                let cs = node.children().filter(|x| x.is_empty());
+                let node = self.hyperast.resolve(&a);
+                let cs = node.children().filter(|x| !x.is_empty());
                 let Some(cs) = cs else {
                     panic!("no children in this tree")
                 };
@@ -647,7 +646,7 @@ where
         for d in p {
             let a = self.original(&r);
             let node = store.resolve(&a);
-            let cs = node.children().filter(|x| x.is_empty());
+            let cs = node.children().filter(|x| !x.is_empty());
             let Some(cs) = cs else {
                 panic!("no children in this tree")
             };

@@ -117,7 +117,7 @@ where
             if !(is_mapped || !Self::src_has_children(internal, a)) {
                 if let Some(best_dst) = Self::best_dst_candidate_lazy(internal, &a) {
                     if Self::best_src_candidate_lazy(internal, &best_dst) == Some(a) {
-                        Self::last_chance_match_zs(internal, a, best_dst);
+                        Self::last_chance_match(internal, a, best_dst);
                         internal.mappings.link(*a.shallow(), *best_dst.shallow());
                     }
                 }
@@ -130,7 +130,7 @@ where
         );
         let src = internal.src_arena.starter();
         let dst = internal.dst_arena.starter();
-        Self::last_chance_match_zs(internal, src, dst);
+        Self::last_chance_match(internal, src, dst);
     }
 
     fn src_has_children(internal: &Mapper<HAST, Dsrc, Ddst, M>, src: Dsrc::IdD) -> bool {
@@ -190,6 +190,15 @@ where
             }
         }
         best
+    }
+
+    pub(crate) fn last_chance_match(
+        internal: &mut Mapper<HAST, Dsrc, Ddst, M>,
+        src: Dsrc::IdD,
+        dst: Ddst::IdD,
+    ) {
+        Self::last_chance_match_zs(internal, src, dst);
+        //internal.last_chance_match_histogram(src, dst);
     }
 
     pub(crate) fn last_chance_match_zs(

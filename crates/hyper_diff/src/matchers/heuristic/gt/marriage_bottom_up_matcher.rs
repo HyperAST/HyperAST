@@ -260,7 +260,8 @@ where
     }
 
     pub(crate) fn last_chance_match(&mut self, src: M::Src, dst: M::Dst) {
-        self.last_chance_match_zs(src, dst);
+        //self.last_chance_match_zs(src, dst);
+        self.internal.last_chance_match_histogram(&src, &dst);
     }
 
     pub(crate) fn last_chance_match_zs(&mut self, src: M::Src, dst: M::Dst) {

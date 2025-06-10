@@ -64,7 +64,7 @@ impl DataSet {
 fn diff_benchmark(c: &mut Criterion) {
     let gumtree_dataset_dir = std::env::var("GUMTREE_DATASET_DIR").unwrap();
     let root = Path::new(&gumtree_dataset_dir);
-    let [src, dst] = dataset_roots(root, DataSet::Defects4j("Jsoup"));
+    let [src, dst] = dataset_roots(root, DataSet::Defects4j("Closure"));
 
     let stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let md_cache = Default::default();
