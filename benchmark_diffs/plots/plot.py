@@ -51,43 +51,61 @@ def plot_comparison(title, x, y, datasets, n_bins=None):
     plt.xlabel(x)
     plt.ylabel(y)
     plt.xscale('log')
+    plt.yscale('log')
     plt.legend()
     plt.title(title)
     plt.grid(True)
     plt.savefig(title + ".png")
 
-greedy_1000_data = read_json_file("../results_greedy_1000.json")
 xy_data = read_json_file("../results_xy.json")
 greedy_100_data = read_json_file("../results_greedy_100.json")
 greedy_300_data = read_json_file("../results_greedy_300.json")
-greedy_500_data = read_json_file("../results_greedy_500.json")
+#greedy_500_data = read_json_file("../results_greedy_500.json")
+greedy_1000_data = read_json_file("../results_greedy_1000.json")
+simple_data = read_json_file("../results_simple.json")
 
 plot_performance(greedy_1000_data, "Greedy S=1000 performance")
 plot_performance(greedy_100_data, "Greedy S=100 performance")
 plot_performance(greedy_300_data, "Greedy S=300 performance")
-plot_performance(greedy_500_data, "Greedy S=500 performance")
+#plot_performance(greedy_500_data, "Greedy S=500 performance")
 plot_performance(xy_data, "XY performance")
+plot_performance(simple_data, "Simple performance")
 
 plot_comparison(
-    title = "Quality (matched nodes)",
+    title = "Quality (script length difference)",
     x = 'Best algorithm matched nodes',
-    y = 'Matched nodes',
-    datasets = [(greedy_1000_data, 'GreedyBottomUpMatcher, S=1000'),
-                (greedy_500_data, 'GreedyBottomUpMatcher, S=500'),
-                (greedy_300_data, 'GreedyBottomUpMatcher, S=300'),
-                (greedy_100_data, 'GreedyBottomUpMatcher, S=100'),
-                (xy_data, 'XYMatcher')],
+    y = 'Script length difference',
+    datasets = [(greedy_1000_data, 'Greedy Matcher, S=1000'),
+                #(greedy_500_data, 'Greedy Matcher, S=500'),
+                (greedy_300_data, 'Greedy Matcher, S=300'),
+                (greedy_100_data, 'Greedy Matcher, S=100'),
+                (xy_data, 'XYMatcher'),
+                (simple_data, 'Simple Matcher')],
 )
 
 plot_comparison(
-    title = "Quality by algorithm",
+    title = "Quality by algorithm (matched nodes)",
     x = 'Best algorithm matched nodes',
     y = 'Matched nodes',
-    datasets = [(greedy_1000_data, 'GreedyBottomUpMatcher, S=1000'),
-                (greedy_500_data, 'GreedyBottomUpMatcher, S=500'),
-                (greedy_300_data, 'GreedyBottomUpMatcher, S=300'),
-                (greedy_100_data, 'GreedyBottomUpMatcher, S=100'),
-                (xy_data, 'XYMatcher')],
+    datasets = [(greedy_1000_data, 'Greedy Matcher, S=1000'),
+                #(greedy_500_data, 'Greedy Matcher, S=500'),
+                (greedy_300_data, 'Greedy Matcher, S=300'),
+                (greedy_100_data, 'Greedy Matcher, S=100'),
+                (xy_data, 'XYMatcher'),
+                (simple_data, 'Simple Matcher')],
+    n_bins = 20
+)
+
+plot_comparison(
+    title = "Quality by algorithm (script length difference)",
+    x = 'Best algorithm matched nodes',
+    y = 'Script length difference',
+    datasets = [(greedy_1000_data, 'Greedy Matcher, S=1000'),
+                #(greedy_500_data, 'Greedy Matcher, S=500'),
+                (greedy_300_data, 'Greedy Matcher, S=300'),
+                (greedy_100_data, 'Greedy Matcher, S=100'),
+                (xy_data, 'XYMatcher'),
+                (simple_data, 'Simple Matcher')],
     n_bins = 20
 )
 
@@ -95,10 +113,11 @@ plot_comparison(
     title = "Performance by algorithm",
     x = 'Best algorithm matched nodes',
     y = 'Time (ms)',
-    datasets = [(greedy_1000_data, 'GreedyBottomUpMatcher, S=1000'),
-                (greedy_500_data, 'GreedyBottomUpMatcher, S=500'),
-                (greedy_300_data, 'GreedyBottomUpMatcher, S=300'),
-                (greedy_100_data, 'GreedyBottomUpMatcher, S=100'),
-                (xy_data, 'XYMatcher')],
+    datasets = [(greedy_1000_data, 'Greedy Matcher, S=1000'),
+                #(greedy_500_data, 'Greedy Matcher, S=500'),
+                (greedy_300_data, 'Greedy Matcher, S=300'),
+                (greedy_100_data, 'Greedy Matcher, S=100'),
+                (xy_data, 'XYMatcher'),
+                (simple_data, 'Simple Matcher')],
     n_bins = 20
 )
