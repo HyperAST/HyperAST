@@ -146,7 +146,7 @@ impl DiffProcessor {
     fn setup_logging(&self) {
         if self.args.verbose {
             env_logger::Builder::from_default_env()
-                .filter_level(log::LevelFilter::Info)
+                .filter_level(log::LevelFilter::Trace)
                 .init();
         } else {
             env_logger::Builder::from_default_env()
@@ -291,6 +291,14 @@ impl DiffProcessor {
         use hyperast::types::WithStats;
         use hyperast_gen_ts_java::utils::memusage_linux;
 
+        if self.args.verbose {
+            log::info!(
+                "Starting diff processing for commits {} -> {}",
+                oid_src,
+                oid_dst
+            );
+        }
+
         let stores = &self.preprocessed.processor.main_stores;
 
         let commit_src = self
@@ -301,6 +309,14 @@ impl DiffProcessor {
         let src_tr = commit_src.ast_root;
         let src_s = stores.node_store.resolve(src_tr).size();
 
+        if self.args.verbose {
+            log::info!(
+                "Processed src commit with size {} in {}s",
+                src_s,
+                time_src / 1_000_000_000
+            );
+        }
+
         let commit_dst = self
             .preprocessed
             .get_commit(&self.repo.config, oid_dst)
@@ -308,6 +324,14 @@ impl DiffProcessor {
         let time_dst = commit_dst.processing_time();
         let dst_tr = commit_dst.ast_root;
         let dst_s = stores.node_store.resolve(dst_tr).size();
+
+        if self.args.verbose {
+            log::info!(
+                "Processed dst commit with size {} in {}s",
+                dst_s,
+                time_dst / 1_000_000_000
+            );
+        }
 
         let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
@@ -515,14 +539,15 @@ impl DiffProcessor {
         };
 
         let diff_memory = memusage_linux() - mu;
+        let diff_duration = diff_start.elapsed();
 
         if self.args.verbose {
             log::info!(
-                "Diff computed time: {:.3?}s, memory: {} KB\n{}",
-                diff_start.elapsed(),
-                diff_memory,
-                diff_result
+                "Diff computation completed in {:.3?} (memory used: {}KB)",
+                diff_duration,
+                diff_memory
             );
+            log::debug!("Diff result details: {}", diff_result);
         }
 
         if let Some(writer) = output_writer {
@@ -540,6 +565,15 @@ impl DiffProcessor {
                 diff_result
             )?;
             writer.flush()?;
+        }
+
+        if self.args.verbose {
+            log::info!(
+                "Completed diff processing for commits {} -> {} (total time: {:.3?})",
+                oid_src,
+                oid_dst,
+                diff_duration
+            );
         }
 
         Ok(())
