@@ -4,7 +4,7 @@ use hyper_diff::{
     algorithms,
     decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
     matchers::{
-        Decompressible, Mapper,
+        Decompressible, Mapper, Mapping,
         heuristic::gt::{
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::GreedySubtreeMatcher,
@@ -22,6 +22,7 @@ use hyperast::{
 use hyperast_benchmark_diffs::preprocess::{JavaPreprocessFileSys, parse_dir_pair};
 use hyperast_gen_ts_java::legion_with_refs::Local;
 use std::{fmt::Debug, path::PathBuf};
+use tuples::TupleAsMut;
 
 use crate::bench_utils::bench_utils_models::{BenchInfo, DataSet, Heuristic, HeuristicType};
 
@@ -99,11 +100,12 @@ pub fn run_all_heuristics_for_dataset(
     );
 
     // Prepare Lazy mapper
-    let mut lazy_mapper = stores
+    let mapper_owned = stores
         .clone()
         .decompress_pair(&src.clone().compressed_node, &dst.clone().compressed_node)
         .1;
-    let _ = lazy_top_down(&mut lazy_mapper);
+    let mut _mapper_owned = mapper_owned.clone();
+    let lazy_mapper = lazy_top_down(&mut _mapper_owned);
 
     // Run the benchmark for different variants
     for heuristic in variants {
@@ -112,15 +114,30 @@ pub fn run_all_heuristics_for_dataset(
             HeuristicType::Lazy => {
                 group.bench_function(bench_id, |b| {
                     b.iter_batched(
-                        || lazy_mapper.clone(),
-                        |mut mapper| {
-                            let mapper = lazy_top_down(&mut mapper);
+                        || {
+                            (
+                                mapper_owned.clone(),
+                                stores.clone(),
+                                lazy_mapper.mappings.clone(),
+                            )
+                        },
+                        |(mut mapper, hyperast, mappings)| {
+                            // Create the mapper we can use for bottom up
+                            let ready_mapper = Mapper {
+                                hyperast,
+                                mapping: Mapping {
+                                    src_arena: mapper.0.as_mut(),
+                                    dst_arena: mapper.1.as_mut(),
+                                    mappings,
+                                },
+                            };
+
                             let output = match heuristic {
                                 Heuristic::LazyGreedy => {
-                                    LazyGreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper)
+                                    LazyGreedyBottomUpMatcher::<_, _, _, _>::match_it(ready_mapper)
                                 }
                                 Heuristic::LazySimple => {
-                                    LazySimpleBottomUpMatcher::<_, _, _, _>::match_it(mapper)
+                                    LazySimpleBottomUpMatcher::<_, _, _, _>::match_it(ready_mapper)
                                 }
                                 other => {
                                     panic!("Received an unexpected heuristic, got {}", other)
@@ -158,7 +175,7 @@ pub fn run_all_heuristics_for_dataset(
     }
 
     let bench_info =
-        BenchInfo::compute_new(dataset.clone(), &src, &dst, greedy_mapper, lazy_mapper);
+        BenchInfo::compute_new(dataset.clone(), &src, &dst, greedy_mapper, mapper_owned);
     bench_info.write_to_file(dataset);
 
     group.finish();

@@ -141,11 +141,7 @@ impl<HAST: Copy, Dsrc, Ddst, M> Mapper<HAST, Dsrc, Ddst, M> {
         }
     }
 
-    pub(crate) fn new(
-        hyperast: HAST,
-        mappings: M,
-        owned: (Dsrc, Ddst),
-    ) -> Mapper<HAST, Dsrc, Ddst, M> {
+    pub fn new(hyperast: HAST, mappings: M, owned: (Dsrc, Ddst)) -> Mapper<HAST, Dsrc, Ddst, M> {
         Mapper {
             hyperast,
             mapping: crate::matchers::Mapping {

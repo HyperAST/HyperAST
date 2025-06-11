@@ -87,6 +87,7 @@ fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
     // Apply diff with both gumtree simple and simple_lazy
     let _diff_result_normal = algorithms::gumtree_simple::diff(&stores, &src, &dst);
     let _diff_result_lazy = algorithms::gumtree_simple_lazy::diff(&stores, &src, &dst);
+    let _diff_result_greedy = algorithms::gumtree::diff(&stores, &src, &dst);
 
     // Get the number of generated actions
     let num_actions_normal = _diff_result_normal
@@ -94,6 +95,10 @@ fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
         .expect("ASTs were not equal, but no actions were found")
         .len();
     let num_actions_lazy = _diff_result_lazy
+        .actions
+        .expect("ASTs were not equal, but no actions were found")
+        .len();
+    let num_actions_greedy = _diff_result_greedy
         .actions
         .expect("ASTs were not equal, but no actions were found")
         .len();
@@ -113,6 +118,22 @@ fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
         .iter()
         .filter(|a| **a != 0)
         .count();
+    let num_matches_greedy = _diff_result_greedy
+        .mapper
+        .mappings
+        .src_to_dst
+        .iter()
+        .filter(|a| **a != 0)
+        .count();
+
+    println!(
+        "Greedy found {} mappings, simple found {} mappings and lazy simple found: {} mappings",
+        num_matches_greedy, num_matches_normal, num_matches_lazy
+    );
+    println!(
+        "Greedy found {} actions, simple found {} actions and lazy simple found: {} actions",
+        num_actions_greedy, num_actions_normal, num_actions_lazy
+    );
 
     return DiffInfo {
         num_actions_normal,

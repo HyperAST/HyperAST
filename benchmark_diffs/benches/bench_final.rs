@@ -8,18 +8,56 @@ use perfcnt::linux::PerfCounterBuilderLinux as Builder;
 use crate::bench_utils::bench_utils_methods;
 use crate::bench_utils::bench_utils_models::{DataSet, Heuristic};
 
-fn run_all_heuristics_gh_java_drool(c: &mut Criterion<Perf>) {
+fn all_heuristics_bugsinpy_httpie(c: &mut Criterion<Perf>) {
     let variants = [
         Heuristic::LazySimple,
         Heuristic::LazyGreedy,
         Heuristic::Simple,
         Heuristic::Greedy,
     ];
-    let dataset = DataSet::GhJava(Some(String::from("drool")));
+    let dataset = DataSet::BugsInPy(Some(String::from("httpie")));
     bench_utils_methods::run_all_heuristics_for_dataset(c, dataset, &variants);
 }
 
-fn run_all_heuristics_gh_java(c: &mut Criterion<Perf>) {
+fn run_all_heuristics_bugsinpie(c: &mut Criterion<Perf>) {
+    let variants = [
+        Heuristic::LazySimple,
+        Heuristic::LazyGreedy,
+        Heuristic::Simple,
+        Heuristic::Greedy,
+    ];
+
+    let dataset_projects: Vec<DataSet> = DataSet::BugsInPy(None)
+        .get_all_projects_of_dataset()
+        .into_iter()
+        .map(|name| DataSet::GhJava(Some(name)))
+        .collect();
+
+    for dataset in dataset_projects {
+        bench_utils_methods::run_all_heuristics_for_dataset(c, dataset, &variants);
+    }
+}
+
+fn run_all_heuristics_ghpython(c: &mut Criterion<Perf>) {
+    let variants = [
+        Heuristic::LazySimple,
+        Heuristic::LazyGreedy,
+        Heuristic::Simple,
+        Heuristic::Greedy,
+    ];
+
+    let dataset_projects: Vec<DataSet> = DataSet::GhPython(None)
+        .get_all_projects_of_dataset()
+        .into_iter()
+        .map(|name| DataSet::GhJava(Some(name)))
+        .collect();
+
+    for dataset in dataset_projects {
+        bench_utils_methods::run_all_heuristics_for_dataset(c, dataset, &variants);
+    }
+}
+
+fn run_all_heuristics_ghjava(c: &mut Criterion<Perf>) {
     let variants = [
         Heuristic::LazySimple,
         Heuristic::LazyGreedy,
@@ -59,16 +97,32 @@ fn run_all_heuristics_defects4j(c: &mut Criterion<Perf>) {
 
 // Make sure the event_paranoid is set for this session, 0 or 1 should suffice.
 // sudo sysctl -w kernel.perf_event_paranoid=0
-// criterion_group!(
-//     name = gh_java_all_heuristic_drool;
-//     config = Criterion::default()
-//         .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
-//         .sample_size(10)
-//         .configure_from_args();
-//     targets = run_all_heuristics_gh_java_drool
-// );
 criterion_group!(
-    name = defects4j_all_heuristic;
+    name = bugsinpy_httpie;
+    config = Criterion::default()
+        .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
+        .sample_size(10)
+        .configure_from_args();
+    targets = all_heuristics_bugsinpy_httpie
+);
+criterion_group!(
+    name = bugsinpy_all;
+    config = Criterion::default()
+        .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
+        .sample_size(15)
+        .configure_from_args();
+    targets = run_all_heuristics_bugsinpie
+);
+criterion_group!(
+    name = ghpython_all;
+    config = Criterion::default()
+        .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
+        .sample_size(15)
+        .configure_from_args();
+    targets = run_all_heuristics_ghpython
+);
+criterion_group!(
+    name = defects4j_all;
     config = Criterion::default()
         .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
         .sample_size(15)
@@ -76,11 +130,12 @@ criterion_group!(
     targets = run_all_heuristics_defects4j
 );
 criterion_group!(
-    name = gh_java_all_heuristic;
+    name = ghjava_all;
     config = Criterion::default()
         .with_measurement(Perf::new(Builder::from_hardware_event(Hardware::Instructions)))
         .sample_size(15)
         .configure_from_args();
-    targets = run_all_heuristics_gh_java
+    targets = run_all_heuristics_ghjava
 );
-criterion_main!(gh_java_all_heuristic, defects4j_all_heuristic);
+// criterion_main!(bugsinpy_all, ghpython_all, defects4j_all, ghjava_all);
+criterion_main!(bugsinpy_httpie);
