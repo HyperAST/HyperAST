@@ -1,10 +1,10 @@
 use hyperast::test_utils::simple_tree::SimpleTree;
 
-use crate::tests::tree;
+use crate::{matchers::mapping_store::VecStore, tests::tree};
 
 type ST<K> = SimpleTree<K>;
 
-pub(crate) fn example_stable_test1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable_test1() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -27,14 +27,18 @@ pub(crate) fn example_stable_test1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec
                 tree!(0, "1"),
             ])
     ]);
-    let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
-    let map_dst = vec![vec![1, 1], vec![0, 1], vec![0, 0], vec![1, 0]];
-    ((src, dst), map_src, map_dst)
+    //let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+    //let map_dst = vec![vec![1, 1], vec![0, 1], vec![0, 0], vec![1, 0]];
+    let mappings = VecStore {
+        src_to_dst: vec![5, 2, 0, 1, 4, 0, 0, 0],
+        dst_to_src: vec![4, 2, 0, 5, 1, 0, 0, 0],
+    };
+    ((src, dst), mappings)
 }
 
 // This is a variation of the previous test: gumtree stable succeeds, but it doesn't map
 // anything because there is a cycle of 'best' mappings (but all have the same weight)
-pub(crate) fn example_stable_test2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable_test2() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -57,12 +61,16 @@ pub(crate) fn example_stable_test2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec
                 tree!(0, "1"),
             ])
     ]);
-    let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
-    let map_dst = vec![vec![1, 1], vec![0, 0], vec![0, 1], vec![1, 0]];
-    ((src, dst), map_src, map_dst)
+    //let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+    //let map_dst = vec![vec![1, 1], vec![0, 0], vec![0, 1], vec![1, 0]];
+    let mappings = VecStore {
+        src_to_dst: vec![5, 1, 0, 2, 4, 0, 0, 0],
+        dst_to_src: vec![2, 4, 0, 5, 1, 0, 0, 0],
+    };
+    ((src, dst), mappings)
 }
 
-pub(crate) fn example_stable1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable1() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -85,12 +93,16 @@ pub(crate) fn example_stable1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>
                 tree!(0, "2"),
             ])
     ]);
-    let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
-    let map_dst = vec![vec![0, 1], vec![1, 1], vec![1, 0], vec![0, 0]];
-    ((src, dst), map_src, map_dst)
+    //let map_src = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+    //let map_dst = vec![vec![0, 1], vec![1, 1], vec![1, 0], vec![0, 0]];
+    let mappings = VecStore {
+        src_to_dst: vec![2, 5, 0, 4, 1, 0, 0, 0],
+        dst_to_src: vec![5, 1, 0, 4, 2, 0, 0, 0],
+    };
+    ((src, dst), mappings)
 }
 
-pub(crate) fn example_stable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable2() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -127,32 +139,36 @@ pub(crate) fn example_stable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>
                 tree!(0, "9"),
             ])
     ]);
-    let map_src = vec![
-        vec![0, 0],
-        vec![0, 1],
-        vec![0, 2],
-        vec![1, 0],
-        vec![1, 1],
-        vec![1, 2],
-        vec![2, 0],
-        vec![2, 1],
-        vec![2, 2],
-    ];
-    let map_dst = vec![
-        vec![0, 0],
-        vec![1, 0],
-        vec![2, 0],
-        vec![0, 1],
-        vec![1, 1],
-        vec![2, 1],
-        vec![0, 2],
-        vec![1, 2],
-        vec![2, 2],
-    ];
-    ((src, dst), map_src, map_dst)
+    // let map_src = vec![
+    // vec![0, 0],
+    // vec![0, 1],
+    // vec![0, 2],
+    // vec![1, 0],
+    // vec![1, 1],
+    // vec![1, 2],
+    // vec![2, 0],
+    // vec![2, 1],
+    // vec![2, 2],
+    // ];
+    // let map_dst = vec![
+    // vec![0, 0],
+    // vec![1, 0],
+    // vec![2, 0],
+    // vec![0, 1],
+    // vec![1, 1],
+    // vec![2, 1],
+    // vec![0, 2],
+    // vec![1, 2],
+    // vec![2, 2],
+    // ];
+    let mappings = VecStore {
+        src_to_dst: vec![1, 5, 9, 0, 2, 6, 10, 0, 3, 7, 11, 0, 0, 0],
+        dst_to_src: vec![1, 5, 9, 0, 2, 6, 10, 0, 3, 7, 11, 0, 0, 0],
+    };
+    ((src, dst), mappings)
 }
 
-pub(crate) fn example_stable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_stable3() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -201,38 +217,44 @@ pub(crate) fn example_stable3() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>
                 ])
             ]),
     ]);
-    let map_src = vec![
-        vec![0, 0],
-        vec![0, 1],
-        vec![0, 2],
-        vec![0, 3],
-        vec![1, 0, 0],
-        vec![1, 0, 1],
-        vec![1, 0, 2],
-        vec![1, 0, 3],
-        vec![2, 0],
-        vec![2, 1],
-        vec![2, 2],
-        vec![2, 3],
-    ];
-    let map_dst = vec![
-        vec![1, 0],
-        vec![1, 1],
-        vec![2, 0, 0],
-        vec![2, 0, 1],
-        vec![0, 0],
-        vec![0, 1],
-        vec![1, 2],
-        vec![1, 3],
-        vec![2, 0, 2],
-        vec![2, 0, 3],
-        vec![0, 2],
-        vec![0, 3],
-    ];
-    ((src, dst), map_src, map_dst)
+    // let map_src = vec![
+    // vec![0, 0],
+    // vec![0, 1],
+    // vec![0, 2],
+    // vec![0, 3],
+    // vec![1, 0, 0],
+    // vec![1, 0, 1],
+    // vec![1, 0, 2],
+    // vec![1, 0, 3],
+    // vec![2, 0],
+    // vec![2, 1],
+    // vec![2, 2],
+    // vec![2, 3],
+    // ];
+    // let map_dst = vec![
+    // vec![1, 0],
+    // vec![1, 1],
+    // vec![2, 0, 0],
+    // vec![2, 0, 1],
+    // vec![0, 0],
+    // vec![0, 1],
+    // vec![1, 2],
+    // vec![1, 3],
+    // vec![2, 0, 2],
+    // vec![2, 0, 3],
+    // vec![0, 2],
+    // vec![0, 3],
+    // ];
+    let mappings = VecStore {
+        src_to_dst: vec![7, 8, 13, 14, 0, 1, 2, 9, 10, 0, 0, 15, 16, 3, 4, 0, 0, 0],
+        dst_to_src: vec![
+            6, 7, 14, 15, 0, 0, 1, 2, 8, 9, 0, 0, 3, 4, 12, 13, 0, 0, 0, 0,
+        ],
+    };
+    ((src, dst), mappings)
 }
 
-pub(crate) fn example_unstable1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_unstable1() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "t"; [
             tree!(0, "a"; [
@@ -250,12 +272,16 @@ pub(crate) fn example_unstable1() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8
                 tree!(0, "2"),
             ])
     ]);
-    let map_src = vec![vec![0, 0], vec![1, 0]];
-    let map_dst = vec![vec![0, 0], vec![0, 1]];
-    ((src, dst), map_src, map_dst)
+    //let map_src = vec![vec![0, 0], vec![1, 0]];
+    //let map_dst = vec![vec![0, 0], vec![0, 1]];
+    let mappings = VecStore {
+        src_to_dst: vec![1, 0, 0, 2, 0, 0, 0],
+        dst_to_src: vec![1, 4, 0, 0, 0],
+    };
+    ((src, dst), mappings)
 }
 
-pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>) {
+pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), VecStore<u16>) {
     let src = tree!(
         0, "r"; [
             tree!(
@@ -278,9 +304,13 @@ pub(crate) fn example_unstable2() -> ((ST<u8>, ST<u8>), Vec<Vec<u8>>, Vec<Vec<u8
                     tree!(0, "c"),
             ]),
     ]);
-    let map_src = vec![vec![0, 0], vec![1, 0], vec![1, 1]];
-    let map_dst = vec![vec![1, 0], vec![1, 1], vec![1, 2]];
-    ((src, dst), map_src, map_dst)
+    //let map_src = vec![vec![0, 0], vec![1, 0], vec![1, 1]];
+    //let map_dst = vec![vec![1, 0], vec![1, 1], vec![1, 2]];
+    let mappings = VecStore {
+        src_to_dst: vec![2, 0, 3, 4, 0, 0, 0],
+        dst_to_src: vec![0, 1, 3, 4, 0, 0, 0],
+    };
+    ((src, dst), mappings)
 }
 
 #[allow(unused)] // TODO make a test with this example

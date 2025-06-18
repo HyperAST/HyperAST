@@ -18,7 +18,7 @@ use hyperast::PrimInt;
 use hyperast::types::{self, AstLending, Children, Childrn, HyperAST, WithChildren, WithStats};
 
 pub struct LazyPostOrder<IdN, IdD> {
-    pub(super) id_compressed: Box<[IdN]>,
+    pub id_compressed: Box<[IdN]>,
     pub id_parent: Box<[IdD]>,
     /// leftmost leaf descendant of nodes
     pub(crate) llds: Box<[IdD]>,

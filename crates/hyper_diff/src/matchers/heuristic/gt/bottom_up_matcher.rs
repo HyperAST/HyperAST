@@ -5,7 +5,7 @@ use crate::{
 };
 use hyperast::types::{self, HashKind, HyperAST, NodeStore, TypeStore, WithHashs};
 use hyperast::{PrimInt, types::HyperASTShared};
-use num_traits::{ToPrimitive, Zero};
+use num_traits::ToPrimitive;
 use std::{collections::HashMap, hash::Hash};
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {
     pub(in crate::matchers) stores: HAST,
@@ -74,12 +74,6 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;self.src_arena.len()];
-
-        let seeds_orig: Vec<_> = seeds
-            .iter()
-            .map(|seed| self.src_arena.original(seed))
-            .collect();
-        //println!("seeds: {:?}", seeds_orig);
 
         let t = self.stores.resolve_type(s);
         for mut seed in seeds {
@@ -235,6 +229,42 @@ where
     M::Src: PrimInt,
     M::Dst: PrimInt,
 {
+    pub fn get_src_candidates(&self, dst: &M::Dst) -> Vec<M::Src> {
+        let src_arena = &self.mapping.src_arena;
+        let dst_arena = &self.mapping.dst_arena;
+        let mappings = &self.mapping.mappings;
+        let mut seeds = vec![];
+        let s = &dst_arena.original(dst);
+        for c in dst_arena.descendants(dst) {
+            if mappings.is_dst(&c) {
+                let m = mappings.get_src_unchecked(&c);
+                seeds.push(m);
+            }
+        }
+        let mut candidates = vec![];
+        let mut visited = bitvec::bitbox![0;src_arena.len()];
+        let t = self.hyperast.resolve_type(s);
+        for mut seed in seeds {
+            loop {
+                let Some(parent) = src_arena.parent(&seed) else {
+                    break;
+                };
+                if visited[parent.to_usize().unwrap()] {
+                    break;
+                }
+                visited.set(parent.to_usize().unwrap(), true);
+                let p = &src_arena.original(&parent);
+                if self.hyperast.resolve_type(p) == t
+                    && !(mappings.is_src(&parent) || parent == src_arena.root())
+                {
+                    candidates.push(parent);
+                }
+                seed = parent;
+            }
+        }
+        candidates
+    }
+
     pub fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &self.mapping.dst_arena;
