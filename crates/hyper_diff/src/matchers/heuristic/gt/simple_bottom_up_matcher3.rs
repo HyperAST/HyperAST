@@ -92,8 +92,8 @@ where
                     &self.internal.dst_arena.root(),
                 );
                 break;
-            } else if !(self.internal.mappings.is_src(&node)
-                || !self.internal.src_has_children(node))
+            } else if !self.internal.mappings.is_src(&node)
+                && self.internal.src_has_children(node)
             {
                 let candidates = self.internal.get_dst_candidates(&node);
                 let mut best = None;
@@ -124,7 +124,6 @@ where
                 }
             } else if self.internal.mappings.is_src(&node)
                 && self.internal.has_unmapped_src_children(&node)
-            // Check if there are unmapped children in src or dst
             {
                 if let Some(dst) = self.internal.mappings.get_dst(&node) {
                     if self.internal.has_unmapped_dst_children(&dst) {

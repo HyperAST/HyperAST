@@ -117,8 +117,8 @@ where
                     self.internal.dst_arena.starter(),
                 );
                 break;
-            } else if !(self.internal.mappings.is_src(&node)
-                || !self.internal.src_has_children(decompressed_node))
+            } else if !self.internal.mappings.is_src(&node)
+                && self.internal.src_has_children(decompressed_node)
             {
                 let candidates = self.internal.get_dst_candidates_lazily(&decompressed_node);
                 let mut best_candidate = None;

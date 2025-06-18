@@ -55,18 +55,16 @@ where
         let mut visited = bitvec::bitbox![0;self.dst_arena.len()];
         let t = self.stores.resolve_type(s);
         for mut seed in seeds {
-            loop {
-                let Some(parent) = self.dst_arena.parent(&seed) else {
-                    break;
-                };
+            while let Some(parent) = self.dst_arena.parent(&seed) {
                 if visited[parent.to_usize().unwrap()] {
                     break;
                 }
                 visited.set(parent.to_usize().unwrap(), true);
+
                 let p = &self.dst_arena.original(&parent);
                 if self.stores.resolve_type(p) == t
-                    && !(self.mappings.is_dst(parent.shallow())
-                        || parent.shallow() == &self.dst_arena.root())
+                    && !self.mappings.is_dst(parent.shallow())
+                    && parent.shallow() != &self.dst_arena.root()
                 {
                     candidates.push(parent);
                 }
@@ -95,12 +93,7 @@ where
         let mut visited = bitvec::bitbox![0;dst_arena.len()];
         let t = self.stores.resolve_type(s);
         for mut seed in seeds {
-            loop {
-                let parent = match dst_arena.parent(&seed) {
-                    Some(val) => val,
-                    None => break,
-                };
-
+            while let Some(parent) = dst_arena.parent(&seed) {
                 // If visited break, otherwise mark as visisted
                 if visited[parent.to_usize().unwrap()] {
                     break;
@@ -110,7 +103,8 @@ where
                 let p = &dst_arena.original(&parent);
                 let p_type = self.stores.resolve_type(p);
                 if p_type == t
-                    && !(mappings.is_dst(parent.shallow()) || parent.shallow() == &dst_arena.root())
+                    && !mappings.is_dst(parent.shallow()) 
+                    && parent.shallow() != &dst_arena.root()
                 {
                     candidates.push(parent);
                 }
@@ -271,7 +265,8 @@ where
             {
                 let t1 = src_histogram[src_type][0];
                 let t2 = dst_histogram[src_type][0];
-                self.mappings.link(*t1.shallow(), *t2.shallow());
+                self.mappings
+                    .link_if_both_unmapped(*t1.shallow(), *t2.shallow());
                 self.last_chance_match_histogram(t1, t2);
             }
         }
