@@ -218,7 +218,7 @@ where
                             &self.dst_arena.descendants_range(dst),
                             &self.mappings,
                         )
-                        .chawathe();
+                        .dice();
                         similarity_time += sim_start.elapsed();
 
                         if similarity >= threshold {
@@ -432,7 +432,7 @@ where
             &self.dst_arena.descendants_range(dst),
             &self.mappings,
         )
-        .chawathe()
+        .dice()
     }
 }
 

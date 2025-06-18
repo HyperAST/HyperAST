@@ -104,7 +104,7 @@ where
                     total_comparisons += 1;
 
                     let sim_start = std::time::Instant::now();
-                    let similarity = similarity_metrics::chawathe_similarity(
+                    let similarity = similarity_metrics::dice_similarity(
                         &self.src_arena.descendants(&src_tree),
                         &self.dst_arena.descendants(&dst_tree),
                         &self.mappings,

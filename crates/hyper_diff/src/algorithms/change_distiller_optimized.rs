@@ -269,8 +269,6 @@ where
         (None, 0.0, 0.0, mapper)
     };
 
-    let start = Instant::now();
-
     CDResult {
         total_time: start.elapsed(),
         mapping_durations: PreparedMappingDurations {
