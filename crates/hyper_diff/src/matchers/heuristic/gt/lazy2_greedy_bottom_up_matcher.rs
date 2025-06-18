@@ -26,7 +26,7 @@ pub struct GreedyBottomUpMatcher<
     HAST: HyperAST + Copy,
     M: MonoMappingStore,
     MZs: MonoMappingStore = M,
-    const SIZE_THRESHOLD: usize = 1000,
+    const SIZE_THRESHOLD: usize = 200,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {

@@ -20,7 +20,7 @@ pub struct GreedyBottomUpMatcher<
     Ddst,
     HAST,
     M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize = 1000,
+    const SIZE_THRESHOLD: usize = 200,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {

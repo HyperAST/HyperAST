@@ -46,9 +46,9 @@ pub enum Heuristic {
 impl Display for Heuristic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Heuristic::Greedy => write!(f, "Gumtree_Greedy"),
+            Heuristic::Greedy => write!(f, "Gumtree_Greedy_200"),
             Heuristic::Simple => write!(f, "Gumtree_Simple"),
-            Heuristic::LazyGreedy => write!(f, "Lazy_Gumtree_Greedy"),
+            Heuristic::LazyGreedy => write!(f, "Lazy_Gumtree_Greedy_200"),
             Heuristic::LazySimple => write!(f, "Lazy_Gumtree_Simple"),
         }
     }
