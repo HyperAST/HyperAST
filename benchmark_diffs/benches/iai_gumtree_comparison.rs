@@ -4,6 +4,7 @@ use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
 use std::hint::black_box;
+use hyperast_benchmark_diffs::run_diff::run_diff;
 
 const DEFAULT_SIZE_THRESHOLD: usize = 1000;
 
@@ -119,44 +120,9 @@ fn iai_hybrid_benchmark() {
     
     let (_, buggy, fixed) = test_inputs.first().unwrap();
 
-    run_diff::<50>(black_box(buggy), black_box(fixed), "hybrid");
+    run_diff(black_box(buggy), black_box(fixed), "hybrid", 50);
 
 }
-
-fn run_diff<const SIZE_THRESHOLD: usize>(src: &str, dst: &str, algorithm: &str) {
-    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-    let mut md_cache = Default::default();
-
-    let (src_tr, dst_tr) =
-        parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-
-    let diff_result = match algorithm {
-        "hybrid" => algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD, 1>(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "simple" => algorithms::gumtree_simple::diff_simple(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "greedy" => algorithms::gumtree::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "lazy" => algorithms::gumtree_lazy::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        _ => panic!("Unknown function")
-    };
-
-    black_box(diff_result);
-}
-
 
 library_benchmark_group!(name = bench_gumtree_comparison_group; benchmarks = iai_hybrid_benchmark);
 main!(library_benchmark_groups = bench_gumtree_comparison_group);

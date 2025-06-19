@@ -120,7 +120,7 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
         let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
         let mu = memusage_linux();
-        let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
+        let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
         let summarized_lazy = &lazy.summarize();
         use hyper_diff::algorithms::ComputeTime;
         let total_lazy_t: f64 = summarized_lazy.time();
@@ -217,7 +217,7 @@ fn whole(
             let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
             let mu = memusage_linux();
-            let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
+            let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
             let summarized_lazy = &lazy.summarize();
             use hyper_diff::algorithms::ComputeTime;
             let total_lazy_t: f64 = summarized_lazy.time();

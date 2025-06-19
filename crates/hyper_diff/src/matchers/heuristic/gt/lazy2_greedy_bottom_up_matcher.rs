@@ -26,9 +26,6 @@ pub struct GreedyBottomUpMatcher<
     HAST: HyperAST + Copy,
     M: MonoMappingStore,
     MZs: MonoMappingStore = M,
-    const SIZE_THRESHOLD: usize = 1000,
-    const SIM_THRESHOLD_NUM: u64 = 1,
-    const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     internal: Mapper<HAST, Dsrc, Ddst, M>,
     _phantom: PhantomData<*const MZs>,
@@ -44,9 +41,6 @@ impl<
     HAST,
     M,
     MZs,
-    const SIZE_THRESHOLD: usize,
-    const SIM_THRESHOLD_NUM: u64,
-    const SIM_THRESHOLD_DEN: u64,
 >
     GreedyBottomUpMatcher<
         Dsrc,
@@ -54,9 +48,6 @@ impl<
         HAST,
         M,
         MZs,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
     >
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: Tree + WithHashs + WithStats,
@@ -92,6 +83,7 @@ where
 {
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        max_size: usize, sim_threshold: f64
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             internal: mapping,
@@ -101,11 +93,11 @@ where
             matcher.internal.mapping.src_arena.len(),
             matcher.internal.mapping.dst_arena.len(),
         );
-        Self::execute(&mut matcher.internal);
+        Self::execute(&mut matcher.internal, max_size, sim_threshold);
         matcher.internal
     }
 
-    pub fn execute(internal: &mut Mapper<HAST, Dsrc, Ddst, M>) {
+    pub fn execute(internal: &mut Mapper<HAST, Dsrc, Ddst, M>, max_size: usize, sim_threshold: f64) {
         assert_eq!(
             // TODO move it inside the arena ...
             internal.src_arena.root(),
@@ -133,14 +125,14 @@ where
                         &internal.mappings,
                     )
                     .dice();
-                    if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
+                    if sim > max && sim >= sim_threshold {
                         max = sim;
                         best = Some(cand);
                     }
                 }
 
                 if let Some(best) = best {
-                    Self::last_chance_match_zs(internal, a, best);
+                    Self::last_chance_match_zs(internal, a, best, max_size);
                     internal.mappings.link(*a.shallow(), *best.shallow());
                 }
             }
@@ -152,7 +144,7 @@ where
         );
         let src = internal.src_arena.starter();
         let dst = internal.dst_arena.starter();
-        Self::last_chance_match_zs(internal, src, dst);
+        Self::last_chance_match_zs(internal, src, dst, max_size);
     }
 
     fn src_has_children(internal: &Mapper<HAST, Dsrc, Ddst, M>, src: Dsrc::IdD) -> bool {
@@ -174,6 +166,7 @@ where
         internal: &mut Mapper<HAST, Dsrc, Ddst, M>,
         src: Dsrc::IdD,
         dst: Ddst::IdD,
+        max_size: usize
     ) {
         let stores = internal.hyperast;
         // allow using another internal mapping store
@@ -183,7 +176,7 @@ where
         let dst_arena = &mut mapping.dst_arena;
         let src_s = src_arena.descendants_count(&src);
         let dst_s = dst_arena.descendants_count(&dst);
-        if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
+        if !(src_s < cast(max_size).unwrap() || dst_s < cast(max_size).unwrap()) {
             return;
         }
         let src_offset;

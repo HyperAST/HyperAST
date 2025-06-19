@@ -1,4 +1,4 @@
-use super::tr;
+use super::{get_allocated_memory, tr, MappingMemoryUsages};
 use super::{DiffResult, PreparedMappingDurations};
 use crate::algorithms::MappingDurations;
 use crate::{
@@ -49,10 +49,12 @@ where
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     tr!(subtree_prepare_t);
 
+    let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
+    let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
     let now = Instant::now();
@@ -65,14 +67,19 @@ where
     let bottomup_prepare_t = now.elapsed().as_secs_f64();
     tr!(bottomup_prepare_t);
 
+    let mem = get_allocated_memory();
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper, 1000, 0.5f64);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
+    let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(bottomup_matcher_t, bottomup_mappings_s);
     let mapping_durations = PreparedMappingDurations {
         mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
         preparation: [subtree_prepare_t, bottomup_prepare_t],
+    };
+    let mapping_memory_usages = MappingMemoryUsages {
+        memory: [subtree_matcher_m, bottomup_matcher_m]
     };
 
     let now = Instant::now();
@@ -94,6 +101,7 @@ where
 
     DiffResult {
         mapping_durations,
+        mapping_memory_usages,
         mapper,
         actions,
         prepare_gen_t,

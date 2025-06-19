@@ -21,7 +21,7 @@ fn main() {
     let mut repo = args
         .get(1)
         .expect("give an argument like openjdk/jdk or INRIA/spoon") //"openjdk/jdk";//"INRIA/spoon";
-        .split('/'); 
+        .split('/');
     let repo_user = repo.next().unwrap();
     let repo_name = repo.next().unwrap();
     let before = args.get(2).map_or("", |x| x);
@@ -50,6 +50,17 @@ fn bbb() {
     )
 }
 
+#[test]
+fn test_histogram_bug() {
+    single(
+        "google",
+        "gson",
+        hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        "810e3560590bb807ed7113ccfff716aac21a3f33",
+        "00ae39775708147e115512be5d4f92bee02e9b89"
+    )
+}
+
 fn single(repo_user: &str, repo_name: &str, config: hyperast_vcs_git::processing::RepoConfig, before: &str, after: &str) {
     let mut repositories = PreProcessedRepositories::default();
     let (hyperast, src_tr, dst_tr) = parse_repo(
@@ -62,7 +73,7 @@ fn single(repo_user: &str, repo_name: &str, config: hyperast_vcs_git::processing
     );
 
     let mu = memusage_linux();
-    let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
+    let lazy = hyper_diff::algorithms::gumtree_hybrid_lazy::diff_hybrid_lazy(&hyperast, &src_tr, &dst_tr, 50);
     let summarized_lazy = &lazy.summarize();
     use hyper_diff::algorithms::ComputeTime;
     let total_lazy_t: f64 = summarized_lazy.time();

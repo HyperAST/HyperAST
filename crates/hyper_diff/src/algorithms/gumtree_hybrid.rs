@@ -1,4 +1,4 @@
-use super::MappingDurations;
+use super::{get_allocated_memory, MappingDurations, MappingMemoryUsages};
 use super::tr;
 use super::{DiffResult, PreparedMappingDurations};
 use crate::{
@@ -22,10 +22,13 @@ use crate::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMat
 #[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
-pub fn diff_hybrid<HAST: HyperAST + Copy, const MAX_SIZE_THRESHOLD: usize, const MIN_HEIGHT_THRESHOLD: usize>(
+const DEFAULT_MIN_HEIGHT: usize = 1; // todo: make min_height adjustable?
+
+pub fn diff_hybrid<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
+    max_size: usize,
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
@@ -47,24 +50,32 @@ where
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     tr!(subtree_prepare_t);
 
+    let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper =
-        GreedySubtreeMatcher::<_, _, _, _, MIN_HEIGHT_THRESHOLD>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+        GreedySubtreeMatcher::<_, _, _, _, DEFAULT_MIN_HEIGHT>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
+    let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
     let bottomup_prepare_t = 0.; // nothing to prepare
 
+    let mem = get_allocated_memory();
     let now = Instant::now();
-    let mapper = HybridBottomUpMatcher::<_, _, _, _, MAX_SIZE_THRESHOLD>::match_it(mapper);
+    let mapper = HybridBottomUpMatcher::<_, _, _, _>::match_it(mapper, max_size);
     dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
+    let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
+    
     tr!(bottomup_matcher_t, bottomup_mappings_s);
     let mapping_durations = PreparedMappingDurations {
         mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
         preparation: [subtree_prepare_t, bottomup_prepare_t],
+    };
+    let mapping_memory_usages = MappingMemoryUsages {
+        memory: [subtree_matcher_m, bottomup_matcher_m]
     };
 
     let now = Instant::now();
@@ -82,6 +93,7 @@ where
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
         mapping_durations,
+        mapping_memory_usages,
         mapper,
         actions,
         prepare_gen_t,

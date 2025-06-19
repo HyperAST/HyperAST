@@ -189,10 +189,12 @@ fn run_diff<const SIZE_THRESHOLD: usize>(src: &str, dst: &str) {
     let (src_tr, dst_tr) =
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
 
-    let diff_result= algorithms::gumtree_hybrid::diff_hybrid::<_, 100, SIZE_THRESHOLD>(
+    todo!("update benchmark when minsize is adjustable")
+    let diff_result= algorithms::gumtree_hybrid::diff_hybrid(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
+            1000
         );
 
     black_box(diff_result);

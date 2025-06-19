@@ -146,6 +146,7 @@ fn test_compare_java(src: &[u8], dst: &[u8]) {
         &stores,
         &src.local.compressed_node,
         &dst.local.compressed_node,
+        1000, 0.5f64
     );
     dbg!(&diff_result.mapper.mappings);
     dbg!(&diff_result.mapper.mappings.src_to_dst.len());

@@ -304,6 +304,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
 
 [[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "arboard"
 version = "3.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4014,6 +4023,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper_dat"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "byteorder",
+ "cfg-if",
+ "const-chunks",
+ "criterion 0.4.0",
+ "env_logger 0.11.5",
+ "hashbrown 0.13.2",
+ "hyper_diff",
+ "hyperast",
+ "hyperast_benchmark_diffs",
+ "hyperast_gen_ts_java",
+ "hyperast_gen_ts_xml",
+ "hyperast_vcs_git",
+ "iai-callgrind",
+ "log",
+ "md5",
+ "num-traits",
+ "pprof",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tpe",
+ "tree-sitter",
+ "tuples",
+ "winit",
+]
+
+[[package]]
 name = "hyper_diff"
 version = "0.3.0"
 dependencies = [
@@ -4030,6 +4071,8 @@ dependencies = [
  "num-traits",
  "specs",
  "str-distance",
+ "tikv-jemalloc-ctl",
+ "tikv-jemallocator",
 ]
 
 [[package]]
@@ -4091,6 +4134,7 @@ dependencies = [
  "cfg-if",
  "const-chunks",
  "criterion 0.4.0",
+ "csv",
  "env_logger 0.11.5",
  "git2",
  "hashbrown 0.13.2",
@@ -4107,6 +4151,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "tikv-jemalloc-ctl",
  "tikv-jemallocator",
  "tree-sitter",
  "tuples",
@@ -5338,6 +5383,35 @@ dependencies = [
  "termcolor",
  "thiserror 2.0.12",
  "unicode-xid",
+]
+
+[[package]]
+name = "nalgebra"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "462fffe4002f4f2e1f6a9dcf12cc1a6fc0e15989014efc02a941d3e0f5dc2120"
+dependencies = [
+ "approx",
+ "matrixmultiply 0.3.9",
+ "nalgebra-macros",
+ "num-complex 0.4.6",
+ "num-rational",
+ "num-traits",
+ "rand",
+ "rand_distr",
+ "simba",
+ "typenum",
+]
+
+[[package]]
+name = "nalgebra-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01fcc0b8149b4632adc89ac3b7b31a12fb6099a0317a4eb2ebff574ef7de7218"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -6711,6 +6785,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom 0.2.15",
+]
+
+[[package]]
+name = "rand_distr"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
+dependencies = [
+ "num-traits",
+ "rand",
 ]
 
 [[package]]
@@ -8217,6 +8301,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "simba"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e82063457853d00243beda9952e910b82593e4b07ae9f721b9278a99a0d3d5c"
+dependencies = [
+ "approx",
+ "num-complex 0.4.6",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8448,6 +8544,19 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "statrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05bdbb8e4e78216a85785a85d3ec3183144f98d0097b9281802c019bb07a6f05"
+dependencies = [
+ "approx",
+ "lazy_static",
+ "nalgebra",
+ "num-traits",
+ "rand",
+]
 
 [[package]]
 name = "str-distance"
@@ -9332,6 +9441,19 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "tpe"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01850406776cd3109d0ea1fc20d752c2074a3f0bd9266e14613c0b8b6085bfee"
+dependencies = [
+ "ordered-float 2.10.1",
+ "rand",
+ "rand_distr",
+ "statrs",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "tracing"

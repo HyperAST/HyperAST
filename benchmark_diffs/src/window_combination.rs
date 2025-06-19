@@ -87,13 +87,13 @@ pub fn windowed_commits_compare(
             let hyperast = as_nospaces(stores);
 
             let mu = memusage_linux();
-            let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr);
+            let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
             let not_lazy = not_lazy.summarize();
             dbg!(&not_lazy);
             let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
             let partial_lazy = partial_lazy.summarize();
             dbg!(&partial_lazy);
-            let lazy = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
+            let lazy = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
             let summarized_lazy = &lazy.summarize();
             dbg!(summarized_lazy);
             if summarized_lazy.compare_results(&not_lazy)
@@ -310,7 +310,7 @@ pub(crate) fn write_perfs<Id: Display>(
 ) -> Result<(), std::io::Error> {
     writeln!(
         buf_perfs,
-        "{}/{},{},{},{},{},{},{},{},{},{},{},{}",
+        "{}/{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
         oid_src,
         oid_dst,
         kind,
@@ -324,6 +324,8 @@ pub(crate) fn write_perfs<Id: Display>(
         summarized_lazy.mapping_durations.mappings.0[1],
         summarized_lazy.prepare_gen_t,
         summarized_lazy.gen_t,
+        summarized_lazy.mapping_memory_usages.memory[0],
+        summarized_lazy.mapping_memory_usages.memory[1],
     )
 }
 
@@ -643,7 +645,7 @@ mod test {
         // the store it alongside other mappings
         dbg!();
         use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 2>::execute(&mut mapper);
+        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(&mut mapper, 1000, 0.5f64);
         // This one matches everingthing as it should but it is much slower
         // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 10_000, 1, 2>::execute(
         //     &mut mapper,

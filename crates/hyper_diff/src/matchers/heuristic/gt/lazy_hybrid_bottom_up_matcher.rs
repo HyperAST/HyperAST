@@ -172,21 +172,11 @@ where
     // }
 
     pub fn execute<'b>(&mut self) {
-        for t in self.internal.src_arena.iter_df_post::<true>() {
+        for t in self.internal.src_arena.iter_df_post::<false>() {
             // let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
             // dbg!(path);
             let a = self.internal.src_arena.decompress_to(&t);
-            if self.internal.src_arena.parent(&a).is_none() {
-                self.internal.mappings.link(
-                    self.internal.src_arena.root(),
-                    self.internal.dst_arena.root(),
-                );
-                self.last_chance_match_hybrid(
-                    self.internal.src_arena.starter(),
-                    self.internal.dst_arena.starter(),
-                );
-                break;
-            } else if !(self.internal.mappings.is_src(&t) || !self.src_has_children(a)) {
+            if !self.internal.mappings.is_src(&t) && self.src_has_children(a) {
                 let candidates = self.internal.get_dst_candidates_lazily(&a);
                 let mut best = None;
                 let mut max_sim = -1f64;
@@ -208,6 +198,7 @@ where
                     }
                 }
                 if let Some(best) = best {
+                    let _ = self.internal.dst_arena.decompress_descendants(&best);
                     self.last_chance_match_hybrid(a, best);
                     self.internal.mappings.link(*a.shallow(), *best.shallow());
                 }
@@ -222,6 +213,15 @@ where
                 }
             }
         }
+
+        self.internal.mappings.link(
+            self.internal.src_arena.root(),
+            self.internal.dst_arena.root(),
+        );
+        self.last_chance_match_hybrid(
+            self.internal.src_arena.starter(),
+            self.internal.dst_arena.starter(),
+        );
     }
 
     /// Hybrid recovery algorithm (finds mappings between src and dst descendants)

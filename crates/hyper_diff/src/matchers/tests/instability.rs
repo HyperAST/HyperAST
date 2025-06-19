@@ -66,7 +66,7 @@ fn test_unstable_greedy() {
 
     let mirrored = mapper.mapping.mappings.clone().mirror();
 
-    GreedyBottomUpMatcher::<_, _, _, _, 1>::execute(&mut mapper);
+    GreedyBottomUpMatcher::<_, _, _, _>::execute(&mut mapper, 1000, 0.5f64);
 
     let src = &mapper.src_arena.root();
     let dst = &mapper.dst_arena.root();
@@ -86,7 +86,7 @@ fn test_unstable_greedy() {
             mappings: mirrored,
         },
     };
-    GreedyBottomUpMatcher::<_, _, _, _, 1>::execute(&mut mapper);
+    GreedyBottomUpMatcher::<_, _, _, _>::execute(&mut mapper, 1000, 0.5f64);
 
     let src = &mapper.src_arena.root();
     let dst = &mapper.dst_arena.root();

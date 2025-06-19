@@ -105,6 +105,7 @@ pub trait LazyDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
     #[must_use]
     fn decompress_children(&mut self, x: &Self::IdD) -> Vec<Self::IdD>;
     fn decompress_to(&mut self, x: &IdS) -> Self::IdD;
+    fn decompress_descendants(&mut self, x: &Self::IdD);
 }
 
 pub trait DecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD>:

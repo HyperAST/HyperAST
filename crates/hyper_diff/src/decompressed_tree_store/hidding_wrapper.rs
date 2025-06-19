@@ -795,6 +795,10 @@ where
         let c = b.decompress_to(self.map.borrow()[len - x.to_usize().unwrap() - 1].shallow());
         *self.rev.borrow().get(&c).unwrap()
     }
+
+    fn decompress_descendants(&mut self, x: &Self::IdD) {
+        todo!()
+    }
 }
 
 impl<

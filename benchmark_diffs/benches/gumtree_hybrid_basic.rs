@@ -135,10 +135,11 @@ fn run_diff(src: &str, dst: &str, max_size: usize) {
     let (src_tr, dst_tr) =
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
     
-    let diff_result= algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let diff_result= algorithms::gumtree_hybrid::diff_hybrid(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
+        max_size
     );
 
     black_box(diff_result);

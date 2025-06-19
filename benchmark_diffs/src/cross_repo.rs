@@ -184,13 +184,13 @@ pub fn windowed_commits_compare(
             let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
             let mu = memusage_linux();
-            let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr);
+            let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
             let not_lazy = not_lazy.summarize();
             dbg!(&not_lazy);
             let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
             let partial_lazy = partial_lazy.summarize();
             dbg!(&partial_lazy);
-            let lazy = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
+            let lazy = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
             let summarized_lazy = &lazy.summarize();
             dbg!(summarized_lazy);
             if !summarized_lazy.compare_results(&not_lazy)

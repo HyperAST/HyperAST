@@ -683,6 +683,8 @@ where
             c = c - s;
             r[i] = c;
         }
+        let a = self._lld(x.to_usize().unwrap()).to_usize().unwrap();
+        let b = self._lld(c.to_usize().unwrap()).to_usize().unwrap();
         assert_eq!(
             self._lld(x.to_usize().unwrap()).to_usize().unwrap(),
             self._lld(c.to_usize().unwrap()).to_usize().unwrap()
@@ -804,6 +806,14 @@ where
             self._lld(c.to_usize().unwrap()).to_usize().unwrap()
         );
         r
+    }
+
+    fn decompress_descendants(&mut self, x: &IdD) {
+        let mut q = vec![x.clone()];
+        while let Some(x) = q.pop() {
+            assert!(self.id_parent[x.to_usize().unwrap()] != zero());
+            q.extend(self.decompress_children(&x));
+        }
     }
 
     fn decompress_to(&mut self, x: &IdD) -> Self::IdD {

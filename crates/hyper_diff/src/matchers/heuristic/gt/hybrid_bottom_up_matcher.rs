@@ -23,11 +23,11 @@ pub struct HybridBottomUpMatcher<
     Ddst,
     HAST,
     M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize = 1000,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     internal: BottomUpMatcher<Dsrc, Ddst, HAST, M>,
+    max_size: usize,
 }
 
 /// Enable using a slice instead of recreating a ZsTree for each call to ZsMatch, see last_chance_match
@@ -38,7 +38,6 @@ impl<
     Ddst,
     HAST: HyperAST,
     M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize,  // = 1000,
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
@@ -47,7 +46,6 @@ for HybridBottomUpMatcher<
     Ddst,
     HAST,
     M,
-    SIZE_THRESHOLD,
     SIM_THRESHOLD_NUM,
     SIM_THRESHOLD_DEN,
 >
@@ -76,10 +74,9 @@ impl<
     + POBorrowSlice<HAST, M::Dst>,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
-    const SIZE_THRESHOLD: usize,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
-> HybridBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+> HybridBottomUpMatcher<Dsrc, Ddst, HAST, M, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
         for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
         M::Src: PrimInt,
@@ -88,7 +85,7 @@ where
         HAST::IdN: Debug,
         HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
+    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M, max_size: usize) -> Self {
         Self {
             internal: BottomUpMatcher {
                 stores,
@@ -96,11 +93,13 @@ where
                 dst_arena,
                 mappings,
             },
+            max_size,
         }
     }
 
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        max_size: usize,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             internal: BottomUpMatcher {
@@ -109,6 +108,7 @@ where
                 dst_arena: mapping.mapping.dst_arena,
                 mappings: mapping.mapping.mappings,
             },
+            max_size
         };
         matcher.internal.mappings.topit(
             matcher.internal.src_arena.len(),
@@ -125,12 +125,13 @@ where
         }
     }
 
-    pub fn matchh(store: HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M) -> Self {
+    pub fn matchh(store: HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M, max_size: usize) -> Self {
         let mut matcher = Self::new(
             store,
             Dsrc::decompress(store, src),
             Ddst::decompress(store, dst),
             mappings,
+            max_size
         );
         matcher.internal.mappings.topit(
             matcher.internal.src_arena.len(),
@@ -188,8 +189,8 @@ where
     }
 
     fn last_chance_match_hybrid(&mut self, src: &M::Src, dst: &M::Dst) {
-        if self.internal.src_arena.descendants_count(&src) < SIZE_THRESHOLD
-            && self.internal.dst_arena.descendants_count(&dst) < SIZE_THRESHOLD
+        if self.internal.src_arena.descendants_count(&src) < self.max_size
+            && self.internal.dst_arena.descendants_count(&dst) < self.max_size
         {
             self.last_chance_match_optimal(src, dst);
         } else {

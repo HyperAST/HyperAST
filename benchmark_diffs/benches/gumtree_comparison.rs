@@ -1,8 +1,11 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
+use std::time::Duration;
+use hyper_diff::algorithms::{PreparedMappingDurations, ResultsSummary};
+use hyperast_benchmark_diffs::run_diff::run_diff;
 
 const DEFAULT_SIZE_THRESHOLD: usize = 1000;
 
@@ -119,76 +122,128 @@ fn diff_benchmark(c: &mut Criterion) {
 
     for (i, (name, buggy, fixed)) in test_inputs.iter().enumerate() {
         group.bench_with_input(BenchmarkId::new("hybrid_50", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<50>(black_box(buggy), black_box(fixed), "hybrid");
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 50)
+                        .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
         group.bench_with_input(BenchmarkId::new("hybrid_100", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<100>(black_box(buggy), black_box(fixed), "hybrid");
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 100)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
         group.bench_with_input(BenchmarkId::new("hybrid_500", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<500>(black_box(buggy), black_box(fixed), "hybrid");
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 500)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
         group.bench_with_input(BenchmarkId::new("hybrid_1000", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<1000>(black_box(buggy), black_box(fixed), "hybrid");
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 1000)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
         group.bench_with_input(BenchmarkId::new("simple", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<DEFAULT_SIZE_THRESHOLD>(black_box(buggy), black_box(fixed), "simple");
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "simple", DEFAULT_SIZE_THRESHOLD)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
         group.bench_with_input(BenchmarkId::new("greedy", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<DEFAULT_SIZE_THRESHOLD>(black_box(buggy), black_box(fixed), "greedy");
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "greedy", DEFAULT_SIZE_THRESHOLD)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
-        group.bench_with_input(BenchmarkId::new("lazy", i), &i,|b, i| {
-            b.iter(|| {
-                run_diff::<DEFAULT_SIZE_THRESHOLD>(black_box(buggy), black_box(fixed), "lazy");
+        group.bench_with_input(BenchmarkId::new("lazy_greedy", i), &i,|b, i| {
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "lazy", DEFAULT_SIZE_THRESHOLD)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
+            })
+        });
+        group.bench_with_input(BenchmarkId::new("lazy_hybrid_50", i), &i,|b, i| {
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 50)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
+            })
+        });
+        group.bench_with_input(BenchmarkId::new("lazy_hybrid_100", i), &i,|b, i| {
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 100)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
+            })
+        });
+        group.bench_with_input(BenchmarkId::new("lazy_hybrid_500", i), &i,|b, i| {
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 500)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
+            })
+        });
+        group.bench_with_input(BenchmarkId::new("lazy_hybrid_1000", i), &i,|b, i| {
+            b.iter_custom(|iters| {
+                let mut time = Duration::new(0, 0);
+                for _i in 0..iters {
+                    time += Duration::from_secs_f64(
+                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 1000)
+                            .mapping_durations.mappings.0.get(1).unwrap().clone());
+                }
+                time
             })
         });
     }
     group.finish();
-}
-
-fn run_diff<const SIZE_THRESHOLD: usize>(src: &str, dst: &str, algorithm: &str) {
-    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-    let mut md_cache = Default::default();
-
-    let (src_tr, dst_tr) =
-        parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-
-    let diff_result= match algorithm {
-        "hybrid" => algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD, 1>(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "simple" => algorithms::gumtree_simple::diff_simple(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "greedy" => algorithms::gumtree::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        "lazy" => algorithms::gumtree_lazy::diff(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        ),
-        _ => panic!("Unknown function")
-    };
-
-    black_box(diff_result);
 }
 
 criterion_group!(benches, diff_benchmark);

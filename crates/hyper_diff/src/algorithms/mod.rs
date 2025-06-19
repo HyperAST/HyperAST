@@ -3,6 +3,7 @@ use crate::{
     decompressed_tree_store::ShallowDecompressedTreeStore,
     matchers::{Mapper, mapping_store::VecStore},
 };
+use jemalloc_ctl::{epoch, stats};
 
 pub mod gumtree;
 pub mod gumtree_lazy;
@@ -18,6 +19,11 @@ pub struct MappingDurations<const N: usize>(pub [f64; N]);
 pub struct PreparedMappingDurations<const N: usize> {
     pub mappings: MappingDurations<N>,
     pub preparation: [f64; N],
+}
+
+#[derive(Debug, Clone)]
+pub struct MappingMemoryUsages<const N: usize> {
+    pub memory: [usize; N],
 }
 
 impl<const N: usize> ComputeTime for PreparedMappingDurations<N> {
@@ -40,6 +46,7 @@ impl<const N: usize> From<[f64; N]> for MappingDurations<N> {
 
 pub struct DiffResult<A, M, MD> {
     pub mapping_durations: MD,
+    pub mapping_memory_usages: MappingMemoryUsages<2>, // todo: use templates
     pub mapper: M,
     pub actions: Option<ActionsVec<A>>,
     pub prepare_gen_t: f64,
@@ -49,6 +56,7 @@ pub struct DiffResult<A, M, MD> {
 #[derive(Debug)]
 pub struct ResultsSummary<MD> {
     pub mapping_durations: MD,
+    pub mapping_memory_usages: MappingMemoryUsages<2>,
     pub mappings: usize,
     pub actions: Option<usize>,
     pub prepare_gen_t: f64,
@@ -65,6 +73,7 @@ impl<A, MD: Clone, HAST, DS, DD> DiffResult<A, Mapper<HAST, DS, DD, VecStore<u32
             actions: self.actions.as_ref().map(|x| x.len()),
             prepare_gen_t: self.prepare_gen_t,
             gen_t: self.gen_t,
+            mapping_memory_usages: self.mapping_memory_usages.clone()
         }
     }
 }
@@ -120,6 +129,11 @@ where
         };
         crate::actions::action_vec::actions_vec_f(f, actions, self.mapper.hyperast, ori)
     }
+}
+
+fn get_allocated_memory() -> usize {
+    epoch::advance().unwrap();
+    stats::allocated::read().unwrap()
 }
 
 // #[macro_use]

@@ -20,9 +20,6 @@ pub struct GreedyBottomUpMatcher<
     Ddst,
     HAST,
     M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize = 1000,
-    const SIM_THRESHOLD_NUM: u64 = 1,
-    const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     pub(crate) internal: Mapper<HAST, Dsrc, Ddst, M>,
 }
@@ -35,18 +32,12 @@ impl<
     Ddst,
     HAST: HyperAST,
     M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize,  // = 1000,
-    const SIM_THRESHOLD_NUM: u64, // = 1,
-    const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<Mapper<HAST, Dsrc, Ddst, M>>
     for GreedyBottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,
         M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
     >
 {
     fn into(self) -> Mapper<HAST, Dsrc, Ddst, M> {
@@ -73,10 +64,7 @@ impl<
         + POBorrowSlice<HAST, M::Dst>,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
-    const SIZE_THRESHOLD: usize,
-    const SIM_THRESHOLD_NUM: u64,
-    const SIM_THRESHOLD_DEN: u64,
-> GreedyBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+> GreedyBottomUpMatcher<Dsrc, Ddst, HAST, M>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -94,12 +82,14 @@ where
                     dst_arena,
                     mappings,
                 },
-            },
+
+            }
         }
     }
 
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        max_size: usize, sim_threshold: f64
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
         let mut matcher = mapping;
         matcher.mapping.mappings.topit(
@@ -107,26 +97,26 @@ where
             matcher.mapping.dst_arena.len(),
         );
         let mut matcher = Self { internal: matcher };
-        Self::execute(&mut matcher.internal);
+        Self::execute(&mut matcher.internal, max_size, sim_threshold);
         matcher.internal
     }
 
-    pub fn matchh(store: HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M) -> Self {
+    pub fn matchh(store: HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M, max_size: usize, sim_threshold: f64) -> Self {
         let mut matcher = Self::new(
             store,
             Dsrc::decompress(store, src),
             Ddst::decompress(store, dst),
-            mappings,
+            mappings
         );
         matcher.internal.mapping.mappings.topit(
             matcher.internal.mapping.src_arena.len(),
             matcher.internal.mapping.dst_arena.len(),
         );
-        Self::execute(&mut matcher.internal);
+        Self::execute(&mut matcher.internal, max_size, sim_threshold);
         matcher
     }
 
-    pub fn execute<'b>(mapper: &mut Mapper<HAST, Dsrc, Ddst, M>) {
+    pub fn execute<'b>(mapper: &mut Mapper<HAST, Dsrc, Ddst, M>, max_size: usize, sim_threshold: f64) {
         assert_eq!(
             // TODO move it inside the arena ...
             mapper.src_arena.root(),
@@ -151,14 +141,14 @@ where
                         &mapper.mappings,
                     )
                     .dice();
-                    if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
+                    if sim > max && sim >= sim_threshold {
                         max = sim;
                         best = Some(cand);
                     }
                 }
 
                 if let Some(best) = best {
-                    Self::last_chance_match_zs(mapper, a, best);
+                    Self::last_chance_match_zs(mapper, a, best, max_size);
                     mapper.mappings.link(a, best);
                 }
             }
@@ -168,7 +158,7 @@ where
             mapper.mapping.src_arena.root(),
             mapper.mapping.dst_arena.root(),
         );
-        Self::last_chance_match_zs(mapper, mapper.src_arena.root(), mapper.dst_arena.root());
+        Self::last_chance_match_zs(mapper, mapper.src_arena.root(), mapper.dst_arena.root(), max_size);
     }
 
     pub(in crate::matchers) fn get_dst_candidates(mapper: &mut Mapper<HAST, Dsrc, Ddst, M>, src: &M::Src) -> Vec<M::Dst> {
@@ -226,11 +216,12 @@ where
         mapper: &mut Mapper<HAST, Dsrc, Ddst, M>,
         src: M::Src,
         dst: M::Dst,
+        max_size: usize
     ) {
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
         let src_s = mapper.src_arena.descendants_count(&src);
         let dst_s = mapper.dst_arena.descendants_count(&dst);
-        if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
+        if !(src_s < cast(max_size).unwrap() || dst_s < cast(max_size).unwrap()) {
             return;
         }
         let stores = mapper.hyperast;

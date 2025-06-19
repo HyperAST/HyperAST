@@ -13,6 +13,7 @@ members = [
     "benchmark_diffs",
     "benchmark_smells",
     "benchmark",
+    "hyper_dat"
 ]
 exclude = ["crates/ref-mining-evaluation", "hyperast_wasm"]
 default-members = [
@@ -44,6 +45,7 @@ hyperast = { path = "./crates/hyper_ast", default-features = false }
 hyperast_tsquery = { path = "./crates/tsquery" }
 hyperast_vcs_git = { path = "./vcs/git" }
 polyglote = { path = "./lib/polyglote" }
+hyperast_benchmark_diffs = { path = "./benchmark_diffs" }
 
 hyperast_gen_ts_cpp = { path = "./gen/tree-sitter/cpp" }
 hyperast_gen_ts_java = { path = "./gen/tree-sitter/java" }

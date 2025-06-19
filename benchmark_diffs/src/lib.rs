@@ -15,6 +15,8 @@
 //! RQ 2: performances: how our performances compare for the task of computing edit scripts on consecutive commits ? on a set of buggy/fixed files ?
 //! RQ 3: scaling: what is the maximum number of commits that can be incremetally processed while staying in RAM ?
 //!                what is the maximum size of the window where we can compute all combination of edit scripts ?
+#![recursion_limit = "256"]
+
 #[cfg(test)]
 mod random_sample_diff;
 #[cfg(test)]
@@ -30,6 +32,8 @@ pub mod other_tools;
 pub mod postprocess;
 pub mod preprocess;
 pub mod preprocess_repo;
+pub mod run_diff;
+pub mod cross_repo_hybrid;
 
 use std::{env, fs, io, path, time};
 

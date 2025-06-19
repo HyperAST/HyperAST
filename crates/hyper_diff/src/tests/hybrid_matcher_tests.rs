@@ -37,10 +37,11 @@ fn test_gumtree_hybrid_java_simple() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_simple());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -60,10 +61,11 @@ fn test_gumtree_hybrid_java_method() {
     let (stores, src, dst) = vpair_to_stores(example_from_gumtree_java_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -82,10 +84,11 @@ fn test_gumtree_hybrid_reorder_children() {
     let (stores, src, dst) = vpair_to_stores(example_reorder_children());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -104,10 +107,11 @@ fn test_gumtree_hybrid_move_method() {
     let (stores, src, dst) = vpair_to_stores(example_move_method());
 
     // Perform the diff using gumtree lazy
-    let _diff_result = diff_hybrid::<_, DEFAULT_SIZE_THRESHOLD, DEFAULT_MIN_HEIGHT>(
+    let _diff_result = diff_hybrid(
         &stores,
         &src,
         &dst,
+        DEFAULT_SIZE_THRESHOLD
     );
 
     println!("{}", _diff_result);
@@ -118,5 +122,51 @@ fn test_gumtree_hybrid_move_method() {
     let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
 
     assert_eq!(hyperast_matches_len, 31);
+    assert_eq!(hyperast_actions_len, 7);
+}
+
+#[test]
+fn test_gumtree_chart_1() {
+    let (stores, src, dst) = vpair_to_stores(example_chart_1());
+
+    // Perform the diff using gumtree lazy
+    let _diff_result = diff_hybrid(
+        &stores,
+        &src,
+        &dst,
+        DEFAULT_SIZE_THRESHOLD
+    );
+
+    println!("{}", _diff_result);
+
+    let actions = _diff_result.actions.expect("Expected a result");
+
+    let hyperast_actions_len = actions.len();
+    let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
+
+    assert_eq!(hyperast_matches_len, 5693);
+    assert_eq!(hyperast_actions_len, 1);
+}
+
+#[test]
+fn test_gumtree_csv_11() {
+    let (stores, src, dst) = vpair_to_stores(example_csv_11());
+
+    // Perform the diff using gumtree lazy
+    let _diff_result = diff_hybrid(
+        &stores,
+        &src,
+        &dst,
+        DEFAULT_SIZE_THRESHOLD
+    );
+
+    println!("{}", _diff_result);
+
+    let actions = _diff_result.actions.expect("Expected a result");
+
+    let hyperast_actions_len = actions.len();
+    let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
+
+    assert_eq!(hyperast_matches_len, 1288);
     assert_eq!(hyperast_actions_len, 7);
 }
