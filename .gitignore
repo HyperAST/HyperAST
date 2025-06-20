@@ -19,3 +19,8 @@
 # Direnv
 /.direnv/
 /result
+
+gt_datasets/
+.idea/
+benchmark_diffs/plots
+*.java
