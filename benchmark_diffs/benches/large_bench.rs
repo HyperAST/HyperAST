@@ -2,34 +2,26 @@ use std::fmt::Debug;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use hyper_diff::decompressed_tree_store::{CompletePostOrder, ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent};
 use hyper_diff::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
 use hyper_diff::matchers::{Decompressible, Mapper, Mapping};
-use hyper_diff::matchers::heuristic::gt::greedy_bottom_up_matcher::GreedyBottomUpMatcher;
 use hyper_diff::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, MonoMappingStore, VecStore};
 use hyper_diff::tree::tree_path::{CompressedTreePath, SimpleTreePath, TreePath};
 use hyperast::store::SimpleStores;
-use hyperast_gen_ts_java::types::TStore;
-use hyperast::{types, PrimInt};
 use hyperast::types::{DecompressedFrom, HyperAST, HyperASTShared, NodeId};
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
-use hyperast_gen_ts_java::legion_with_refs;
 use walkdir::{DirEntry, WalkDir};
 use std::io::Write;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use hyper_diff::actions::action_vec::ActionsVec;
 use hyper_diff::actions::Actions;
-use hyper_diff::actions::script_generator2::{ScriptGenerator, SimpleAction};
+use hyper_diff::actions::script_generator2::{Act, ScriptGenerator, SimpleAction};
 use hyper_diff::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
-use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 use hyper_diff::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMatcher3;
-use hyper_diff::matchers::heuristic::gt::xy_bottom_up_matcher::XYBottomUpMatcher;
 use hyperast::store::defaults::NodeIdentifier;
 use hyperast::store::labels::DefaultLabelIdentifier;
-use hyperast_gen_ts_java::legion_with_refs::FNode;
 
 const ALGORITHM_NAME: &str = "SimpleBottomUpMatcher3";
 
@@ -63,21 +55,12 @@ fn compute_metadata(before_entry: &PathBuf) -> (usize, usize, usize, usize, usiz
     let mut hyperast = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
 
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        parse_string_pair(
-            &mut hyperast,
-            &mut md_cache,
-            black_box(&before_content),
-            black_box(&after_content),
-        )
-    }));
-    let (src_tr, dst_tr) = match result {
-        Ok(pair) => pair,
-        Err(_) => {
-            eprintln!("Could not parse {}", before_entry.to_string_lossy().to_string());
-            return (0, 0, 0, 0, 0);
-        }
-    };
+    let (src_tr, dst_tr) = parse_string_pair(
+        &mut hyperast,
+        &mut md_cache,
+        black_box(&before_content),
+        black_box(&after_content),
+    );
 
     let src = &src_tr.local.compressed_node;
     let dst = &dst_tr.local.compressed_node;
@@ -102,12 +85,10 @@ fn compute_metadata(before_entry: &PathBuf) -> (usize, usize, usize, usize, usiz
     };
     let script_mapper = script_mapper.map(
         |x| x,
-        // the dst side has to be traversed in bfs for chawathe
         |dst_arena| SimpleBfsMapper::with_store(&hyperast, dst_arena),
     );
     let script_length_before: ActionsVec<SimpleAction<DefaultLabelIdentifier, SimpleTreePath<u16>, NodeIdentifier>> = ScriptGenerator::compute_actions(&hyperast, &script_mapper.mapping).ok().unwrap();
     let script_length_before = script_length_before.len();
-
     mapper = SimpleBottomUpMatcher3::<_, _, _, _>::match_it(mapper);
 
     let matches_after = mapper.mappings().len();
@@ -124,7 +105,6 @@ fn compute_metadata(before_entry: &PathBuf) -> (usize, usize, usize, usize, usiz
     };
     let script_mapper = script_mapper.map(
         |x| x,
-        // the dst side has to be traversed in bfs for chawathe
         |dst_arena| SimpleBfsMapper::with_store(&hyperast, dst_arena),
     );
     let script_length_after: ActionsVec<SimpleAction<DefaultLabelIdentifier, SimpleTreePath<u16>, NodeIdentifier>> = ScriptGenerator::compute_actions(&hyperast, &script_mapper.mapping).ok().unwrap();
@@ -154,7 +134,17 @@ fn compile_results() {
         let path = Path::new(&path);
         dbg!(path);
 
-        let (total_size, matches_before, matches_after, script_length_before, script_length_after) = compute_metadata(&before_entry);
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            compute_metadata(&before_entry)
+        }));
+        let (total_size, matches_before, matches_after, script_length_before, script_length_after) = match result {
+            Ok(result) => result,
+            Err(_) => {
+                eprintln!("Could not compile {}", before_entry.to_string_lossy().to_string());
+                continue;
+            }
+        };
+
         if let Ok(result) = fs::read_to_string(&path) {
             writeln!(result_file, "{{
                 \"file_name\": \"{before_path}\",
@@ -179,7 +169,13 @@ fn diff_benchmark(c: &mut Criterion) {
 
     dbg!(dataset_files());
 
+    let dataset_size = dataset_files().len();
+    let mut progress = 0;
+
     for before_entry in dataset_files() {
+        progress += 1;
+        println!("Processing {}/{}", progress, dataset_size);
+
         let path = format!(
             "/home/maciek/HyperAST/target/criterion/large_bench/{ALGORITHM_NAME}/{}/new/estimates.json",
             file_id(&before_entry)
@@ -188,7 +184,7 @@ fn diff_benchmark(c: &mut Criterion) {
             println!("Results exists, skipping: {}", path);
             continue;
         }
-        
+
         let after_entry = PathBuf::from(before_entry.to_string_lossy().replace("before", "after"));
 
         let before_content = fs::read_to_string(&before_entry).unwrap();
