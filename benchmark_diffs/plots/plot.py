@@ -4,22 +4,21 @@ import json
 import matplotlib.pyplot as plt
 from cycler import cycler
 import numpy as np
-from utils import read_json_file
+from utils import read_json_file, add_markers
 import seaborn as sns
 
 def plot_performance(df, name, x='AST total nodes'):
-    df['x'] = df[x]
+    df = df[df[x] > 1]
+    df['x'] = df[x] + np.random.uniform(-0.5, 0.5, size=len(df))
     df['y'] = df['Time (ms)']
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Plot the points
-    ax.scatter(df['x'], df['y'], color='blue', s=30)
+    ax.scatter(df['x'], df['y'], color='blue', s=30, marker='x')
     ax.errorbar(df['x'], df['y'],
                 yerr=[df['y'] - df['ci_lower'], df['ci_upper'] - df['y']],
                 fmt='none', ecolor='gray', elinewidth=1, capsize=3, alpha=0.7)
 
-    # Labels and title
     plt.title(name)
     plt.xlabel(x)
     plt.ylabel('Time (ms)')
@@ -27,9 +26,9 @@ def plot_performance(df, name, x='AST total nodes'):
     plt.xscale('log')
     plt.yscale('log')
     plt.tight_layout()
-    plt.savefig(name + ".png")
+    plt.savefig(name + " (" + x + ").png")
 
-def plot_comparison(title, x, y, datasets):
+def plot_comparison(title, x, y, datasets, s=None):
     x_for_file = {d['file_name']: d[x] for _, d in datasets[0][0].iterrows()}
 
     plt.clf()
@@ -39,8 +38,10 @@ def plot_comparison(title, x, y, datasets):
         df = df[df['file_name'].isin(x_for_file)]
         df['x'] = df['file_name'].map(x_for_file)
         df['y'] = df[y]
+        if s:
+            df['size'] = np.sqrt(df[s]) * 5
 
-        plt.plot(df['x'], df['y'], marker='x', linestyle='', label=label)
+        plt.scatter(df['x'], df['y'], s=df['size'] if s else None, marker='x', linestyle='', label=label)
 
     plt.xlabel(x)
     plt.ylabel(y)
@@ -54,9 +55,17 @@ def plot_comparison_binned(title, x, y, datasets, n_bins=12):
     x_for_file = {d['file_name']: d[x] for _, d in datasets[0][0].iterrows() if d[x] > 1}
 
     all_data = []
+
+    # set up bins
     bins = np.logspace(np.log10(min(x_for_file.values())), np.log10(max(x_for_file.values())), n_bins + 2)
     bins[-1] += 1
     bins = bins[1:]
+    while np.count_nonzero(list(x_for_file.values()) > bins[-2]) < 10:
+        bins = np.delete(bins, -2)
+    bins = np.round(bins, -1 if bins[-2] < 10000 else -2)
+    bins = np.unique(bins)
+
+    n_bins = len(bins) - 1
 
     for (df, label) in datasets:
         df = df[df['file_name'].isin(x_for_file)]
@@ -74,7 +83,12 @@ def plot_comparison_binned(title, x, y, datasets, n_bins=12):
     plot_df['bin'] = plot_df['bin'].astype(int)
 
     plt.figure(figsize=(10, 6))
-    sns.stripplot(data=plot_df, x='bin', y='y', hue='label', jitter=0.5, dodge=True, alpha=0.7)
+    ax = sns.stripplot(data=plot_df, x='bin', y='y', hue='label', jitter=0.5, dodge=True, alpha=0.7)
+
+    ax.set_xlim(-0.5, n_bins - 0.5)
+
+    add_markers(ax, len(datasets), plot_df)
+
     plt.xticks(
         ticks=np.arange(n_bins),
         labels=[f"{bins[i]:.0f} - {bins[i+1]:.0f}" for i in range(n_bins)],
@@ -85,74 +99,78 @@ def plot_comparison_binned(title, x, y, datasets, n_bins=12):
     plt.xlabel(x)
     plt.ylabel(y)
     plt.yscale('log')
-    plt.legend()
     plt.title(title)
     plt.tight_layout()
-    plt.savefig(title + ".png")
+    plt.savefig(title + " (" + x + ").png", dpi=300)
 
 xy_data = read_json_file("../results_xy.json")
 greedy_100_data = read_json_file("../results_greedy_100.json")
 greedy_300_data = read_json_file("../results_greedy_300.json")
-#greedy_500_data = read_json_file("../results_greedy_500.json")
 greedy_1000_data = read_json_file("../results_greedy_1000.json")
 simple_data = read_json_file("../results_simple.json")
-gumtreediff_1000_data = read_json_file("../results_gumtreediff.json")
-hyperdiff_1000_data = read_json_file("../results_hyperdiff.json")
+gumtreediff_data = read_json_file("../results_gumtreediff.json")
+hyperdiff_data = read_json_file("../results_hyperdiff.json")
 
-plot_performance(greedy_1000_data, "Greedy S=1000 performance", x='Matched nodes')
-plot_performance(greedy_100_data, "Greedy S=100 performance")
-plot_performance(greedy_300_data, "Greedy S=300 performance")
-#plot_performance(greedy_500_data, "Greedy S=500 performance")
+plot_performance(greedy_1000_data, "GumTreeBottomUp MAX_SIZE=1000")
+plot_performance(greedy_100_data, "GumTreeBottomUp MAX_SIZE=100", x='AST total nodes')
+plot_performance(greedy_100_data, "GumTreeBottomUp MAX_SIZE=100", x='Matched nodes')
+plot_performance(greedy_300_data, "GumTreeBottomUp MAX_SIZE=300")
 plot_performance(xy_data, "XY performance")
 plot_performance(simple_data, "Simple performance")
 
-datasets_bottomup = [(greedy_1000_data, 'Greedy Matcher, S=1000'),
-                    #(greedy_500_data, 'Greedy Matcher, S=500'),
-                    (greedy_300_data, 'Greedy Matcher, S=300'),
-                    (greedy_100_data, 'Greedy Matcher, S=100'),
-                    (xy_data, 'XYMatcher'),
-                    (simple_data, 'Simple Matcher')]
+datasets_bottomup = [(greedy_1000_data, 'GumTreeBottomUp, MAX_SIZE=1000'),
+                    (greedy_300_data, 'GumTreeBottomUp, MAX_SIZE=300'),
+                    (greedy_100_data, 'GumTreeBottomUp, MAX_SIZE=100'),
+                    (xy_data, 'XyBottomUp'),
+                    (simple_data, 'SimpleBottomUp'),]
 plot_comparison(
-    title = "Quality (raw)",
-    x = 'Best algorithm matched nodes',
-    y = 'Script length difference',
+    title = "BottomUp Quality (raw)",
+    x = 'Matched nodes',
+    y = 'Script length reduction',
     datasets = datasets_bottomup,
 )
 
 plot_comparison_binned(
-    title = "Quality by algorithm (total nodes)",
+    title = "BottomUp Quality",
     x = 'AST total nodes',
-    y = 'Matched nodes',
+    y = 'Script length reduction',
     datasets = datasets_bottomup
 )
 
 plot_comparison_binned(
-    title = "Runtime by algorithm (matched nodes)",
-    x = 'Best algorithm matched nodes',
+    title = "BottomUp Runtime",
+    x = 'Matched nodes',
     y = 'Time (ms)',
     datasets = datasets_bottomup
 )
 
 plot_comparison_binned(
-    title = "Runtime by algorithm (total size)",
+    title = "BottomUp Runtime",
     x = 'AST total nodes',
     y = 'Time (ms)',
     datasets = datasets_bottomup
 )
 
-dataset_diff = [(gumtreediff_1000_data, 'GumtreeDiff'),
-                (hyperdiff_1000_data, 'HyperDiff')]
+dataset_diff = [(gumtreediff_data, 'GumTreeSubtree'),
+                (hyperdiff_data, 'HyperDiffSubtree')]
 
 plot_comparison(
-    title = "Diff Runtime (raw)",
+    title = "Runtime (raw)",
     x = 'AST total nodes',
     y = 'Time (ms)',
     datasets = dataset_diff,
 )
 
 plot_comparison_binned(
-    title = "Diff Runtime by algorithm (total size)",
+    title = "Subtree Runtime",
     x = 'AST total nodes',
+    y = 'Time (ms)',
+    datasets = dataset_diff
+)
+
+plot_comparison_binned(
+    title = "Subtree Runtime",
+    x = 'Unmatched nodes (Subtree)',
     y = 'Time (ms)',
     datasets = dataset_diff
 )
