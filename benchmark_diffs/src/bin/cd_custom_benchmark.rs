@@ -104,18 +104,9 @@ struct MeasurementResult {
 /// Create various optimization configurations for comprehensive benchmarking
 fn create_optimization_configs() -> Vec<OptimizationConfig> {
     vec![
+        // Label
         OptimizationConfig::new("Baseline with Deep Label", OptimizedDiffConfig::baseline()),
-        OptimizationConfig::new(
-            "Baseline with Statement",
-            OptimizedDiffConfig::baseline().with_statement_level_iteration(),
-        ),
-        OptimizationConfig::new(
-            "Baseline with Deep Statement",
-            OptimizedDiffConfig::baseline()
-                .with_statement_level_iteration()
-                .with_deep_leaves(),
-        ),
-        // Optimized Label
+        Optimized Label
         OptimizationConfig::new(
             "Optimized with Deep Label",
             OptimizedDiffConfig::optimized(),
@@ -124,24 +115,37 @@ fn create_optimization_configs() -> Vec<OptimizationConfig> {
             "Optimized with Deep Label and Label Cache",
             OptimizedDiffConfig::optimized().with_label_caching(),
         ),
+
+        // Shallow Statement
+        OptimizationConfig::new(
+            "Baseline with Shallow Statement",
+            OptimizedDiffConfig::baseline().with_statement_level_iteration(),
+        ),
         // Optimized shallow statements
         OptimizationConfig::new(
-            "Optimized with Statement",
+            "Optimized with Shallow Statement",
             OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
         OptimizationConfig::new(
-            "Optimized with Statement and Ngram Cache",
+            "Optimized with Shallow Statement and Ngram Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_ngram_caching(),
         ),
         OptimizationConfig::new(
-            "Optimized with Statement and Label Cache",
+            "Optimized with Shallow Statement and Label Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_label_caching(),
         ),
-        // Optimized deep statements
+        // Deep Statement
+        OptimizationConfig::new(
+            "Baseline with Deep Statement",
+            OptimizedDiffConfig::baseline()
+                .with_statement_level_iteration()
+                .with_deep_leaves(),
+        ),
+        Optimized deep statements
         OptimizationConfig::new(
             "Optimized with Deep Statement",
             OptimizedDiffConfig::optimized()
