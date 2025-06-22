@@ -1,0 +1,14 @@
+{
+  "name": "452811cc9cc1f2d3",
+  "main": "452811cc9cc1f2d3@930.js",
+  "version": "930.0.0",
+  "homepage": "https://observablehq.com/d/452811cc9cc1f2d3",
+  "author": {
+    "name": "Leo Mangold",
+    "url": "https://observablehq.com/@leo-mangold"
+  },
+  "type": "module",
+  "peerDependencies": {
+    "@observablehq/runtime": "4 - 5"
+  }
+}
