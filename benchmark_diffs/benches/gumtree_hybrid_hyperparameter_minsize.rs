@@ -178,7 +178,7 @@ fn diff_benchmark(c: &mut Criterion) {
         };
     }
 
-    run_diff_for_thresholds!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    run_diff_for_thresholds!(0, 1, 2, 3, 4, 5);
     group.finish();
 }
 
@@ -189,8 +189,7 @@ fn run_diff<const SIZE_THRESHOLD: usize>(src: &str, dst: &str) {
     let (src_tr, dst_tr) =
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
 
-    todo!("update benchmark when minsize is adjustable")
-    let diff_result= algorithms::gumtree_hybrid::diff_hybrid(
+    let diff_result= algorithms::gumtree_hybrid::diff_hybrid_minheight::<_, SIZE_THRESHOLD>(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
