@@ -63,4 +63,4 @@ impl = [
     "dep:tree-sitter-query",
     "dep:hyperast_tsquery",
 ]
-synth_par = ["dep:rayon"]
+synth_par = ["dep:rayon", "hashbrown?/rayon"]
