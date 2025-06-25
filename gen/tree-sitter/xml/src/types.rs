@@ -1,62 +1,59 @@
 use std::{fmt::Display, u16};
 
-use hyperast::{
-    tree_gen::utils_ts::TsEnableTS,
-    types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypeU16, TypedNodeId},
-};
+use hyperast::tree_gen::{TsEnableTS, TsType};
+use hyperast::types::TypeStore;
+use hyperast::types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypeU16, TypedNodeId};
+
+impl<'a> hyperast::types::ETypeStore for TStore {
+    type Ty2 = Type;
+
+    fn intern(ty: Self::Ty2) -> Self::Ty {
+        TType::new(ty)
+    }
+}
+
+impl TsEnableTS for TStore {
+    fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
+        let k = n.kind_id();
+        Type::from_u16(k)
+    }
+
+    fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> Option<Self::Ty2> {
+        let k = n.kind_id();
+        static LEN: u16 = S_T_L.len() as u16;
+        if LEN <= k && k < TStore::LOWEST_RESERVED {
+            return None;
+        }
+        Some(Type::from_u16(k))
+    }
+}
+
+impl TsType for Type {
+    fn spaces() -> Self {
+        Self::Spaces
+    }
+
+    fn is_repeat(&self) -> bool {
+        self.is_repeat()
+    }
+}
+
+impl TypeStore for TStore {
+    type Ty = TypeU16<Xml>;
+}
+impl TypeStore for &TStore {
+    type Ty = TypeU16<Xml>;
+}
 
 #[cfg(feature = "impl")]
 mod impls {
     use super::*;
-    use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
-    use hyperast::types::TypeStore;
-
-    impl<'a> hyperast::types::ETypeStore for TStore {
-        type Ty2 = Type;
-
-        fn intern(ty: Self::Ty2) -> Self::Ty {
-            TType::new(ty)
-        }
-    }
-
-    impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
-            let k = n.kind_id();
-            Type::from_u16(k)
-        }
-
-        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> Option<Self::Ty2> {
-            let k = n.kind_id();
-            static LEN: u16 = S_T_L.len() as u16;
-            if LEN <= k && k < TStore::LOWEST_RESERVED {
-                return None;
-            }
-            Some(Type::from_u16(k))
-        }
-    }
-
-    impl TsType for Type {
-        fn spaces() -> Self {
-            Self::Spaces
-        }
-
-        fn is_repeat(&self) -> bool {
-            self.is_repeat()
-        }
-    }
 
     use hyperast::types::{LangWrapper, RoleStore};
-
-    impl TypeStore for TStore {
-        type Ty = TypeU16<Xml>;
-    }
-    impl TypeStore for &TStore {
-        type Ty = TypeU16<Xml>;
-    }
 
     impl XmlEnabledTypeStore for TStore {
         fn resolve(t: Self::Ty) -> Type {

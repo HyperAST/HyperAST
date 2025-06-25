@@ -1,53 +1,59 @@
 use std::fmt::Display;
 
-use hyperast::{
-    tree_gen::utils_ts::TsEnableTS,
-    types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypedNodeId},
-};
+use hyperast::tree_gen::{TsEnableTS, TsType};
+use hyperast::types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypedNodeId};
 
+impl TsEnableTS for TStore {
+    fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
+        let k = n.kind_id();
+        Type::from_u16(k)
+    }
+
+    fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> Option<Self::Ty2> {
+        let k = n.kind_id();
+        static LEN: u16 = S_T_L.len() as u16;
+        if LEN <= k && k < TStore::LOWEST_RESERVED {
+            return None;
+        }
+        Some(Type::from_u16(k))
+    }
+}
+
+impl TsType for Type {
+    fn spaces() -> Self {
+        Self::Spaces
+    }
+
+    fn is_repeat(&self) -> bool {
+        self.is_repeat()
+    }
+}
+
+use hyperast::types::TypeStore;
+impl TypeStore for TStore {
+    type Ty = TType;
+}
+impl TypeStore for &TStore {
+    type Ty = TType;
+}
+
+impl<'a> hyperast::types::ETypeStore for TStore {
+    type Ty2 = Type;
+
+    fn intern(ty: Self::Ty2) -> Self::Ty {
+        TType::new(ty)
+    }
+}
 #[cfg(feature = "impl")]
 mod impls {
     use super::*;
-    use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
-    use hyperast::types::{RoleStore, TypeStore};
-
-    impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
-            let k = n.kind_id();
-            Type::from_u16(k)
-        }
-
-        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> Option<Self::Ty2> {
-            let k = n.kind_id();
-            static LEN: u16 = S_T_L.len() as u16;
-            if LEN <= k && k < TStore::LOWEST_RESERVED {
-                return None;
-            }
-            Some(Type::from_u16(k))
-        }
-    }
-
-    impl TsType for Type {
-        fn spaces() -> Self {
-            Self::Spaces
-        }
-
-        fn is_repeat(&self) -> bool {
-            self.is_repeat()
-        }
-    }
-
     use hyperast::types::LangWrapper;
-    impl TypeStore for TStore {
-        type Ty = TType;
-    }
-    impl TypeStore for &TStore {
-        type Ty = TType;
-    }
+    use hyperast::types::RoleStore;
+
     impl RoleStore for TStore {
         type IdF = u16;
 
@@ -69,13 +75,6 @@ mod impls {
                 .into()
         }
     }
-    impl<'a> hyperast::types::ETypeStore for TStore {
-        type Ty2 = Type;
-
-        fn intern(ty: Self::Ty2) -> Self::Ty {
-            TType::new(ty)
-        }
-    }
     impl<'a> JavaEnabledTypeStore for TStore {
         fn resolve(t: Self::Ty) -> Type {
             t.e()
@@ -93,7 +92,7 @@ pub use impls::as_any;
 
 #[cfg(feature = "impl")]
 pub trait JavaEnabledTypeStore:
-    hyperast::types::ETypeStore<Ty2 = Type> + Clone + hyperast::tree_gen::utils_ts::TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + Clone + hyperast::tree_gen::TsEnableTS
 {
     fn resolve(t: Self::Ty) -> Type;
 }
