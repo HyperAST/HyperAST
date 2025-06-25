@@ -182,6 +182,39 @@ int main(int argl, int* argv) {
 }
 
 #[test]
+pub(crate) fn cpp_systemd_test() {
+    let text = {
+        let source_code1 = r#"
+ACK(aa, int, LOG_FAC(~0));
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyperast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyperast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyperast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+#[test]
 pub(crate) fn cpp_issue_stockfish_movegen_test() {
     let text = {
         let source_code1 = r#"
