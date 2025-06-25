@@ -198,6 +198,7 @@ impl crate::HyperApp {
                             let id = id.clone();
                             let commit = crate::app::types::Commit { repo, id };
                             let md = self.data.fetched_commit_metadata.remove(&commit.id);
+                            log::debug!("fetch_merge_pr");
                             let waiting = commit::fetch_merge_pr(
                                 ui.ctx(),
                                 &self.data.api_addr,
@@ -232,12 +233,21 @@ impl crate::HyperApp {
                             self.selected_baseline = Some(cached.commits[i].to_string());
                             self.selected_commit =
                                 Some((repo_id, cached.commits[after].to_string()));
-                            assert_eq!(self.data.queries.len(), 1); // need to retieve current query if multiple
+                            // assert_eq!(self.data.queries.len(), 1); // need to retieve current query if multiple
+
+                            for q in &self.data.queries {
+                                dbg!(&q.lang);
+                                dbg!(&q.name);
+                                dbg!(q.max_matches);
+                            }
                             let tabid = self
                                 .data
                                 .queries_results
                                 .iter()
-                                .find(|x| x.project == repo_id && x.query == 0)
+                                .find(|x| {
+                                    x.project == repo_id
+                                        && self.data.queries[x.query as usize].lang == "Java"
+                                })
                                 .unwrap()
                                 .tab;
                             if let super::Tab::QueryResults { id, format } =
@@ -320,6 +330,7 @@ impl crate::HyperApp {
                                         repo,
                                         id: id.clone(),
                                     };
+                                    log::debug!("fetch_merge_pr");
                                     let waiting = commit::fetch_merge_pr(
                                         ui.ctx(),
                                         &self.data.api_addr,
@@ -358,6 +369,7 @@ impl crate::HyperApp {
                                         repo,
                                         id: id.clone(),
                                     };
+                                    log::debug!("fetch_merge_pr");
                                     let waiting = commit::fetch_merge_pr(
                                         ui.ctx(),
                                         &self.data.api_addr,
@@ -385,6 +397,7 @@ impl crate::HyperApp {
                             repo,
                             id: id.clone(),
                         };
+                        log::debug!("fetch_merge_pr");
                         let waiting = commit::fetch_merge_pr(
                             ui.ctx(),
                             &self.data.api_addr,
@@ -821,7 +834,11 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         points,
                         with_data: false,
                     };
-                    if plot_ui.response().clicked() {
+                    let has_any_click = plot_ui
+                        .response()
+                        .flags
+                        .contains(egui::response::Flags::CLICKED);
+                    if has_any_click {
                         if let Some(x) = item.find_closest(
                             plot_ui.response().hover_pos().unwrap(),
                             plot_ui.transform(),
@@ -846,7 +863,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         points,
                         with_data: true,
                     };
-                    if plot_ui.response().clicked() {
+                    if has_any_click {
                         if let Some(x) = item.find_closest(
                             plot_ui.response().hover_pos().unwrap(),
                             plot_ui.transform(),
@@ -875,7 +892,15 @@ fn show_commit_graph_timed_egui_plot<'a>(
                     }
                     ouput
                 });
-
+            if resp.response.secondary_clicked() {
+                log::error!("secondary_clicked");
+            }
+            if resp.response.clicked() {
+                log::error!("clicked");
+            }
+            if resp.response.double_clicked() {
+                log::error!("double_clicked");
+            }
             // if let Some(id) = &resp.hovered_plot_item {
             //     if resp.response.clicked() {}
             // }
