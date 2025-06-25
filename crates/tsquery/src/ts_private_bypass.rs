@@ -18,7 +18,7 @@ type IsPositive = bool;
 type MatchAllNodes = bool;
 
 #[derive(Clone, Debug)]
-pub(crate) enum TextPredicateCapture<T = Box<str>> {
+pub enum TextPredicateCapture<T = Box<str>> {
     EqString(CaptureId, T, IsPositive, MatchAllNodes),
     EqCapture(CaptureId, CaptureId, IsPositive, MatchAllNodes),
     MatchString(CaptureId, regex::bytes::Regex, IsPositive, MatchAllNodes),

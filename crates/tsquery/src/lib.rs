@@ -1,5 +1,5 @@
 #![allow(unused)]
-mod predicate;
+pub mod predicate;
 
 // static const TSQueryError PARENT_DONE = -1;
 
@@ -82,7 +82,7 @@ pub struct Query {
     text_predicates: predicate::TextPredicateCaptures,
     property_predicates: predicate::PropertyPredicates,
     property_settings: predicate::PropertySettings,
-    general_predicates: predicate::GeneralPredicates,
+    pub general_predicates: predicate::GeneralPredicates,
     immediate_predicates: Vec<predicate::ImmediateTextPredicate>,
     precomputed_patterns: Option<query::PrecomputedPatterns>,
     used_precomputed: Precomps,
