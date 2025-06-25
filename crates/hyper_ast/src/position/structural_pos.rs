@@ -1,19 +1,20 @@
 use super::{
+    Position, TreePath, WithHyperAstPositionConverter,
     building::{self, bottom_up, top_down},
-    position_accessors, tags, Position, TreePath, WithHyperAstPositionConverter,
+    position_accessors, tags,
 };
 use std::{fmt::Debug, path::PathBuf};
 
 use num::{one, zero};
 
 use crate::{
-    position::building::{top_down::SetNode, ReceiveRows},
+    PrimInt,
+    position::building::{ReceiveRows, top_down::SetNode},
     store::defaults::NodeIdentifier,
     types::{
         AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, LendT, NodeId,
         NodeStore, Typed, TypedNodeId, WithChildren, WithSerialization, WithStats,
     },
-    PrimInt,
 };
 
 pub use super::offsets_and_nodes::StructuralPosition;
@@ -859,6 +860,38 @@ impl<IdN, Idx> PartialEq for CursorWithPersistance<IdN, Idx> {
     }
 }
 
+pub struct CursorWithPersistanceOrderedSet<IdN, Idx = u16> {
+    s: Rc<RefCell<StructuralPositionStore2<IdN, Idx>>>,
+    handles: Vec<usize>,
+}
+
+impl<IdN, Idx> CursorWithPersistanceOrderedSet<IdN, Idx> {
+    pub fn register(&mut self, p: &PersistedNode<IdN, Idx>) {
+        assert!(Rc::ptr_eq(&self.s, &p.s));
+        if !self.handles.contains(&p.h.0) {
+            self.handles.push(p.h.0);
+        }
+    }
+    pub fn collect_vec<R>(self, f: impl Fn(RefNode<IdN, Idx>) -> R) -> Vec<R> {
+        self.handles
+            .into_iter()
+            .map(move |h| {
+                let s = self.s.borrow();
+                f(RefNode { s, h: Handle(h) })
+            })
+            .collect()
+    }
+}
+
+impl<'a, IdN: 'a, Idx: 'a> CursorWithPersistanceOrderedSet<IdN, Idx> {
+    pub fn iter(&'a self) -> impl Iterator<Item = RefNode<'a, IdN, Idx>> {
+        self.handles.iter().map(move |h| {
+            let s = self.s.borrow();
+            RefNode { s, h: Handle(*h) }
+        })
+    }
+}
+
 impl<IdN, Idx> Eq for CursorWithPersistance<IdN, Idx> {}
 
 impl<IdN, Idx> CursorWithPersistance<IdN, Idx> {
@@ -869,6 +902,15 @@ impl<IdN, Idx> CursorWithPersistance<IdN, Idx> {
         let mut n = Self::default();
         n.h = n.s.borrow_mut().down(n.h, node, num::zero());
         n
+    }
+    pub fn build_empty_set(&mut self) -> CursorWithPersistanceOrderedSet<IdN, Idx>
+    where
+        Idx: PrimInt,
+    {
+        CursorWithPersistanceOrderedSet {
+            s: self.s.clone(),
+            handles: vec![],
+        }
     }
     pub fn default() -> Self {
         let s = StructuralPositionStore2 {
@@ -987,6 +1029,11 @@ where
     IdN: Copy,
     Idx: Copy,
 {
+    pub fn build(&self) -> ExtRefNode<IdN, Idx> {
+        let s = self.s.borrow();
+        ExtRefNode::new(s, self.h)
+    }
+
     pub fn ext(&self) -> ExtRefNode<IdN, Idx> {
         let s = self.s.borrow();
         ExtRefNode::new(s, self.h)
@@ -1001,6 +1048,11 @@ where
             }
         }
         r
+    }
+
+    pub fn ref_node(&self) -> RefNode<IdN, Idx> {
+        let s = self.s.borrow();
+        RefNode { s, h: self.h }
     }
 }
 
@@ -1070,6 +1122,17 @@ where
         let s = std::cell::Ref::clone(&self.s);
         ExtRefNode::new(s, self.h)
     }
+
+    pub fn offsets(mut self) -> Vec<Idx> {
+        let mut r = vec![];
+        loop {
+            r.push(self.offset());
+            if !self.up() {
+                break;
+            }
+        }
+        r
+    }
 }
 
 impl<'a, IdN, Idx> AAA<IdN, Idx> for RefNode<'a, IdN, Idx>
@@ -1098,8 +1161,7 @@ where
 
 impl<'a, IdN, Idx> PartialEq for RefNode<'a, IdN, Idx> {
     fn eq(&self, other: &Self) -> bool {
-        // TODO check
-        std::ptr::eq(&self.s, &other.s) && self.h.0 == other.h.0
+        std::ptr::eq(&*self.s, &*other.s) && self.h.0 == other.h.0
     }
 }
 
