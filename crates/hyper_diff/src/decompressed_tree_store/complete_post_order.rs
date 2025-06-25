@@ -21,10 +21,12 @@ use crate::matchers::Decompressible;
 use hyperast::PrimInt;
 use hyperast::types::{self, HyperAST};
 
-/// made for TODO
-/// - post order
+/// Decompressed tree with a post-order layout
+/// provides:
+/// - origines (through [`SimplePostOrder`])
+/// - llds (through [`SimplePostOrder`])
+/// - parents (through [`SimplePostOrder`])
 /// - key roots
-/// - parents
 pub struct CompletePostOrder<IdN, IdD> {
     pub(super) simple: SimplePostOrder<IdN, IdD>,
     /// LR_keyroots(T) = {k | there exists no k < k' such that l(k) = l(k’)}.

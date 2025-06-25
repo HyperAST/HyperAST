@@ -86,8 +86,6 @@ impl<T, IdN> BasicAccumulator<T, IdN> {
         K: crate::store::nodes::Compo,
         L: crate::store::nodes::Compo,
         IdN: 'static + Send + Sync,
-        // NOTE bounds too verbose an open
-        // TODO use a less explicit formulation
     {
         use crate::store::nodes::compo;
         // TODO better handle the interneds

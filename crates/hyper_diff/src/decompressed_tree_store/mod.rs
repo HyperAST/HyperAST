@@ -68,6 +68,7 @@ pub trait ShallowDecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD> {
     fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdS;
     fn children(&self, x: &IdD) -> Vec<IdS>;
 }
+
 pub trait Shallow<T> {
     fn shallow(&self) -> &T;
 }

@@ -26,11 +26,16 @@ use crate::matchers::Decompressible;
 
 use logging_timer::time;
 
-/// made for TODO
-/// - post order
+/// Decompressed tree with a post-order layout.
+/// Backed by read only reference a sufficiently completed LazyPostOrder tree.
+///
+/// provides:
+/// - origines (through [`LazyPostOrder`])
+/// - llds (through [`LazyPostOrder`])
+/// - parents (through [`LazyPostOrder`])
 /// - key roots
-/// - parents
 pub struct CompletePostOrder<'a, IdN, IdD> {
+    /// TODO also make IdS explicit
     pub(super) lazy: &'a LazyPostOrder<IdN, IdD>,
     /// LR_keyroots(T) = {k | there exists no k < k' such that l(k) = l(k’)}.
     pub(super) kr: bitvec::boxed::BitBox,
@@ -179,7 +184,6 @@ impl<'b, 'd, HAST: HyperAST + Copy, IdD: PrimInt> DecompressedWithParent<HAST, I
     for Decompressible<HAST, CompletePostOrder<'b, HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
-    // for<'t> <T as types::NLending<'t, T::TreeId>>::N: WithChildren + WithStats,
 {
     fn parent(&self, id: &IdD) -> Option<IdD> {
         self.as_lazy().parent(id)
