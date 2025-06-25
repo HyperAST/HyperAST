@@ -90,7 +90,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             {
                 let parent_acc = &mut self.stack.last_mut().unwrap().acc;
                 // TODO find a better conversion, ie. first safe conv to MavenProc handle then into()
-                let parameters = PCP2Handle(self.handle.1, PhantomData);
+                let parameters = PCP2Handle(
+                    crate::processing::erased::ConfigParametersHandle(0),
+                    // self.handle.1,
+                    PhantomData,
+                );
                 if let Err(err) =
                     self.prepro
                         .handle_pom(oid, parent_acc, name, &self.repository, parameters)
