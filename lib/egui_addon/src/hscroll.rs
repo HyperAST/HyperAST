@@ -2,12 +2,12 @@ use egui::*;
 
 pub fn hscroll_many_columns<R>(
     ui: &mut Ui,
+    width: f32,
     total_cols: usize,
-    add_contents: impl Fn(&mut Ui, usize) -> R,
+    mut add_contents: impl FnMut(&mut Ui, usize) -> R,
 ) {
     let spacing = ui.spacing().item_spacing;
     // the width of each column with space
-    let width = 300.0;
     let with_spacing = width + spacing.x;
     egui::ScrollArea::horizontal()
         .auto_shrink([false, false])
@@ -36,13 +36,12 @@ pub fn hscroll_many_columns<R>(
                 |ui| {
                     ui.skip_ahead_auto_ids(min_col); // Make sure we get consistent IDs.
                     for i in cols {
-                        let i = total_cols - 1 - i;
                         ui.allocate_ui(Vec2::new(with_spacing, ui.clip_rect().height()), |ui| {
                             ui.set_max_width(width);
                             egui::ScrollArea::vertical()
                                 .id_salt(i)
                                 .auto_shrink([false, false])
-                                .show(ui, |ui| add_contents(ui, i));
+                                .show(ui, |ui| ui.vertical(|ui| add_contents(ui, i)));
                         });
                     }
                 },
@@ -52,7 +51,7 @@ pub fn hscroll_many_columns<R>(
 }
 
 #[allow(unused)]
-const ELE: &'static str = r#"adfwregwr
+const ELE: &str = r#"adfwregwr
 adfwregwradfwregwradfwregwr
 adfwregwr
 adfwregwr
@@ -86,7 +85,7 @@ fn main() {
         eframe::NativeOptions::default(),
         move |ctx, _frame| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                hscroll_many_columns(ui, total_cols, |ui: &mut Ui, i| {
+                hscroll_many_columns(ui, 300.0, total_cols, |ui: &mut Ui, i| {
                     ui.label(format!("{}", cols[i]))
                 });
             });
