@@ -104,7 +104,7 @@ pub(crate) fn state_bitfield() {
 // If one or more patterns finish, return `true` and store their states in the
 // `finished_states` array. Multiple patterns can finish on the same node. If
 // there are no more matches, return `false`.
-impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node>
+impl<Cursor: super::Cursor> QueryCursor<'_, Cursor, Cursor::Node>
 where
     <Cursor::Status as Status>::IdF: Into<u16> + From<u16>,
 {
@@ -114,8 +114,7 @@ where
         loop {
             if self.halted {
                 log::trace!("releasing {} states", self.states.len());
-                while (self.states.len() > 0) {
-                    let state = self.states.pop().unwrap();
+                while let Some(state) = self.states.pop() {
                     self.capture_list_pool.release(state.capture_list_id);
                 }
             }
@@ -765,7 +764,6 @@ where
 
     pub fn next_match(&mut self) -> Option<QueryMatch<Cursor::Node>> {
         if self.finished_states.len() == 0 {
-            // dbg!();
             if !self.advance(false) {
                 return None;
             }
@@ -779,11 +777,11 @@ where
         let id = state.id;
         let pattern_index = state.pattern_index();
         let captures = self.capture_list_pool.pop(state.capture_list_id);
-        return Some(QueryMatch {
+        Some(QueryMatch {
             pattern_index,
             captures,
             id,
-        });
+        })
     }
 
     fn wont_match(
@@ -804,7 +802,7 @@ where
     }
 }
 
-impl<'query, Cursor, Node> QueryCursor<'query, Cursor, Node> {
+impl<Cursor, Node> QueryCursor<'_, Cursor, Node> {
     /// Set the max depth where queries can start being matched
     /// For example, set it to 0 to only match on the node you start on.
     pub fn set_max_start_depth(&mut self, max: u32) {
@@ -815,7 +813,7 @@ impl<'query, Cursor, Node> QueryCursor<'query, Cursor, Node> {
     }
 }
 
-impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
+impl<Cursor: super::Cursor> QueryCursor<'_, Cursor, Cursor::Node> {
     fn should_descend(&self, node_intersects_range: bool) -> bool {
         if node_intersects_range && self.depth < self.max_start_depth {
             if self.cursor.wont_match(self.query.used_precomputed) {
@@ -875,7 +873,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
             return true;
         }
 
-        return false;
+        false
     }
 
     fn copy_state(&mut self, state_index: &mut usize) -> Option<usize> {
@@ -891,7 +889,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
             let old_captures = self.capture_list_pool.get(capture_list_id);
             self.capture_list_pool[new_captures] = old_captures.to_owned();
         }
-        return Some(*state_index + 1);
+        Some(*state_index + 1)
     }
 
     fn compare_captures(&self, left_state: &State, right_state: &State) -> (bool, bool) {
