@@ -811,16 +811,22 @@ where
 
         if children.len() == 1 {
             let Ok(cs) = x.get_component::<compo::CS0<I, 1>>() else {
+                debug_assert!(x.get_component::<compo::CS<I>>().is_err());
+                debug_assert!(x.get_component::<compo::CS0<I, 2>>().is_err());
                 return false;
             };
             cs.0[0] == children[0]
         } else if children.len() == 2 {
             let Ok(cs) = x.get_component::<compo::CS0<I, 2>>() else {
+                debug_assert!(x.get_component::<compo::CS<I>>().is_err());
+                debug_assert!(x.get_component::<compo::CS0<I, 1>>().is_err());
                 return false;
             };
             cs.0[..] == children[..]
         } else if !children.is_empty() {
             let Ok(cs) = x.get_component::<compo::CS<I>>() else {
+                debug_assert!(x.get_component::<compo::CS0<I, 1>>().is_err());
+                debug_assert!(x.get_component::<compo::CS0<I, 2>>().is_err());
                 return false;
             };
             cs.0.as_ref() == children
