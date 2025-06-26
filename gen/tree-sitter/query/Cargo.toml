@@ -28,6 +28,8 @@ serde = { version = "1.0.130" }
 
 rayon = { version = "1.10.0", optional = true }
 
+petgraph = { version = "0.7.1", optional = true }
+
 [dev-dependencies]
 pretty_assertions = "1.0.0"
 env_logger = "0.11.3"
@@ -64,3 +66,4 @@ impl = [
     "dep:hyperast_tsquery",
 ]
 synth_par = ["dep:rayon", "hashbrown?/rayon"]
+lattice = ["dep:petgraph"]

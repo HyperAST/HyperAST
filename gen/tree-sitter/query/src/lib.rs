@@ -30,6 +30,11 @@ pub mod auto;
 
 pub mod code2query;
 
+pub mod refinements;
+
+#[cfg(feature = "lattice")]
+pub mod lattice_graph;
+
 pub fn prepare_matcher<Ty>(query: &str) -> crate::search::PreparedMatcher<Ty, Conv<Ty>>
 where
     Ty: std::fmt::Debug,

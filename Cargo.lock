@@ -1110,7 +1110,7 @@ dependencies = [
  "concurrent-queue",
  "fixedbitset 0.5.7",
  "nonmax",
- "petgraph",
+ "petgraph 0.6.5",
  "thiserror 1.0.69",
 ]
 
@@ -4174,6 +4174,7 @@ dependencies = [
  "libc",
  "log",
  "num",
+ "petgraph 0.7.1",
  "pretty_assertions",
  "rayon",
  "serde",
@@ -6070,6 +6071,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "petgraph"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
+dependencies = [
+ "fixedbitset 0.5.7",
+ "indexmap 2.7.0",
+]
+
+[[package]]
 name = "pico-args"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6450,7 +6461,7 @@ dependencies = [
  "lazy_static",
  "log",
  "multimap",
- "petgraph",
+ "petgraph 0.6.5",
  "prost 0.10.4",
  "prost-types 0.10.1",
  "regex",
