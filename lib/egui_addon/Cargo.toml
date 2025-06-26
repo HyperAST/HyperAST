@@ -12,6 +12,7 @@ egui_demo_lib = { version = "0.31.1", default-features = false, features = [
     "syntect",
 ] }
 egui_extras = { version = "0.31.1", default-features = false }
+egui_graphs = { version = "=0.25.0", features = ["events"], optional = true }
 
 # You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -30,6 +31,10 @@ crossbeam-queue = "0.3.8"
 syntect = { version = "5", features = [
     "default-fancy",
 ], default-features = false }
+
+petgraph = { version = "0.7.1", optional = true }
+crossbeam = { version = "0.8", optional = true }
+fdg = { git = "https://github.com/grantshandy/fdg", optional = true }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -74,3 +79,4 @@ ts_highlight = [
     # "dep:tree-sitter",
     # "dep:web-tree-sitter-sg"
 ]
+force_layout = ["dep:egui_graphs", "dep:petgraph", "dep:crossbeam", "dep:fdg"]

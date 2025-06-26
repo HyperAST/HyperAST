@@ -2,6 +2,7 @@
 pub mod async_exec;
 pub mod code_editor;
 pub mod egui_utils;
+pub mod force_layout;
 pub mod hscroll;
 pub mod interactive_split;
 pub mod meta_edge;
