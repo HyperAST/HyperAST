@@ -1,14 +1,14 @@
 use crate::{
-    decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent, Shallow},
+    decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
 use hyperast::PrimInt;
 use hyperast::types::{
-    self, Childrn, DecompressedFrom, HashKind, HyperAST, HyperASTShared, Labeled, NodeId,
-    NodeStore, Tree, TypeStore, WithChildren, WithHashs,
+    self, Childrn, HashKind, HyperAST, Labeled, NodeId, NodeStore, TypeStore, WithChildren,
+    WithHashs,
 };
-use num_traits::{ToPrimitive, Zero};
+use num_traits::ToPrimitive;
 use std::{collections::HashMap, hash::Hash};
 
 pub struct BottomUpMatcher<Dsrc, Ddst, HAST, M> {

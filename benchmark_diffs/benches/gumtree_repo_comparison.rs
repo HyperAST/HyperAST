@@ -1,4 +1,7 @@
+use criterion::Throughput;
 use criterion::{Criterion, criterion_group, criterion_main};
+use hyperast::types::HyperAST;
+use hyperast::types::WithStats;
 use hyperast_benchmark_diffs::preprocess_repo::parse_repo;
 use hyperast_benchmark_diffs::run_diff::run_diff_trees;
 use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
@@ -76,9 +79,20 @@ fn diff_benchmark(c: &mut Criterion) {
     let select_metric = |summary: hyper_diff::algorithms::ResultsSummary<
         hyper_diff::algorithms::PreparedMappingDurations<2, Duration>,
         Duration,
-    >| { *summary.mapping_durations.mappings.0.get(1).unwrap() };
+    >| {
+        summary.mapping_durations.mappings.0[1] + summary.mapping_durations.preparation[1]
+    };
 
     for (algo, max_size) in &tested_fcts {
+        group.throughput(Throughput::Elements(
+            dataset_trees
+                .iter()
+                .map(|x| {
+                    (x.0.node_store().resolve(x.1).size() + x.0.node_store().resolve(x.2).size())
+                        .div_ceil(2)
+                })
+                .sum::<usize>() as u64,
+        ));
         group.bench_function(format!("{algo}_{max_size}"), |b| {
             b.iter_custom(|iters| {
                 let mut time = Duration::ZERO;
@@ -98,7 +112,9 @@ fn diff_benchmark(c: &mut Criterion) {
 
 criterion_group!(
     name = benches;
-    config = Criterion::default().sample_size(10).configure_from_args();
+    config = Criterion::default()
+        .measurement_time(Duration::from_secs(20))
+        .configure_from_args();
     targets = diff_benchmark
 );
 criterion_main!(benches);

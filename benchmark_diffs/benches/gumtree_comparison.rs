@@ -150,8 +150,8 @@ fn diff_benchmark(c: &mut Criterion) {
                         dbg!(iters);
                         let mut time = Duration::ZERO;
                         for _i in 0..iters {
-                            let r = run_diff(buggy, fixed, *algo, *max_size);
-                            time += r.mapping_durations.mappings.0.get(1).unwrap().clone();
+                            let r = run_diff(buggy, fixed, *algo, *max_size).mapping_durations;
+                            time += r.mappings.0[1] + r.preparation[1]
                         }
                         time
                     })

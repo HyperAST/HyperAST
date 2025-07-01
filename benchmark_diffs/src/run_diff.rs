@@ -80,7 +80,7 @@ where
     use Algorithm::*;
     use algorithms::*;
     let diff_result = match algorithm.as_ref() {
-        Hybrid => gumtree_hybrid::diff_hybrid(stores, src_tr, dst_tr, max_size),
+        Hybrid => gumtree_hybrid_partial_lazy::diff(stores, src_tr, dst_tr, max_size),
         LazyHybrid => gumtree_hybrid_lazy::diff_hybrid_lazy(stores, src_tr, dst_tr, max_size),
         LazySimple => todo!(), //gumtree_simple::diff_lazy(stores, src_tr, dst_tr, max_size)),
         Simple => gumtree_simple::diff_simple(stores, src_tr, dst_tr),

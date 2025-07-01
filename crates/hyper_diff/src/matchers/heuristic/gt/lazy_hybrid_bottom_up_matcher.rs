@@ -160,33 +160,33 @@ where
 
     pub fn execute<'b>(&mut self) {
         for t in self.internal.src_arena.iter_df_post::<false>() {
-            // let path = self.internal.src_arena.path::<usize>(&self.internal.src_arena.root(), &t);
-            // dbg!(path);
             let a = self.internal.src_arena.decompress_to(&t);
             if !self.internal.mappings.is_src(&t) && self.src_has_children(a) {
                 let candidates = self.internal.get_dst_candidates_lazily(&a);
                 let mut best = None;
                 let mut max_sim = -1f64;
                 for candidate in candidates {
-                    let t_descendents = &self.internal.src_arena.descendants(&a);
-                    let candidate_descendents = &self.internal.dst_arena.descendants(&candidate);
-                    let sim = similarity_metrics::chawathe_similarity(
-                        t_descendents,
-                        candidate_descendents,
+                    let t_descendents = self.internal.src_arena.descendants_range(&a);
+                    let candidate_descendents =
+                        self.internal.dst_arena.descendants_range(&candidate);
+                    let sim = similarity_metrics::SimilarityMeasure::range(
+                        &t_descendents,
+                        &candidate_descendents,
                         &self.internal.mappings,
-                    );
+                    )
+                    .chawathe();
                     let threshold = 1f64
                         / (1f64
-                            + ((candidate_descendents.len() + t_descendents.len()) as f64).ln());
-                    // SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
+                            + ((self.internal.dst_arena.descendants_count(&candidate)
+                                + self.internal.src_arena.descendants_count(&a))
+                                as f64)
+                                .ln());
                     if sim > max_sim && sim >= threshold {
                         max_sim = sim;
                         best = Some(candidate);
                     }
                 }
                 if let Some(best) = best {
-                    // TODO remove this
-                    let _ = self.internal.dst_arena.decompress_descendants(&best);
                     self.last_chance_match_hybrid(a, best);
                     self.internal.mappings.link(*a.shallow(), *best.shallow());
                 }
@@ -267,17 +267,15 @@ where
         cmp: F,
     ) {
         let src_children = &mut Vec::new();
-        // TODO use decompress_children...
-        for c in &self.internal.src_arena.children(&src) {
-            if !self.internal.mappings.is_src(c) {
-                src_children.push(self.internal.src_arena.decompress_to(c));
+        for c in self.internal.src_arena.decompress_children(&src) {
+            if !self.internal.mappings.is_src(c.shallow()) {
+                src_children.push(c);
             }
         }
         let dst_children = &mut Vec::new();
-        // TODO use decompress_children...
-        for c in &self.internal.dst_arena.children(&dst) {
-            if !self.internal.mappings.is_dst(c) {
-                dst_children.push(self.internal.dst_arena.decompress_to(c));
+        for c in self.internal.dst_arena.decompress_children(&dst) {
+            if !self.internal.mappings.is_dst(c.shallow()) {
+                dst_children.push(c);
             }
         }
 
@@ -298,12 +296,10 @@ where
     fn histogram_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
         let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Dsrc::IdD>> =
             HashMap::new();
-        // TODO use decompress_children...
-        for c in self.internal.src_arena.children(&src) {
-            if self.internal.mappings.is_src(&c) {
+        for c in self.internal.src_arena.decompress_children(&src) {
+            if self.internal.mappings.is_src(c.shallow()) {
                 continue;
             }
-            let c = self.internal.src_arena.decompress_to(&c);
             let t = &self
                 .internal
                 .stores
@@ -316,12 +312,10 @@ where
 
         let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Ddst::IdD>> =
             HashMap::new();
-        // TODO use decompress_children...
-        for c in self.internal.dst_arena.children(&dst) {
-            if self.internal.mappings.is_dst(&c) {
+        for c in self.internal.dst_arena.decompress_children(&dst) {
+            if self.internal.mappings.is_dst(c.shallow()) {
                 continue;
             }
-            let c = self.internal.dst_arena.decompress_to(&c);
             let t = &self
                 .internal
                 .stores
@@ -351,6 +345,7 @@ where
 
         self.isomorphic_aux::<true, STRUCTURAL>(&src, &dst)
     }
+
     fn isomorphic_aux<const USE_HASH: bool, const STRUCTURAL: bool>(
         &self,
         src: &HAST::IdN,

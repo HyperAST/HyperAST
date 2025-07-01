@@ -1,5 +1,3 @@
-use std::iter::Sum;
-
 use crate::{
     actions::action_vec::ActionsVec,
     decompressed_tree_store::ShallowDecompressedTreeStore,
@@ -10,6 +8,7 @@ use jemalloc_ctl::{epoch, stats};
 pub mod gumtree;
 pub mod gumtree_hybrid;
 pub mod gumtree_hybrid_lazy;
+pub mod gumtree_hybrid_partial_lazy;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
 pub mod gumtree_simple;
