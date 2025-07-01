@@ -1,11 +1,8 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
-
-const DEFAULT_SIZE_THRESHOLD: usize = 1000;
-const DEFAULT_MIN_HEIGHT: usize = 1;
 
 const TEST_CASES: &[(&str, &str, &str)] = &[
     (
@@ -121,7 +118,7 @@ fn diff_benchmark(c: &mut Criterion) {
     group.bench_function("hybrid 100", |b| {
         b.iter(|| {
             let (_name, buggy, fixed) = &test_inputs[5];
-            run_diff(buggy, fixed, 100);
+            run_diff(buggy, fixed, 100)
         })
     });
 
@@ -134,16 +131,20 @@ fn run_diff(src: &str, dst: &str, max_size: usize) {
 
     let (src_tr, dst_tr) =
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-    
-    let diff_result= algorithms::gumtree_hybrid::diff_hybrid(
+
+    let diff_result = algorithms::gumtree_hybrid::diff_hybrid(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        max_size
+        max_size,
     );
 
     black_box(diff_result);
 }
 
-criterion_group!(benches, diff_benchmark);
+criterion_group!(
+    name = benches;
+    config = Criterion::default().sample_size(10).configure_from_args();
+    targets = diff_benchmark
+);
 criterion_main!(benches);

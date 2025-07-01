@@ -12,34 +12,6 @@ use hyper_diff::matchers::mapping_store::MappingStore;
 use hyper_diff::matchers::mapping_store::VecStore;
 use hyper_diff::matchers::{Decompressible, Mapping};
 
-// pub trait AAA {
-//     fn aaa<B, A, R, F: Fn(&Self, &mut B, &mut A) -> R>(&self, f: F, b: &mut B, a: &mut A) -> R;
-// }
-
-// impl<'store, HAST> AAA for HAST
-// where
-//     HAST: HyperAST,
-// {
-//     fn aaa<B, A, R, F: Fn(&Self, &mut B, &mut A) -> R>(&self, f: F, b: &mut B, a: &mut A) -> R {
-//         f(self, b, a)
-//     }
-// }
-
-// fn t<'store, HAST: HyperAST + Copy>(
-//     hyperast: &'store HAST,
-//     src_arena: &mut LazyPostOrder<HAST::IdN, u32>,
-//     dst_arena: &mut LazyPostOrder<HAST::IdN, u32>,
-// ) -> DefaultMultiMappingStore<u32>
-// where
-//     HAST::IdN: Clone + Debug + Eq,
-//     HAST::Label: Clone + Copy + Eq + Debug,
-//     <HAST::T as types::Typed>::Type: Debug,
-//     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-//     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: 'store + types::WithHashs + types::WithStats,
-// {
-//     hyperast.aaa(top_down, src_arena, dst_arena)
-// }
-
 pub fn top_down<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src_arena: &mut LazyPostOrder<HAST::IdN, u32>,
@@ -89,7 +61,7 @@ pub fn full<HAST: HyperAST + Copy>(
         DefaultMultiMappingStore<_>,
     >(mapper);
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, &mm);
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper);
+    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, 100, 0.5);
 }
 
 pub fn bottom_up_hiding<'a, 'b, 's: 'a, HAST: 's + HyperAST + Copy>(
@@ -143,7 +115,7 @@ pub fn bottom_up_hiding<'a, 'b, 's: 'a, HAST: 's + HyperAST + Copy>(
                 mappings,
             },
         };
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 200, 1, 2>::execute(&mut mapper);
+        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(&mut mapper, 200, 0.5);
         // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 100>::execute(
         //     &mut mapper,
         //     hyperast.label_store(),
@@ -171,7 +143,7 @@ pub fn bottom_up<'store, 'a, 'b, HAST: HyperAST + Copy>(
 {
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
 
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper);
+    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, 1000, 0.5);
 }
 
 pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST + Copy>(
@@ -191,7 +163,7 @@ pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST + Copy>(
         'store + types::WithHashs + types::WithStats,
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 2000, 1, 100>::execute(mapper);
+    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, 2000, 0.01);
 }
 
 pub fn full2<'a, 'b, 's: 'a, HAST: 's + HyperAST + Copy>(

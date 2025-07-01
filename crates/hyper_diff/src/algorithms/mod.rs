@@ -6,11 +6,11 @@ use crate::{
 use jemalloc_ctl::{epoch, stats};
 
 pub mod gumtree;
+pub mod gumtree_hybrid;
+pub mod gumtree_hybrid_lazy;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
-pub mod gumtree_hybrid;
 pub mod gumtree_simple;
-pub mod gumtree_hybrid_lazy;
 
 #[derive(Debug, Clone)]
 pub struct MappingDurations<const N: usize>(pub [f64; N]);
@@ -73,7 +73,7 @@ impl<A, MD: Clone, HAST, DS, DD> DiffResult<A, Mapper<HAST, DS, DD, VecStore<u32
             actions: self.actions.as_ref().map(|x| x.len()),
             prepare_gen_t: self.prepare_gen_t,
             gen_t: self.gen_t,
-            mapping_memory_usages: self.mapping_memory_usages.clone()
+            mapping_memory_usages: self.mapping_memory_usages.clone(),
         }
     }
 }
@@ -136,7 +136,6 @@ fn get_allocated_memory() -> usize {
     stats::allocated::read().unwrap()
 }
 
-// #[macro_use]
 macro_rules! tr {
     ($($val:ident),*) => {
         $(

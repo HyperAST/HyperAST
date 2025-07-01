@@ -1,23 +1,19 @@
-use super::{get_allocated_memory, MappingDurations, MappingMemoryUsages};
 use super::tr;
 use super::{DiffResult, PreparedMappingDurations};
+use super::{MappingDurations, MappingMemoryUsages, get_allocated_memory};
+use crate::matchers::heuristic::gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
     matchers::{
         Decompressible, Mapper,
-        heuristic::gt::{
-            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-            greedy_subtree_matcher::GreedySubtreeMatcher,
-        },
+        heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher,
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
     },
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
-use crate::matchers::heuristic::gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
-use crate::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMatcher3;
 
 #[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
@@ -52,8 +48,9 @@ where
 
     let mem = get_allocated_memory();
     let now = Instant::now();
-    let mapper =
-        GreedySubtreeMatcher::<_, _, _, _, DEFAULT_MIN_HEIGHT>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+    let mapper = GreedySubtreeMatcher::<_, _, _, _, DEFAULT_MIN_HEIGHT>::match_it::<
+        DefaultMultiMappingStore<_>,
+    >(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
@@ -75,7 +72,7 @@ where
         preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
     let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m]
+        memory: [subtree_matcher_m, bottomup_matcher_m],
     };
 
     let now = Instant::now();
@@ -129,8 +126,9 @@ where
 
     let mem = get_allocated_memory();
     let now = Instant::now();
-    let mapper =
-        GreedySubtreeMatcher::<_, _, _, _, MIN_HEIGHT>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+    let mapper = GreedySubtreeMatcher::<_, _, _, _, MIN_HEIGHT>::match_it::<
+        DefaultMultiMappingStore<_>,
+    >(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
@@ -152,7 +150,7 @@ where
         preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
     let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m]
+        memory: [subtree_matcher_m, bottomup_matcher_m],
     };
 
     let now = Instant::now();
@@ -205,6 +203,7 @@ fn check_oneshot_decompressed_against_lazy<HAST: HyperAST + Copy>(
         "naive:\t{:?}",
         &mapper.llds.iter().take(20).collect::<Vec<_>>()
     );
+    #[allow(type_alias_bounds)]
     type DS<HAST: HyperASTShared> = Decompressible<
         HAST,
         crate::decompressed_tree_store::lazy_post_order::LazyPostOrder<HAST::IdN, u32>,

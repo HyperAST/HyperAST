@@ -9,7 +9,7 @@ use crate::{
 use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
 // use hyperast_gen_ts_java::types::TStore;
 use hyper_diff::actions::Actions;
-use hyper_diff::algorithms::{self, DiffResult, MappingDurations, MappingMemoryUsages};
+use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
 const DATASET_FORMAT: i32 = 1; // ok as of 33024da8de4c519bb1c1146b19d91d6cb4c81ea6
 // TODO find when format of dataset changed
@@ -58,7 +58,8 @@ fn test_simple_1() {
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
-            1000, 0.5f64
+            1000,
+            0.5f64
         )
         .actions
         .unwrap()
@@ -88,7 +89,8 @@ fn test_crash1() {
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     )
     .actions
     .unwrap()
@@ -118,7 +120,8 @@ fn test_perf_mokito() {
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     );
     println!("{:#?}", res.summarize());
     println!("{}", res);
@@ -152,7 +155,8 @@ mod examples {
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
-            1000, 0.5f64
+            1000,
+            0.5f64,
         )
         .actions
         .unwrap()
@@ -199,7 +203,8 @@ mod examples {
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
-            1000, 0.5f64
+            1000,
+            0.5f64,
         )
         .actions
         .unwrap()
@@ -285,7 +290,8 @@ mod examples {
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
-            1000, 0.5f64
+            1000,
+            0.5f64,
         )
         .actions
         .unwrap()
@@ -1250,7 +1256,8 @@ fn compare_perfs() {
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     )
     .actions
     .unwrap()
@@ -1323,7 +1330,8 @@ pub fn bad_perfs() {
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     )
     .actions
     .unwrap()
@@ -1376,7 +1384,8 @@ pub fn bad_perfs2() {
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     )
     .actions
     .unwrap()
@@ -1512,7 +1521,8 @@ fn bad_perfs_helper(buggy_path: &Path, fixed_path: &Path) {
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     );
     let actions = actions.unwrap();
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
@@ -1608,7 +1618,8 @@ fn test_all() {
                 &stores,
                 &src_tr.local.compressed_node,
                 &dst_tr.local.compressed_node,
-                1000, 0.5f64
+                1000,
+                0.5f64,
             )
             .actions
             .unwrap()
@@ -1739,13 +1750,14 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         mapper,
         actions,
         prepare_gen_t,
-        gen_t, 
+        gen_t,
         ..
     } = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
-        1000, 0.5f64
+        1000,
+        0.5f64,
     );
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
@@ -1820,7 +1832,13 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         prepare_gen_t,
         gen_t,
         ..
-    } = algorithms::gumtree::diff(&stores, &src_tr.compressed_node, &dst_tr.compressed_node, 1000, 0.5f64);
+    } = algorithms::gumtree::diff(
+        &stores,
+        &src_tr.compressed_node,
+        &dst_tr.compressed_node,
+        1000,
+        0.5f64,
+    );
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
     let gt_out = other_tools::gumtree::subprocess(
         &stores,

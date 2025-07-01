@@ -1,27 +1,25 @@
 use super::lazy_bottom_up_matcher::BottomUpMatcher;
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     PostOrderIterable, PostOrderKeyRoots,
 };
 use crate::decompressed_tree_store::{
     LazyDecompressed, LazyDecompressedTreeStore, LazyPOBorrowSlice, Shallow,
     ShallowDecompressedTreeStore, SimpleZsTree as ZsTree,
 };
+use crate::matchers::Decompressible;
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{Decompressible, Mapper};
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyperast::PrimInt;
-use hyperast::position::tags::TopDownNoSpace;
 use hyperast::types::Childrn;
 use hyperast::types::Labeled;
 use hyperast::types::{DecompressedFrom, HashKind, HyperAST, NodeId, NodeStore, Tree, WithHashs};
 use hyperast::types::{TypeStore, WithChildren};
-use num_traits::{cast, one};
+use num_traits::cast;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::time::Instant;
 
 /// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
 ///
@@ -53,15 +51,7 @@ impl<
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
-    for LazyHybridBottomUpMatcher<
-        Dsrc,
-        Ddst,
-        HAST,
-        M,
-        MZs,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    >
+    for LazyHybridBottomUpMatcher<Dsrc, Ddst, HAST, M, MZs, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 {
     fn into(self) -> BottomUpMatcher<Dsrc, Ddst, HAST, M> {
         self.internal
@@ -94,16 +84,7 @@ impl<
     M: MonoMappingStore + Default,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
->
-    LazyHybridBottomUpMatcher<
-        Dsrc,
-        Ddst,
-        HAST,
-        M,
-        MZs,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    >
+> LazyHybridBottomUpMatcher<Dsrc, Ddst, HAST, M, MZs, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -114,7 +95,13 @@ where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M, max_size: usize) -> Self {
+    pub fn new(
+        stores: HAST,
+        src_arena: Dsrc,
+        dst_arena: Ddst,
+        mappings: M,
+        max_size: usize,
+    ) -> Self {
         Self {
             internal: BottomUpMatcher {
                 stores,
@@ -198,6 +185,7 @@ where
                     }
                 }
                 if let Some(best) = best {
+                    // TODO remove this
                     let _ = self.internal.dst_arena.decompress_descendants(&best);
                     self.last_chance_match_hybrid(a, best);
                     self.internal.mappings.link(*a.shallow(), *best.shallow());
@@ -279,12 +267,14 @@ where
         cmp: F,
     ) {
         let src_children = &mut Vec::new();
+        // TODO use decompress_children...
         for c in &self.internal.src_arena.children(&src) {
             if !self.internal.mappings.is_src(c) {
                 src_children.push(self.internal.src_arena.decompress_to(c));
             }
         }
         let dst_children = &mut Vec::new();
+        // TODO use decompress_children...
         for c in &self.internal.dst_arena.children(&dst) {
             if !self.internal.mappings.is_dst(c) {
                 dst_children.push(self.internal.dst_arena.decompress_to(c));
@@ -308,6 +298,7 @@ where
     fn histogram_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
         let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Dsrc::IdD>> =
             HashMap::new();
+        // TODO use decompress_children...
         for c in self.internal.src_arena.children(&src) {
             if self.internal.mappings.is_src(&c) {
                 continue;
@@ -325,6 +316,7 @@ where
 
         let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Ddst::IdD>> =
             HashMap::new();
+        // TODO use decompress_children...
         for c in self.internal.dst_arena.children(&dst) {
             if self.internal.mappings.is_dst(&c) {
                 continue;
@@ -353,13 +345,13 @@ where
     }
 
     /// Checks if src and dst are (structurally) isomorphic
-    fn isomorphic<const structural: bool>(&self, src: Dsrc::IdD, dst: Ddst::IdD) -> bool {
+    fn isomorphic<const STRUCTURAL: bool>(&self, src: Dsrc::IdD, dst: Ddst::IdD) -> bool {
         let src = self.internal.src_arena.original(&src);
         let dst = self.internal.dst_arena.original(&dst);
 
-        self.isomorphic_aux::<true, structural>(&src, &dst)
+        self.isomorphic_aux::<true, STRUCTURAL>(&src, &dst)
     }
-    fn isomorphic_aux<const use_hash: bool, const structural: bool>(
+    fn isomorphic_aux<const USE_HASH: bool, const STRUCTURAL: bool>(
         &self,
         src: &HAST::IdN,
         dst: &HAST::IdN,
@@ -370,7 +362,7 @@ where
 
         let _src = self.internal.stores.node_store().resolve(src);
         let _dst = self.internal.stores.node_store().resolve(dst);
-        if use_hash {
+        if USE_HASH {
             let src_hash = WithHashs::hash(&_src, &HashKind::label());
             let dst_hash = WithHashs::hash(&_dst, &HashKind::label());
             if src_hash != dst_hash {
@@ -384,7 +376,7 @@ where
             return false;
         }
 
-        if !structural {
+        if !STRUCTURAL {
             let src_label = _src.try_get_label();
             let dst_label = _dst.try_get_label();
             if src_label != dst_label {
@@ -401,7 +393,7 @@ where
                     false
                 } else {
                     for (src, dst) in src_c.iter().zip(dst_c.iter()) {
-                        if !self.isomorphic_aux::<false, structural>(src, dst) {
+                        if !self.isomorphic_aux::<false, STRUCTURAL>(src, dst) {
                             return false;
                         }
                     }

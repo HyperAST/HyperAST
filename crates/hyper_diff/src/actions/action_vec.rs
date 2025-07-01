@@ -19,6 +19,7 @@ impl<A: Debug> Debug for ActionsVec<A> {
         f.debug_tuple("ActionsVec").field(&self.0).finish()
     }
 }
+
 impl<A> Default for ActionsVec<A> {
     fn default() -> Self {
         Self(Default::default())

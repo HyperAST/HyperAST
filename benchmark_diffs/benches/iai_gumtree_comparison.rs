@@ -1,12 +1,7 @@
-use iai_callgrind::{main, library_benchmark_group, library_benchmark};
-use hyper_diff::algorithms;
-use hyperast::store::SimpleStores;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
-use std::path::Path;
-use std::hint::black_box;
 use hyperast_benchmark_diffs::run_diff::run_diff;
-
-const DEFAULT_SIZE_THRESHOLD: usize = 1000;
+use iai_callgrind::{library_benchmark, library_benchmark_group, main};
+use std::hint::black_box;
+use std::path::Path;
 
 const TEST_CASES: &[(&str, &str, &str)] = &[
     (
@@ -87,7 +82,6 @@ fn iai_hybrid_benchmark() {
         .is_test(true)
         .init();
 
-
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -117,11 +111,11 @@ fn iai_hybrid_benchmark() {
             (name, buggy_content, fixed_content)
         })
         .collect();
-    
+
     let (_, buggy, fixed) = test_inputs.first().unwrap();
 
-    run_diff(black_box(buggy), black_box(fixed), "hybrid", 50);
-
+    let algo = hyperast_benchmark_diffs::run_diff::Algorithm::Hybrid;
+    run_diff(black_box(buggy), black_box(fixed), algo, 50);
 }
 
 library_benchmark_group!(name = bench_gumtree_comparison_group; benchmarks = iai_hybrid_benchmark);

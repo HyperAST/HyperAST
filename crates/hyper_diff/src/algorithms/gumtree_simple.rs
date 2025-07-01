@@ -1,26 +1,25 @@
-use super::{get_allocated_memory, MappingDurations, MappingMemoryUsages};
 use super::tr;
 use super::{DiffResult, PreparedMappingDurations};
+use super::{MappingDurations, MappingMemoryUsages, get_allocated_memory};
+use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+use crate::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMatcher3;
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
     matchers::{
         Decompressible, Mapper,
-        heuristic::gt::{
-            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-            greedy_subtree_matcher::GreedySubtreeMatcher,
-        },
+        heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher,
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
     },
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
-use crate::matchers::heuristic::gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
-use crate::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMatcher3;
 
 #[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+#[allow(type_alias_bounds)]
+type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
 
 pub fn diff_simple<HAST: HyperAST + Copy>(
     hyperast: HAST,
@@ -71,7 +70,7 @@ where
         preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
     let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m]
+        memory: [subtree_matcher_m, bottomup_matcher_m],
     };
 
     let now = Instant::now();
@@ -124,10 +123,6 @@ fn check_oneshot_decompressed_against_lazy<HAST: HyperAST + Copy>(
         "naive:\t{:?}",
         &mapper.llds.iter().take(20).collect::<Vec<_>>()
     );
-    type DS<HAST: HyperASTShared> = Decompressible<
-        HAST,
-        crate::decompressed_tree_store::lazy_post_order::LazyPostOrder<HAST::IdN, u32>,
-    >;
     let _mapper: (HAST, (DS<HAST>, DS<HAST>)) = hyperast.decompress_pair(src, dst);
     let mut _mapper_owned: Mapper<_, DS<HAST>, DS<HAST>, VecStore<u32>> = _mapper.into();
     let _mapper = Mapper {

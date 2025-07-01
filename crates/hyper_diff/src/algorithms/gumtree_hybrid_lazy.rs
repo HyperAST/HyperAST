@@ -1,6 +1,7 @@
-use super::{get_allocated_memory, tr, MappingMemoryUsages};
 use super::{DiffResult, PreparedMappingDurations};
+use super::{MappingMemoryUsages, get_allocated_memory, tr};
 use crate::algorithms::MappingDurations;
+use crate::matchers::heuristic::gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{
@@ -8,18 +9,13 @@ use crate::{
     },
     matchers::{
         Decompressible, Mapper,
-        heuristic::gt::{
-            lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-            lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-        },
+        heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
     },
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
-use std::cmp::max;
-use crate::matchers::heuristic::gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
 
 #[allow(type_alias_bounds)]
 type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
@@ -74,7 +70,7 @@ where
         preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
     let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m]
+        memory: [subtree_matcher_m, bottomup_matcher_m],
     };
 
     let now = Instant::now();

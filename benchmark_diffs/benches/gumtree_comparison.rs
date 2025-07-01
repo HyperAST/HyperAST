@@ -1,11 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use hyper_diff::algorithms;
-use hyperast::store::SimpleStores;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use hyperast_benchmark_diffs::run_diff::run_diff;
 use std::path::Path;
 use std::time::Duration;
-use hyper_diff::algorithms::{PreparedMappingDurations, ResultsSummary};
-use hyperast_benchmark_diffs::run_diff::run_diff;
 
 const DEFAULT_SIZE_THRESHOLD: usize = 1000;
 
@@ -90,6 +86,14 @@ fn diff_benchmark(c: &mut Criterion) {
 
     group.sample_size(10);
 
+    dbg!(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+    );
+
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -120,131 +124,47 @@ fn diff_benchmark(c: &mut Criterion) {
         })
         .collect();
 
-    for (i, (name, buggy, fixed)) in test_inputs.iter().enumerate() {
-        group.bench_with_input(BenchmarkId::new("hybrid_50", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 50)
-                        .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("hybrid_100", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 100)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("hybrid_500", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 500)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("hybrid_1000", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "hybrid", 1000)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("simple", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "simple", DEFAULT_SIZE_THRESHOLD)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("greedy", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "greedy", DEFAULT_SIZE_THRESHOLD)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("lazy_greedy", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "lazy", DEFAULT_SIZE_THRESHOLD)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("lazy_hybrid_50", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 50)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("lazy_hybrid_100", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 100)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("lazy_hybrid_500", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 500)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
-        group.bench_with_input(BenchmarkId::new("lazy_hybrid_1000", i), &i,|b, i| {
-            b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
-                for _i in 0..iters {
-                    time += Duration::from_secs_f64(
-                        run_diff(black_box(buggy), black_box(fixed), "lazy_hybrid", 1000)
-                            .mapping_durations.mappings.0.get(1).unwrap().clone());
-                }
-                time
-            })
-        });
+    use hyperast_benchmark_diffs::run_diff::Algorithm::*;
+    let tested_fcts: Vec<_> = vec![
+        (Hybrid, 50),
+        (Hybrid, 100),
+        (Hybrid, 500),
+        (Hybrid, 1000),
+        (Simple, DEFAULT_SIZE_THRESHOLD),
+        (Greedy, DEFAULT_SIZE_THRESHOLD),
+        (LazyGreedy, DEFAULT_SIZE_THRESHOLD),
+        (LazyHybrid, 50),
+        (LazyHybrid, 100),
+        (LazyHybrid, 500),
+        (LazyHybrid, 1000),
+    ];
+
+    for (i, inputs) in test_inputs.iter().enumerate() {
+        for (algo, max_size) in &tested_fcts {
+            group.bench_with_input(
+                BenchmarkId::new(format!("{algo}_{max_size}"), i),
+                inputs,
+                |b, (_, buggy, fixed)| {
+                    b.iter_custom(|iters| {
+                        let mut time = Duration::new(0, 0);
+                        for _i in 0..iters {
+                            let r = run_diff(buggy, fixed, *algo, *max_size);
+                            time += Duration::from_secs_f64(
+                                r.mapping_durations.mappings.0.get(1).unwrap().clone(),
+                            );
+                        }
+                        time
+                    })
+                },
+            );
+        }
     }
     group.finish();
 }
 
-criterion_group!(benches, diff_benchmark);
+criterion_group!(
+    name = benches;
+    config = Criterion::default().sample_size(10).configure_from_args();
+    targets = diff_benchmark
+);
 criterion_main!(benches);

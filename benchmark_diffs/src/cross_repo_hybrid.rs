@@ -1,5 +1,7 @@
 use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
 
+use crate::window_combination::write_perfs;
+use hyper_diff::algorithms::{self};
 use hyperast::{
     types::{LabelStore, WithStats},
     utils::memusage_linux,
@@ -12,14 +14,6 @@ use hyperast_vcs_git::{
         CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait, erased::ParametrizedCommitProc2,
     },
 };
-use num_traits::ToPrimitive;
-
-use crate::{
-    other_tools,
-    postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
-    window_combination::write_perfs,
-};
-use hyper_diff::algorithms::{self, ComputeTime};
 
 pub struct CommitCompareParameters<'a> {
     pub configured_repo: ConfiguredRepoHandle2,
@@ -182,30 +176,33 @@ pub fn windowed_commits_compare(
 
             let mu = memusage_linux();
 
-
             let max_sizes = [50, 100, 200, 500, 1000];
 
             for &max_size in &max_sizes {
                 // Greedy
-                let greedy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr, max_size, 0.5f64);
+                let greedy =
+                    algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr, max_size, 0.5f64);
                 let summarized_greedy = greedy.summarize();
                 dbg!(max_size, src_s, &summarized_greedy);
 
                 // Hybrid
-                let hybrid = algorithms::gumtree_hybrid::diff_hybrid(&hyperast, &src_tr, &dst_tr, max_size);
+                let hybrid =
+                    algorithms::gumtree_hybrid::diff_hybrid(&hyperast, &src_tr, &dst_tr, max_size);
                 let summarized_hybrid = &hybrid.summarize();
                 dbg!(max_size, src_s, &summarized_hybrid);
 
                 // Greedy lazy
-                let greedy_lazy = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, max_size, 0.5f64);
+                let greedy_lazy =
+                    algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, max_size, 0.5f64);
                 let summarized_greedy_lazy = greedy_lazy.summarize();
                 dbg!(max_size, src_s, &summarized_greedy_lazy);
 
-                // Hybrid lazy  
-                let hybrid_lazy = algorithms::gumtree_hybrid_lazy::diff_hybrid_lazy(&hyperast, &src_tr, &dst_tr, max_size);
+                // Hybrid lazy
+                let hybrid_lazy = algorithms::gumtree_hybrid_lazy::diff_hybrid_lazy(
+                    &hyperast, &src_tr, &dst_tr, max_size,
+                );
                 let summarized_hybrid_lazy = &hybrid_lazy.summarize();
                 dbg!(max_size, src_s, &summarized_hybrid_lazy);
-
 
                 // Check if lazy always gives same result for hybrid
                 // assert_eq!(summarized_hybrid.actions.map_or(-1, |x| x as isize), summarized_hybrid_lazy.actions.map_or(-1, |x| x as isize));
@@ -227,7 +224,8 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     &summarized_greedy,
-                ).unwrap();
+                )
+                .unwrap();
 
                 write_perfs(
                     &mut buf_perfs,
@@ -237,7 +235,8 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     &summarized_hybrid,
-                ).unwrap();
+                )
+                .unwrap();
 
                 write_perfs(
                     &mut buf_perfs,
@@ -247,7 +246,8 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     &summarized_greedy_lazy,
-                ).unwrap();
+                )
+                .unwrap();
 
                 write_perfs(
                     &mut buf_perfs,
@@ -257,7 +257,8 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     &summarized_hybrid_lazy,
-                ).unwrap();
+                )
+                .unwrap();
             }
 
             // Simple (max_size = 0)
@@ -283,7 +284,8 @@ pub fn windowed_commits_compare(
                 src_s,
                 dst_s,
                 &summarized_simple,
-            ).unwrap();
+            )
+            .unwrap();
             buf_perfs.flush().unwrap();
         }
         log::warn!("done computing diff {loop_count}");

@@ -1,18 +1,15 @@
 use super::bottom_up_matcher::BottomUpMatcher;
-use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
+use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
-    PostOrderIterable, PostOrderKeyRoots,
+    PostOrderIterable,
 };
-use crate::matchers::Decompressible;
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyperast::PrimInt;
-use hyperast::position::tags::TopDownNoSpace;
 use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
-use num_traits::{cast, one};
+use num_traits::cast;
 use std::fmt::Debug;
-use std::time::Instant;
 
 /// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
 ///
@@ -30,9 +27,6 @@ pub struct HybridBottomUpMatcher<
     max_size: usize,
 }
 
-/// Enable using a slice instead of recreating a ZsTree for each call to ZsMatch, see last_chance_match
-const SLICE: bool = true;
-
 impl<
     Dsrc,
     Ddst,
@@ -41,14 +35,7 @@ impl<
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > Into<BottomUpMatcher<Dsrc, Ddst, HAST, M>>
-for HybridBottomUpMatcher<
-    Dsrc,
-    Ddst,
-    HAST,
-    M,
-    SIM_THRESHOLD_NUM,
-    SIM_THRESHOLD_DEN,
->
+    for HybridBottomUpMatcher<Dsrc, Ddst, HAST, M, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 {
     fn into(self) -> BottomUpMatcher<Dsrc, Ddst, HAST, M> {
         self.internal
@@ -59,33 +46,39 @@ for HybridBottomUpMatcher<
 impl<
     'a,
     Dsrc: DecompressedTreeStore<HAST, M::Src>
-    + DecompressedWithParent<HAST, M::Src>
-    + PostOrder<HAST, M::Src>
-    + PostOrderIterable<HAST, M::Src>
-    + DecompressedFrom<HAST, Out = Dsrc>
-    + ContiguousDescendants<HAST, M::Src>
-    + POBorrowSlice<HAST, M::Src>,
+        + DecompressedWithParent<HAST, M::Src>
+        + PostOrder<HAST, M::Src>
+        + PostOrderIterable<HAST, M::Src>
+        + DecompressedFrom<HAST, Out = Dsrc>
+        + ContiguousDescendants<HAST, M::Src>
+        + POBorrowSlice<HAST, M::Src>,
     Ddst: DecompressedTreeStore<HAST, M::Dst>
-    + DecompressedWithParent<HAST, M::Dst>
-    + PostOrder<HAST, M::Dst>
-    + PostOrderIterable<HAST, M::Dst>
-    + DecompressedFrom<HAST, Out = Ddst>
-    + ContiguousDescendants<HAST, M::Dst>
-    + POBorrowSlice<HAST, M::Dst>,
+        + DecompressedWithParent<HAST, M::Dst>
+        + PostOrder<HAST, M::Dst>
+        + PostOrderIterable<HAST, M::Dst>
+        + DecompressedFrom<HAST, Out = Ddst>
+        + ContiguousDescendants<HAST, M::Dst>
+        + POBorrowSlice<HAST, M::Dst>,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
 > HybridBottomUpMatcher<Dsrc, Ddst, HAST, M, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
-        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
-        M::Src: PrimInt,
-        M::Dst: PrimInt,
-        HAST::Label: Eq,
-        HAST::IdN: Debug,
-        HAST::IdN: NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
+    M::Src: PrimInt,
+    M::Dst: PrimInt,
+    HAST::Label: Eq,
+    HAST::IdN: Debug,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    pub fn new(stores: HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M, max_size: usize) -> Self {
+    pub fn new(
+        stores: HAST,
+        src_arena: Dsrc,
+        dst_arena: Ddst,
+        mappings: M,
+        max_size: usize,
+    ) -> Self {
         Self {
             internal: BottomUpMatcher {
                 stores,
@@ -108,7 +101,7 @@ where
                 dst_arena: mapping.mapping.dst_arena,
                 mappings: mapping.mapping.mappings,
             },
-            max_size
+            max_size,
         };
         matcher.internal.mappings.topit(
             matcher.internal.src_arena.len(),
@@ -125,13 +118,19 @@ where
         }
     }
 
-    pub fn matchh(store: HAST, src: &'a HAST::IdN, dst: &'a HAST::IdN, mappings: M, max_size: usize) -> Self {
+    pub fn matchh(
+        store: HAST,
+        src: &'a HAST::IdN,
+        dst: &'a HAST::IdN,
+        mappings: M,
+        max_size: usize,
+    ) -> Self {
         let mut matcher = Self::new(
             store,
             Dsrc::decompress(store, src),
             Ddst::decompress(store, dst),
             mappings,
-            max_size
+            max_size,
         );
         matcher.internal.mappings.topit(
             matcher.internal.src_arena.len(),
@@ -167,7 +166,9 @@ where
                         candidate_descendents,
                         &self.internal.mappings,
                     );
-                    let threshold = 1f64 / (1f64 + ((candidate_descendents.len() + t_descendents.len()) as f64).ln());
+                    let threshold = 1f64
+                        / (1f64
+                            + ((candidate_descendents.len() + t_descendents.len()) as f64).ln());
                     // SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
                     if sim > max_sim && sim >= threshold {
                         max_sim = sim;
@@ -178,7 +179,9 @@ where
                     self.last_chance_match_hybrid(&t, &best);
                     self.internal.mappings.link(t, best);
                 }
-            } else if self.internal.mappings.is_src(&t) && self.internal.has_unmapped_src_children(&t) {
+            } else if self.internal.mappings.is_src(&t)
+                && self.internal.has_unmapped_src_children(&t)
+            {
                 if let Some(dst) = self.internal.mappings.get_dst(&t) {
                     if self.internal.has_unmapped_dst_children(&dst) {
                         self.last_chance_match_hybrid(&t, &dst);

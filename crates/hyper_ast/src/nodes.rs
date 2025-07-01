@@ -6,12 +6,11 @@ use std::{
 
 use num::ToPrimitive;
 
+use crate::types::Childrn;
 use crate::{
     impact::serialize::{Keyed, MySerialize},
     types::{AstLending, HyperAST, HyperType, NodeId, RoleStore},
 };
-use crate::types::Children;
-use crate::types::Childrn;
 
 // pub type TypeIdentifier = Type;
 
@@ -150,7 +149,7 @@ impl<N, L, T> CompressedNode<N, L, T> {
 // CompressedNode
 
 impl<N, L, T: HyperType + Copy + Hash + Eq + Send + Sync> crate::types::Typed
-for CompressedNode<N, L, T>
+    for CompressedNode<N, L, T>
 {
     type Type = T;
 
@@ -264,7 +263,7 @@ impl<N, L, T> crate::types::ErasedHolder for CompressedNode<N, L, T> {
 }
 
 impl<N: NodeId<IdN = N> + Eq + Clone, L: Eq, T: Copy + Hash + Eq + HyperType + Send + Sync>
-crate::types::Tree for CompressedNode<N, L, T>
+    crate::types::Tree for CompressedNode<N, L, T>
 where
     N::IdN: Copy,
 {
@@ -486,17 +485,17 @@ impl<W: std::io::Write> std::fmt::Write for IoOut<W> {
 }
 
 pub type StructureSerializer<'a, 'b, IdN, HAST> =
-SimpleSerializer<'a, IdN, HAST, true, false, false, false>;
+    SimpleSerializer<'a, IdN, HAST, true, false, false, false>;
 pub type LabelSerializer<'a, 'b, IdN, HAST> =
-SimpleSerializer<'a, IdN, HAST, true, true, false, false>;
+    SimpleSerializer<'a, IdN, HAST, true, true, false, false>;
 pub type IdsSerializer<'a, 'b, IdN, HAST> =
-SimpleSerializer<'a, IdN, HAST, false, false, true, false>;
+    SimpleSerializer<'a, IdN, HAST, false, false, true, false>;
 pub type SyntaxSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
-SimpleSerializer<'a, IdN, HAST, true, true, false, true, false>;
+    SimpleSerializer<'a, IdN, HAST, true, true, false, true, false>;
 pub type SyntaxWithIdsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
-SimpleSerializer<'a, IdN, HAST, true, true, true, SPC, false>;
+    SimpleSerializer<'a, IdN, HAST, true, true, true, SPC, false>;
 pub type SyntaxWithFieldsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
-SimpleSerializer<'a, IdN, HAST, true, true, true, false, true>;
+    SimpleSerializer<'a, IdN, HAST, true, true, true, false, true>;
 
 pub struct SimpleSerializer<
     'a,
@@ -529,7 +528,7 @@ impl<
 }
 
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool> Display
-for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
+    for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
     HAST: HyperAST,
     HAST::IdN: std::fmt::Debug,
@@ -541,7 +540,7 @@ where
 }
 
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool> Display
-for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
+    for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
     HAST: HyperAST,
     HAST::TS: RoleStore,
@@ -555,7 +554,7 @@ where
     }
 }
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
-SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
+    SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
     HAST: HyperAST,
     HAST::IdN: std::fmt::Debug,
@@ -756,7 +755,7 @@ where
 // }
 
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
-SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
+    SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
     HAST: HyperAST,
     HAST::TS: RoleStore,
@@ -891,7 +890,7 @@ impl Format for Text {}
 impl Format for Sexp {}
 
 pub type JsonSerializer<'a, 'b, IdN, HAST, const SPC: bool> =
-IndentedSerializer<'a, 'b, IdN, HAST, Json, SPC>;
+    IndentedSerializer<'a, 'b, IdN, HAST, Json, SPC>;
 pub type TextSerializer<'a, 'b, IdN, HAST> = IndentedSerializer<'a, 'b, IdN, HAST, Text, true>;
 
 pub struct IndentedSerializer<'hast, 'a, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
@@ -902,7 +901,7 @@ pub struct IndentedSerializer<'hast, 'a, IdN, HAST, Fmt: Format = Text, const SP
 }
 
 impl<'store, 'b, IdN, HAST, Fmt: Format, const SPC: bool>
-IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC>
+    IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC>
 {
     pub fn new(stores: &'b HAST, root: IdN) -> Self {
         Self {
@@ -915,7 +914,7 @@ IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC>
 }
 
 impl<'store, 'b, IdN, HAST, const SPC: bool> Display
-for IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
+    for IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
 where
     IdN: NodeId<IdN = IdN>,
     HAST: HyperAST<IdN = IdN>,
@@ -929,7 +928,7 @@ where
 }
 
 impl<'store, 'b, IdN, HAST, const SPC: bool> Display
-for IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
+    for IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
 where
     IdN: NodeId<IdN = IdN>,
     HAST: HyperAST<IdN = IdN>,
@@ -1109,7 +1108,7 @@ where
 }
 
 pub type JsonSerializer2<'a, IdN, HAST, const SPC: bool> =
-IndentedSerializer2<'a, IdN, HAST, Json, SPC>;
+    IndentedSerializer2<'a, IdN, HAST, Json, SPC>;
 pub type TextSerializer2<'a, IdN, HAST> = IndentedSerializer2<'a, IdN, HAST, Text, true>;
 
 pub struct IndentedSerializer2<'hast, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
@@ -1120,7 +1119,7 @@ pub struct IndentedSerializer2<'hast, IdN, HAST, Fmt: Format = Text, const SPC: 
 }
 
 impl<'store, IdN, HAST, Fmt: Format, const SPC: bool>
-IndentedSerializer2<'store, IdN, HAST, Fmt, SPC>
+    IndentedSerializer2<'store, IdN, HAST, Fmt, SPC>
 {
     pub fn new(stores: HAST, root: IdN) -> Self {
         Self {
@@ -1133,7 +1132,7 @@ IndentedSerializer2<'store, IdN, HAST, Fmt, SPC>
 }
 
 impl<'store, IdN, HAST, const SPC: bool> Display
-for IndentedSerializer2<'store, IdN, HAST, Text, SPC>
+    for IndentedSerializer2<'store, IdN, HAST, Text, SPC>
 where
     IdN: NodeId<IdN = IdN>,
     HAST: HyperAST<IdN = IdN>,
@@ -1147,7 +1146,7 @@ where
 }
 
 impl<'store, IdN, HAST, const SPC: bool> Display
-for IndentedSerializer2<'store, IdN, HAST, Json, SPC>
+    for IndentedSerializer2<'store, IdN, HAST, Json, SPC>
 where
     IdN: NodeId<IdN = IdN>,
     HAST: HyperAST<IdN = IdN>,

@@ -933,7 +933,7 @@ mod tests {
     };
     use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
     // use hyperast_gen_ts_java::types::TStore;
-    use hyper_diff::algorithms::{self, DiffResult, MappingDurations, MappingMemoryUsages};
+    use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
     #[test]
     fn test() {
@@ -985,7 +985,8 @@ mod tests {
             &java_gen.main_stores,
             &src_tr.compressed_node,
             &dst_tr.compressed_node,
-            1000, 0.5f64
+            1000,
+            0.5f64,
         );
         let actions = actions.unwrap();
         // let Mapping {

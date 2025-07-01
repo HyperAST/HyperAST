@@ -1,6 +1,6 @@
-use super::{get_allocated_memory, MappingDurations, MappingMemoryUsages};
 use super::tr;
 use super::{DiffResult, PreparedMappingDurations};
+use super::{MappingDurations, MappingMemoryUsages, get_allocated_memory};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
@@ -16,7 +16,6 @@ use crate::{
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
-use crate::matchers::heuristic::gt::simple_bottom_up_matcher3::SimpleBottomUpMatcher3;
 
 #[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
@@ -26,7 +25,7 @@ pub fn diff<HAST: HyperAST + Copy>(
     src: &HAST::IdN,
     dst: &HAST::IdN,
     max_size: usize,
-    sim_threshold: f64
+    sim_threshold: f64,
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
@@ -72,7 +71,7 @@ where
         preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
     let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m]
+        memory: [subtree_matcher_m, bottomup_matcher_m],
     };
 
     let now = Instant::now();

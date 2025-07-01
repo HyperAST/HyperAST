@@ -57,24 +57,20 @@ fn change_class_name_test() {
         &stores,
         &src.local.compressed_node,
         &dst.local.compressed_node,
+        1000,
+        0.5f64,
     );
 
     let print_tree = prepare_tree_print(&stores);
     print_tree(src);
     print_tree(dst);
 
-    println!("stats from diffing: \n{}", &diff_result.summarize());
+    println!("stats from diffing: \n{:?}", &diff_result.summarize());
     diff_result
         .actions
         .unwrap()
         .iter()
         .for_each(|a| println!("{:?}", a));
-
-    // action_vec::actions_vec_f(
-    //     &diff_result.actions.unwrap(),
-    //     &diff_result.mapper.hyperast,
-    //     src.local.compressed_node.as_id().clone(),
-    // );
 }
 
 #[test]
@@ -87,6 +83,8 @@ fn add_inner_class_test() {
         &stores,
         &src.local.compressed_node,
         &dst.local.compressed_node,
+        1000,
+        0.5f64,
     );
 
     let print_tree = prepare_tree_print(&stores);
@@ -98,10 +96,4 @@ fn add_inner_class_test() {
         .unwrap()
         .iter()
         .for_each(|a| println!("{:?}", a));
-
-    // action_vec::actions_vec_f(
-    //     &diff_result.actions.unwrap(),
-    //     &diff_result.mapper.hyperast,
-    //     src.local.compressed_node.as_id().clone(),
-    // );
 }

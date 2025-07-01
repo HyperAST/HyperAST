@@ -1,56 +1,15 @@
-use std::fs::remove_dir_all;
-use hyper_diff::{actions::{action_vec::actions_vec_f, action_vec::ActionsVec}, algorithms};
-use hyper_diff::tree::tree_path::CompressedTreePath;
-use hyperast_benchmark_diffs::preprocess::parse_string_pair;
-use std::path::{Path, PathBuf};
 use hyper_diff::actions::Actions;
-use std::process::Command;
-use std::io::Write;
-use std::ptr::null;
-use serde::Deserialize;
-use hyper_diff::actions::script_generator2::{Act, SimpleAction};
-use hyper_diff::matchers::Mapping;
+use hyper_diff::algorithms;
 use hyperast::{
-    full::FullNode, nodes::SyntaxSerializer, store::SimpleStores, tree_gen::StatsGlobalData, types::NodeId
+    full::FullNode, nodes::SyntaxSerializer, store::SimpleStores, tree_gen::StatsGlobalData,
 };
-use hyperast_gen_ts_java::{
-    legion_with_refs::{self, JavaTreeGen, Local},
-    types::TStore,
-};
-use hyperast_gen_ts_java::legion_with_refs::FNode;
-
-const GUMTREE_JAVA_PATH: &str = "../gumtree/dist/build/install/gumtree/bin/gumtree";
-const TEMP_FOLDER: &str = "../gumtree/dist/";
+use hyperast_benchmark_diffs::preprocess::parse_string_pair;
+use hyperast_gen_ts_java::{legion_with_refs::Local, types::TStore};
+use serde::Deserialize;
+use std::path::{Path, PathBuf};
 
 const DATASET_PATH: &str = "../datasets/defects4j/";
 
-// const TEST_CASES: [(&str, &str, &str, usize, usize); 3] = [
-// // Define test case paths relative to root/../datasets/defects4j
-//     // "Jsoup_17",
-//     // "before/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
-//     // "after/Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java",
-//     (
-//         "Chart10",
-//         "before/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
-//         "after/Chart/10/source_org_jfree_chart_imagemap_StandardToolTipTagFragmentGenerator.java",
-//         45, // Number of mappings when running java gumtree
-//         2,
-//     ),
-//     (
-//         "Csv1",
-//         "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java",
-//         "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java",
-//         414,
-//         8,
-//     ),
-//     (
-//         "Jsoup1",
-//         "before/Jsoup/1/src_main_java_org_jsoup_nodes_Document.java",
-//         "after/Jsoup/1/src_main_java_org_jsoup_nodes_Document.java",
-//         566,
-//         3,
-//     )
-// ];
 const TEST_CASES: &[(&str, &str, &str)] = &[
     (
         "Mockito_31",
@@ -124,51 +83,6 @@ const TEST_CASES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-#[derive(Deserialize)]
-struct GumTreeOutput {
-    matches: Vec<Match>,
-    actions: Vec<GumTreeAction>,
-}
-
-#[derive(Deserialize)]
-struct Match {
-    src: String,
-    dest: String,
-}
-
-#[derive(Deserialize)]
-struct GumTreeAction {
-    action: String,
-    tree: String,
-    parent: Option<String>,
-    at: Option<usize>,
-}
-
-fn parse_gumtree_output(path: &Path) -> (usize, usize) { // (usize, ActionsVec<SimpleAction<LabelIdentifier, CompressedTreePath<u16>, NodeIdentifier>>) {
-    let output = std::fs::read_to_string(path)
-        .expect("Failed to read gumtree output file");
-
-    let parsed: GumTreeOutput = serde_json::from_str(&output)
-        .expect("Failed to parse GumTree JSON output");
-
-    let matches_count = parsed.matches.len();
-    // let actions = parsed.actions.into_iter()
-    //     .map(|a| SimpleAction {
-    //         path: ?,
-    //         action: match a.action.as_str() {
-    //             "delete" => Act::Delete {},
-    //             "update" => Act::Update { new: ? },
-    //             "move" => Act::Move { from: ? },
-    //             "insert" => Act::Insert { sub: ? },
-    //             _ => panic!("Unknown action type: {}", a.action)
-    //         }
-    //     })
-    //     .collect();
-    let actions_count = parsed.actions.len();
-
-    (matches_count, actions_count)
-}
-
 fn prepare_tree_print<'a>(
     stores: &'a SimpleStores<TStore>,
 ) -> impl Fn(&FullNode<StatsGlobalData, Local>) -> () + 'a {
@@ -187,50 +101,54 @@ fn prepare_tree_print<'a>(
 
 // fn test_custom_tree(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
 //     // Get path to dataset
-// 
+//
 //     // Initialize stores
 //     let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
 //     let mut md_cache = Default::default();
-// 
+//
 //     // Parse the two Java files
 //     let (src_tr, dst_tr) =
 //         parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 //     // let src_tr = tree!(
-//     // 
+//     //
 //     // );
-// 
+//
 //     // Perform the diff using gumtree lazy
 //     let _diff_result = algorithms::gumtree_hybrid::diff_hybrid(
 //         &stores,
 //         &src_tr.local.compressed_node,
 //         &dst_tr.local.compressed_node,
 //     );
-// 
-// 
+//
+//
 //     let print_tree = prepare_tree_print(&stores);
 //     print_tree(&src_tr);
 //     print_tree(&dst_tr);
-// 
+//
 //     let actions = _diff_result.actions.expect("Expected a result");
 //     actions_vec_f(
 //         &actions,
 //         &_diff_result.mapper.hyperast,
 //         src_tr.local.compressed_node.as_id().clone(),
 //     );
-//     
+//
 //     // print_mappings(&_diff_result.mapper.mappings, &src_tr, &dst_tr);
 //     // for (let m in &_diff_result.mapper.mappings.src_to_dst) {
 //     //     src_tr.
 //     // }
-//     
+//
 //     let hyperast_actions_len = actions.len();
 //     let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
-// 
+//
 //     assert_eq!(hyperast_actions_len, gumtree_actions_len);
 //     assert_eq!(hyperast_matches_len, gumtree_matches_len);
 // }
 
-fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(name: &str, buggy_rel_path: &str, fixed_rel_path: &str) {
+fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(
+    name: &str,
+    buggy_rel_path: &str,
+    fixed_rel_path: &str,
+) {
     // Get path to dataset
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -257,16 +175,15 @@ fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(name: &str, buggy_rel_path: 
     //     ])
     //     .output()
     //     .expect("Failed to execute gumtree command");
-    // 
+    //
     // if !output.status.success() {
     //     panic!("Gumtree command failed: {}", String::from_utf8_lossy(&output.stderr));
     // }
-    // 
+    //
     // dbg!(String::from_utf8_lossy(&output.stdout));
     // dbg!(String::from_utf8_lossy(&output.stderr));
     // // Parse the GumTree output
     // let (gumtree_matches_len, gumtree_actions_len) = parse_gumtree_output(&temp_path);
-
 
     // Read file contents
     let buggy_content = std::fs::read_to_string(&buggy_path)
@@ -283,12 +200,12 @@ fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(name: &str, buggy_rel_path: 
         parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
     // Perform the diff using gumtree lazy
-    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid::<_, SIZE_THRESHOLD, 1>(
+    let _diff_result = algorithms::gumtree_hybrid::diff_hybrid(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
+        100,
     );
-
 
     let print_tree = prepare_tree_print(&stores);
     print_tree(&src_tr);
@@ -305,8 +222,14 @@ fn test_cd_diff_single<const SIZE_THRESHOLD: usize>(name: &str, buggy_rel_path: 
     dbg!(&_diff_result.mapper.mappings.dst_to_src);
 
     let hyperast_actions_len = actions.len();
-    let hyperast_matches_len = _diff_result.mapper.mappings.src_to_dst.iter().filter(|a| **a != 0).count();
-    
+    let hyperast_matches_len = _diff_result
+        .mapper
+        .mappings
+        .src_to_dst
+        .iter()
+        .filter(|a| **a != 0)
+        .count();
+
     dbg!(hyperast_actions_len);
     dbg!(hyperast_matches_len);
 
@@ -338,29 +261,37 @@ fn test_cd_diff_2() {
 
 #[test]
 fn test_csv1_100() {
-    let buggy_rel_path = "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
-    let fixed_rel_path = "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    let buggy_rel_path =
+        "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    let fixed_rel_path =
+        "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
     test_cd_diff_single::<100>("csv1", buggy_rel_path, fixed_rel_path);
 }
 
 #[test]
 fn test_csv1_1000() {
-    let buggy_rel_path = "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
-    let fixed_rel_path = "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    let buggy_rel_path =
+        "before/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
+    let fixed_rel_path =
+        "after/Csv/1/src_main_java_org_apache_commons_csv_ExtendedBufferedReader.java";
     test_cd_diff_single::<1000>("csv1", buggy_rel_path, fixed_rel_path);
 }
 
 #[test]
 fn test_mockito_37_100() {
-    let buggy_rel_path = "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
-    let fixed_rel_path = "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    let buggy_rel_path =
+        "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    let fixed_rel_path =
+        "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
     test_cd_diff_single::<100>("mockito_37", buggy_rel_path, fixed_rel_path);
 }
 
 #[test]
 fn test_mockito_37_1000() {
-    let buggy_rel_path = "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
-    let fixed_rel_path = "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    let buggy_rel_path =
+        "before/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
+    let fixed_rel_path =
+        "after/Mockito/37/src_org_mockito_internal_stubbing_answers_AnswersValidator.java";
     test_cd_diff_single::<1000>("mockito_37", buggy_rel_path, fixed_rel_path);
 }
 
@@ -406,14 +337,13 @@ fn script_find_highest_edit_script_difference() {
 
     let before_dir = root.join("before");
     let java_files = find_java_files(&before_dir, &before_dir);
-    
 
     let mut max_difference = 0;
     let mut max_path = PathBuf::new();
     let mut max_50 = 0;
     let mut max_3000 = 0;
     let measurements = &mut Vec::new();
-    
+
     for rel_path in java_files {
         println!("DBG Checking {:?}", rel_path);
         let buggy_path = root.join("before").join(&rel_path);
@@ -433,39 +363,63 @@ fn script_find_highest_edit_script_difference() {
             parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
         // Perform the diff using gumtree lazy
-        let _diff_result_50 = algorithms::gumtree_hybrid::diff_hybrid::<_, 100, 1> ( //50, 1>(
+        let _diff_result_50 = algorithms::gumtree_hybrid::diff_hybrid::<_>(
+            //50, 1>(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
+            100,
         );
 
-        let _diff_result_3000 = algorithms::gumtree_hybrid::diff_hybrid::<_, 100, 3> ( //3000, 1>(
+        let _diff_result_3000 = algorithms::gumtree_hybrid::diff_hybrid::<_>(
+            //3000, 1>(
             &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
+            100,
         );
 
         let actions_50 = _diff_result_50.actions.expect("Expected a result");
         let actions_3000 = _diff_result_3000.actions.expect("Expected a result");
-        
+
         if (actions_3000.len() <= actions_50.len()) {
             let difference = actions_50.len() - actions_3000.len();
-            println!("DBG Tried: {:?} / {} ({} - {})", &rel_path, difference, actions_50.len(), actions_3000.len());
-            measurements.push((rel_path.clone(), difference, actions_50.len(), actions_3000.len()));
+            println!(
+                "DBG Tried: {:?} / {} ({} - {})",
+                &rel_path,
+                difference,
+                actions_50.len(),
+                actions_3000.len()
+            );
+            measurements.push((
+                rel_path.clone(),
+                difference,
+                actions_50.len(),
+                actions_3000.len(),
+            ));
             if (difference > max_difference) {
                 max_difference = difference;
                 max_50 = actions_50.len();
                 max_3000 = actions_3000.len();
                 max_path = rel_path.clone();
-                println!("DBG !!! New file: {:?} / {} ({} - {})", &rel_path, max_difference, max_50, max_3000);
+                println!(
+                    "DBG !!! New file: {:?} / {} ({} - {})",
+                    &rel_path, max_difference, max_50, max_3000
+                );
             }
         } else {
-            println!("DBG Smaller value for action_50: {} / {}", actions_50.len(), actions_3000.len());
+            println!(
+                "DBG Smaller value for action_50: {} / {}",
+                actions_50.len(),
+                actions_3000.len()
+            );
         }
-
     }
-    
-    println!("DBG Max: {:?} / {} ({} - {})", &max_path, max_difference, max_3000, max_50);
+
+    println!(
+        "DBG Max: {:?} / {} ({} - {})",
+        &max_path, max_difference, max_3000, max_50
+    );
     println!("DBG: {:?}", measurements);
     dbg!(measurements);
 }

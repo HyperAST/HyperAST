@@ -38,7 +38,7 @@ pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
 
 const-chunks = "0.3.0"
 
-winit = { version="0.30.10" , features = ["wayland-backend"] }
+winit = { version = "0.30.10", features = ["wayland-backend"] }
 #hyperopt = "0.0.17"
 #fastrand = "2.2.0"
 #ordered-float = "5.0.0"
@@ -54,6 +54,6 @@ criterion = { version = "0.4", features = [
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    "real_blackbox",
+    # "real_blackbox",
 ] }
 iai-callgrind = "0.14.0"

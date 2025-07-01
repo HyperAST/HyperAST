@@ -1,14 +1,12 @@
 use hyperast::utils::memusage_linux;
-use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 use num_traits::ToPrimitive;
-use hyperast::types::WithStats;
 
 use hyperast_benchmark_diffs::{other_tools, postprocess::CompressedBfPostProcess};
 
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
 use hyperast_benchmark_diffs::preprocess_repo::parse_repo;
 use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -33,7 +31,8 @@ fn main() {
 #[test]
 fn aaa() {
     single(
-        "apache", "maven",
+        "apache",
+        "maven",
         hyperast_vcs_git::processing::RepoConfig::JavaMaven,
         "a02834611bad3442ad073b10f1dee2322916f1f3",
         "c3cf29438e3d65d6ee5c5726f8611af99d9a649a",
@@ -43,7 +42,8 @@ fn aaa() {
 #[test]
 fn bbb() {
     single(
-        "apache", "maven",
+        "apache",
+        "maven",
         hyperast_vcs_git::processing::RepoConfig::JavaMaven,
         "14449e426aee2763d6435b63ef632b7c0b9ed767",
         "6fba7aa3c4d31d088df3ef682f7307b7c9a2f17c",
@@ -57,11 +57,17 @@ fn test_histogram_bug() {
         "gson",
         hyperast_vcs_git::processing::RepoConfig::JavaMaven,
         "810e3560590bb807ed7113ccfff716aac21a3f33",
-        "00ae39775708147e115512be5d4f92bee02e9b89"
+        "00ae39775708147e115512be5d4f92bee02e9b89",
     )
 }
 
-fn single(repo_user: &str, repo_name: &str, config: hyperast_vcs_git::processing::RepoConfig, before: &str, after: &str) {
+fn single(
+    repo_user: &str,
+    repo_name: &str,
+    config: hyperast_vcs_git::processing::RepoConfig,
+    before: &str,
+    after: &str,
+) {
     let mut repositories = PreProcessedRepositories::default();
     let (hyperast, src_tr, dst_tr) = parse_repo(
         &mut repositories,
@@ -69,11 +75,13 @@ fn single(repo_user: &str, repo_name: &str, config: hyperast_vcs_git::processing
         repo_name,
         config,
         before,
-        after
+        after,
     );
 
     let mu = memusage_linux();
-    let lazy = hyper_diff::algorithms::gumtree_hybrid_lazy::diff_hybrid_lazy(&hyperast, &src_tr, &dst_tr, 50);
+    let lazy = hyper_diff::algorithms::gumtree_hybrid_lazy::diff_hybrid_lazy(
+        &hyperast, &src_tr, &dst_tr, 50,
+    );
     let summarized_lazy = &lazy.summarize();
     use hyper_diff::algorithms::ComputeTime;
     let total_lazy_t: f64 = summarized_lazy.time();
