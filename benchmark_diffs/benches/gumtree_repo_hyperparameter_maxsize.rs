@@ -147,7 +147,7 @@ fn diff_benchmark(c: &mut Criterion) {
             &max_size,
             |b, _i| {
                 b.iter_custom(|iters| {
-                    let mut time = Duration::new(0, 0);
+                    let mut time = Duration::ZERO;
                     for _ in 0..iters {
                         for ((stores, src_tr, dst_tr), before, after) in dataset_trees.iter() {
                             epoch::advance().unwrap();
@@ -159,9 +159,7 @@ fn diff_benchmark(c: &mut Criterion) {
                             let memory_used = after_allocated.saturating_sub(before_allocated);
                             dbg!(&summary);
                             dbg!(&memory_used);
-                            time += Duration::from_secs_f64(
-                                summary.mapping_durations.mappings.0.get(1).unwrap().clone(),
-                            );
+                            time += *summary.mapping_durations.mappings.0.get(1).unwrap();
                             write_perfs(
                                 &mut buf_perfs,
                                 algo,
@@ -195,7 +193,8 @@ fn write_perfs(
     src_s: usize,
     dst_s: usize,
     summarized_lazy: &hyper_diff::algorithms::ResultsSummary<
-        hyper_diff::algorithms::PreparedMappingDurations<2>,
+        hyper_diff::algorithms::PreparedMappingDurations<2, Duration>,
+        Duration,
     >,
     total_mem: usize,
 ) -> Result<(), std::io::Error> {
@@ -210,12 +209,12 @@ fn write_perfs(
         dst_s,
         summarized_lazy.mappings,
         summarized_lazy.actions.map_or(-1, |x| x as isize),
-        summarized_lazy.mapping_durations.preparation[0],
-        summarized_lazy.mapping_durations.mappings.0[0],
-        summarized_lazy.mapping_durations.preparation[1],
-        summarized_lazy.mapping_durations.mappings.0[1],
-        summarized_lazy.prepare_gen_t,
-        summarized_lazy.gen_t,
+        summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
+        summarized_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+        summarized_lazy.mapping_durations.preparation[1].as_secs_f64(),
+        summarized_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+        summarized_lazy.prepare_gen_t.as_secs_f64(),
+        summarized_lazy.gen_t.as_secs_f64(),
         total_mem,
     )
 }

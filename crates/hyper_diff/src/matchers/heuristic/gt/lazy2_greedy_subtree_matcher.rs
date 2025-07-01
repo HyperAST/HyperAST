@@ -2,16 +2,16 @@ use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
     LazyDecompressedTreeStore, Shallow,
 };
-use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Mapper;
+use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
+use hyperast::PrimInt;
 use hyperast::compat::HashMap;
 use hyperast::types::{
     Childrn, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree, WithChildren, WithHashs,
     WithStats,
 };
-use hyperast::PrimInt;
 use num_traits::ToPrimitive;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -21,12 +21,12 @@ pub struct LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, const MIN_HEIGHT: usize
 }
 
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
@@ -89,12 +89,12 @@ where
 }
 
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::IdN: Clone,
@@ -177,7 +177,7 @@ where
         let mut sib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         let mut psib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         let mut p_in_p_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
-        dbg!(&ambiguous_mappings.len());
+        // dbg!(&ambiguous_mappings.len());
         ambiguous_mappings.sort_by(|a, b| {
             let cached_coef_sib = |l: &(Dsrc::IdD, Ddst::IdD)| {
                 sib_sim
@@ -360,11 +360,11 @@ where
 }
 
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-    > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
@@ -400,7 +400,7 @@ where
             dst_arena,
         );
         let match_init_t = now.elapsed().as_secs_f64();
-        dbg!(match_init_t);
+        // dbg!(match_init_t);
         while src_trees.peek_height() != -1 && dst_trees.peek_height() != -1 {
             // println!("multi_mappings={}", multi_mappings.len());
             while src_trees.peek_height() != dst_trees.peek_height() {

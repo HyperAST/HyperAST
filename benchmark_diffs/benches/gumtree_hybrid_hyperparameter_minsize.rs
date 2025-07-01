@@ -1,8 +1,8 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
-use std::path::Path;
+use std::{hint::black_box, path::Path};
 
 const TEST_CASES: &[(&str, &str, &str)] = &[
     (

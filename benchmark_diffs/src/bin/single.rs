@@ -84,8 +84,8 @@ fn single(
     );
     let summarized_lazy = &lazy.summarize();
     use hyper_diff::algorithms::ComputeTime;
-    let total_lazy_t: f64 = summarized_lazy.time();
-    dbg!(summarized_lazy);
+    // let total_lazy_t: std::time::Duration = summarized_lazy.time();
+    // dbg!(summarized_lazy);
     log::warn!("ed+mappings size: {}", memusage_linux() - mu);
     log::warn!("done computing diff");
     // println!(
@@ -108,7 +108,7 @@ fn single(
         dst_tr,
         "gumtree",
         diff_algorithm,
-        (total_lazy_t * 10.).ceil().to_u64().unwrap(),
+        0, //(total_lazy_t * 10).as_secs_f64().ceil().to_u64().unwrap(),
         gt_out_format,
     );
     if gt_out_format == "COMPRESSED" {

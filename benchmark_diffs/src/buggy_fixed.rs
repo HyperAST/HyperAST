@@ -1790,12 +1790,12 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
             gt_counts.actions,
             valid.missing_mappings,
             valid.additional_mappings,
-            &timings[0],
-            &timings[1],
-            &timings[2],
-            &gt_timings[0],
-            &gt_timings[1],
-            &gt_timings[2],
+            &timings[0].as_secs_f64(),
+            &timings[1].as_secs_f64(),
+            &timings[2].as_secs_f64(),
+            &gt_timings[0].as_secs_f64(),
+            &gt_timings[1].as_secs_f64(),
+            &gt_timings[2].as_secs_f64(),
         )
     })
 }
@@ -1879,12 +1879,12 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
             gt_counts.actions,
             valid.missing_mappings,
             valid.additional_mappings,
-            &timings[0],
-            &timings[1],
-            &timings[2],
-            &gt_timings[0],
-            &gt_timings[1],
-            &gt_timings[2],
+            &timings[0].as_secs_f64(),
+            &timings[1].as_secs_f64(),
+            &timings[2].as_secs_f64(),
+            &gt_timings[0].as_secs_f64(),
+            &gt_timings[1].as_secs_f64(),
+            &gt_timings[2].as_secs_f64(),
         )
     })
 }

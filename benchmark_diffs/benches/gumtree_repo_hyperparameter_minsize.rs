@@ -1,12 +1,14 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use hyper_diff::algorithms;
 use hyperast::types::WithStats;
 use hyperast_benchmark_diffs::preprocess_repo::parse_repo;
 use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
 use jemalloc_ctl::{epoch, stats};
 use std::fs::File;
+use std::hint::black_box;
 use std::io::BufWriter;
 use std::io::Write;
+use std::time::Duration;
 
 fn diff_benchmark(c: &mut Criterion) {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
@@ -139,7 +141,8 @@ fn write_perfs(
     src_s: usize,
     dst_s: usize,
     summarized_lazy: &hyper_diff::algorithms::ResultsSummary<
-        hyper_diff::algorithms::PreparedMappingDurations<2>,
+        hyper_diff::algorithms::PreparedMappingDurations<2, Duration>,
+        Duration,
     >,
     total_mem: usize,
 ) -> Result<(), std::io::Error> {
@@ -154,12 +157,12 @@ fn write_perfs(
         dst_s,
         summarized_lazy.mappings,
         summarized_lazy.actions.map_or(-1, |x| x as isize),
-        summarized_lazy.mapping_durations.preparation[0],
-        summarized_lazy.mapping_durations.mappings.0[0],
-        summarized_lazy.mapping_durations.preparation[1],
-        summarized_lazy.mapping_durations.mappings.0[1],
-        summarized_lazy.prepare_gen_t,
-        summarized_lazy.gen_t,
+        summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
+        summarized_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+        summarized_lazy.mapping_durations.preparation[1].as_secs_f64(),
+        summarized_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+        summarized_lazy.prepare_gen_t.as_secs_f64(),
+        summarized_lazy.gen_t.as_secs_f64(),
         total_mem,
     )
 }

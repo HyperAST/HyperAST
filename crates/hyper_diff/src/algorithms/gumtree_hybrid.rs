@@ -13,6 +13,7 @@ use crate::{
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
+use std::time::Duration;
 use std::{fmt::Debug, time::Instant};
 
 #[allow(type_alias_bounds)]
@@ -28,7 +29,8 @@ pub fn diff_hybrid<HAST: HyperAST + Copy>(
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
-    PreparedMappingDurations<2>,
+    PreparedMappingDurations<2, Duration>,
+    Duration,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
@@ -43,7 +45,7 @@ where
     if cfg!(debug_assertions) {
         check_oneshot_decompressed_against_lazy(hyperast, src, dst, &mapper);
     }
-    let subtree_prepare_t = now.elapsed().as_secs_f64();
+    let subtree_prepare_t = now.elapsed().into();
     tr!(subtree_prepare_t);
 
     let mem = get_allocated_memory();
@@ -51,18 +53,18 @@ where
     let mapper = GreedySubtreeMatcher::<_, _, _, _, DEFAULT_MIN_HEIGHT>::match_it::<
         DefaultMultiMappingStore<_>,
     >(mapper);
-    let subtree_matcher_t = now.elapsed().as_secs_f64();
+    let subtree_matcher_t = now.elapsed().into();
     let subtree_mappings_s = mapper.mappings().len();
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
-    let bottomup_prepare_t = 0.; // nothing to prepare
+    let bottomup_prepare_t = Duration::ZERO.into(); // nothing to prepare
 
     let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = HybridBottomUpMatcher::<_, _, _, _>::match_it(mapper, max_size);
     dbg!(&now.elapsed().as_secs_f64());
-    let bottomup_matcher_t = now.elapsed().as_secs_f64();
+    let bottomup_matcher_t = now.elapsed().into();
     let bottomup_mappings_s = mapper.mappings().len();
     let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
 
@@ -81,11 +83,11 @@ where
         // the dst side has to be traversed in bfs for chawathe
         |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
     );
-    let prepare_gen_t = now.elapsed().as_secs_f64();
+    let prepare_gen_t = now.elapsed().into();
     tr!(prepare_gen_t);
     let now = Instant::now();
     let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
-    let gen_t = now.elapsed().as_secs_f64();
+    let gen_t = now.elapsed().into();
     tr!(gen_t);
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {
@@ -106,7 +108,8 @@ pub fn diff_hybrid_minheight<HAST: HyperAST + Copy, const MIN_HEIGHT: usize>(
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
-    PreparedMappingDurations<2>,
+    PreparedMappingDurations<2, Duration>,
+    Duration,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
@@ -121,7 +124,7 @@ where
     if cfg!(debug_assertions) {
         check_oneshot_decompressed_against_lazy(hyperast, src, dst, &mapper);
     }
-    let subtree_prepare_t = now.elapsed().as_secs_f64();
+    let subtree_prepare_t = now.elapsed().into();
     tr!(subtree_prepare_t);
 
     let mem = get_allocated_memory();
@@ -129,18 +132,18 @@ where
     let mapper = GreedySubtreeMatcher::<_, _, _, _, MIN_HEIGHT>::match_it::<
         DefaultMultiMappingStore<_>,
     >(mapper);
-    let subtree_matcher_t = now.elapsed().as_secs_f64();
+    let subtree_matcher_t = now.elapsed().into();
     let subtree_mappings_s = mapper.mappings().len();
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
-    let bottomup_prepare_t = 0.; // nothing to prepare
+    let bottomup_prepare_t = Duration::ZERO.into(); // nothing to prepare
 
     let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = HybridBottomUpMatcher::<_, _, _, _>::match_it(mapper, max_size);
     dbg!(&now.elapsed().as_secs_f64());
-    let bottomup_matcher_t = now.elapsed().as_secs_f64();
+    let bottomup_matcher_t = now.elapsed().into();
     let bottomup_mappings_s = mapper.mappings().len();
     let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
 
@@ -159,11 +162,11 @@ where
         // the dst side has to be traversed in bfs for chawathe
         |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
     );
-    let prepare_gen_t = now.elapsed().as_secs_f64();
+    let prepare_gen_t = now.elapsed().into();
     tr!(prepare_gen_t);
     let now = Instant::now();
     let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
-    let gen_t = now.elapsed().as_secs_f64();
+    let gen_t = now.elapsed().into();
     tr!(gen_t);
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
     DiffResult {

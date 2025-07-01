@@ -392,7 +392,7 @@ dependencies = [
  "arrow-data",
  "arrow-schema",
  "chrono",
- "half 2.4.1",
+ "half",
  "hashbrown 0.15.2",
  "num",
 ]
@@ -404,7 +404,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "263f4801ff1839ef53ebd06f99a56cecd1dbaf314ec893d93168e2e860e0291c"
 dependencies = [
  "bytes",
- "half 2.4.1",
+ "half",
  "num",
 ]
 
@@ -422,7 +422,7 @@ dependencies = [
  "atoi",
  "base64 0.22.1",
  "chrono",
- "half 2.4.1",
+ "half",
  "lexical-core",
  "num",
  "ryu",
@@ -436,7 +436,7 @@ checksum = "61cfdd7d99b4ff618f167e548b2411e5dd2c98c0ddebedd7df433d34c20a4429"
 dependencies = [
  "arrow-buffer",
  "arrow-schema",
- "half 2.4.1",
+ "half",
  "num",
 ]
 
@@ -476,7 +476,7 @@ dependencies = [
  "arrow-buffer",
  "arrow-data",
  "arrow-schema",
- "half 2.4.1",
+ "half",
 ]
 
 [[package]]
@@ -1588,7 +1588,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
- "half 2.4.1",
+ "half",
 ]
 
 [[package]]
@@ -1983,90 +1983,25 @@ dependencies = [
 
 [[package]]
 name = "criterion"
-version = "0.3.6"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b01d6de93b2b6c65e17c634a26653a29d107b3c98c607c765bf38d041531cd8f"
-dependencies = [
- "atty",
- "cast",
- "clap 2.34.0",
- "criterion-plot 0.4.5",
- "csv",
- "itertools 0.10.5",
- "lazy_static",
- "num-traits",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_cbor",
- "serde_derive",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
-name = "criterion"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7c76e09c1aae2bc52b3d2f29e13c6572553b30c4aa1b8a49fd70de6412654cb"
-dependencies = [
- "anes",
- "atty",
- "cast",
- "ciborium",
- "clap 3.2.25",
- "criterion-plot 0.5.0",
- "itertools 0.10.5",
- "lazy_static",
- "num-traits",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
-name = "criterion"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
+checksum = "3bf7af66b0989381bd0be551bd7cc91912a655a58c6918420c9527b1fd8b4679"
 dependencies = [
  "anes",
  "cast",
  "ciborium",
  "clap 4.5.32",
- "criterion-plot 0.5.0",
- "is-terminal",
- "itertools 0.10.5",
+ "criterion-plot",
+ "itertools 0.13.0",
  "num-traits",
- "once_cell",
  "oorandom",
  "plotters",
  "rayon",
  "regex",
  "serde",
- "serde_derive",
  "serde_json",
  "tinytemplate",
  "walkdir",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2673cc8207403546f45f5fd319a974b1e6983ad1a3ee7e6041650013be041876"
-dependencies = [
- "cast",
- "itertools 0.10.5",
 ]
 
 [[package]]
@@ -2987,7 +2922,7 @@ checksum = "707070ccf8c4173548210893a0186e29c266901b71ed20cd9e2ca0193dfe95c3"
 dependencies = [
  "az",
  "bytemuck",
- "half 2.4.1",
+ "half",
  "serde",
  "typenum",
 ]
@@ -3589,12 +3524,6 @@ dependencies = [
 
 [[package]]
 name = "half"
-version = "1.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
-
-[[package]]
-name = "half"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
@@ -4030,7 +3959,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "const-chunks",
- "criterion 0.4.0",
+ "criterion",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
  "hyper_diff",
@@ -4059,7 +3988,7 @@ name = "hyper_diff"
 version = "0.3.0"
 dependencies = [
  "bitvec",
- "criterion 0.4.0",
+ "criterion",
  "enum-map",
  "env_logger 0.11.5",
  "hungarian",
@@ -4112,7 +4041,6 @@ name = "hyperast_benchmark"
 version = "0.3.0"
 dependencies = [
  "cfg-if",
- "criterion 0.3.6",
  "env_logger 0.9.3",
  "hyper_diff",
  "hyperast_gen_ts_java",
@@ -4133,7 +4061,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "const-chunks",
- "criterion 0.4.0",
+ "criterion",
  "csv",
  "env_logger 0.11.5",
  "git2",
@@ -4245,7 +4173,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "controlled-option",
- "criterion 0.5.1",
+ "criterion",
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
@@ -4299,7 +4227,7 @@ dependencies = [
  "bitvec",
  "cfg-if",
  "controlled-option",
- "criterion 0.4.0",
+ "criterion",
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
@@ -4354,7 +4282,7 @@ dependencies = [
 name = "hyperast_vcs_git"
 version = "0.3.0"
 dependencies = [
- "criterion 0.4.0",
+ "criterion",
  "enumset",
  "env_logger 0.11.5",
  "git2",
@@ -6843,7 +6771,7 @@ checksum = "a46ccdd58409e0f1ed8303aac523b46d014587b85cfb9bc22db475ebacd0429f"
 dependencies = [
  "anyhow",
  "arrow",
- "half 2.4.1",
+ "half",
  "itertools 0.14.0",
  "re_log",
  "re_tracing",
@@ -6881,7 +6809,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f10d7fb5832ae7b40ab2de1e1136b5b684bbdafd2db98e5e887b54942ec8c4e5"
 dependencies = [
  "arrow",
- "half 2.4.1",
+ "half",
  "smallvec",
 ]
 
@@ -6916,7 +6844,7 @@ dependencies = [
  "bytemuck",
  "crossbeam",
  "document-features",
- "half 2.4.1",
+ "half",
  "itertools 0.14.0",
  "nohash-hasher",
  "rand",
@@ -7158,7 +7086,7 @@ dependencies = [
  "clean-path",
  "document-features",
  "fixed",
- "half 2.4.1",
+ "half",
  "itertools 0.14.0",
  "jiff",
  "natord",
@@ -7384,7 +7312,7 @@ dependencies = [
  "bytemuck",
  "document-features",
  "emath",
- "half 2.4.1",
+ "half",
  "infer",
  "itertools 0.14.0",
  "linked-hash-map",
@@ -7450,7 +7378,7 @@ dependencies = [
  "backtrace",
  "bytemuck",
  "document-features",
- "half 2.4.1",
+ "half",
  "itertools 0.14.0",
  "nohash-hasher",
  "once_cell",
@@ -8144,16 +8072,6 @@ version = "0.11.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8437fd221bde2d4ca316d61b90e337e9e702b3820b87d63caa9ba6c02bd06d96"
 dependencies = [
- "serde",
-]
-
-[[package]]
-name = "serde_cbor"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
-dependencies = [
- "half 1.8.3",
  "serde",
 ]
 

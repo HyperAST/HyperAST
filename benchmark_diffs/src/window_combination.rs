@@ -1,4 +1,10 @@
-use std::{fmt::Display, fs::File, io::BufWriter, io::Write, path::PathBuf};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Duration,
+};
 
 use crate::{
     other_tools,
@@ -103,8 +109,8 @@ pub fn windowed_commits_compare(
             }
 
             log::warn!("ed+mappings size: {}", memusage_linux() - mu);
-            let total_lazy_t: f64 = summarized_lazy.time();
-            dbg!(&total_lazy_t);
+            // let total_lazy_t: std::time::Duration = summarized_lazy.time();
+            // dbg!(&total_lazy_t);
 
             let gt_out_format = "COMPRESSED"; // JSON
             let gt_out = other_tools::gumtree::subprocess(
@@ -113,7 +119,7 @@ pub fn windowed_commits_compare(
                 dst_tr,
                 "gumtree",
                 diff_algorithm,
-                (total_lazy_t * 10.).ceil().to_u64().unwrap(),
+                0, //(total_lazy_t * 10).as_secs_f64().ceil().to_u64().unwrap(),
                 gt_out_format,
             );
             let res = if gt_out_format == "COMPRESSED" {
@@ -186,11 +192,11 @@ pub fn windowed_commits_compare(
                         gt_counts.mappings,
                         gt_counts.actions,
                         0.0,
-                        &gt_timings[0],
+                        &gt_timings[0].as_secs_f64(),
                         0.0,
-                        &gt_timings[1],
+                        &gt_timings[1].as_secs_f64(),
                         0.0,
-                        &gt_timings[2],
+                        &gt_timings[2].as_secs_f64(),
                     )
                     .unwrap();
                 } else {
@@ -253,39 +259,39 @@ pub fn windowed_commits_compare(
                 buf_perfs.flush().unwrap();
             } else {
                 if let Some((gt_timings, gt_counts, valid)) = res {
-                    dbg!(&gt_timings);
-                    println!(
-                        "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                        src_s,
-                        dst_s,
-                        Into::<isize>::into(&commit_src.1.memory_used()),
-                        Into::<isize>::into(&commit_dst.1.memory_used()),
-                        summarized_lazy.actions.map_or(-1, |x| x as isize),
-                        gt_counts.actions,
-                        valid.missing_mappings,
-                        valid.additional_mappings,
-                        &gt_timings[0],
-                        &gt_timings[1],
-                        &gt_timings[2],
-                        summarized_lazy.mapping_durations.preparation[0],
-                        summarized_lazy.mapping_durations.mappings.0[0],
-                        summarized_lazy.mapping_durations.preparation[1],
-                        summarized_lazy.mapping_durations.mappings.0[1],
-                        summarized_lazy.gen_t,
-                        summarized_lazy.prepare_gen_t,
-                        not_lazy.mapping_durations.preparation[0],
-                        not_lazy.mapping_durations.mappings.0[0],
-                        not_lazy.mapping_durations.preparation[1],
-                        not_lazy.mapping_durations.mappings.0[1],
-                        not_lazy.prepare_gen_t,
-                        not_lazy.gen_t,
-                        partial_lazy.mapping_durations.preparation[0],
-                        partial_lazy.mapping_durations.mappings.0[0],
-                        partial_lazy.mapping_durations.preparation[1],
-                        partial_lazy.mapping_durations.mappings.0[1],
-                        partial_lazy.prepare_gen_t,
-                        partial_lazy.gen_t,
-                    );
+                    // dbg!(&gt_timings);
+                    // println!(
+                    //     "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    //     src_s,
+                    //     dst_s,
+                    //     Into::<isize>::into(&commit_src.1.memory_used()),
+                    //     Into::<isize>::into(&commit_dst.1.memory_used()),
+                    //     summarized_lazy.actions.map_or(-1, |x| x as isize),
+                    //     gt_counts.actions,
+                    //     valid.missing_mappings,
+                    //     valid.additional_mappings,
+                    //     &gt_timings[0],
+                    //     &gt_timings[1],
+                    //     &gt_timings[2],
+                    //     summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
+                    //     summarized_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+                    //     summarized_lazy.mapping_durations.preparation[1].as_secs_f64(),
+                    //     summarized_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+                    //     summarized_lazy.gen_t.as_secs_f64(),
+                    //     summarized_lazy.prepare_gen_t.as_secs_f64(),
+                    //     not_lazy.mapping_durations.preparation[0].as_secs_f64(),
+                    //     not_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+                    //     not_lazy.mapping_durations.preparation[1].as_secs_f64(),
+                    //     not_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+                    //     not_lazy.prepare_gen_t.as_secs_f64(),
+                    //     not_lazy.gen_t.as_secs_f64(),
+                    //     partial_lazy.mapping_durations.preparation[0].as_secs_f64(),
+                    //     partial_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+                    //     partial_lazy.mapping_durations.preparation[1].as_secs_f64(),
+                    //     partial_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+                    //     partial_lazy.prepare_gen_t.as_secs_f64(),
+                    //     partial_lazy.gen_t.as_secs_f64(),
+                    // );
                 }
             }
         }
@@ -305,27 +311,28 @@ pub(crate) fn write_perfs<Id: Display>(
     src_s: usize,
     dst_s: usize,
     summarized_lazy: &hyper_diff::algorithms::ResultsSummary<
-        hyper_diff::algorithms::PreparedMappingDurations<2>,
+        hyper_diff::algorithms::PreparedMappingDurations<2, Duration>,
+        Duration,
     >,
 ) -> Result<(), std::io::Error> {
     writeln!(
         buf_perfs,
-        "{}/{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-        oid_src,
-        oid_dst,
-        kind,
-        src_s,
-        dst_s,
-        summarized_lazy.mappings,
-        summarized_lazy.actions.map_or(-1, |x| x as isize),
-        summarized_lazy.mapping_durations.preparation[0],
-        summarized_lazy.mapping_durations.mappings.0[0],
-        summarized_lazy.mapping_durations.preparation[1],
-        summarized_lazy.mapping_durations.mappings.0[1],
-        summarized_lazy.prepare_gen_t,
-        summarized_lazy.gen_t,
-        summarized_lazy.mapping_memory_usages.memory[0],
-        summarized_lazy.mapping_memory_usages.memory[1],
+        // "{}/{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+        // oid_src,
+        // oid_dst,
+        // kind,
+        // src_s,
+        // dst_s,
+        // summarized_lazy.mappings,
+        // summarized_lazy.actions.map_or(-1, |x| x as isize),
+        // summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
+        // summarized_lazy.mapping_durations.mappings.0[0].as_millis(),
+        // summarized_lazy.mapping_durations.preparation[1].as_millis(),
+        // summarized_lazy.mapping_durations.mappings.0[1].as_millis(),
+        // summarized_lazy.prepare_gen_t.as_millis(),
+        // summarized_lazy.gen_t.as_millis(),
+        // summarized_lazy.mapping_memory_usages.memory[0],
+        // summarized_lazy.mapping_memory_usages.memory[1],
     )
 }
 

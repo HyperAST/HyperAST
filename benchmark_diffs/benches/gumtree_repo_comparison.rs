@@ -74,15 +74,14 @@ fn diff_benchmark(c: &mut Criterion) {
     ];
 
     let select_metric = |summary: hyper_diff::algorithms::ResultsSummary<
-        hyper_diff::algorithms::PreparedMappingDurations<2>,
-    >| {
-        Duration::from_secs_f64(*summary.mapping_durations.mappings.0.get(1).unwrap())
-    };
+        hyper_diff::algorithms::PreparedMappingDurations<2, Duration>,
+        Duration,
+    >| { *summary.mapping_durations.mappings.0.get(1).unwrap() };
 
     for (algo, max_size) in &tested_fcts {
         group.bench_function(format!("{algo}_{max_size}"), |b| {
             b.iter_custom(|iters| {
-                let mut time = Duration::new(0, 0);
+                let mut time = Duration::ZERO;
                 for _i in 0..iters {
                     for (stores, src_tr, dst_tr) in &dataset_trees {
                         let summary = run_diff_trees(stores, &src_tr, &dst_tr, algo, *max_size);

@@ -1,11 +1,12 @@
 use crate::preprocess::parse_string_pair;
-use criterion::black_box;
 use hyper_diff::algorithms;
 use hyper_diff::algorithms::{PreparedMappingDurations, ResultsSummary};
 use hyperast::store::SimpleStores;
 use hyperast::types;
 use hyperast::types::{HyperAST, NodeId};
 use std::fmt::{Debug, Display};
+use std::hint::black_box;
+use std::time::Duration;
 
 const DEFAULT_SIM_THRESHOLD: f64 = 0.5f64;
 
@@ -13,6 +14,7 @@ const DEFAULT_SIM_THRESHOLD: f64 = 0.5f64;
 pub enum Algorithm {
     Hybrid,
     LazyHybrid,
+    LazySimple,
     Simple,
     Greedy,
     LazyGreedy,
@@ -29,6 +31,7 @@ impl Display for Algorithm {
         match self {
             Algorithm::Hybrid => write!(f, "hybrid"),
             Algorithm::LazyHybrid => write!(f, "lazy_hybrid"),
+            Algorithm::LazySimple => write!(f, "lazy_simple"),
             Algorithm::Simple => write!(f, "simple"),
             Algorithm::Greedy => write!(f, "greedy"),
             Algorithm::LazyGreedy => write!(f, "lazy_greedy"),
@@ -41,7 +44,7 @@ pub fn run_diff(
     dst: &str,
     algorithm: impl AsRef<Algorithm>,
     max_size: usize,
-) -> ResultsSummary<PreparedMappingDurations<2>> {
+) -> ResultsSummary<PreparedMappingDurations<2, Duration>, Duration> {
     let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
 
@@ -63,7 +66,7 @@ pub fn run_diff_trees<HAST: HyperAST + Copy>(
     dst_tr: &HAST::IdN,
     algorithm: impl AsRef<Algorithm>,
     max_size: usize,
-) -> ResultsSummary<PreparedMappingDurations<2>>
+) -> ResultsSummary<PreparedMappingDurations<2, Duration>, Duration>
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -79,6 +82,7 @@ where
     let diff_result = match algorithm.as_ref() {
         Hybrid => gumtree_hybrid::diff_hybrid(stores, src_tr, dst_tr, max_size),
         LazyHybrid => gumtree_hybrid_lazy::diff_hybrid_lazy(stores, src_tr, dst_tr, max_size),
+        LazySimple => todo!(), //gumtree_simple::diff_lazy(stores, src_tr, dst_tr, max_size)),
         Simple => gumtree_simple::diff_simple(stores, src_tr, dst_tr),
         Greedy => gumtree::diff(stores, src_tr, dst_tr, max_size, DEFAULT_SIM_THRESHOLD),
         LazyGreedy => gumtree_lazy::diff(stores, src_tr, dst_tr, max_size, DEFAULT_SIM_THRESHOLD),

@@ -1,5 +1,5 @@
-use super::{get_allocated_memory, tr, MappingMemoryUsages};
 use super::{DiffResult, PreparedMappingDurations};
+use super::{MappingMemoryUsages, get_allocated_memory, tr};
 use crate::algorithms::MappingDurations;
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
@@ -17,6 +17,7 @@ use crate::{
     tree::tree_path::CompressedTreePath,
 };
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
+use std::time::Duration;
 use std::{fmt::Debug, time::Instant};
 
 #[allow(type_alias_bounds)]
@@ -30,12 +31,13 @@ pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
-    max_size: usize, 
-    sim_threshold: f64
+    max_size: usize,
+    sim_threshold: f64,
 ) -> DiffResult<
     SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
     Mapper<HAST, CDS<HAST>, CDS<HAST>, M>,
-    PreparedMappingDurations<2>,
+    PreparedMappingDurations<2, Duration>,
+    Duration,
 >
 where
     HAST::IdN: Clone + Debug + Eq,
@@ -47,23 +49,23 @@ where
     let now = Instant::now();
     let mut mapper_owned: (DS<HAST>, DS<HAST>) = hyperast.decompress_pair(src, dst).1;
     let mapper = Mapper::with_mut_decompressible(&mut mapper_owned);
-    let subtree_prepare_t = now.elapsed().as_secs_f64();
+    let subtree_prepare_t = now.elapsed().into();
     tr!(subtree_prepare_t);
 
     let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
-    let subtree_matcher_t = now.elapsed().as_secs_f64();
+    let subtree_matcher_t = now.elapsed().into();
     let subtree_mappings_s = mapper.mappings().len();
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
-    let bottomup_prepare_t = 0.; // nothing to prepare
+    let bottomup_prepare_t = Duration::ZERO.into(); // nothing to prepare
 
     let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper, max_size, sim_threshold);
-    let bottomup_matcher_t = now.elapsed().as_secs_f64();
+    let bottomup_matcher_t = now.elapsed().into();
     let bottomup_mappings_s = mapper.mappings().len();
     let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(bottomup_matcher_t, bottomup_mappings_s);
@@ -72,7 +74,7 @@ where
         preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
     let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m]
+        memory: [subtree_matcher_m, bottomup_matcher_m],
     };
 
     let now = Instant::now();
@@ -86,12 +88,12 @@ where
             SimpleBfsMapper::with_store(hyperast, complete)
         },
     );
-    let prepare_gen_t = now.elapsed().as_secs_f64();
+    let prepare_gen_t = now.elapsed().into();
     tr!(prepare_gen_t);
 
     let now = Instant::now();
     let actions = ScriptGenerator::compute_actions(mapper.hyperast, &mapper.mapping).ok();
-    let gen_t = now.elapsed().as_secs_f64();
+    let gen_t = now.elapsed().into();
     tr!(gen_t);
 
     // drop the bfs wrapper

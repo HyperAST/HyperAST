@@ -113,12 +113,12 @@ pub mod compressed_bf_post_process {
     }
 
     impl PP1 {
-        pub fn performances(mut self) -> (PP2, Vec<f64>) {
+        pub fn performances(mut self) -> (PP2, Vec<Duration>) {
             use byteorder::{BigEndian, ReadBytesExt};
             let t_len = self.file.read_u32::<BigEndian>().unwrap() as usize;
             let timings: Vec<_> = (0..t_len)
                 .map(|_| self.file.read_u64::<BigEndian>().unwrap())
-                .map(|x| Duration::from_nanos(x as u64).as_secs_f64())
+                .map(|x| Duration::from_nanos(x as u64))
                 .collect();
             (PP2 { file: self.file }, timings)
         }
@@ -443,11 +443,11 @@ impl SimpleJsonPostProcess {
         dbg!(gt_out_parsing_t);
         Self { file: gt_out }
     }
-    pub fn performances(&self) -> Vec<f64> {
+    pub fn performances(&self) -> Vec<Duration> {
         self.file
             .times
             .iter()
-            .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
+            .map(|x| Duration::from_nanos(*x as u64))
             .collect::<Vec<_>>()
     }
     pub fn counts(&self) -> Counts {
@@ -580,11 +580,11 @@ impl PathJsonPostProcess {
         dbg!(gt_out_parsing_t);
         Self { file: gt_out }
     }
-    pub fn performances(&self) -> Vec<f64> {
+    pub fn performances(&self) -> Vec<Duration> {
         self.file
             .times
             .iter()
-            .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
+            .map(|x| Duration::from_nanos(*x as u64))
             .collect::<Vec<_>>()
     }
     pub fn counts(&self) -> Counts {

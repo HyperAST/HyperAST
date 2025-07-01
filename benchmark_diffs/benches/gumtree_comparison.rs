@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use hyperast_benchmark_diffs::run_diff::run_diff;
 use std::path::Path;
 use std::time::Duration;
@@ -84,8 +84,6 @@ fn diff_benchmark(c: &mut Criterion) {
         .init();
     let mut group = c.benchmark_group("gumtree_comparison");
 
-    group.sample_size(10);
-
     dbg!(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -130,7 +128,7 @@ fn diff_benchmark(c: &mut Criterion) {
         (Hybrid, 100),
         (Hybrid, 500),
         (Hybrid, 1000),
-        (Simple, DEFAULT_SIZE_THRESHOLD),
+        (Simple, 0),
         (Greedy, DEFAULT_SIZE_THRESHOLD),
         (LazyGreedy, DEFAULT_SIZE_THRESHOLD),
         (LazyHybrid, 50),
@@ -140,18 +138,20 @@ fn diff_benchmark(c: &mut Criterion) {
     ];
 
     for (i, inputs) in test_inputs.iter().enumerate() {
+        group.throughput(Throughput::Elements(
+            (inputs.1.len() + inputs.2.len()).div_ceil(2) as u64,
+        ));
         for (algo, max_size) in &tested_fcts {
             group.bench_with_input(
                 BenchmarkId::new(format!("{algo}_{max_size}"), i),
                 inputs,
                 |b, (_, buggy, fixed)| {
                     b.iter_custom(|iters| {
-                        let mut time = Duration::new(0, 0);
+                        dbg!(iters);
+                        let mut time = Duration::ZERO;
                         for _i in 0..iters {
                             let r = run_diff(buggy, fixed, *algo, *max_size);
-                            time += Duration::from_secs_f64(
-                                r.mapping_durations.mappings.0.get(1).unwrap().clone(),
-                            );
+                            time += r.mapping_durations.mappings.0.get(1).unwrap().clone();
                         }
                         time
                     })
@@ -164,7 +164,9 @@ fn diff_benchmark(c: &mut Criterion) {
 
 criterion_group!(
     name = benches;
-    config = Criterion::default().sample_size(10).configure_from_args();
+    config = Criterion::default()
+        .measurement_time(Duration::from_secs(1))
+        .configure_from_args();
     targets = diff_benchmark
 );
 criterion_main!(benches);

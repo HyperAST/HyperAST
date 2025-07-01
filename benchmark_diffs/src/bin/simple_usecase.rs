@@ -124,7 +124,7 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
             hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr, 1000, 0.5f64);
         let summarized_lazy = &lazy.summarize();
         use hyper_diff::algorithms::ComputeTime;
-        let total_lazy_t: f64 = summarized_lazy.time();
+        let total_lazy_t: std::time::Duration = summarized_lazy.time();
         dbg!(summarized_lazy);
         log::warn!("ed+mappings size: {}", memusage_linux() - mu);
         log::warn!("done computing diff {i}");
@@ -139,7 +139,7 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
                 time_src,
                 time_dst,
                 summarized_lazy.mappings,
-                total_lazy_t,
+                total_lazy_t.as_secs_f64(),
                 summarized_lazy.actions.map_or(-1, |x| x as isize),
             )
             .unwrap();
@@ -223,7 +223,7 @@ fn whole(
             );
             let summarized_lazy = &lazy.summarize();
             use hyper_diff::algorithms::ComputeTime;
-            let total_lazy_t: f64 = summarized_lazy.time();
+            let total_lazy_t: std::time::Duration = summarized_lazy.time();
             dbg!(summarized_lazy);
             log::warn!("ed+mappings size: {}", memusage_linux() - mu);
             if let Some(buf) = &mut buf {
@@ -237,7 +237,7 @@ fn whole(
                     time_src,
                     time_dst,
                     summarized_lazy.mappings,
-                    total_lazy_t,
+                    total_lazy_t.as_secs_f64(),
                     summarized_lazy.actions.map_or(-1, |x| x as isize),
                 )
                 .unwrap();
