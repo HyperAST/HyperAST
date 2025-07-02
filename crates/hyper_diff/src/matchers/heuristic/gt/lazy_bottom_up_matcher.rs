@@ -103,7 +103,7 @@ where
                 let p = &dst_arena.original(&parent);
                 let p_type = self.stores.resolve_type(p);
                 if p_type == t
-                    && !mappings.is_dst(parent.shallow()) 
+                    && !mappings.is_dst(parent.shallow())
                     && parent.shallow() != &dst_arena.root()
                 {
                     candidates.push(parent);
@@ -204,7 +204,6 @@ where
         dst: Ddst::IdD,
         cmp: F,
     ) {
-        //!TODO is there a way to do it without decompressing children?
         let src_children: Vec<<Dsrc as LazyDecompressed<<M as MappingStore>::Src>>::IdD> = self
             .src_arena
             .decompress_children(&src)

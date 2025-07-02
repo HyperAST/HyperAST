@@ -1,5 +1,4 @@
-use criterion::{BenchmarkId, Criterion, black_box};
-use criterion_perf_events::Perf;
+use criterion::{BenchmarkId, Criterion, measurement::Measurement};
 use hyper_diff::{
     algorithms,
     decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
@@ -21,7 +20,7 @@ use hyperast::{
 };
 use hyperast_benchmark_diffs::preprocess::{JavaPreprocessFileSys, parse_dir_pair};
 use hyperast_gen_ts_java::legion_with_refs::Local;
-use std::{fmt::Debug, path::PathBuf};
+use std::{fmt::Debug, hint::black_box, path::PathBuf};
 
 use crate::bench_utils::bench_utils_models::{BenchInfo, DataSet, Heuristic, HeuristicType};
 
@@ -80,8 +79,8 @@ where
     algorithms::gumtree_lazy::lazy_top_down(mapper_owned)
 }
 
-pub fn run_all_heuristics_for_dataset(
-    c: &mut Criterion<Perf>,
+pub fn run_all_heuristics_for_dataset<M: Measurement>(
+    c: &mut Criterion<M>,
     dataset: DataSet,
     variants: &[Heuristic],
 ) {

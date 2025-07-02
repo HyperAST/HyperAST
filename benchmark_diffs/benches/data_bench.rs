@@ -166,14 +166,7 @@ fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String, String)> {
             let fixed_path = root.join("after").join(path_rel);
 
             // Get name of fix
-            let name = path_rel
-                .rsplit("/")
-                .nth(1)
-                .expect(&format!(
-                    "Expected at least 2 path separators, got: {:?}",
-                    path_rel
-                ))
-                .to_string();
+            let name = path_rel.split("/").take(3).collect::<Vec<_>>().join("-");
 
             // Read file contents
             let buggy_content = std::fs::read_to_string(&buggy_path)

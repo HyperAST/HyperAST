@@ -1,14 +1,8 @@
 mod data_bench;
-
-use std::{
-    error::Error,
-    fmt::Debug,
-    fs::{self, File},
-    path::Path,
-    usize,
+use criterion::{
+    BenchmarkGroup, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
+    measurement::Measurement,
 };
-
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use hyper_diff::{
     decompressed_tree_store::CompletePostOrder,
     matchers::{
@@ -26,43 +20,101 @@ use hyperast::{store::SimpleStores, types};
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use serde::Serialize;
 use serde_json;
+use std::{
+    collections::HashMap,
+    error::Error,
+    fmt::Debug,
+    fs::{self, File},
+    path::Path,
+    usize,
+};
 
 #[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 #[derive(Serialize)]
 struct MappingInfo {
+    #[serde(flatten)]
+    id: MappingId,
+    #[serde(flatten)]
+    data: MappingData,
+}
+#[derive(Serialize, Hash, Clone, Debug, Eq, PartialEq)]
+struct MappingId {
     algorithm: String,
     file_pair: String,
+}
+#[derive(Serialize)]
+struct MappingData {
     num_pre_bottom_up: usize,
     num_post_bottom_up: usize,
 }
 
-fn log_results<'a>(data: Vec<MappingInfo>, algo: &str) -> Result<(), Box<dyn Error>> {
+fn log_results<'a>(
+    data: HashMap<MappingId, MappingData>,
+    algo: &str,
+    max_size: usize,
+) -> Result<(), Box<dyn Error>> {
     let dir_path = Path::new("bench_results");
     if !dir_path.exists() {
         fs::create_dir_all(dir_path)?;
     }
-
-    let file_path = dir_path.join(format!("{algo}.json"));
+    let data = data
+        .into_iter()
+        .map(|(id, data)| MappingInfo { id, data })
+        .collect::<Vec<_>>();
+    let file_name = if max_size == 0 {
+        format!("{algo}.json")
+    } else {
+        format!("{algo}_{max_size}.json")
+    };
+    let file_path = dir_path.join(file_name);
     let file = File::create(file_path)?;
     serde_json::to_writer_pretty(file, &data)?;
     Ok(())
 }
 
 fn benchmark_simple(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bottom_up_simple");
     let algo = "gumtree_simple";
-    let results = bench_bottom_up(c, algo);
-    log_results(results, algo).expect("Failed to log results");
+    let max_size = 0;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    group.finish();
 }
 
 fn benchmark_greedy(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bottom_up_greedy");
     let algo = "gumtree_greedy";
-    let results = bench_bottom_up(c, algo);
-    log_results(results, algo).expect("Failed to log results");
+    let max_size = 200;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    group.finish();
 }
 
-fn foo<HAST: HyperAST + Copy>(
+fn benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bottom_up");
+    let algo = "gumtree_simple";
+    let max_size = 0;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let algo = "gumtree_greedy";
+    let max_size = 50;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let max_size = 100;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let max_size = 200;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let max_size = 400;
+    let results = bench_bottom_up(&mut group, algo, max_size);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    group.finish();
+}
+
+fn prepare_mapper<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
@@ -79,70 +131,90 @@ where
     GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(base_mapper)
 }
 
-fn bench_bottom_up(c: &mut Criterion, algo: &str) -> Vec<MappingInfo> {
-    let mut group = c.benchmark_group("bottom_up_bench");
+fn bench_bottom_up<M: Measurement>(
+    group: &mut BenchmarkGroup<M>,
+    algo: &str,
+    max_size: usize,
+) -> HashMap<MappingId, MappingData> {
     let file_pairs = data_bench::get_test_data_small();
-    let mut results = Vec::with_capacity(file_pairs.len());
+    let mut results = HashMap::new();
+
+    let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut md_cache = Default::default();
+
+    let alg = if max_size == 0 {
+        algo
+    } else {
+        &format!("{algo}_{max_size}")
+    };
 
     for (id, src, dst) in &file_pairs {
-        {
-            let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-            let mut md_cache = Default::default();
-            let (src, dst) =
-                parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-            let mapper = foo(
-                &stores,
-                &src.local.compressed_node,
-                &dst.local.compressed_node,
-            );
-            let num_mappings_pre = mapper.mappings.len();
-            let mapper_bottom_up = match algo {
-                "gumtree_greedy" => GumtreeGreedy::<_, _, _, _>::match_it(mapper.clone()),
-                "gumtree_simple" => GumtreeSimple::<_, _, _, _>::match_it(mapper.clone()),
-                _ => panic!("unknown algorithm"),
-            };
-            let num_mappings_post = mapper_bottom_up.mappings.len();
-            results.push(MappingInfo {
-                algorithm: algo.to_string(),
-                file_pair: id.to_string(),
-                num_pre_bottom_up: num_mappings_pre,
-                num_post_bottom_up: num_mappings_post,
-            });
-        }
-
-        // Initialize stores for each iteration
-        let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-        let mut md_cache = Default::default();
-
-        // Parse the two Java files
-        let (src, dst) =
-            parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
-
-        let mapper = foo(
+        let bid = BenchmarkId::new(alg, id);
+        let (src, dst) = parse_string_pair(&mut stores, &mut md_cache, src, dst);
+        let mapper = prepare_mapper(
             &stores,
             &src.local.compressed_node,
             &dst.local.compressed_node,
         );
-        group.bench_with_input(BenchmarkId::new(algo, id), &mapper, |b, mapper| {
+        group.throughput(Throughput::Elements(
+            (mapper.mappings.capacity().0 + mapper.mappings.capacity().1).div_ceil(2) as u64,
+        ));
+        group.bench_with_input(bid, &mapper, |b, mapper| {
+            let mut first = true;
             b.iter_batched(
                 || mapper.clone(),
                 |mapper| {
+                    let num_mappings_pre = mapper.mappings.len();
                     let mapper_bottom_up = match algo {
-                        "gumtree_greedy" => GumtreeGreedy::<_, _, _, _>::match_it(mapper),
+                        "gumtree_greedy" if max_size == 50 => {
+                            GumtreeGreedy::<_, _, _, _, 50>::match_it(mapper)
+                        }
+                        "gumtree_greedy" if max_size == 100 => {
+                            GumtreeGreedy::<_, _, _, _, 100>::match_it(mapper)
+                        }
+                        "gumtree_greedy" if max_size == 200 => {
+                            GumtreeGreedy::<_, _, _, _, 200>::match_it(mapper)
+                        }
+                        "gumtree_greedy" if max_size == 400 => {
+                            GumtreeGreedy::<_, _, _, _, 400>::match_it(mapper)
+                        }
+                        "gumtree_greedy" => panic!("unknown max_size"),
                         "gumtree_simple" => GumtreeSimple::<_, _, _, _>::match_it(mapper),
                         _ => panic!("unknown algorithm"),
                     };
-                    black_box(mapper_bottom_up);
+                    let num_mappings_post = mapper_bottom_up.mappings.len();
+                    let id = MappingId {
+                        algorithm: algo.to_string(),
+                        file_pair: id.to_string(),
+                    };
+                    if first && !results.contains_key(&id) {
+                        first = false;
+                        results.insert(
+                            id,
+                            MappingData {
+                                num_pre_bottom_up: num_mappings_pre,
+                                num_post_bottom_up: num_mappings_post,
+                            },
+                        );
+                    }
+                    mapper_bottom_up
                 },
                 criterion::BatchSize::SmallInput,
             );
         });
     }
 
-    group.finish();
     return results;
 }
 
-criterion_group!(simple_diff, benchmark_simple);
-criterion_group!(greedy_diff, benchmark_greedy);
-criterion_main!(simple_diff, greedy_diff);
+criterion_group!(
+    name = bottom_up;
+    config = Criterion::default().configure_from_args();
+    targets = benchmarks
+);
+// criterion_group!(
+//     name = bottom_up;
+//     config = Criterion::default().configure_from_args();
+//     targets = benchmark_simple, benchmark_greedy
+// );
+criterion_main!(bottom_up);

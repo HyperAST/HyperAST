@@ -69,9 +69,7 @@ impl Heuristic {
 #[derive(Debug, Clone, Serialize)]
 pub enum DataSet {
     GhJava(Option<String>),
-    GhPython(Option<String>),
     Defects4J(Option<String>),
-    BugsInPy(Option<String>),
 }
 
 impl Display for DataSet {
@@ -87,9 +85,7 @@ impl DataSet {
     fn parts(&self) -> (&'static str, &Option<String>) {
         match self {
             DataSet::GhJava(project) => ("gh-java", project),
-            DataSet::GhPython(project) => ("gh-python", project),
             DataSet::Defects4J(project) => ("defects4j", project),
-            DataSet::BugsInPy(project) => ("bugsinpy", project),
         }
     }
 
