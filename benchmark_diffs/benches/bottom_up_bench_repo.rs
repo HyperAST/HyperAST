@@ -86,7 +86,7 @@ fn bottom_up_group(c: &mut Criterion) {
         config: hyperast_vcs_git::processing::RepoConfig,
         fetch: bool,
     }
-
+    // NOTE no good way of selecting them to avoid preparing, so comment and uncomment inputs when needed
     let inputs: &[Input] = &[
         // Input {
         //     repo: hyperast_vcs_git::git::Forge::Github.repo("chromium", "chromium"),
@@ -95,17 +95,143 @@ fn bottom_up_group(c: &mut Criterion) {
         //     fetch: false,
         // },
         Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "maven"),
+            commit: "c3cf29438e3d65d6ee5c5726f8611af99d9a649a",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
             repo: hyperast_vcs_git::git::Forge::Github.repo("INRIA", "spoon"),
             commit: "56e12a0c0e0e69ea70863011b4f4ca3305e0542b",
             config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
             fetch: true,
         },
         Input {
-            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "maven"),
-            commit: "c3cf29438e3d65d6ee5c5726f8611af99d9a649a",
+            repo: hyperast_vcs_git::git::Forge::Github.repo("quarkusio", "quarkus"),
+            commit: "5ac8332061fbbd4f11d5f280ff12b65fe7308540",
             config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
             fetch: true,
         },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "logging-log4j2"),
+            commit: "ebfc8945a5dd77b617f4667647ed4b740323acc8",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("javaparser", "javaparser"),
+            commit: "046bf8be251189452ad6b25bf9107a1a2167ce6f",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "spark"),
+            commit: "885f4733c413bdbb110946361247fbbd19f6bba9",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("google", "gson"),
+            commit: "f79ea208b1a42d0ee9e921dcfb3694221a2037ed",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("junit-team", "junit4"),
+        //     commit: "cc7c500584fcb85eaf98c568b7441ceac6dd335c",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("jenkinsci", "jenkins"),
+            commit: "be6713661c120c222c17026e62401191bdc4035c",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "dubbo"),
+            commit: "e831b464837ae5d2afac9841559420aeaef6c52b",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "skywalking"),
+        //     commit: "38a9d4701730e674c9646173dbffc1173623cf24",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "flink"),
+            commit: "d67338a140bf1b744d95a514b82824bba5b16105",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("aws", "aws-sdk-java"),
+        //     commit: "0b01b6c8139e050b36ef79418986cdd8d9704998",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("aws", "aws-sdk-java-v2"),
+        //     commit: "edea5de18755962cb864cb4c88652ec8748d877c",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("aws", "aws-toolkit-eclipse"),
+        //     commit: "85417f68e1eb6d90d46e145229e390cf55a4a554",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("netty", "netty"),
+            commit: "c2b846750dd2131d65aa25c8cf66bf3649b248f9",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("alibaba", "fastjson"),
+            commit: "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("alibaba", "arthas"),
+        //     commit: "c661d2d24892ce8a09a783ca3ba82eda90a66a85",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("google", "guava"),
+        //     commit: "b30a7120f901b4a367b8a9839a8b8ba62457fbdf",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "hadoop"),
+            commit: "d5e97fe4d6baf43a5576cbd1700c22b788dba01e",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("FasterXML", "jackson-core"),
+            commit: "3cb5ce818e476d5b0b504b1833c7d33be80e9ca4",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("qos-ch", "slf4j"),
+        //     commit: "2b0e15874aaf5502c9d6e36b0b81fc6bc14a8531",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
+        // Input {
+        //     repo: hyperast_vcs_git::git::Forge::Github.repo("jacoco", "jacoco"),
+        //     commit: "62a2b556c26f0f42a2ae791a86dc39dd36d35392",
+        //     config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+        //     fetch: true,
+        // },
     ];
     let mut repositories = PreProcessedRepositories::default();
 
@@ -125,6 +251,7 @@ fn bottom_up_group(c: &mut Criterion) {
             (repository, p.commit)
         })
         .collect::<Vec<_>>();
+    eprintln!("fetched repositories");
 
     use hyperast_benchmark_diffs::Heuristic;
     use hyperast_benchmark_diffs::Opti;
@@ -141,6 +268,10 @@ fn bottom_up_group(c: &mut Criterion) {
     log_results(results, algo, max_size).expect("Failed to log results");
     let results = bench_bottom_up::<400>(&mut group, &mut repositories, &inputs, algo);
     log_results(results, algo, max_size).expect("Failed to log results");
+    let results = bench_bottom_up::<600>(&mut group, &mut repositories, &inputs, algo);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let results = bench_bottom_up::<800>(&mut group, &mut repositories, &inputs, algo);
+    log_results(results, algo, max_size).expect("Failed to log results");
     let algo = hyperast_benchmark_diffs::Algorithm(Opti::Lazy, Heuristic::Simple);
     let max_size = 0;
     let results = bench_bottom_up::<0>(&mut group, &mut repositories, &inputs, algo);
@@ -153,6 +284,10 @@ fn bottom_up_group(c: &mut Criterion) {
     let results = bench_bottom_up::<200>(&mut group, &mut repositories, &inputs, algo);
     log_results(results, algo, max_size).expect("Failed to log results");
     let results = bench_bottom_up::<400>(&mut group, &mut repositories, &inputs, algo);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let results = bench_bottom_up::<600>(&mut group, &mut repositories, &inputs, algo);
+    log_results(results, algo, max_size).expect("Failed to log results");
+    let results = bench_bottom_up::<800>(&mut group, &mut repositories, &inputs, algo);
     log_results(results, algo, max_size).expect("Failed to log results");
     group.finish();
 }
@@ -197,7 +332,6 @@ fn bench_bottom_up<const MAX_SIZE: usize>(
         group.throughput(Throughput::Elements(
             (mapper.mappings.capacity().0 + mapper.mappings.capacity().1).div_ceil(2) as u64,
         ));
-
         group.bench_with_input(
             bid,
             &(mapper_owned, mappings),
