@@ -125,11 +125,18 @@ where
                 let mut max_similarity: f64 = -1.;
 
                 for candidate in candidates {
-                    let similarity = similarity_metrics::chawathe_similarity(
-                        &self.internal.src_arena.descendants(&decompressed_node),
-                        &self.internal.dst_arena.descendants(&candidate),
+                    let t_descendents = self
+                        .internal
+                        .src_arena
+                        .descendants_range(&decompressed_node);
+                    let candidate_descendents =
+                        self.internal.dst_arena.descendants_range(&candidate);
+                    let similarity = similarity_metrics::SimilarityMeasure::range(
+                        &t_descendents,
+                        &candidate_descendents,
                         &self.internal.mappings,
-                    );
+                    )
+                    .chawathe();
 
                     if similarity > max_similarity && similarity >= similarity_threshold {
                         max_similarity = similarity;
