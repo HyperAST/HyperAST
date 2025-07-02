@@ -82,3 +82,39 @@ pub fn setup_env_logger() {
         })
         .init();
 }
+
+#[derive(Clone, Copy)]
+pub struct Algorithm(pub Opti, pub Heuristic);
+
+#[derive(Clone, Copy)]
+pub enum Opti {
+    Lazy,
+    None,
+}
+#[derive(Clone, Copy)]
+pub enum Heuristic {
+    Hybrid,
+    Simple,
+    Greedy,
+}
+
+impl AsRef<Algorithm> for Algorithm {
+    fn as_ref(&self) -> &Algorithm {
+        self
+    }
+}
+
+impl std::fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Heuristic::*;
+        use Opti::*;
+        match self {
+            Algorithm(Lazy, Hybrid) => write!(f, "lazy_hybrid"),
+            Algorithm(Lazy, Simple) => write!(f, "lazy_simple"),
+            Algorithm(Lazy, Greedy) => write!(f, "lazy_greedy"),
+            Algorithm(None, Hybrid) => write!(f, "hybrid"),
+            Algorithm(None, Simple) => write!(f, "simple"),
+            Algorithm(None, Greedy) => write!(f, "greedy"),
+        }
+    }
+}

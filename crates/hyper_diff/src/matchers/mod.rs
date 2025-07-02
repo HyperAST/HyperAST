@@ -61,7 +61,7 @@ impl<HAST, D> std::ops::Deref for Decompressible<HAST, D> {
 }
 
 impl<HAST, D> Decompressible<HAST, D> {
-    pub(crate) fn map<DD>(self, f: impl Fn(D) -> DD) -> Decompressible<HAST, DD> {
+    pub fn map<DD>(self, f: impl Fn(D) -> DD) -> Decompressible<HAST, DD> {
         Decompressible {
             hyperast: self.hyperast,
             decomp: f(self.decomp),
@@ -125,7 +125,7 @@ impl<HAST: Copy, Dsrc, Ddst, M> Mapper<HAST, Dsrc, Ddst, M> {
         }
     }
 
-    pub(crate) fn with_mut_decompressible(
+    pub fn with_mut_decompressible(
         owned: &mut (Decompressible<HAST, Dsrc>, Decompressible<HAST, Ddst>),
     ) -> Mapper<HAST, Decompressible<HAST, &mut Dsrc>, Decompressible<HAST, &mut Ddst>, M>
     where

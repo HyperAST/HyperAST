@@ -61,6 +61,10 @@ name = "bottom_up_bench"
 harness = false
 
 [[bench]]
+name = "bottom_up_bench_repo"
+harness = false
+
+[[bench]]
 name = "simple_comparison"
 harness = false
 
