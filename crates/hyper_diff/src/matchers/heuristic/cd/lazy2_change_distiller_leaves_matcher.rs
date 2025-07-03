@@ -53,7 +53,7 @@ where
         matcher.internal
     }
 
-    fn is_leaf<IdD>(_: IdD) -> bool {
+    fn is_leaf<D, IdD>(_: &D, _: IdD) -> bool {
         false // reach down to real leaves
     }
 
@@ -67,7 +67,7 @@ where
         // go to the left most "leaf" (i.e., a statement or real leaf)
         let mut src_to_traverse = vec![]; // easier like that
         loop {
-            if Self::is_leaf(src) {
+            if Self::is_leaf(&mapping.src_arena, src) {
                 break;
             }
             let mut cs = mapping.src_arena.decompress_children(&src);
@@ -85,7 +85,7 @@ where
             // go to the left most "leaf" (i.e., a statement or real leaf)
             let mut dst_to_traverse = vec![]; // easier like that
             loop {
-                if Self::is_leaf(&dst) {
+                if Self::is_leaf(&mapping.dst_arena, &dst) {
                     break;
                 }
                 let mut cs = mapping.dst_arena.decompress_children(&dst);
@@ -147,7 +147,7 @@ where
                     cs.reverse();
                     dst = cs.pop().unwrap(); // cs is non empty
                     dst_to_traverse.extend(cs);
-                    if Self::is_leaf(&dst) {
+                    if Self::is_leaf(&mapping.dst_arena, &dst) {
                         break;
                     }
                 }
@@ -157,7 +157,7 @@ where
             };
             src = sib;
             loop {
-                if Self::is_leaf(src) {
+                if Self::is_leaf(&mapping.src_arena, src) {
                     break;
                 }
                 let mut cs = mapping.src_arena.decompress_children(&src);

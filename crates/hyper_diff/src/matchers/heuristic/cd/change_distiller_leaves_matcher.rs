@@ -97,13 +97,20 @@ where
             }
         }
     }
+
+    fn is_leaf<D, IdD>(_: &D, _: &IdD) -> bool {
+        false // reach down to real leaves
+    }
+
     pub fn iter_leaves<D, IdD: Eq>(arena: &D) -> impl Iterator<Item = IdD>
     where
         D: PostOrderIterable<HAST, IdD> + PostOrder<HAST, IdD>,
     {
         arena.iter_df_post::<true>().filter(|x|
             // is leaf. kind of an optimisation, it was easier like this anyway.
-            arena.lld(x) == *x)
+            arena.lld(x) == *x
+        //
+            || Self::is_leaf(arena, x))
     }
 
     fn sim(internal: &Mapper<HAST, Dsrc, Ddst, M>, src: M::Src, dst: M::Dst) -> f64 {
