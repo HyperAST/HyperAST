@@ -1,21 +1,14 @@
-use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
-    PostOrderIterable, PostOrderKeyRoots,
+    PostOrderIterable,
 };
-use crate::matchers::heuristic::gt::bottom_up_matcher::BottomUpMatcher;
+use crate::matchers::Mapper;
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{Decompressible, Mapper};
-use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
+use crate::matchers::similarity_metrics;
 use hyperast::PrimInt;
-use hyperast::types::{DecompressedFrom, HyperAST, NodeId, NodeStore, Tree, WithHashs};
-use num_traits::{cast, one};
+use hyperast::types::{DecompressedFrom, HyperAST, NodeId, WithHashs};
 use std::fmt::Debug;
 
-/// TODO wait for `#![feature(adt_const_params)]` #95174 to be improved
-///
-/// it will allow to make use complex types as const generics
-/// ie. make the different threshold neater
 pub struct ChangeDistillerBottomUpMatcher<
     Dsrc,
     Ddst,
@@ -29,9 +22,6 @@ pub struct ChangeDistillerBottomUpMatcher<
 > {
     internal: Mapper<HAST, Dsrc, Ddst, M>,
 }
-
-/// Enable using a slice instead of recreating a ZsTree for each call to ZsMatch, see last_chance_match
-const SLICE: bool = true;
 
 impl<
     Dsrc,
@@ -135,34 +125,25 @@ where
 
     pub fn execute<'b>(&mut self) {
         let internal = &self.internal;
-        // List<Tree> dstTrees = TreeUtils.postOrder(dst);
-        let mut dsts = internal.dst_arena.iter_df_post::<true>();
-
-        // for (Tree currentSrcTree : src.postOrder()) {
         for src in internal.src_arena.iter_df_post::<true>() {
             let internal = &self.internal;
-            // int numberOfLeaves = numberOfLeaves(currentSrcTree);
             dbg!(src);
             let aaa = internal.src_arena.lld(&src);
             dbg!(aaa);
-            let number_of_leaves =
-                crate::decompressed_tree_store::Iter::new(aaa, src) // TODO check if it is lld or lld - 1
-                    .filter(|x| internal.src_arena.lld(dbg!(x)) == *x)
-                    .count();
+            let number_of_leaves = crate::decompressed_tree_store::Iter::new(aaa, src) // TODO check if it is lld or lld - 1
+                .filter(|x| internal.src_arena.lld(x) == *x)
+                .count();
             // TODO use the properties of the post order traversal to compute the number of leafs incrementally
-            // TODO use the derived data of hyper ast to count number_of_leaves
+            // TODO use the derived data of hyperast to count number_of_leaves
 
-            // List<Tree> dstTrees = TreeUtils.postOrder(dst);
             let mut dsts = internal.dst_arena.iter_df_post::<true>();
 
-            // for (Tree currentDstTree : dstTrees) {
             loop {
                 let Some(dst) = dsts.next() else { break };
                 dbg!(dst);
                 let internal = &self.internal;
                 let mapping = &internal.mapping;
                 let mappings = &mapping.mappings;
-                // mappings.isMappingAllowed(currentSrcTree, currentDstTree)
                 if !mappings.is_src(&src) && !mappings.is_dst(&dst) {
                     dbg!();
                     let tsrc = mapping.src_arena.original(&src);
@@ -170,19 +151,12 @@ where
                     let tdst = mapping.dst_arena.original(&dst);
                     let tdst = internal.hyperast.resolve_type(&tdst);
                     if tsrc == tdst {
-                        // !(currentSrcTree.isLeaf() || currentDstTree.isLeaf())
-                        dbg!();
                         if !(internal.src_arena.lld(&src) == src
                             || internal.dst_arena.lld(&dst) == dst)
                         {
-                            // double similarity = SimilarityMetrics.chawatheSimilarity(currentSrcTree, currentDstTree, mappings);
                             let sim = Self::sim(internal, src, dst);
-                            dbg!(src, dst, sim);
-
-                            // numberOfLeaves > maxNumberOfLeaves && similarity >= structSimThreshold1
                             let cond1 = number_of_leaves > SIZE_THRESHOLD
                                 && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
-                            // numberOfLeaves <= maxNumberOfLeaves && similarity >= structSimThreshold2
                             let cond2 = number_of_leaves <= SIZE_THRESHOLD
                                 && sim >= SIM_THRESHOLD2_NUM as f64 / SIM_THRESHOLD2_DEN as f64;
                             if cond1 || cond2 {

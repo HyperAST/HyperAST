@@ -53,22 +53,21 @@ where
         matcher.internal
     }
 
+    fn is_leaf<IdD>(_: IdD) -> bool {
+        false // reach down to real leaves
+    }
+
     pub fn execute(internal: &mut Mapper<HAST, Dsrc, Ddst, M>) {
         let hyperast = internal.hyperast;
         let mapping = &mut internal.mapping;
         let mappings = &mut mapping.mappings;
         let mut leaves_mappings = vec![];
 
-        fn is_leaf<IdD>(_: IdD) -> bool {
-            // todo!("is leaf")
-            false
-        }
-
         let mut src = mapping.src_arena.starter();
-        // go to the left most "leaf" a statement or a real leaf
+        // go to the left most "leaf" (i.e., a statement or real leaf)
         let mut src_to_traverse = vec![]; // easier like that
         loop {
-            if is_leaf(&src) {
+            if Self::is_leaf(src) {
                 break;
             }
             let mut cs = mapping.src_arena.decompress_children(&src);
@@ -83,10 +82,10 @@ where
         // for src in src_leaves
         loop {
             let mut dst = mapping.dst_arena.starter();
-            // go to the left most "leaf" a statement or a real leaf
+            // go to the left most "leaf" (i.e., a statement or real leaf)
             let mut dst_to_traverse = vec![]; // easier like that
             loop {
-                if is_leaf(&dst) {
+                if Self::is_leaf(&dst) {
                     break;
                 }
                 let mut cs = mapping.dst_arena.decompress_children(&dst);
@@ -115,7 +114,6 @@ where
                                 src += one();
                                 dst += one();
                             }
-                            todo!("skip going down")
                         }
                     } else if tsrc == tdst {
                         // Self::sim(internal, src, dst);
@@ -149,7 +147,7 @@ where
                     cs.reverse();
                     dst = cs.pop().unwrap(); // cs is non empty
                     dst_to_traverse.extend(cs);
-                    if is_leaf(&dst) {
+                    if Self::is_leaf(&dst) {
                         break;
                     }
                 }
@@ -159,7 +157,7 @@ where
             };
             src = sib;
             loop {
-                if is_leaf(&src) {
+                if Self::is_leaf(src) {
                     break;
                 }
                 let mut cs = mapping.src_arena.decompress_children(&src);
@@ -172,14 +170,12 @@ where
             }
         }
 
-        dbg!(&leaves_mappings);
         leaves_mappings.sort_unstable_by(|a, b| a.2.total_cmp(&b.2));
 
         for best_mapping in leaves_mappings {
             mappings.link(*best_mapping.0.shallow(), *best_mapping.1.shallow());
             // mappings.link_if_both_unmapped(*best_mapping.0.shallow(), *best_mapping.1.shallow());
         }
-        dbg!(&mappings);
     }
 
     fn lab(hyperast: &HAST, i: HAST::IdN) -> Option<&str> {
@@ -228,9 +224,7 @@ mod tests {
                 mappings: crate::matchers::mapping_store::VecStore::default(),
             },
         };
-        //  MappingStore mappings = new LazyChangeDistillerLeavesMatcher().match(src, dst);
         let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_it(mapping);
-        // assertEquals(2, mappings.size());
         assert_eq!(2, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let src = mapping.mapping.src_arena.root();
