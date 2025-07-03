@@ -173,8 +173,7 @@ where
         leaves_mappings.sort_unstable_by(|a, b| a.2.total_cmp(&b.2));
 
         for best_mapping in leaves_mappings {
-            mappings.link(*best_mapping.0.shallow(), *best_mapping.1.shallow());
-            // mappings.link_if_both_unmapped(*best_mapping.0.shallow(), *best_mapping.1.shallow());
+            mappings.link_if_both_unmapped(*best_mapping.0.shallow(), *best_mapping.1.shallow());
         }
     }
 

@@ -4,7 +4,6 @@ use crate::matchers::mapping_store::{MonoMappingStore, MultiMappingStore};
 use crate::matchers::optimal::zs::str_distance_patched::QGram;
 use hyperast::types::{self, HyperAST, NodeId, NodeStore};
 use hyperast::{PrimInt, types::LabelStore};
-use num_traits::ToPrimitive;
 use std::fmt::Debug;
 
 pub struct ChangeDistillerLeavesMatcher<
@@ -77,24 +76,15 @@ where
             }
         }
 
-        let mut src_ignored = bitvec::bitbox![0;internal.src_arena.len()];
-        let mut dst_ignored = bitvec::bitbox![0;internal.dst_arena.len()];
-        dbg!(&leaves_mappings);
         leaves_mappings.sort_by(|a, b| {
             let a = Self::sim_cmp(internal, &(a.0, a.1));
             let b = Self::sim_cmp(internal, &(b.0, b.1));
-            dbg!(a, b);
             b.cmp(&a)
         });
-        while leaves_mappings.len() > 0 {
-            let best_mapping = leaves_mappings.remove(0);
-            let src_i = best_mapping.0.to_usize().unwrap();
-            let dst_i = best_mapping.1.to_usize().unwrap();
-            if !(src_ignored[src_i] || dst_ignored[dst_i]) {
-                internal.mappings.link(best_mapping.0, best_mapping.1);
-                src_ignored.set(src_i, true);
-                dst_ignored.set(dst_i, true);
-            }
+        for best_mapping in leaves_mappings {
+            internal
+                .mappings
+                .link_if_both_unmapped(best_mapping.0, best_mapping.1);
         }
     }
 
