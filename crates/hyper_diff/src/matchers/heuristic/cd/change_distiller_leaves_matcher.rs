@@ -56,10 +56,12 @@ where
         let mapping = &internal.mapping;
         let mappings = &mapping.mappings;
         let mut leaves_mappings = vec![];
-        let dst_leaves: Vec<_> = Self::iter_leaves(&internal.dst_arena).collect();
 
-        for src in Self::iter_leaves(&internal.src_arena) {
-            for &dst in &dst_leaves {
+        let mut src_iter = LeafIter::new(&internal.src_arena, Self::is_leaf);
+
+        while let Some(src) = src_iter.next() {
+            let mut dst_iter = LeafIter::new(&internal.dst_arena, Self::is_leaf);
+            while let Some(dst) = dst_iter.next() {
                 if !mappings.is_src(&src) && !mappings.is_dst(&dst) {
                     let tsrc = mapping.src_arena.original(&src);
                     let tsrc = internal.hyperast.resolve_type(&tsrc);
@@ -88,19 +90,18 @@ where
         }
     }
 
-    fn is_leaf<D, IdD>(_: &D, _: &IdD) -> bool {
+    fn is_leaf<D, IdD>(_: &D, _: IdD) -> bool {
         false // reach down to real leaves
     }
 
-    pub fn iter_leaves<D, IdD: Eq>(arena: &D) -> impl Iterator<Item = IdD>
+    pub fn iter_leaves<D, IdD: Eq + Copy>(arena: &D) -> impl Iterator<Item = IdD>
     where
         D: PostOrderIterable<HAST, IdD> + PostOrder<HAST, IdD>,
     {
         arena.iter_df_post::<true>().filter(|x|
             // is leaf. kind of an optimisation, it was easier like this anyway.
             arena.lld(x) == *x
-        //
-            || Self::is_leaf(arena, x))
+            || Self::is_leaf(arena, *x))
     }
 
     fn sim(internal: &Mapper<HAST, Dsrc, Ddst, M>, src: M::Src, dst: M::Dst) -> f64 {
@@ -134,6 +135,66 @@ where
         let dst_l = dst.try_get_label().unwrap();
         let dst_l = internal.hyperast.label_store().resolve(&dst_l);
         (src_l, dst_l)
+    }
+}
+
+struct LeafIter<'a, HAST, D, IdD> {
+    arena: &'a D,
+    to_traverse: Vec<IdD>,
+    idd: IdD,
+    down: bool,
+    is_leaf: fn(&D, IdD) -> bool,
+    _phantom: std::marker::PhantomData<HAST>,
+}
+impl<'a, HAST, D, IdD> LeafIter<'a, HAST, D, IdD>
+where
+    HAST: HyperAST + Copy,
+    D: DecompressedTreeStore<HAST, IdD>,
+    IdD: Copy,
+{
+    fn new(arena: &'a D, is_leaf: fn(&D, IdD) -> bool) -> Self {
+        Self {
+            idd: arena.root(),
+            arena,
+            to_traverse: Vec::new(),
+            down: true,
+            is_leaf,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<HAST, D, IdD> Iterator for LeafIter<'_, HAST, D, IdD>
+where
+    HAST: HyperAST + Copy,
+    D: DecompressedTreeStore<HAST, IdD>,
+    IdD: Copy,
+{
+    type Item = IdD;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.down {
+            loop {
+                if (self.is_leaf)(&self.arena, self.idd) {
+                    break;
+                }
+                let mut cs = self.arena.children(&self.idd);
+                if cs.is_empty() {
+                    break;
+                }
+                cs.reverse();
+                self.idd = cs.pop().unwrap(); // cs is non empty
+                self.to_traverse.extend(cs);
+            }
+            self.down = false;
+            Some(self.idd)
+        } else {
+            let Some(sib) = self.to_traverse.pop() else {
+                return None;
+            };
+            self.idd = sib;
+            Some(self.idd)
+        }
     }
 }
 

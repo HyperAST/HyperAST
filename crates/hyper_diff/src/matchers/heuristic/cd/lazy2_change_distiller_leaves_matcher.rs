@@ -63,52 +63,20 @@ where
         let mappings = &mut mapping.mappings;
         let mut leaves_mappings = vec![];
 
-        let mut src = mapping.src_arena.starter();
-        // go to the left most "leaf" (i.e., a statement or real leaf)
-        let mut src_to_traverse = vec![]; // easier like that
-        loop {
-            if Self::is_leaf(&mapping.src_arena, src) {
-                break;
-            }
-            let mut cs = mapping.src_arena.decompress_children(&src);
-            if cs.is_empty() {
-                break;
-            }
-            cs.reverse();
-            src = cs.pop().unwrap(); // cs is non empty
-            src_to_traverse.extend(cs);
-        }
-
-        // for src in src_leaves
-        loop {
-            let mut dst = mapping.dst_arena.starter();
-            // go to the left most "leaf" (i.e., a statement or real leaf)
-            let mut dst_to_traverse = vec![]; // easier like that
-            loop {
-                if Self::is_leaf(&mapping.dst_arena, &dst) {
-                    break;
-                }
-                let mut cs = mapping.dst_arena.decompress_children(&dst);
-                if cs.is_empty() {
-                    break;
-                }
-                cs.reverse();
-                dst = cs.pop().unwrap(); // cs is non empty
-                dst_to_traverse.extend(cs);
-            }
-
-            // for &dst in &dst_leaves {
-            loop {
+        let mut src_iter = LeafIter::new(&mut mapping.src_arena, Self::is_leaf);
+        while let Some(src) = src_iter.next() {
+            let mut dst_iter = LeafIter::new(&mut mapping.dst_arena, Self::is_leaf);
+            while let Some(dst) = dst_iter.next() {
                 if !mappings.is_src(&src.shallow()) && !mappings.is_dst(&dst.shallow()) {
-                    let osrc = mapping.src_arena.original(&src);
+                    let osrc = src_iter.arena.original(&src);
                     let tsrc = hyperast.resolve_type(&osrc);
-                    let odst = mapping.dst_arena.original(&dst);
+                    let odst = dst_iter.arena.original(&dst);
                     let tdst = hyperast.resolve_type(&odst);
                     if osrc == odst {
                         if mappings.link_if_both_unmapped(*src.shallow(), *dst.shallow()) {
-                            let count = mapping.src_arena.descendants_count(&src);
-                            let mut src = mapping.src_arena.descendants_range(&src).start;
-                            let mut dst = mapping.dst_arena.descendants_range(&dst).start;
+                            let count = src_iter.arena.descendants_count(&src);
+                            let mut src = src_iter.arena.descendants_range(&src).start;
+                            let mut dst = dst_iter.arena.descendants_range(&dst).start;
                             for _ in 0..count {
                                 mappings.link_if_both_unmapped(src, dst);
                                 src += one();
@@ -135,42 +103,9 @@ where
                         }
                     }
                 }
-                let Some(sib) = dst_to_traverse.pop() else {
-                    break;
-                };
-                dst = sib;
-                loop {
-                    let mut cs = mapping.dst_arena.decompress_children(&dst);
-                    if cs.is_empty() {
-                        break;
-                    }
-                    cs.reverse();
-                    dst = cs.pop().unwrap(); // cs is non empty
-                    dst_to_traverse.extend(cs);
-                    if Self::is_leaf(&mapping.dst_arena, &dst) {
-                        break;
-                    }
-                }
-            }
-            let Some(sib) = src_to_traverse.pop() else {
-                break;
-            };
-            src = sib;
-            loop {
-                if Self::is_leaf(&mapping.src_arena, src) {
-                    break;
-                }
-                let mut cs = mapping.src_arena.decompress_children(&src);
-                if cs.is_empty() {
-                    break;
-                }
-                cs.reverse();
-                src = cs.pop().unwrap(); // cs is non empty
-                src_to_traverse.extend(cs);
             }
         }
-
-        leaves_mappings.sort_unstable_by(|a, b| a.2.total_cmp(&b.2));
+        leaves_mappings.sort_by(|a, b| a.2.total_cmp(&b.2));
 
         for best_mapping in leaves_mappings {
             mappings.link_if_both_unmapped(*best_mapping.0.shallow(), *best_mapping.1.shallow());
@@ -183,6 +118,66 @@ where
         let l = n.try_get_label()?;
         let l = hyperast.label_store().resolve(l);
         Some(l)
+    }
+}
+
+struct LeafIter<'a, HAST, D, IdS, IdD> {
+    arena: &'a mut D,
+    to_traverse: Vec<IdD>,
+    idd: IdD,
+    down: bool,
+    is_leaf: fn(&D, IdD) -> bool,
+    _phantom: std::marker::PhantomData<(HAST, IdS)>,
+}
+impl<'a, HAST, D, IdS> LeafIter<'a, HAST, D, IdS, D::IdD>
+where
+    HAST: HyperAST + Copy,
+    D: LazyDecompressedTreeStore<HAST, IdS>,
+    D::IdD: Copy,
+{
+    fn new(arena: &'a mut D, is_leaf: fn(&D, D::IdD) -> bool) -> Self {
+        Self {
+            idd: arena.starter(),
+            arena,
+            to_traverse: Vec::new(),
+            down: true,
+            is_leaf,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<HAST, D, IdS> Iterator for LeafIter<'_, HAST, D, IdS, D::IdD>
+where
+    HAST: HyperAST + Copy,
+    D: LazyDecompressedTreeStore<HAST, IdS>,
+    D::IdD: Copy,
+{
+    type Item = D::IdD;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.down {
+            loop {
+                if (self.is_leaf)(&self.arena, self.idd) {
+                    break;
+                }
+                let mut cs = self.arena.decompress_children(&self.idd);
+                if cs.is_empty() {
+                    break;
+                }
+                cs.reverse();
+                self.idd = cs.pop().unwrap(); // cs is non empty
+                self.to_traverse.extend(cs);
+            }
+            self.down = false;
+            Some(self.idd)
+        } else {
+            let Some(sib) = self.to_traverse.pop() else {
+                return None;
+            };
+            self.idd = sib;
+            Some(self.idd)
+        }
     }
 }
 
