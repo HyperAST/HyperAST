@@ -37,13 +37,11 @@ pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
 
 const-chunks = "0.3.0"
 memory-stats = "1.2.0"
-criterion = "0.4.0"
+criterion = "0.6"
 
 
 regex = "1.11.1"
-tabled = "0.19.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-walkdir = "2.5.0"
 clap = { version = "4.5.39", features = ["derive"] }
 indicatif = "0.17.11"
 anyhow = "1.0.98"
@@ -57,56 +55,14 @@ jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.5.4" }
 
 [dev-dependencies]
 hyperast_gen_ts_java = { workspace = true }
-criterion = { version = "0.4", features = [
+criterion = { version = "0.6", features = [
     "rayon",
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    # "real_blackbox",
 ] }
 
 
 [[bench]]
 name = "cd_runtime"
 harness = false
-
-[[bench]]
-name = "cd_memory_criterion"
-harness = false
-
-[[bin]]
-name = "cd_memory"
-path = "benches/cd_memory.rs"
-
-
-[[bin]]
-name = "cd_memory_jemalloc"
-path = "benches/cd_memory_jemalloc.rs"
-
-[[bin]]
-name = "cd_memory_system_time"
-path = "benches/cd_memory_system_time.rs"
-
-[[bin]]
-name = "cd_memory_system_instruments"
-path = "benches/cd_memory_system_instruments.rs"
-
-
-[[bin]]
-name = "cd_memory_custom"
-path = "benches/cd_memory_custom.rs"
-
-[[bin]]
-name = "algorithm_runner"
-path = "benches/algorithm_runner.rs"
-
-[[bin]]
-name = "cd_hyperparameter_tuner"
-path = "src/bin/cd_hyperparameter_tuner.rs"
-
-[[bin]]
-name = "cd_custom_benchmark"
-path = "src/bin/cd_custom_benchmark.rs"
-
-[profile.release]
-debug = true

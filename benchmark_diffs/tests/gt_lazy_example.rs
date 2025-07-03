@@ -20,7 +20,7 @@ fn test_gt_lazy_jsoup_diff() {
         .unwrap()
         .join("datasets/defects4j");
 
-    let (name, buggy_rel_path, fixed_rel_path) = TEST_CASE;
+    let (_name, buggy_rel_path, fixed_rel_path) = TEST_CASE;
     let buggy_path = root.join(buggy_rel_path);
     let fixed_path = root.join(fixed_rel_path);
 
@@ -35,7 +35,7 @@ fn test_gt_lazy_jsoup_diff() {
     let mut md_cache = Default::default();
 
     // Parse the two Java files
-    let (src_tr, dst_tr) =
+    let [src_tr, dst_tr] =
         parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
     // Perform the diff using gumtree lazy

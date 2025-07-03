@@ -48,7 +48,7 @@ fn test_simple_1() {
     // use hyperast_gen_ts_java::types::TStore;
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
 
     let stores = stores.change_type_store::<hyperast_gen_ts_java::types::TStore>();
 
@@ -82,7 +82,7 @@ fn test_crash1() {
     };
     let mut md_cache = Default::default();
     print!("{:?} len={}: ", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -111,7 +111,7 @@ fn test_perf_mokito() {
     };
     let mut md_cache = Default::default();
     print!("{:?} len={}: ", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &fixed, &buggy);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &fixed, &buggy);
     let res = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -144,7 +144,7 @@ mod examples {
         let mut md_cache = Default::default();
         // let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+        let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
             &stores,
             &src_tr.local.compressed_node,
@@ -190,7 +190,7 @@ mod examples {
         };
         let mut md_cache = Default::default();
         print!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+        let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
             &stores,
             &src_tr.local.compressed_node,
@@ -275,7 +275,7 @@ mod examples {
         let now = Instant::now();
 
         println!("{} len={}", "buggy", buggy.len());
-        let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+        let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
             &stores,
             &src_tr.local.compressed_node,
@@ -448,7 +448,7 @@ mod test {
             stores: &mut stores,
         };
         println!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = {
+        let [src_tr, dst_tr] = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
                 let tree = match parse_xml(buggy.as_bytes()) {
@@ -468,7 +468,7 @@ mod test {
                     tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
                 full_node1
             };
-            (full_node1, full_node2)
+            [full_node1, full_node2]
         };
         let src = src_tr.local.compressed_node;
         // let src = tree_gen.stores.node_store.resolve(src).get_child(&0);
@@ -567,7 +567,7 @@ mod test {
             stores: &mut stores,
         };
         println!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = {
+        let [src_tr, dst_tr] = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
                 let tree = match parse_xml(buggy.as_bytes()) {
@@ -587,7 +587,7 @@ mod test {
                     tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
                 full_node1
             };
-            (full_node1, full_node2)
+            [full_node1, full_node2]
         };
         let src = src_tr.local.compressed_node;
         // let src = tree_gen.stores.node_store.resolve(src).get_child(&0);
@@ -689,7 +689,7 @@ mod test {
             stores: &mut stores,
         };
         println!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = {
+        let [src_tr, dst_tr] = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
                 let tree = match parse_xml(buggy.as_bytes()) {
@@ -709,7 +709,7 @@ mod test {
                     tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
                 full_node1
             };
-            (full_node1, full_node2)
+            [full_node1, full_node2]
         };
         let src = src_tr.local.compressed_node;
         use hyperast::types::HyperAST;
@@ -891,7 +891,7 @@ mod test {
             stores: &mut stores,
         };
         println!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = {
+        let [src_tr, dst_tr] = {
             let full_node1 = {
                 let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
@@ -906,7 +906,7 @@ mod test {
                 };
                 tree_gen.generate_file("pom.xml".as_bytes(), fixed.as_bytes(), tree.walk())
             };
-            (full_node1, full_node2)
+            [full_node1, full_node2]
         };
         let src = src_tr.local.compressed_node;
         // let src = tree_gen.stores.node_store.resolve(src).get_child(&0);
@@ -1008,7 +1008,7 @@ mod test {
             stores: &mut stores,
         };
         println!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = {
+        let [src_tr, dst_tr] = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
                 let tree = match parse_xml(buggy.as_bytes()) {
@@ -1028,7 +1028,7 @@ mod test {
                     tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
                 full_node1
             };
-            (full_node1, full_node2)
+            [full_node1, full_node2]
         };
         let src = src_tr.local.compressed_node;
         // let src = tree_gen.stores.node_store.resolve(src).child(&0).unwrap();
@@ -1108,7 +1108,7 @@ mod test {
             stores: &mut stores,
         };
         println!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = {
+        let [src_tr, dst_tr] = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
                 let tree = match parse_xml(buggy.as_bytes()) {
@@ -1128,7 +1128,7 @@ mod test {
                     tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
                 full_node1
             };
-            (full_node1, full_node2)
+            [full_node1, full_node2]
         };
         let src = src_tr.local.compressed_node;
         // let src = tree_gen.stores.node_store.resolve(src).child(&0).unwrap();
@@ -1239,7 +1239,7 @@ fn compare_perfs() {
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -1311,7 +1311,7 @@ pub fn bad_perfs() {
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -1363,7 +1363,7 @@ pub fn bad_perfs2() {
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -1480,7 +1480,7 @@ fn bad_perfs_helper(buggy_path: &Path, fixed_path: &Path) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
     let fixed_s = dst_tr.local.metrics.size;
     dbg!(buggy_s, fixed_s);
@@ -1592,7 +1592,7 @@ fn test_all() {
             let now = Instant::now();
 
             println!("{:?} len={}", buggy_path, buggy.len());
-            let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+            let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
             let len = algorithms::gumtree::diff(
                 &stores,
                 &src_tr.local.compressed_node,
@@ -1707,7 +1707,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     };
     let mut md_cache = Default::default();
     println!("{:?} len={}", name, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let [src_tr, dst_tr] = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
     let fixed_s = dst_tr.local.metrics.size;
     let gt_out_format = "COMPRESSED"; // JSON
@@ -1786,7 +1786,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         java_md_cache: md_cache,
     };
     let now = Instant::now();
-    let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
+    let [src_tr, dst_tr] = parse_dir_pair(&mut java_gen, &src, &dst);
     let parse_t = now.elapsed().as_secs_f64();
 
     let stores = hyperast_vcs_git::no_space::as_nospaces2(&java_gen.main_stores);

@@ -1,7 +1,7 @@
 use crate::{
     actions::action_vec::ActionsVec,
     decompressed_tree_store::ShallowDecompressedTreeStore,
-    matchers::{Mapper, heuristic::cd::BottomUpMatcherConfig, mapping_store::VecStore},
+    matchers::{Mapper, mapping_store::VecStore},
 };
 
 pub mod change_distiller;

@@ -1,11 +1,9 @@
-use crate::{
-    decompressed_tree_store::{
-        ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
-        LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
-        ShallowDecompressedTreeStore,
-    },
-    matchers::mapping_store::MonoMappingStore,
+use crate::decompressed_tree_store::{
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
+    LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
+    ShallowDecompressedTreeStore,
 };
+use crate::matchers::mapping_store::MonoMappingStore;
 use hyperast::PrimInt;
 use hyperast::types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, WithHashs};
 use std::fmt::Debug;

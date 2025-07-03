@@ -1,7 +1,6 @@
-use criterion::black_box;
 use hyper_diff::algorithms;
-use hyperast::{store::SimpleStores, types::HyperAST};
-use std::{cmp::max, fs, path::Path};
+use hyperast::store::SimpleStores;
+use std::{hint::black_box, path::Path};
 
 use crate::preprocess::parse_string_pair;
 
@@ -11,7 +10,7 @@ pub fn run_diff(src: &str, dst: &str, algorithm: &str) {
     let mut md_cache = Default::default();
 
     // Parse the two Java files
-    let (src_tr, dst_tr) =
+    let [src_tr, dst_tr] =
         parse_string_pair(&mut stores, &mut md_cache, black_box(src), black_box(dst));
 
     // Perform the diff using specified algorithm
@@ -228,30 +227,27 @@ const TEST_CASES_L: &[&str] = &[
     "Cli/13/src_java_org_apache_commons_cli2_WriteableCommandLine.java",
 ];
 
-pub fn get_test_data_small() -> Vec<(String, String)> {
-    get_test_data(&TEST_CASES_S[0..101])
+pub fn read_test_data_small() -> Vec<(String, String)> {
+    read_tests_data(&TEST_CASES_S[0..101])
 }
 
-pub fn get_test_data_medium() -> Vec<(String, String)> {
-    get_test_data(&TEST_CASES_M[0..4])
+pub fn test_data_small() -> &'static [&'static str] {
+    &TEST_CASES_S[0..101]
 }
 
-pub fn get_test_data_large() -> Vec<(String, String)> {
-    get_test_data(&TEST_CASES_L[0..4])
+pub fn test_data_medium() -> &'static [&'static str] {
+    &TEST_CASES_M[0..4]
 }
 
-pub fn get_test_data_mixed() -> Vec<(String, String)> {
-    let mixed = TEST_CASES_S[0..0]
-        .iter()
-        .chain(TEST_CASES_M[11..49].iter())
-        // .chain(TEST_CASES_L[0..22].iter())
-        .cloned()
-        .collect::<Vec<_>>();
-    println!("Mixed test data size: {}", mixed.len());
-    get_test_data(&mixed)
+pub fn test_data_large() -> &'static [&'static str] {
+    &TEST_CASES_L[0..4]
 }
 
-pub fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
+pub fn read_tests_data<'a>(data: &[&str]) -> Vec<(String, String)> {
+    data.into_iter().copied().map(read_test_data).collect()
+}
+
+pub fn read_test_data<'a>(path_rel: &str) -> (String, String) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -259,205 +255,41 @@ pub fn get_test_data<'a>(data: &[&str]) -> Vec<(String, String)> {
         .unwrap()
         .join("datasets/defects4j");
 
-    let test_inputs: Vec<_> = data
-        .iter()
-        .map(|path_rel| {
-            let buggy_path = root.join("before").join(path_rel);
-            let fixed_path = root.join("after").join(path_rel);
+    let buggy_path = root.join("before").join(path_rel);
+    let fixed_path = root.join("after").join(path_rel);
 
-            // Read file contents
-            let buggy_content = std::fs::read_to_string(&buggy_path)
-                .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
-            let fixed_content = std::fs::read_to_string(&fixed_path)
-                .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
+    // Read file contents
+    let buggy_content = std::fs::read_to_string(&buggy_path)
+        .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
+    let fixed_content = std::fs::read_to_string(&fixed_path)
+        .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
 
-            (buggy_content, fixed_content)
-        })
-        .collect();
-    test_inputs
+    (buggy_content, fixed_content)
 }
 
-/// This function examines the defect4j dataset and extracts all file changes sorted by file size
-/// It returns a vector of tuples containing the relative paths of the before and after files.
-pub fn get_all_case_paths() -> Vec<(String, String)> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("datasets/defects4j");
-
-    // Collect all file paths in "before" recursively
-    let mut file_paths = Vec::new();
-    for entry in walkdir::WalkDir::new(root.join("before"))
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file() && e.file_name().to_string_lossy().ends_with(".java"))
-    {
-        file_paths.push(
-            entry
-                .path()
-                .strip_prefix(root.join("before"))
-                .unwrap()
-                .to_owned(),
-        );
-    }
-
-    // Sort by file size (smallest first)
-    file_paths.sort_by_key(|rel_path| {
-        let abs_path = root.join("before").join(rel_path);
-        std::fs::metadata(&abs_path).map(|m| m.len()).unwrap_or(0)
-    });
-
-    file_paths
-        .iter()
-        .map(|path| {
-            let before_path = root.join("before").join(&path);
-            let after_path = root.join("after").join(&path);
-
-            (
-                before_path.to_string_lossy().into_owned(),
-                after_path.to_string_lossy().into_owned(),
-            )
-        })
-        .collect()
-}
-
-/// Given a list of relative paths, reads the before/after file contents and returns them as pairs
-pub fn get_all_cases_from_paths(paths: &[(String, String)]) -> Vec<(String, String)> {
-    let test_inputs: Vec<_> = paths
-        .iter()
-        .map(|(buggy_path, fixed_path)| {
-            // Read file contents
-            let buggy_content = std::fs::read_to_string(&buggy_path)
-                .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
-            let fixed_content = std::fs::read_to_string(&fixed_path)
-                .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
-
-            (buggy_content, fixed_content)
-        })
-        .collect();
-    test_inputs
-}
-
-pub fn get_all_cases() -> Vec<(String, String)> {
-    let paths = get_all_case_paths();
-    get_all_cases_from_paths(&paths)
-}
-
-pub fn get_all_cases_with_paths() -> Vec<(String, String, String)> {
-    let paths = get_all_case_paths();
-    paths
-        .into_iter()
-        .map(|(buggy_path, fixed_path)| {
-            let buggy_content = std::fs::read_to_string(&buggy_path)
-                .expect(&format!("Failed to read buggy file: {:?}", buggy_path));
-            let fixed_content = std::fs::read_to_string(&fixed_path)
-                .expect(&format!("Failed to read fixed file: {:?}", fixed_path));
-
-            (buggy_path, buggy_content, fixed_content)
-        })
-        .collect()
-}
-
-use tabled::{Table, Tabled};
-
-#[derive(Tabled)]
-struct CaseStats {
-    #[tabled(rename = "Index")]
-    index: usize,
-    #[tabled(rename = "Src LOC")]
-    src_loc: usize,
-    #[tabled(rename = "Dst LOC")]
-    dst_loc: usize,
-    #[tabled(rename = "Nodes")]
-    nodes: usize,
-}
-
-pub fn print_test_case_table(test_inputs: &Vec<(String, String)>) {
-    use crate::preprocess::parse_string_pair;
-    use hyperast::store::SimpleStores;
-
-    let mut rows = Vec::new();
-    let mut src_locs = Vec::new();
-    let mut dst_locs = Vec::new();
-    let mut nodes = Vec::new();
-
-    for (i, (src, dst)) in test_inputs.iter().enumerate() {
-        let src_loc = src.lines().count();
-        let dst_loc = dst.lines().count();
-
-        let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
-        let mut md_cache = Default::default();
-        let _ = parse_string_pair(&mut stores, &mut md_cache, src, dst);
-        let nodes_count = stores.node_store.len();
-
-        rows.push(CaseStats {
-            index: i,
-            src_loc,
-            dst_loc,
-            nodes: nodes_count,
-        });
-
-        src_locs.push(src_loc);
-        dst_locs.push(dst_loc);
-        nodes.push(nodes_count);
-    }
-
-    // Print table
-    let table = Table::new(&rows).to_string();
-    println!("{}", table);
-
-    // Print summary statistics
-    let avg = |v: &[usize]| v.iter().copied().sum::<usize>() as f64 / v.len() as f64;
-    let min = |v: &[usize]| *v.iter().min().unwrap_or(&0);
-    let max = |v: &[usize]| *v.iter().max().unwrap_or(&0);
-
-    println!("\nSummary statistics:");
-    println!(
-        "  Src LOC:    avg {:.1}, min {}, max {}",
-        avg(&src_locs),
-        min(&src_locs),
-        max(&src_locs)
-    );
-    println!(
-        "  Dst LOC:    avg {:.1}, min {}, max {}",
-        avg(&dst_locs),
-        min(&dst_locs),
-        max(&dst_locs)
-    );
-
-    println!(
-        "  Nodes:      avg {:.1}, min {}, max {}",
-        avg(&nodes),
-        min(&nodes),
-        max(&nodes)
-    );
-
-    println!("  Total Nodes: {}", nodes.iter().sum::<usize>());
-}
-
-pub struct Input {
+pub struct BenchInput {
     pub stores: SimpleStores<hyperast_gen_ts_java::types::TStore>,
     pub src: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
     pub dst: hyperast_gen_ts_java::legion_with_refs::NodeIdentifier,
-    pub loc: usize,
+    pub lines: usize,
     pub node_count: usize,
 }
 
-pub fn preprocess(input: &(&String, &String)) -> Input {
-    let (src, dst) = input;
+pub fn preprocess_file_pair(input: [&str; 2]) -> BenchInput {
+    let [src, dst] = input;
     let mut stores = SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, src, dst);
-    let loc = max(src.lines().count(), dst.lines().count());
-    let node_count = stores.node_store().len();
-
-    Input {
+    let tr = parse_string_pair(&mut stores, &mut md_cache, src, dst);
+    let lines = input.map(|x| x.lines().count());
+    let lines = lines[0].max(lines[1]);
+    let node_count = tr.each_ref().map(|x| x.local.metrics.size as usize);
+    let node_count = node_count[0] + node_count[1];
+    let [src, dst] = tr.map(|x| x.local.compressed_node);
+    BenchInput {
         stores,
-        src: src_tr.local.compressed_node,
-        dst: dst_tr.local.compressed_node,
-        loc,
+        src,
+        dst,
+        lines,
         node_count,
     }
 }

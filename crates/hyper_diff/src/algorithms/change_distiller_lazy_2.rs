@@ -1,5 +1,6 @@
 use super::MappingDurations;
 use super::{DiffResult, PreparedMappingDurations};
+use crate::algorithms::tr;
 use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 use crate::matchers::heuristic::cd::lazy_bottom_up_matcher_2::LazyBottomUpMatcher;
 use crate::matchers::heuristic::cd::lazy_leaves_matcher_2::LazyLeavesMatcher;
@@ -16,7 +17,9 @@ use crate::{
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::{fmt::Debug, time::Instant};
 
+#[allow(type_alias_bounds)]
 type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
+#[allow(type_alias_bounds)]
 type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
 
 pub fn diff<HAST: HyperAST + Copy>(
@@ -64,14 +67,9 @@ where
     HAST::Label: Debug + Copy + Eq,
     for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
-    log::debug!("Starting Lazy ChangeDistiller Algorithm. Preparing subtrees");
     let now = Instant::now();
-    // let mapper: Mapper<_, DS<HAST>, DS<HAST>, VecStore<_>> =
-    // hyperast.decompress_pair(src, dst).into();
     let mapper: (HAST, (DS<HAST>, DS<HAST>)) = hyperast.decompress_pair(src, dst);
     let mut mapper_owned: Mapper<_, DS<HAST>, DS<HAST>, VecStore<_>> = mapper.into();
-    // TODO find better way, at least make a shorthand
-
     let mapper = Mapper {
         hyperast,
         mapping: crate::matchers::Mapping {
@@ -81,30 +79,19 @@ where
         },
     };
     let subtree_prepare_t = now.elapsed().as_secs_f64();
-    log::debug!("Subtree prepare time: {}", subtree_prepare_t);
-    log::debug!("Starting LazyLeavesMatcher");
+    tr!(subtree_prepare_t);
     let now = Instant::now();
     let mapper = LazyLeavesMatcher::<_, _, _, _>::with_config(mapper, leaves_config);
     let leaves_matcher_t = now.elapsed().as_secs_f64();
     let leaves_mappings_s = mapper.mappings().len();
-    log::debug!(
-        "LeavesMatcher time: {}, Leaves mappings: {}",
-        leaves_matcher_t,
-        leaves_mappings_s
-    );
-    log::debug!("Starting LazyBottomUpMatcher");
+    tr!(leaves_matcher_t, leaves_mappings_s);
     let now = Instant::now();
     let mapper = LazyBottomUpMatcher::<_, _, _, _>::with_config(mapper, bottom_up_config);
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();
-    log::debug!(
-        "Bottom-up matcher time: {}, Bottom-up mappings: {}",
-        bottomup_matcher_t,
-        bottomup_mappings_s
-    );
+    tr!(bottomup_matcher_t, bottomup_mappings_s);
 
     let (actions, prepare_gen_t, gen_t, mapper) = if calculate_script {
-        log::debug!("Starting script generation");
         let now = Instant::now();
 
         let mapper = mapper.map(
@@ -115,8 +102,7 @@ where
         let now = Instant::now();
         let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
         let gen_t = now.elapsed().as_secs_f64();
-        log::debug!("Script generator time: {}", gen_t);
-        log::debug!("Prepare generator time: {}", prepare_gen_t);
+        tr!(prepare_gen_t, gen_t);
 
         // TODO find better way, at least make a shorthand
         let mapper = Mapper {

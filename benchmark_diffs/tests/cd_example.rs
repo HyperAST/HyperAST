@@ -1,4 +1,6 @@
-use hyper_diff::algorithms;
+use hyper_diff::algorithms::change_distiller_optimized::{
+    diff_with_complete_decompression, diff_with_lazy_decompression,
+};
 use hyperast::store::SimpleStores;
 use hyperast_benchmark_diffs::preprocess::parse_string_pair;
 use std::path::Path;
@@ -173,15 +175,27 @@ fn run_diff_test(test_cases: &[(&str, &str, &str)]) {
         let mut md_cache = Default::default();
 
         // Parse the two Java files
-        let (src_tr, dst_tr) =
+        let [src_tr, dst_tr] =
             parse_string_pair(&mut stores, &mut md_cache, &buggy_content, &fixed_content);
 
+        let config = hyper_diff::OptimizedDiffConfig::default();
         // Perform the diff
-        let diff_result = algorithms::change_distiller_optimized::diff_with_all_optimizations(
-            &stores,
-            &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node,
-        );
+        let diff_result = if config.use_lazy_decompression {
+            diff_with_lazy_decompression(
+                &stores,
+                &src_tr.local.compressed_node,
+                &dst_tr.local.compressed_node,
+                config,
+            )
+        } else {
+            diff_with_complete_decompression(
+                &stores,
+                &src_tr.local.compressed_node,
+                &dst_tr.local.compressed_node,
+                config,
+            )
+        }
+        .into_diff_result();
 
         // println!(
         //     "Src Tree:\n{}",

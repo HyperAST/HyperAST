@@ -10,7 +10,6 @@ use hyperast::types::{
     Childrn, DecompressedFrom, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree, WithChildren,
     WithHashs, WithStats,
 };
-use logging_timer::time;
 use num_traits::ToPrimitive;
 use std::fmt::Debug;
 use std::hash::Hash;

@@ -219,17 +219,10 @@ where
     fn execute_statement(&mut self) {
         let start_time = std::time::Instant::now();
 
-        let collect_start = std::time::Instant::now();
         let dst_leaves = self.collect_statement_leaves_dst();
         let src_leaves = self.collect_statement_leaves_src();
 
-        let collect_time = collect_start.elapsed();
-
         let mut leaves_mappings: Vec<MappingWithSimilarity<Dsrc, Ddst, M>> = Vec::new();
-        let total_comparisons = src_leaves.len() * dst_leaves.len();
-
-        let comparison_start = std::time::Instant::now();
-        let cache_build_start = std::time::Instant::now();
         let mut src_text_cache: HashMap<
             &<Dsrc as LazyDecompressed<M::Src>>::IdD,
             String,
@@ -267,7 +260,7 @@ where
         let mut skipped_dst = 0;
         let total_comparisons = src_leaves.len() * dst_leaves.len();
 
-        for (src_idx, src) in src_leaves.iter().enumerate() {
+        for (_src_idx, src) in src_leaves.iter().enumerate() {
             let hash_start = std::time::Instant::now();
             let src_original = self.src_arena.original(src);
             let src_node = self.stores.node_store().resolve(&src_original);
@@ -395,7 +388,6 @@ where
         // Sort mappings by similarity
         leaves_mappings.sort_by(|a, b| b.sim.partial_cmp(&a.sim).unwrap_or(Ordering::Equal));
 
-        let mapping_start = std::time::Instant::now();
         let mut mapped_count = 0;
         // Process mappings in order
         for mapping in leaves_mappings {
@@ -420,8 +412,6 @@ where
                 mapped_count += 1;
             }
         }
-        let mapping_time = mapping_start.elapsed();
-
         let total_time = start_time.elapsed();
 
         // Update metrics
@@ -543,13 +533,9 @@ mod tests {
         let config = OptimizedLeavesMatcherConfig {
             base_config: super::super::LeavesMatcherConfig::default(),
             enable_label_caching: false,
-            enable_type_grouping: false,
             enable_deep_leaves: false,
             enable_ngram_caching: false,
-
             statement_level_iteration: false,
-            use_binary_heap: false,
-            reuse_qgram_object: false,
         };
 
         let mapping = Mapper {
@@ -585,12 +571,9 @@ mod tests {
         let config = OptimizedLeavesMatcherConfig {
             base_config: super::super::LeavesMatcherConfig::default(),
             enable_label_caching: false,
-            enable_type_grouping: false,
             enable_deep_leaves: false,
             enable_ngram_caching: true,
             statement_level_iteration: true, // Required for ngram caching
-            use_binary_heap: false,
-            reuse_qgram_object: false,
         };
 
         let mapping = Mapper {
@@ -649,12 +632,9 @@ mod tests {
         let config = OptimizedLeavesMatcherConfig {
             base_config: super::super::LeavesMatcherConfig::default(),
             enable_label_caching: true,
-            enable_type_grouping: false,
             enable_deep_leaves: false,
             enable_ngram_caching: true,
             statement_level_iteration: true,
-            use_binary_heap: false,
-            reuse_qgram_object: false,
         };
 
         let mapping = Mapper {

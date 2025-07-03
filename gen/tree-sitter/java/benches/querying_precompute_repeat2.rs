@@ -1,9 +1,12 @@
 //! Compare query matching performances
 //!
 
-use std::path::{Path, PathBuf};
+use std::{
+    hint::black_box,
+    path::{Path, PathBuf},
+};
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::{JavaTreeGen, tree_sitter_parse};

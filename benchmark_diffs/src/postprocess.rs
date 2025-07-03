@@ -955,7 +955,7 @@ mod tests {
             java_md_cache: md_cache,
         };
         let now = Instant::now();
-        let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
+        let [src_tr, dst_tr] = parse_dir_pair(&mut java_gen, &src, &dst);
         let parse_t = now.elapsed().as_secs_f64();
 
         dbg!(&parse_t);

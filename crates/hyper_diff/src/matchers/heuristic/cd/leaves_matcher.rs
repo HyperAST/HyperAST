@@ -168,7 +168,6 @@ where
             mapped_count
         );
 
-        // Track metrics
         self.metrics.total_comparisons = comparison_count;
         self.metrics.successful_matches = mapped_count;
         self.metrics.similarity_time = comparison_time;

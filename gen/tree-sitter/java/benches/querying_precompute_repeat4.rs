@@ -1,10 +1,13 @@
 //! further benchmarks query matching,
 //! here focuses on impact of using different precomputed queries
 //! including analyzing tests from spoon
-use std::path::{Path, PathBuf};
+use std::{
+    hint::black_box,
+    path::{Path, PathBuf},
+};
 
 use criterion::{
-    AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput, black_box, criterion_group,
+    AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput, criterion_group,
     criterion_main,
 };
 

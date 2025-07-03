@@ -1,15 +1,12 @@
-use crate::{
-    decompressed_tree_store::{
-        ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
-        LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
-        ShallowDecompressedTreeStore,
-    },
-    matchers::{
-        Mapper, Mapping, heuristic::cd::BottomUpMatcherMetrics, mapping_store::MonoMappingStore,
-        similarity_metrics,
-    },
+use crate::decompressed_tree_store::{
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
+    LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
+    ShallowDecompressedTreeStore,
 };
-use ahash::RandomState;
+use crate::matchers::{
+    Mapper, Mapping, heuristic::cd::BottomUpMatcherMetrics, mapping_store::MonoMappingStore,
+    similarity_metrics,
+};
 use hyperast::types::{HyperAST, HyperType, NodeId, WithHashs};
 use hyperast::{PrimInt, types::TypeStore};
 use std::collections::HashMap;
@@ -120,121 +117,9 @@ where
     fn execute(&mut self) {
         if self.config.statement_level_iteration {
             self.execute_statement_level();
-        } else if self.config.enable_type_grouping {
-            self.execute_with_type_grouping();
         } else {
             self.execute_naive();
         }
-    }
-
-    /// Execute with type grouping and leaf count pre-computation optimizations
-    fn execute_with_type_grouping(&mut self) {
-        // Always pre-compute leaf counts when using type grouping for optimal performance
-        let mut leaf_counts: HashMap<M::Src, usize> = HashMap::new();
-
-        // Process nodes in post-order so children are processed before parents
-        for s in self.src_arena.iter_df_post::<true>() {
-            let src = self.src_arena.decompress_to(&s);
-            let is_leaf = self.src_arena.children(&src).is_empty();
-
-            let leaf_count = if is_leaf {
-                1 // Leaf nodes have a count of 1
-            } else {
-                // Sum the leaf counts of all children
-                self.src_arena
-                    .children(&src)
-                    .iter()
-                    .map(|child| {
-                        let child = self.src_arena.decompress_to(child);
-                        leaf_counts.get(child.shallow()).copied().unwrap_or(0)
-                    })
-                    .sum()
-            };
-
-            leaf_counts.insert(*src.shallow(), leaf_count);
-        }
-
-        let mut src_nodes_by_type: HashMap<_, Vec<_>, RandomState> = HashMap::default();
-        let mut dst_nodes_by_type: HashMap<_, Vec<_>, RandomState> = HashMap::default();
-
-        // Index source nodes by their type (only unmapped non-leaf nodes)
-        for s in self.src_arena.iter_df_post::<true>() {
-            let src = self.src_arena.decompress_to(&s);
-            let src_type = self.stores.resolve_type(&self.src_arena.original(&src));
-
-            let is_leaf = self.src_arena.children(&src).is_empty();
-            let is_mapped = self.mappings.is_src(src.shallow());
-
-            if !is_mapped && !is_leaf {
-                src_nodes_by_type.entry(src_type).or_default().push(src);
-            }
-        }
-
-        // Index destination nodes by their type (only unmapped non-leaf nodes)
-        for d in self.dst_arena.iter_df_post::<true>() {
-            let dst = self.dst_arena.decompress_to(&d);
-            let dst_type = self.stores.resolve_type(&self.dst_arena.original(&dst));
-
-            let is_leaf = self.dst_arena.children(&dst).is_empty();
-            let is_mapped = self.mappings.is_dst(dst.shallow());
-
-            if !is_mapped && !is_leaf {
-                dst_nodes_by_type.entry(dst_type).or_default().push(dst);
-            }
-        }
-
-        // Process nodes by type, comparing only nodes with matching types
-        let mut total_comparisons = 0;
-        let mut successful_matches = 0;
-        let mut similarity_time = std::time::Duration::ZERO;
-
-        for (node_type, src_nodes) in src_nodes_by_type.iter() {
-            if let Some(dst_nodes) = dst_nodes_by_type.get(node_type) {
-                for src in src_nodes {
-                    // Skip if the source node is already mapped
-                    if self.mappings.is_src(src.shallow()) {
-                        continue;
-                    }
-
-                    let number_of_leaves = *leaf_counts.get(src.shallow()).unwrap_or(&0);
-                    let threshold = if number_of_leaves > self.config.base.max_leaves {
-                        self.config.base.sim_threshold_large_trees
-                    } else {
-                        self.config.base.sim_threshold_small_trees
-                    };
-
-                    for dst in dst_nodes {
-                        // Skip if the destination node is already mapped
-                        if self.mappings.is_dst(dst.shallow()) {
-                            continue;
-                        }
-
-                        total_comparisons += 1;
-
-                        // Use range-based similarity computation for optimal performance
-                        let sim_start = std::time::Instant::now();
-                        let similarity = similarity_metrics::SimilarityMeasure::range(
-                            &self.src_arena.descendants_range(src),
-                            &self.dst_arena.descendants_range(dst),
-                            &self.mappings,
-                        )
-                        .dice();
-                        similarity_time += sim_start.elapsed();
-
-                        if similarity >= threshold {
-                            self.mappings.link(*src.shallow(), *dst.shallow());
-                            successful_matches += 1;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Update metrics
-        self.metrics.total_comparisons += total_comparisons;
-        self.metrics.successful_matches += successful_matches;
-        self.metrics.similarity_time += similarity_time;
     }
 
     /// Execute with up to statement level iteration
@@ -578,7 +463,6 @@ mod tests {
 
         let config = OptimizedBottomUpMatcherConfig {
             base: super::super::BottomUpMatcherConfig::default(),
-            enable_type_grouping: false,
             enable_deep_leaves: false,
             statement_level_iteration: false,
             enable_leaf_count_precomputation: false,

@@ -25,16 +25,15 @@ pub fn parse_string_pair<'a>(
     // java_tree_gen: &mut JavaTreeGen<'a, '_, TStore>,
     buggy: &'a str,
     fixed: &'a str,
-) -> (FNode, FNode) {
+) -> [FNode; 2] {
     let full_node1 = parse_unchecked(buggy, "", stores, md_cache);
     let full_node2 = parse_unchecked(fixed, "", stores, md_cache);
-    (full_node1, full_node2)
+    [full_node1, full_node2]
 }
 
 fn parse_unchecked<'b: 'stores, 'stores>(
     content: &'b str,
     name: &str,
-    // java_tree_gen: &mut JavaTreeGen<'stores, '_, TStore>,
     stores: &'stores mut SimpleStores<TStore>,
     md_cache: &'_ mut MDCache,
 ) -> FNode {
@@ -43,8 +42,7 @@ fn parse_unchecked<'b: 'stores, 'stores>(
         Err(t) => t,
     };
     let mut java_tree_gen = JavaTreeGen::new(stores, md_cache);
-    let full_node1 = java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk());
-    full_node1
+    java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk())
 }
 
 // TODO make it vcs/files or a module of hyperast (it will also serve as an example)
@@ -370,11 +368,7 @@ fn make(
     full_node
 }
 
-pub fn parse_dir_pair(
-    java_gen: &mut JavaPreprocessFileSys,
-    src: &Path,
-    dst: &Path,
-) -> (Local, Local) {
+pub fn parse_dir_pair(java_gen: &mut JavaPreprocessFileSys, src: &Path, dst: &Path) -> [Local; 2] {
     let mut filesys = FileSys {};
     let src = java_gen
         .handle_java_directory(src.to_path_buf(), &mut filesys)
@@ -384,5 +378,5 @@ pub fn parse_dir_pair(
         .0;
     // let src = parse_filesys(java_gen, src);
     // let dst = parse_filesys(java_gen, dst);
-    (src, dst)
+    [src, dst]
 }

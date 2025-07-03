@@ -1,76 +1,64 @@
-use criterion::{criterion_group, criterion_main};
 use hyper_diff::OptimizedDiffConfig;
-use hyper_diff::algorithms;
+use hyper_diff::algorithms::change_distiller_optimized::diff_with_complete_decompression;
+use hyper_diff::algorithms::change_distiller_optimized::diff_with_lazy_decompression;
 use hyper_diff::matchers::heuristic::cd::DiffResultSummary;
 use hyperast_benchmark_diffs::common;
 
-/// Configuration for different optimization combinations to benchmark
-struct OptimizationConfig {
-    name: &'static str,
-    config: OptimizedDiffConfig,
-}
-
-impl OptimizationConfig {
-    fn new(name: &'static str, config: OptimizedDiffConfig) -> Self {
-        Self { name, config }
-    }
-}
-
 /// Create various optimization configurations for comprehensive benchmarking
-fn create_optimization_configs() -> Vec<OptimizationConfig> {
+fn create_optimization_configs() -> Vec<(&'static str, OptimizedDiffConfig)> {
     vec![
-        OptimizationConfig::new("Baseline with Deep Label", OptimizedDiffConfig::baseline()),
-        OptimizationConfig::new(
+        ("Baseline with Deep Label", OptimizedDiffConfig::baseline()),
+        (
             "Baseline with Statement",
             OptimizedDiffConfig::baseline().with_statement_level_iteration(),
         ),
-        OptimizationConfig::new(
+        (
             "Baseline with Deep Statement",
             OptimizedDiffConfig::baseline()
                 .with_statement_level_iteration()
                 .with_deep_leaves(),
         ),
         // Optimized Label
-        OptimizationConfig::new(
+        (
             "Optimized with Deep Label",
             OptimizedDiffConfig::optimized(),
         ),
-        OptimizationConfig::new(
+        (
             "Optimized with Deep Label and Label Cache",
             OptimizedDiffConfig::optimized().with_label_caching(),
         ),
         // Optimized shallow statements
-        OptimizationConfig::new(
+        (
             "Optimized with Statement",
             OptimizedDiffConfig::optimized().with_statement_level_iteration(),
         ),
-        OptimizationConfig::new(
+        (
             "Optimized with Statement and Ngram Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_ngram_caching(),
         ),
-        OptimizationConfig::new(
+        (
             "Optimized with Statement and Label Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_label_caching(),
         ),
         // Optimized deep statements
-        OptimizationConfig::new(
+        (
             "Optimized with Deep Statement",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_deep_leaves(),
         ),
-        OptimizationConfig::new(
+        (
             "Optimized with Deep Statement and Ngram Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
                 .with_deep_leaves()
                 .with_ngram_caching(),
         ),
-        OptimizationConfig::new(
+        (
             "Optimized with Deep Statement and Label Cache",
             OptimizedDiffConfig::optimized()
                 .with_statement_level_iteration()
@@ -109,12 +97,11 @@ fn main() {
                 })
                 .collect();
             let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
-            common::get_test_data(&path_refs)
+            common::read_tests_data(&path_refs)
         } else {
-            common::get_test_data_small()
+            common::read_test_data_small()
         }
     };
-    common::print_test_case_table(&test_inputs);
     let total_lines: usize = test_inputs
         .iter()
         .map(|(buggy, _)| buggy.lines().count())
@@ -135,8 +122,8 @@ fn main() {
         if input_idx < skip {
             continue;
         }
-        let input = common::preprocess(&(&input.0, &input.1));
-        for (opt_idx, opt_config) in optimization_configs.iter().enumerate() {
+        let input = common::preprocess_file_pair([&input.0, &input.1]);
+        for (opt_idx, (config_name, config)) in optimization_configs.iter().copied().enumerate() {
             iteration += 1;
             println!("\n\n--------------------------------------------------------------------");
             println!(
@@ -149,15 +136,14 @@ fn main() {
                 optimization_configs.len()
             );
             println!(
-                "CD Single - {} - {} loc {} nodes",
-                opt_config.name, input.loc, input.node_count,
+                "CD Single - {} - {} lines {} nodes",
+                config_name, input.lines, input.node_count,
             );
-            let result = algorithms::change_distiller_optimized::diff_optimized_verbose(
-                &input.stores,
-                &input.src,
-                &input.dst,
-                opt_config.config.clone(),
-            );
+            let result = if config.use_lazy_decompression {
+                diff_with_lazy_decompression(&input.stores, &input.src, &input.dst, config)
+            } else {
+                diff_with_complete_decompression(&input.stores, &input.src, &input.dst, config)
+            };
             let summary: DiffResultSummary = result.into();
             println!("Result: {:#?}\n\n", summary);
         }

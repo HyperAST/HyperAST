@@ -1,8 +1,11 @@
 //! further benchmarks query matching,
 //! here focuses on impact of using different precomputed queries
-use std::path::{Path, PathBuf};
+use std::{
+    hint::black_box,
+    path::{Path, PathBuf},
+};
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
 mod shared;
 use hyperast_gen_ts_java::legion_with_refs::{self, JavaTreeGen};

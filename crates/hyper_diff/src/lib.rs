@@ -9,12 +9,12 @@ pub mod utils;
 /// helpers
 pub mod algorithms;
 
-// Re-export optimized diff API for convenience
-pub use algorithms::change_distiller_optimized::{
-    diff_optimized, diff_with_all_optimizations, diff_baseline,
-};
+// // Re-export optimized diff API for convenience
+// pub use algorithms::change_distiller_optimized::{
+//     diff_baseline, diff_with_all_optimizations, diff_baseline,
+// };
 pub use matchers::heuristic::cd::{
-    OptimizedDiffConfig, OptimizedLeavesMatcherConfig, OptimizedBottomUpMatcherConfig,
+    OptimizedBottomUpMatcherConfig, OptimizedDiffConfig, OptimizedLeavesMatcherConfig,
 };
 
 #[cfg(test)]
