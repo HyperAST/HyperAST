@@ -367,7 +367,7 @@ where
                     characters_compared += src_text.chars().count() + dst_text.chars().count();
                     let sim_start = std::time::Instant::now();
                     let sim = 1.0
-                        - str_distance::QGram::new(2)
+                        - str_distance::QGram::new(3)
                             .normalized(src_text.chars(), dst_text.chars());
                     similarity_computation_time += sim_start.elapsed();
                     similarity_checks += 1;

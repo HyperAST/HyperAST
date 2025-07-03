@@ -247,7 +247,7 @@ where
             self.metrics.characters_compared += src_text.chars().count() + dst_text.chars().count();
 
             let sim_start = std::time::Instant::now();
-            let dist = str_distance::QGram::new(2).normalized(src_text.chars(), dst_text.chars());
+            let dist = str_distance::QGram::new(3).normalized(src_text.chars(), dst_text.chars());
 
             self.metrics.similarity_time += sim_start.elapsed();
 
