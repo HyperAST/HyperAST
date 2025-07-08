@@ -1991,7 +1991,29 @@ dependencies = [
  "cast",
  "ciborium",
  "clap 4.5.32",
- "criterion-plot",
+ "criterion-plot 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.13.0",
+ "num-traits",
+ "oorandom",
+ "plotters",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_json",
+ "tinytemplate",
+ "walkdir",
+]
+
+[[package]]
+name = "criterion"
+version = "0.6.0"
+source = "git+https://github.com/quentinLeDilavrec/criterion.rs?rev=0301588ad4e88e7911330a77c4bc1edee6677c27#0301588ad4e88e7911330a77c4bc1edee6677c27"
+dependencies = [
+ "anes",
+ "cast",
+ "ciborium",
+ "clap 4.5.32",
+ "criterion-plot 0.5.0 (git+https://github.com/quentinLeDilavrec/criterion.rs?rev=0301588ad4e88e7911330a77c4bc1edee6677c27)",
  "itertools 0.13.0",
  "num-traits",
  "oorandom",
@@ -2012,6 +2034,15 @@ checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
  "itertools 0.10.5",
+]
+
+[[package]]
+name = "criterion-plot"
+version = "0.5.0"
+source = "git+https://github.com/quentinLeDilavrec/criterion.rs?rev=0301588ad4e88e7911330a77c4bc1edee6677c27#0301588ad4e88e7911330a77c4bc1edee6677c27"
+dependencies = [
+ "cast",
+ "itertools 0.13.0",
 ]
 
 [[package]]
@@ -3966,7 +3997,7 @@ name = "hyper_diff"
 version = "0.3.0"
 dependencies = [
  "bitvec",
- "criterion",
+ "criterion 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "enum-map",
  "env_logger 0.11.5",
  "hungarian",
@@ -4037,7 +4068,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "const-chunks",
- "criterion",
+ "criterion 0.6.0 (git+https://github.com/quentinLeDilavrec/criterion.rs?rev=0301588ad4e88e7911330a77c4bc1edee6677c27)",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
  "hyper_diff",
@@ -4144,7 +4175,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "controlled-option",
- "criterion",
+ "criterion 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
@@ -4198,7 +4229,7 @@ dependencies = [
  "bitvec",
  "cfg-if",
  "controlled-option",
- "criterion",
+ "criterion 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "enumset",
  "env_logger 0.11.5",
  "hashbrown 0.14.5",
@@ -4254,7 +4285,7 @@ dependencies = [
 name = "hyperast_vcs_git"
 version = "0.3.0"
 dependencies = [
- "criterion",
+ "criterion 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "enumset",
  "env_logger 0.11.5",
  "git2",

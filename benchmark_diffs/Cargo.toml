@@ -43,7 +43,7 @@ jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
 # [build-dependencies]
 
 [dev-dependencies]
-criterion = { version = "0.6.0", features = [
+criterion = { git = "https://github.com/quentinLeDilavrec/criterion.rs", rev = "0301588ad4e88e7911330a77c4bc1edee6677c27", features = [
     "rayon",
     "plotters",
     "cargo_bench_support",
