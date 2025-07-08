@@ -458,3 +458,27 @@ pub(crate) fn example_unstable() -> (ST<u8>, ST<u8>) {
     ]);
     (src, dst)
 }
+
+pub(crate) fn example_change_distiller() -> (ST<u8>, ST<u8>) {
+    let src = tree!(0, "a"; [
+        tree!(0, "b"),
+        tree!(42; [ // let's say 42 is for a statement
+            tree!(0, "c"),
+            tree!(0, "d"),
+        ]),
+        tree!(52; [ // let's say 52 is when it contains a statement and is one too
+            tree!(42, "e"),
+        ]),
+    ]);
+    let dst = tree!(0, "a"; [
+        tree!(42; [
+            tree!(0, "c"),
+            tree!(0, "d"),
+        ]),
+        tree!(52; [
+            tree!(42, "e"),
+        ]),
+        tree!(0, "b"),
+    ]);
+    (src, dst)
+}

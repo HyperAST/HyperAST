@@ -1,14 +1,15 @@
 #![allow(unexpected_cfgs)]
 use super::{Similarity, TextSimilarity, is_leaf, is_leaf_file, is_leaf_stmt, is_leaf_sub_file};
 use crate::decompressed_tree_store::*;
+use crate::matchers::Mapper;
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{Mapper, Mapping};
+use hyperast::PrimInt;
 use hyperast::store::nodes::compo;
-use hyperast::types::{HyperAST, NodeId, WithMetaData};
-use hyperast::{PrimInt, types};
+use hyperast::types::{HashKind, HyperAST, NodeId, NodeStore, WithHashs, WithMetaData};
+use num_traits::one;
 use std::fmt::Debug;
 
-pub struct ChangeDistillerLeavesMatcher<
+pub struct LazyChangeDistillerLeavesMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -22,31 +23,36 @@ pub struct ChangeDistillerLeavesMatcher<
 }
 
 impl<
-    Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
-    Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
     HAST: HyperAST + Copy,
-    M: MonoMappingStore,
+    M: MonoMappingStore + Debug,
     S: Similarity<HAST = HAST, IdN = HAST::IdN>,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64, // DEFAULT_LABEL_SIM_THRESHOLD = 0.5
-> ChangeDistillerLeavesMatcher<Dsrc, Ddst, HAST, M, S, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+> LazyChangeDistillerLeavesMatcher<Dsrc, Ddst, HAST, M, S, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
-    Dsrc: PostOrderIterable<HAST, M::Src> + PostOrder<HAST, M::Src>,
-    Ddst: PostOrderIterable<HAST, M::Dst> + PostOrder<HAST, M::Dst>,
-    HAST::Label: Eq + Clone,
-    HAST::IdN: Debug + Copy,
+    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
+        + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
+        + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedWithParent<HAST, Ddst::IdD>
+        + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
+    Ddst::IdD: Eq + Debug + Copy + PrimInt,
+    Dsrc::IdD: Eq + Debug + Copy + PrimInt,
+    HAST::Label: Eq,
+    HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
 {
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
     where
-        for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
-        for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::MemberImportCount>,
-        M::Src: Shallow<M::Src>,
-        M::Dst: Shallow<M::Dst>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+            WithMetaData<compo::StmtCount> + WithMetaData<compo::MemberImportCount>,
     {
         let mut matcher = Self {
             internal: mapping,
@@ -62,27 +68,11 @@ where
         Self::execute(&mut matcher.internal, is_leaf, is_leaf);
         matcher.internal
     }
-
-    pub fn match_files(
-        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
-    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
-        let mut matcher = Self {
-            internal: mapping,
-            _phantom: std::marker::PhantomData,
-        };
-        matcher.internal.mapping.mappings.topit(
-            matcher.internal.mapping.src_arena.len(),
-            matcher.internal.mapping.dst_arena.len(),
-        );
-        Self::execute(&mut matcher.internal, is_leaf_file, is_leaf_file);
-        matcher.internal
-    }
-
     pub fn match_stmt(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
     where
-        for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
     {
         let mut matcher = Self {
             internal: mapping,
@@ -97,10 +87,39 @@ where
     }
     pub fn match_all(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+        let mut matcher = Self {
+            internal: mapping,
+            _phantom: std::marker::PhantomData,
+        };
+        matcher.internal.mapping.mappings.topit(
+            matcher.internal.mapping.src_arena.len(),
+            matcher.internal.mapping.dst_arena.len(),
+        );
+
+        Self::execute(&mut matcher.internal, is_leaf, is_leaf);
+        matcher.internal
+    }
+    pub fn match_files(
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+        let mut matcher = Self {
+            internal: mapping,
+            _phantom: std::marker::PhantomData,
+        };
+        matcher.internal.mapping.mappings.topit(
+            matcher.internal.mapping.src_arena.len(),
+            matcher.internal.mapping.dst_arena.len(),
+        );
+        Self::execute(&mut matcher.internal, is_leaf_file, is_leaf_file);
+        matcher.internal
+    }
+    pub fn match_sub_files(
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
     where
-        M::Src: Shallow<M::Src>,
-        M::Dst: Shallow<M::Dst>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+            WithMetaData<compo::MemberImportCount>,
     {
         let mut matcher = Self {
             internal: mapping,
@@ -110,36 +129,50 @@ where
             matcher.internal.mapping.src_arena.len(),
             matcher.internal.mapping.dst_arena.len(),
         );
-        Self::execute(&mut matcher.internal, is_leaf, is_leaf);
+        Self::execute(&mut matcher.internal, is_leaf_sub_file, is_leaf_sub_file);
         matcher.internal
     }
 
     pub fn execute(
         internal: &mut Mapper<HAST, Dsrc, Ddst, M>,
-        is_leaf_src: fn(HAST, &Dsrc, M::Src) -> bool,
-        is_leaf_dst: fn(HAST, &Ddst, M::Dst) -> bool,
+        is_leaf_src: fn(HAST, &Dsrc, Dsrc::IdD) -> bool,
+        is_leaf_dst: fn(HAST, &Ddst, Ddst::IdD) -> bool,
     ) {
         let hyperast = internal.hyperast;
+        let mapping = &mut internal.mapping;
+        let mappings = &mut mapping.mappings;
         let mut leaves_mappings = vec![];
 
-        let mut src_iter = LeafIter::new(hyperast, &internal.mapping.src_arena, is_leaf_src);
-        while let Some(src) = src_iter.next_mappable(|src| internal.mapping.mappings.is_src(&src)) {
-            let mut dst_iter = LeafIter::new(hyperast, &internal.mapping.dst_arena, is_leaf_dst);
-            while let Some(dst) =
-                dst_iter.next_mappable(|dst| internal.mapping.mappings.is_dst(&dst))
-            {
-                let mappings = &mut internal.mapping.mappings;
-                let osrc = src_iter.arena.original(&src);
-                let odst = dst_iter.arena.original(&dst);
-                if osrc == odst {
-                    Self::link(mappings, src_iter.arena, dst_iter.arena, src, dst);
-                } else if !mappings.is_src(&src) && !mappings.is_dst(&dst) {
+        let mut src_iter = LeafIter::new(hyperast, &mut mapping.src_arena, is_leaf_src);
+        while let Some(src) = src_iter.next_mappable(|src| mappings.is_src(&src.shallow())) {
+            let mut dst_iter = LeafIter::new(hyperast, &mut mapping.dst_arena, is_leaf_dst);
+            while let Some(dst) = dst_iter.next_mappable(|dst| mappings.is_dst(&dst.shallow())) {
+                if !mappings.is_src(&src.shallow()) && !mappings.is_dst(&dst.shallow()) {
+                    let osrc = src_iter.arena.original(&src);
                     let tsrc = hyperast.resolve_type(&osrc);
+                    let odst = dst_iter.arena.original(&dst);
                     let tdst = hyperast.resolve_type(&odst);
-                    if tsrc == tdst {
-                        let p = Self::ori_pair(&internal.mapping, src, dst);
+                    if osrc == odst {
+                        // VALIDITY delaying and sorting would not change the result as sim would be 1.0
+                        // NOTE it also avoids going multiple times over the same mapping
+                        Self::link(mappings, &src_iter.arena, &dst_iter.arena, src, dst);
+                    } else if tsrc == tdst
+                        && !mappings.is_src(src.shallow())
+                        && !mappings.is_dst(dst.shallow())
+                    {
+                        if WithHashs::hash(
+                            &hyperast.node_store().resolve(&osrc),
+                            &HashKind::structural(),
+                        ) != WithHashs::hash(
+                            &hyperast.node_store().resolve(&odst),
+                            &HashKind::structural(),
+                        ) {
+                            continue; // cannot easily link descendants
+                            // NOTE having the same number of descendants might be a sufficient condition
+                            // but it might produce weird mappings if not cautious
+                        }
+                        let p = [src_iter.arena.original(&src), dst_iter.arena.original(&dst)];
                         let sim = S::norm(&hyperast, &p);
-                        dbg!(&p, sim);
                         if sim > SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
                             #[cfg(not(feature = "no_precomp_sim"))]
                             leaves_mappings.push((src, dst, sim));
@@ -150,7 +183,6 @@ where
                 }
             }
         }
-
         #[cfg(not(feature = "no_precomp_sim"))]
         leaves_mappings.sort_by(|a, b| a.2.total_cmp(&b.2));
         #[cfg(feature = "no_precomp_sim")]
@@ -170,70 +202,70 @@ where
         }
     }
 
-    fn link(mappings: &mut M, src_arena: &Dsrc, dst_arena: &Ddst, src: M::Src, dst: M::Dst) {
-        if mappings.link_if_both_unmapped(src, dst) {
-            let src = src_arena.descendants(&src);
-            let dst = dst_arena.descendants(&dst);
-            assert_eq!(src.len(), dst.len());
-            for (src, dst) in src.iter().zip(dst.iter()) {
-                mappings.link(*src, *dst)
+    fn link(mappings: &mut M, src_arena: &Dsrc, dst_arena: &Ddst, src: Dsrc::IdD, dst: Ddst::IdD) {
+        if mappings.link_if_both_unmapped(src.to_shallow(), dst.to_shallow()) {
+            let count = src_arena.descendants_count(&src);
+            assert_eq!(count, dst_arena.descendants_count(&dst));
+            let mut src = src_arena.descendants_range(&src).start;
+            let mut dst = dst_arena.descendants_range(&dst).start;
+            for _ in 0..count {
+                mappings.link_if_both_unmapped(src, dst);
+                src += one();
+                dst += one();
             }
         }
     }
-
-    fn ori_pair(mapping: &Mapping<Dsrc, Ddst, M>, src: M::Src, dst: M::Dst) -> [HAST::IdN; 2] {
-        let src = mapping.src_arena.original(&src);
-        let dst = mapping.dst_arena.original(&dst);
-        [src, dst]
-    }
 }
 
-pub(super) struct LeafIter<'a, HAST, D, IdD> {
+struct LeafIter<'a, HAST, D, IdS, IdD> {
     stores: HAST,
-    pub(super) arena: &'a D,
+    arena: &'a mut D,
     to_traverse: Vec<IdD>,
     idd: IdD,
     down: bool,
     is_leaf: fn(HAST, &D, IdD) -> bool,
+    _phantom: std::marker::PhantomData<IdS>,
 }
 
-impl<'a, HAST, D, IdD> LeafIter<'a, HAST, D, IdD>
+impl<'a, HAST, D, IdS> LeafIter<'a, HAST, D, IdS, D::IdD>
 where
     HAST: HyperAST + Copy,
-    D: ShallowDecompressedTreeStore<HAST, IdD>,
-    IdD: Copy,
+    D: LazyDecompressedTreeStore<HAST, IdS>,
+    D::IdD: Copy,
 {
-    pub fn new(stores: HAST, arena: &'a D, is_leaf: fn(HAST, &D, IdD) -> bool) -> Self {
+    fn new(stores: HAST, arena: &'a mut D, is_leaf: fn(HAST, &D, D::IdD) -> bool) -> Self {
         Self {
             stores,
-            idd: arena.root(),
+            idd: arena.starter(),
             arena,
             to_traverse: Vec::new(),
             down: true,
             is_leaf,
+            _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<HAST, D, IdD> Iterator for LeafIter<'_, HAST, D, IdD>
+impl<HAST, D, IdS> Iterator for LeafIter<'_, HAST, D, IdS, D::IdD>
 where
     HAST: HyperAST + Copy,
-    D: DecompressedTreeStore<HAST, IdD>,
-    IdD: Copy,
+    D: LazyDecompressedTreeStore<HAST, IdS>,
+    D::IdD: Copy,
 {
-    type Item = IdD;
+    type Item = D::IdD;
+
     fn next(&mut self) -> Option<Self::Item> {
         self.next_mappable(|_| false)
     }
 }
 
-impl<HAST, D, IdD> LeafIter<'_, HAST, D, IdD>
+impl<HAST, D, IdS> LeafIter<'_, HAST, D, IdS, D::IdD>
 where
     HAST: HyperAST + Copy,
-    D: DecompressedTreeStore<HAST, IdD>,
-    IdD: Copy,
+    D: LazyDecompressedTreeStore<HAST, IdS>,
+    D::IdD: Copy,
 {
-    pub fn next_mappable(&mut self, skip: impl Fn(IdD) -> bool) -> Option<IdD> {
+    fn next_mappable(&mut self, skip: impl Fn(D::IdD) -> bool) -> Option<D::IdD> {
         loop {
             if self.down {
                 if skip(self.idd) {
@@ -244,7 +276,7 @@ where
                     self.down = false;
                     return Some(self.idd);
                 }
-                let mut cs = self.arena.children(&self.idd);
+                let mut cs = self.arena.decompress_children(&self.idd);
                 cs.reverse();
                 let Some(idd) = cs.pop() else {
                     self.down = false;
@@ -257,8 +289,8 @@ where
                 let Some(sib) = self.to_traverse.pop() else {
                     return None;
                 };
-                self.down = true;
                 self.idd = sib;
+                self.down = true;
             }
         }
     }
@@ -266,17 +298,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::LabelSimilarity;
-    use super::*;
-    use crate::decompressed_tree_store::CompletePostOrder;
-    use crate::matchers::Decompressible;
-    use crate::matchers::mapping_store::MappingStore;
-    use crate::tests::examples::example_change_distiller;
     use hyperast::test_utils::simple_tree::vpair_to_stores;
     use hyperast::types::{DecompressedFrom, HyperASTShared};
+    use lazy_post_order::LazyPostOrder;
+
+    use crate::{
+        matchers::{Decompressible, mapping_store::MappingStore},
+        tests::examples::example_change_distiller,
+    };
+
+    use super::*;
 
     #[allow(type_alias_bounds)]
-    type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+    type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
 
     #[test]
     fn test_leaf_matcher() {
@@ -292,22 +326,17 @@ mod tests {
             ]),
         ));
 
-        #[allow(type_alias_bounds)]
-        type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
-
-        let src_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &src);
-        let dst_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &dst);
+        let mut src_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &src);
+        let mut dst_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &dst);
         let mapping = Mapper {
             hyperast: &stores,
             mapping: crate::matchers::Mapping {
+                src_arena: src_arena.as_mut(),
+                dst_arena: dst_arena.as_mut(),
                 mappings: crate::matchers::mapping_store::VecStore::default(),
-                src_arena,
-                dst_arena,
             },
         };
-        //  MappingStore mappings = new ChangeDistillerLeavesMatcher().match(src, dst);
-        let mapping = ChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
-        // assertEquals(2, mappings.size());
+        let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
         assert_eq!(2, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let src = mapping.mapping.src_arena.root();
@@ -336,6 +365,8 @@ mod tests {
         );
         let mut src_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &src);
         let mut dst_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &dst);
+        let mut src_arena = src_arena.as_mut();
+        let mut dst_arena = dst_arena.as_mut();
 
         let src_iter = LeafIter::new(&stores, &mut src_arena, is_leaf);
         assert_eq!(4, src_iter.count());
@@ -357,6 +388,8 @@ mod tests {
         );
         let mut src_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &src);
         let mut dst_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &dst);
+        let mut src_arena = src_arena.as_mut();
+        let mut dst_arena = dst_arena.as_mut();
 
         let src_iter = LeafIter::new(&stores, &mut src_arena, is_leaf_stmt);
         assert_eq!(2, src_iter.count());
@@ -384,21 +417,20 @@ mod tests {
                 dst
             )
         );
-        let src_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &src);
-        let dst_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &dst);
+
+        let mut src_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &src);
+        let mut dst_arena = <DS<_> as DecompressedFrom<_>>::decompress(&stores, &dst);
+
         let mapping = Mapper {
             hyperast: &stores,
             mapping: crate::matchers::Mapping {
-                src_arena,
-                dst_arena,
+                src_arena: src_arena.as_mut(),
+                dst_arena: dst_arena.as_mut(),
                 mappings: crate::matchers::mapping_store::VecStore::default(),
             },
         };
-        // NOTE cannot use TextSimilarity here because `SimpleTree` does not have a textual source code representation
-        let mapping =
-            ChangeDistillerLeavesMatcher::<_, _, _, _, LabelSimilarity<_>>::match_stmt(mapping);
-        let mapping =
-            ChangeDistillerLeavesMatcher::<_, _, _, _, LabelSimilarity<_>>::match_all(mapping);
+        let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_stmt(mapping);
+        let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
         assert_eq!(5, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let src = mapping.mapping.src_arena.root();

@@ -135,6 +135,8 @@ pub struct Local {
     pub mcc: Mcc,
     pub role: Option<Role>,
     pub precomp_queries: PrecompQueries,
+    pub stmt_count: u8,
+    pub member_import_count: u8,
 }
 
 impl Local {
@@ -149,6 +151,10 @@ impl Local {
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
         acc.precomp_queries |= self.precomp_queries;
+        acc.stmt_count = acc.stmt_count.saturating_add(self.stmt_count);
+        acc.member_import_count = acc
+            .member_import_count
+            .saturating_add(self.member_import_count);
 
         #[cfg(feature = "impact")]
         if let Some(s) = self.ana {
@@ -180,6 +186,8 @@ pub struct Acc<Scope = hyperast::scripting::Acc> {
     role: RoleAcc<crate::types::Role>,
     precomp_queries: PrecompQueries,
     prepro: Option<Scope>,
+    stmt_count: u8,
+    member_import_count: u8,
 }
 
 impl<Scope> Accumulator for Acc<Scope> {
@@ -326,6 +334,8 @@ where
             role: Default::default(),
             precomp_queries: Default::default(),
             prepro,
+            stmt_count: kind.is_statement() as u8,
+            member_import_count: (kind == Type::Import || kind.is_member()) as u8,
         }
     }
 
@@ -419,6 +429,8 @@ where
             role: Default::default(),
             precomp_queries: Default::default(),
             prepro,
+            stmt_count: kind.is_statement() as u8,
+            member_import_count: (kind == Type::Import || kind.is_member()) as u8,
         }
     }
 
@@ -675,6 +687,8 @@ where
             mcc: Mcc::new(&Type::Spaces),
             role: None,
             precomp_queries: Default::default(),
+            stmt_count: 0,
+            member_import_count: 0,
         }
     }
 
@@ -856,6 +870,8 @@ where
                 mcc,
                 role: acc.role.current,
                 precomp_queries,
+                stmt_count: acc.stmt_count,
+                member_import_count: acc.member_import_count,
             }
         } else {
             #[cfg(feature = "impact")]
@@ -897,6 +913,13 @@ where
                 //     &'static hyperast::store::labels::LabelStore,
                 // > = unsafe { std::mem::transmute(stores.clone()) };
                 more.compute_tsg(stores, &acc, label.as_deref()).unwrap();
+            }
+
+            if acc.stmt_count > 0 {
+                dyn_builder.add(compo::StmtCount(acc.stmt_count));
+            }
+            if acc.member_import_count > 0 {
+                dyn_builder.add(compo::MemberImportCount(acc.member_import_count));
             }
 
             let current_role = Option::take(&mut acc.role.current);
@@ -957,6 +980,8 @@ where
                 mcc: acc.mcc,
                 role: current_role,
                 precomp_queries: acc.precomp_queries,
+                stmt_count: acc.stmt_count,
+                member_import_count: acc.member_import_count,
             }
         };
 
@@ -1023,6 +1048,8 @@ where
                 role: Default::default(),
                 precomp_queries: Default::default(),
                 prepro,
+                stmt_count: 0,
+                member_import_count: 0,
             }
         };
         for c in cs {
@@ -1062,6 +1089,8 @@ where
                     mcc,
                     role: acc.role.current,
                     precomp_queries: todo!(),
+                    stmt_count: acc.stmt_count,
+                    member_import_count: acc.member_import_count,
                 }
             };
             let global = StatsGlobalData::default();
@@ -1102,6 +1131,8 @@ where
                     mcc,
                     role: acc.role.current,
                     precomp_queries,
+                    stmt_count: acc.stmt_count,
+                    member_import_count: acc.member_import_count,
                 }
             } else {
                 let metrics = metrics.map_hashs(|h| h.build());
@@ -1169,6 +1200,8 @@ where
                     mcc: acc.mcc,
                     role: current_role,
                     precomp_queries: todo!(),
+                    stmt_count: acc.stmt_count,
+                    member_import_count: acc.member_import_count,
                 }
             };
             local

@@ -21,7 +21,6 @@ criterion = { version = "0.5.1", features = [
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    # "real_blackbox", # need nightly
 ] }
 env_logger = "0.11.3"
 hungarian = "1.1.1"

@@ -230,8 +230,6 @@ pub struct Iter<IdD> {
     len: IdD,
 }
 
-#[cfg(debug_assertions)]
-#[allow(unused)]
 impl<IdD> Iter<IdD> {
     pub(crate) fn new(current: IdD, len: IdD) -> Self {
         Self { current, len }

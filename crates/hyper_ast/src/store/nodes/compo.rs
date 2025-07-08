@@ -48,23 +48,34 @@ pub struct PrecompFlag;
 #[repr(transparent)]
 pub struct Flags<F>(pub F);
 
+// TODO unify with `Precomp` so we directly use the code patterns, way more flexible
+// To be done cleanly it would require to preregister them in priority to custom ones
+pub struct StmtCount(pub u8);
+pub struct MemberImportCount(pub u8);
+pub struct LeafCount(pub u8);
+
 macro_rules! impls {
     ($Ty:ident) => {
         #[cfg(feature = "bevy_ecs")]
         impl bevy_ecs::component::Component for $Ty {
-            const STORAGE_TYPE: bevy_ecs::component::StorageType = bevy_ecs::component::StorageType::Table;
+            const STORAGE_TYPE: bevy_ecs::component::StorageType =
+                bevy_ecs::component::StorageType::Table;
         }
     };
     ($Ty:ident < $T:ident >) => {
         #[cfg(feature = "bevy_ecs")]
         impl<$T: 'static + Send + Sync> bevy_ecs::component::Component for $Ty<$T> {
-            const STORAGE_TYPE: bevy_ecs::component::StorageType = bevy_ecs::component::StorageType::Table;
+            const STORAGE_TYPE: bevy_ecs::component::StorageType =
+                bevy_ecs::component::StorageType::Table;
         }
     };
     ($Ty:ident < $T:ident, const $N:ident: $U:ident >) => {
         #[cfg(feature = "bevy_ecs")]
-        impl<$T: 'static + Send + Sync, const $N: $U> bevy_ecs::component::Component for $Ty<$T , $N> {
-            const STORAGE_TYPE: bevy_ecs::component::StorageType = bevy_ecs::component::StorageType::Table;
+        impl<$T: 'static + Send + Sync, const $N: $U> bevy_ecs::component::Component
+            for $Ty<$T, $N>
+        {
+            const STORAGE_TYPE: bevy_ecs::component::StorageType =
+                bevy_ecs::component::StorageType::Table;
         }
     };
 }

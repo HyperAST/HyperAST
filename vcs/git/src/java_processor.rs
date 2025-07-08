@@ -284,6 +284,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyperast_gen_ts_java::legion
             mcc: Mcc::new(&Type::Directory),
             role: None,
             precomp_queries: Default::default(),
+            stmt_count: 0,
+            member_import_count: 0,
         };
     }
 
@@ -327,6 +329,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyperast_gen_ts_java::legion
         mcc: Mcc::new(&kind),
         role: None,
         precomp_queries: acc.precomp_queries,
+        stmt_count: 0,
+        member_import_count: 0, // TODO precise the exact semantics
     };
     full_node
 }
