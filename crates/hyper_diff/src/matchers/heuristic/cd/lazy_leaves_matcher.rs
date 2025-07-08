@@ -1,6 +1,8 @@
 #![allow(unexpected_cfgs)]
 use super::{Similarity, TextSimilarity, is_leaf, is_leaf_file, is_leaf_stmt, is_leaf_sub_file};
-use crate::decompressed_tree_store::*;
+use crate::decompressed_tree_store::{
+    ContiguousDescendants, LazyDecompressed, LazyDecompressedTreeStore, Shallow,
+};
 use crate::matchers::Mapper;
 use crate::matchers::mapping_store::MonoMappingStore;
 use hyperast::PrimInt;
@@ -9,7 +11,7 @@ use hyperast::types::{HashKind, HyperAST, NodeId, NodeStore, WithHashs, WithMeta
 use num_traits::one;
 use std::fmt::Debug;
 
-pub struct LazyChangeDistillerLeavesMatcher<
+pub struct LazyLeavesMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -30,16 +32,12 @@ impl<
     S: Similarity<HAST = HAST, IdN = HAST::IdN>,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64, // DEFAULT_LABEL_SIM_THRESHOLD = 0.5
-> LazyChangeDistillerLeavesMatcher<Dsrc, Ddst, HAST, M, S, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+> LazyLeavesMatcher<Dsrc, Ddst, HAST, M, S, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
-    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
-        + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
-        + LazyDecompressedTreeStore<HAST, M::Src>,
-    Ddst: DecompressedWithParent<HAST, Ddst::IdD>
-        + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
-        + LazyDecompressedTreeStore<HAST, M::Dst>,
+    Dsrc: ContiguousDescendants<HAST, Dsrc::IdD, M::Src> + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: ContiguousDescendants<HAST, Ddst::IdD, M::Dst> + LazyDecompressedTreeStore<HAST, M::Dst>,
     Ddst::IdD: Eq + Debug + Copy + PrimInt,
     Dsrc::IdD: Eq + Debug + Copy + PrimInt,
     HAST::Label: Eq,
@@ -298,16 +296,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+    use crate::matchers::{Decompressible, mapping_store::MappingStore};
+    use crate::tests::examples::example_change_distiller;
     use hyperast::test_utils::simple_tree::vpair_to_stores;
     use hyperast::types::{DecompressedFrom, HyperASTShared};
-    use lazy_post_order::LazyPostOrder;
-
-    use crate::{
-        matchers::{Decompressible, mapping_store::MappingStore},
-        tests::examples::example_change_distiller,
-    };
-
-    use super::*;
 
     #[allow(type_alias_bounds)]
     type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
@@ -336,7 +330,7 @@ mod tests {
                 mappings: crate::matchers::mapping_store::VecStore::default(),
             },
         };
-        let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
+        let mapping = LazyLeavesMatcher::<_, _, _, _>::match_all(mapping);
         assert_eq!(2, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let src = mapping.mapping.src_arena.root();
@@ -429,8 +423,8 @@ mod tests {
                 mappings: crate::matchers::mapping_store::VecStore::default(),
             },
         };
-        let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_stmt(mapping);
-        let mapping = LazyChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
+        let mapping = LazyLeavesMatcher::<_, _, _, _>::match_stmt(mapping);
+        let mapping = LazyLeavesMatcher::<_, _, _, _>::match_all(mapping);
         assert_eq!(5, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let src = mapping.mapping.src_arena.root();

@@ -1,14 +1,16 @@
 #![allow(unexpected_cfgs)]
 use super::{Similarity, TextSimilarity, is_leaf, is_leaf_file, is_leaf_stmt, is_leaf_sub_file};
-use crate::decompressed_tree_store::*;
+use crate::decompressed_tree_store::{
+    DecompressedTreeStore, PostOrder, PostOrderIterable, Shallow, ShallowDecompressedTreeStore,
+};
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{Mapper, Mapping};
 use hyperast::store::nodes::compo;
-use hyperast::types::{HyperAST, NodeId, WithMetaData};
+use hyperast::types::{HyperAST, NodeId, NodeStore as _, WithMetaData};
 use hyperast::{PrimInt, types};
 use std::fmt::Debug;
 
-pub struct ChangeDistillerLeavesMatcher<
+pub struct LeavesMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -22,14 +24,14 @@ pub struct ChangeDistillerLeavesMatcher<
 }
 
 impl<
-    Dsrc: DecompressedTreeStore<HAST, M::Src> + DecompressedWithParent<HAST, M::Src>,
-    Ddst: DecompressedTreeStore<HAST, M::Dst> + DecompressedWithParent<HAST, M::Dst>,
+    Dsrc: DecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedTreeStore<HAST, M::Dst>,
     HAST: HyperAST + Copy,
     M: MonoMappingStore,
     S: Similarity<HAST = HAST, IdN = HAST::IdN>,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64, // DEFAULT_LABEL_SIM_THRESHOLD = 0.5
-> ChangeDistillerLeavesMatcher<Dsrc, Ddst, HAST, M, S, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+> LeavesMatcher<Dsrc, Ddst, HAST, M, S, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
@@ -45,6 +47,7 @@ where
     where
         for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
         for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::MemberImportCount>,
+        for<'t> <HAST as types::AstLending<'t>>::RT: hyperast::types::WithHashs,
         M::Src: Shallow<M::Src>,
         M::Dst: Shallow<M::Dst>,
     {
@@ -65,7 +68,10 @@ where
 
     pub fn match_files(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
-    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
+    ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
+    where
+        for<'t> <HAST as types::AstLending<'t>>::RT: types::WithHashs,
+    {
         let mut matcher = Self {
             internal: mapping,
             _phantom: std::marker::PhantomData,
@@ -83,6 +89,7 @@ where
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
     where
         for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
+        for<'t> <HAST as types::AstLending<'t>>::RT: types::WithHashs,
     {
         let mut matcher = Self {
             internal: mapping,
@@ -101,6 +108,7 @@ where
     where
         M::Src: Shallow<M::Src>,
         M::Dst: Shallow<M::Dst>,
+        for<'t> <HAST as types::AstLending<'t>>::RT: types::WithHashs,
     {
         let mut matcher = Self {
             internal: mapping,
@@ -118,7 +126,9 @@ where
         internal: &mut Mapper<HAST, Dsrc, Ddst, M>,
         is_leaf_src: fn(HAST, &Dsrc, M::Src) -> bool,
         is_leaf_dst: fn(HAST, &Ddst, M::Dst) -> bool,
-    ) {
+    ) where
+        for<'t> <HAST as types::AstLending<'t>>::RT: types::WithHashs,
+    {
         let hyperast = internal.hyperast;
         let mut leaves_mappings = vec![];
 
@@ -138,8 +148,20 @@ where
                     let tdst = hyperast.resolve_type(&odst);
                     if tsrc == tdst {
                         let p = Self::ori_pair(&internal.mapping, src, dst);
+
+                        if types::WithHashs::hash(
+                            &hyperast.node_store().resolve(&p[0]),
+                            &types::HashKind::structural(),
+                        ) != types::WithHashs::hash(
+                            &hyperast.node_store().resolve(&p[1]),
+                            &types::HashKind::structural(),
+                        ) {
+                            continue; // cannot easily link descendants
+                            // NOTE having the same number of descendants might be a sufficient condition
+                            // but it might produce weird mappings if not cautious
+                        }
                         let sim = S::norm(&hyperast, &p);
-                        dbg!(&p, sim);
+                        // dbg!(&p, sim);
                         if sim > SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
                             #[cfg(not(feature = "no_precomp_sim"))]
                             leaves_mappings.push((src, dst, sim));
@@ -306,7 +328,7 @@ mod tests {
             },
         };
         //  MappingStore mappings = new ChangeDistillerLeavesMatcher().match(src, dst);
-        let mapping = ChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
+        let mapping = LeavesMatcher::<_, _, _, _>::match_all(mapping);
         // assertEquals(2, mappings.size());
         assert_eq!(2, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
@@ -395,10 +417,8 @@ mod tests {
             },
         };
         // NOTE cannot use TextSimilarity here because `SimpleTree` does not have a textual source code representation
-        let mapping =
-            ChangeDistillerLeavesMatcher::<_, _, _, _, LabelSimilarity<_>>::match_stmt(mapping);
-        let mapping =
-            ChangeDistillerLeavesMatcher::<_, _, _, _, LabelSimilarity<_>>::match_all(mapping);
+        let mapping = LeavesMatcher::<_, _, _, _, LabelSimilarity<_>>::match_stmt(mapping);
+        let mapping = LeavesMatcher::<_, _, _, _, LabelSimilarity<_>>::match_all(mapping);
         assert_eq!(5, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let src = mapping.mapping.src_arena.root();

@@ -7,10 +7,10 @@ use str_distance::DistanceMetric;
 use types::{HyperAST, NodeId, WithMetaData};
 use types::{HyperType as _, LabelStore as _, NodeStore as _};
 
-pub mod change_distiller_bottom_up_matcher;
-pub mod change_distiller_leaves_matcher;
-pub mod lazy_change_distiller_bottom_up_matcher;
-pub mod lazy_change_distiller_leaves_matcher;
+pub mod bottom_up_matcher;
+pub mod lazy_bottom_up_matcher;
+pub mod lazy_leaves_matcher;
+pub mod leaves_matcher;
 
 pub trait Similarity {
     type HAST;
@@ -148,7 +148,7 @@ fn is_leaf_sub_file<HAST, D, IdS, IdD>(stores: HAST, arena: &D, idd: IdD) -> boo
 where
     HAST: HyperAST + Copy,
     D: ShallowDecompressedTreeStore<HAST, IdD, IdS>,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithMetaData<compo::MemberImportCount>,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::MemberImportCount>,
 {
     let id = arena.original(&idd);
     let n = stores.node_store().resolve(&id);
@@ -158,7 +158,7 @@ where
 fn is_leaf_stmt<HAST, D, IdS, IdD>(stores: HAST, arena: &D, idd: IdD) -> bool
 where
     HAST: HyperAST + Copy,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
     D: ShallowDecompressedTreeStore<HAST, IdD, IdS>,
 {
     let id = arena.original(&idd);
@@ -173,7 +173,7 @@ where
     IdD: Shallow<IdS>,
     D: ShallowDecompressedTreeStore<HAST, IdD, IdS>,
 {
-    use hyperast::types::WithChildren;
+    use types::WithChildren;
     let o = arena.original(&idd);
     stores.node_store().resolve(&o).child_count() == num_traits::zero()
 }
@@ -182,8 +182,8 @@ where
 fn leaf_count<HAST>(hyperast: HAST, x: HAST::IdN) -> usize
 where
     HAST: HyperAST + Copy,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
-    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithMetaData<compo::MemberImportCount>,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithMetaData<compo::MemberImportCount>,
 {
     let n = hyperast.node_store().resolve(&x);
     let t = hyperast.resolve_type(&x);

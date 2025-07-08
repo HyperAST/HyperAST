@@ -1,7 +1,6 @@
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
-    LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder, PostOrderIterable, Shallow,
-    ShallowDecompressedTreeStore,
+    ContiguousDescendants, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
+    PostOrder, PostOrderIterable, Shallow,
 };
 use crate::matchers::Mapper;
 use crate::matchers::mapping_store::MonoMappingStore;
@@ -60,23 +59,16 @@ where
     M::Dst: PrimInt,
     HAST: HyperAST + Copy,
     M: MonoMappingStore,
-    Dsrc: DecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
-        + DecompressedWithParent<HAST, Dsrc::IdD>
+    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
         + PostOrder<HAST, Dsrc::IdD, M::Src>
         + PostOrderIterable<HAST, Dsrc::IdD, M::Src>
         + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
-        + LazyPOBorrowSlice<HAST, Dsrc::IdD, M::Src>
-        + ShallowDecompressedTreeStore<HAST, Dsrc::IdD, M::Src>
         + LazyDecompressedTreeStore<HAST, M::Src>,
-    Ddst: DecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
-        + DecompressedWithParent<HAST, Ddst::IdD>
+    Ddst: DecompressedWithParent<HAST, Ddst::IdD>
         + PostOrder<HAST, Ddst::IdD, M::Dst>
         + PostOrderIterable<HAST, Ddst::IdD, M::Dst>
         + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
-        + LazyPOBorrowSlice<HAST, Ddst::IdD, M::Dst>
-        + ShallowDecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
-        + LazyDecompressedTreeStore<HAST, M::Dst>
-        + LazyDecompressed<M::Dst>,
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
     HAST::Label: Eq,
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,

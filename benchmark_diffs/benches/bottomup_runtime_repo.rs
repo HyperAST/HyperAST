@@ -1,18 +1,12 @@
-use std::hint::black_box;
-
-use criterion::{
-    BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
-    measurement::Measurement,
-};
-use hyper_diff::{
-    decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
-    matchers::{Decompressible, Mapper, mapping_store::VecStore},
-};
-use hyperast::{
-    store::nodes::legion::NodeIdentifier,
-    types::{HyperAST as _, HyperASTShared, WithStats as _},
-};
+use criterion::measurement::Measurement;
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use hyper_diff::decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder};
+use hyper_diff::matchers::mapping_store::MappingStore;
+use hyper_diff::matchers::{Decompressible, Mapper, mapping_store::VecStore};
+use hyperast::store::nodes::legion::NodeIdentifier;
+use hyperast::types::{HyperAST as _, HyperASTShared, WithStats as _};
 use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
+use std::hint::black_box;
 
 #[allow(type_alias_bounds)]
 type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
@@ -38,6 +32,13 @@ fn construction_group(c: &mut Criterion) {
         //     config: hyperast_vcs_git::processing::RepoConfig::CppMake,
         //     fetch: false,
         // },
+        //
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "maven"),
+            commit: "c3cf29438e3d65d6ee5c5726f8611af99d9a649a",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
         Input {
             repo: hyperast_vcs_git::git::Forge::Github.repo("INRIA", "spoon"),
             commit: "56e12a0c0e0e69ea70863011b4f4ca3305e0542b",
@@ -58,6 +59,78 @@ fn construction_group(c: &mut Criterion) {
         bench_lazy_greedy::<400>(&mut group, &mut repositories, p);
     }
     group.finish();
+    let mut group = c.benchmark_group("ChangDistiller_BottomUp_runtime");
+
+    for p in inputs.iter() {
+        use hyper_diff::matchers::heuristic::cd;
+        prep_bench_cd_subtree(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("Baseline", p.repo.name()),
+            |b, (repositories, (owned, mappings))| {
+                let hyperast = &repositories.processor.main_stores;
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter_batched(
+                    || {
+                        hyper_diff::matchers::Mapper::prep(
+                            hyperast,
+                            mappings.clone(),
+                            owned.clone(),
+                        )
+                    },
+                    |mapper| {
+                        dbg!(mapper.mappings.len());
+                        let mapper = mapper.map(
+                            |src_arena| CDS::<_>::from(src_arena.map(|x| x.complete(hyperast))),
+                            |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.complete(hyperast))),
+                        );
+                        use cd::bottom_up_matcher::BottomUpMatcher;
+                        let mapper = BottomUpMatcher::<_, _, _, _>::match_it(mapper);
+                        dbg!(mapper.mappings.len(), mapper.mappings.capacity());
+                        black_box(mapper);
+                    },
+                    BatchSize::SmallInput,
+                );
+            },
+        );
+        prep_bench_cd_subtree(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("Lazy", p.repo.name()),
+            |b, (repositories, (owned, mappings))| {
+                let hyperast = &repositories.processor.main_stores;
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter_batched(
+                    || {
+                        hyper_diff::matchers::Mapper::prep(
+                            hyperast,
+                            mappings.clone(),
+                            owned.clone(),
+                        )
+                    },
+                    |mut mapper| {
+                        dbg!(mapper.mappings.len());
+                        let mapper = Mapper::new(
+                            hyperast,
+                            mapper.mapping.mappings,
+                            (
+                                mapper.mapping.src_arena.as_mut(),
+                                mapper.mapping.dst_arena.as_mut(),
+                            ),
+                        );
+                        use cd::lazy_bottom_up_matcher::BottomUpMatcher;
+                        let mapper = BottomUpMatcher::<_, _, _, _>::match_it(mapper);
+                        dbg!(mapper.mappings.len(), mapper.mappings.capacity());
+                        black_box(mapper);
+                    },
+                    BatchSize::SmallInput,
+                );
+            },
+        );
+    }
+    group.finish();
 }
 
 fn bench_lazy_greedy<const MAX_SIZE: usize>(
@@ -66,7 +139,7 @@ fn bench_lazy_greedy<const MAX_SIZE: usize>(
     p: &Input,
 ) {
     use hyper_diff::matchers::heuristic::gt;
-    prep_bench_subtree(
+    prep_bench_gt_subtree(
         group,
         repositories,
         &p,
@@ -102,7 +175,7 @@ fn bench_greedy<const MAX_SIZE: usize>(
     p: &Input,
 ) {
     use hyper_diff::matchers::heuristic::gt;
-    prep_bench_subtree(
+    prep_bench_gt_subtree(
         group,
         repositories,
         &p,
@@ -136,7 +209,7 @@ type OwnedLazyMapping = (
     VecStore<u32>,
 );
 
-fn prep_bench_subtree<Mea: Measurement>(
+fn prep_bench_gt_subtree<Mea: Measurement>(
     group: &mut criterion::BenchmarkGroup<'_, Mea>,
     repositories: &mut PreProcessedRepositories,
     p: &Input,
@@ -162,6 +235,39 @@ fn prep_bench_subtree<Mea: Measurement>(
             ((mapper_owned.0.decomp, mapper_owned.1.decomp), mappings)
         },
         f
+    );
+}
+
+fn prep_bench_cd_subtree<Mea: Measurement>(
+    group: &mut criterion::BenchmarkGroup<'_, Mea>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+    bid: BenchmarkId,
+    f: impl FnMut(&mut criterion::Bencher<'_, Mea>, &(&PreProcessedRepositories, &OwnedLazyMapping)),
+) {
+    group.bench_with_input_prepared(
+        bid,
+        repositories,
+        |group, repositories| {
+            let (src, dst) = prep_commits(p, repositories);
+            let hyperast = &repositories.processor.main_stores;
+            group.throughput(Throughput::Elements(
+                (hyperast.node_store().resolve(src).size()
+                    + hyperast.node_store().resolve(dst).size())
+                .div_ceil(2) as u64,
+            ));
+            let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+            let mapper = hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+
+            use cd::lazy_leaves_matcher::LazyLeavesMatcher;
+            use hyper_diff::matchers::heuristic::cd;
+            dbg!();
+            let mapper = LazyLeavesMatcher::<_, _, _, M>::match_it(mapper);
+            dbg!();
+            let mappings = mapper.mapping.mappings;
+            ((mapper_owned.0.decomp, mapper_owned.1.decomp), mappings)
+        },
+        f,
     );
 }
 

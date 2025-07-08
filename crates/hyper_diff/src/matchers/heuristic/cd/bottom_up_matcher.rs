@@ -1,5 +1,5 @@
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     PostOrderIterable,
 };
 use crate::matchers::Mapper;
@@ -13,7 +13,7 @@ use std::fmt::Debug;
 
 use super::leaf_count;
 
-pub struct ChangeDistillerBottomUpMatcher<
+pub struct BottomUpMatcher<
     Dsrc,
     Ddst,
     HAST,
@@ -28,49 +28,17 @@ pub struct ChangeDistillerBottomUpMatcher<
 }
 
 impl<
-    Dsrc,
-    Ddst,
-    HAST: HyperAST,
-    M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize,   // = 1000,
-    const SIM_THRESHOLD_NUM: u64,  // = 6,
-    const SIM_THRESHOLD_DEN: u64,  // = 10,
-    const SIM_THRESHOLD2_NUM: u64, // = 4,
-    const SIM_THRESHOLD2_DEN: u64, // = 10,
-> Into<Mapper<HAST, Dsrc, Ddst, M>>
-    for ChangeDistillerBottomUpMatcher<
-        Dsrc,
-        Ddst,
-        HAST,
-        M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-        SIM_THRESHOLD2_NUM,
-        SIM_THRESHOLD2_DEN,
-    >
-{
-    fn into(self) -> Mapper<HAST, Dsrc, Ddst, M> {
-        self.internal
-    }
-}
-
-impl<
     'a,
-    Dsrc: DecompressedTreeStore<HAST, M::Src>
-        + DecompressedWithParent<HAST, M::Src>
+    Dsrc: DecompressedWithParent<HAST, M::Src>
         + PostOrder<HAST, M::Src>
         + PostOrderIterable<HAST, M::Src>
         + DecompressedFrom<HAST, Out = Dsrc>
-        + ContiguousDescendants<HAST, M::Src>
-        + POBorrowSlice<HAST, M::Src>,
-    Ddst: DecompressedTreeStore<HAST, M::Dst>
-        + DecompressedWithParent<HAST, M::Dst>
+        + ContiguousDescendants<HAST, M::Src>,
+    Ddst: DecompressedWithParent<HAST, M::Dst>
         + PostOrder<HAST, M::Dst>
         + PostOrderIterable<HAST, M::Dst>
         + DecompressedFrom<HAST, Out = Ddst>
-        + ContiguousDescendants<HAST, M::Dst>
-        + POBorrowSlice<HAST, M::Dst>,
+        + ContiguousDescendants<HAST, M::Dst>,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
     const SIZE_THRESHOLD: usize,   // = 1000,
@@ -79,7 +47,7 @@ impl<
     const SIM_THRESHOLD2_NUM: u64, // = 4,
     const SIM_THRESHOLD2_DEN: u64, // = 10,
 >
-    ChangeDistillerBottomUpMatcher<
+    BottomUpMatcher<
         Dsrc,
         Ddst,
         HAST,
@@ -318,7 +286,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::change_distiller_leaves_matcher::ChangeDistillerLeavesMatcher;
+    use super::super::leaves_matcher::LeavesMatcher;
     use crate::decompressed_tree_store::CompletePostOrder;
     use crate::matchers::Decompressible;
     use crate::matchers::mapping_store::MappingStore;
@@ -355,8 +323,8 @@ mod tests {
             },
         };
         //  MappingStore mappings = new ChangeDistillerLeavesMatcher().match(src, dst);
-        let mapping = ChangeDistillerLeavesMatcher::<_, _, _, _>::match_stmt(mapping);
-        let mapping = ChangeDistillerLeavesMatcher::<_, _, _, _>::match_all(mapping);
+        let mapping = LeavesMatcher::<_, _, _, _>::match_stmt(mapping);
+        let mapping = LeavesMatcher::<_, _, _, _>::match_all(mapping);
         // assertEquals(2, mappings.size());
         assert_eq!(2, mapping.mapping.mappings.len());
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
@@ -372,7 +340,7 @@ mod tests {
         // assertTrue(mappings.has(src.getChild(1), dst.getChild(0)));
         assert!(mapping.mapping.mappings.has(&src_cs[1], &dst_cs[0]));
 
-        let mapping = ChangeDistillerBottomUpMatcher::<_, _, _, _, 1>::match_it(mapping);
+        let mapping = BottomUpMatcher::<_, _, _, _, 1>::match_it(mapping);
         dbg!(&mapping.mapping.mappings);
         assert!(mapping.mapping.mappings.has(&src, &dst));
     }

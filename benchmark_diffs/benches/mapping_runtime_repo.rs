@@ -1,15 +1,11 @@
 use std::hint::black_box;
 
 use criterion::{
-    BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
-    measurement::Measurement,
+    BenchmarkId, Criterion, Throughput, criterion_group, criterion_main, measurement::Measurement,
 };
 use hyper_diff::{
     decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
-    matchers::{
-        Decompressible,
-        heuristic::gt::{greedy_bottom_up_matcher, lazy2_greedy_bottom_up_matcher},
-    },
+    matchers::{Decompressible, mapping_store::VecStore},
 };
 use hyperast::{
     store::nodes::legion::NodeIdentifier,
@@ -42,8 +38,38 @@ fn construction_group(c: &mut Criterion) {
         //     fetch: false,
         // },
         Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "maven"),
+            commit: "c3cf29438e3d65d6ee5c5726f8611af99d9a649a",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
             repo: hyperast_vcs_git::git::Forge::Github.repo("INRIA", "spoon"),
             commit: "56e12a0c0e0e69ea70863011b4f4ca3305e0542b",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("javaparser", "javaparser"),
+            commit: "046bf8be251189452ad6b25bf9107a1a2167ce6f",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "dubbo"),
+            commit: "e831b464837ae5d2afac9841559420aeaef6c52b",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("netty", "netty"),
+            commit: "c2b846750dd2131d65aa25c8cf66bf3649b248f9",
+            config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
+            fetch: true,
+        },
+        Input {
+            repo: hyperast_vcs_git::git::Forge::Github.repo("apache", "hadoop"),
+            commit: "d5e97fe4d6baf43a5576cbd1700c22b788dba01e",
             config: hyperast_vcs_git::processing::RepoConfig::JavaMaven,
             fetch: true,
         },
@@ -53,78 +79,162 @@ fn construction_group(c: &mut Criterion) {
         repositories.register_config(p.repo.clone(), p.config);
     }
     for p in inputs.into_iter() {
-        prep_bench_subtree(
+        use hyper_diff::matchers::heuristic::cd;
+        use hyper_diff::matchers::heuristic::gt;
+        prep_bench(
             &mut group,
             &mut repositories,
             &p,
             BenchmarkId::new("GreedyGumtree", p.repo.name()),
             |b, (repositories, (src, dst))| {
                 // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
-                b.iter(
-                    || {
-                        let hyperast = &repositories.processor.main_stores;
-                        let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
-                        let mapper =
-                            hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mapper_owned: (CDS<_>, CDS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper = hyper_diff::matchers::Mapper::new(
+                        hyperast,
+                        VecStore::default(),
+                        mapper_owned,
+                    );
 
-                        let mapper = hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
-                        let mappings = mapper.mapping.mappings;
-                        let mapper = hyper_diff::matchers::Mapper::prep(
-                            hyperast,
-                            mappings,
-                            mapper_owned,
-                        );
-                        let mapper = mapper.map(
-                            |src_arena| CDS::<_>::from(src_arena.map(|x| x.decomp.complete(hyperast))),
-                            |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.decomp.complete(hyperast))),
-                        );
-                        let mapper_bottom_up = greedy_bottom_up_matcher::GreedyBottomUpMatcher::<
-                            _,
-                            _,
-                            _,
-                            _,
-                            200,
-                        >::match_it(mapper);
-                        black_box(mapper_bottom_up);
-                    },
-                );
+                    use gt::greedy_subtree_matcher::GreedySubtreeMatcher;
+                    let mapper = GreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+                    use gt::greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+                    let mapper_bottom_up =
+                        GreedyBottomUpMatcher::<_, _, _, _, 200>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
             },
         );
-        prep_bench_subtree(
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("PartialLazyGreedyGumtree", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+
+                    use gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+                    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+                    let mappings = mapper.mapping.mappings;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::prep(hyperast, mappings, mapper_owned);
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.decomp.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.decomp.complete(hyperast))),
+                    );
+                    use gt::greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+                    let mapper_bottom_up =
+                        GreedyBottomUpMatcher::<_, _, _, _, 200>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
             &mut group,
             &mut repositories,
             &p,
             BenchmarkId::new("LazyGumtree", p.repo.name()),
             |b, (repositories, (src, dst))| {
                 // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
-                b.iter(
-                    || {
-                        let hyperast = &repositories.processor.main_stores;
-                        let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
-                        let mapper =
-                            hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
 
-                        let mapper = hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+                    use gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+                    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
 
-                        let mapper_bottom_up =
-                            lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher::<
-                                _,
-                                _,
-                                _,
-                                M,
-                                M,
-                                200,
-                            >::match_it(mapper);
-                        black_box(mapper_bottom_up);
-                    },
-                );
+                    use gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+                    let mapper_bottom_up =
+                        GreedyBottomUpMatcher::<_, _, _, M, M, 200>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("ChangeDistiller", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mapper_owned: (CDS<_>, CDS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper = hyper_diff::matchers::Mapper::new(
+                        hyperast,
+                        VecStore::default(),
+                        mapper_owned,
+                    );
+
+                    use cd::leaves_matcher::LeavesMatcher;
+                    let mapper = LeavesMatcher::<_, _, _, M>::match_it(mapper);
+                    use cd::bottom_up_matcher::BottomUpMatcher;
+                    let mapper_bottom_up = BottomUpMatcher::<_, _, _, _, 200>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("PartialLazyChangeDistiller", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+                    use cd::lazy_leaves_matcher::LazyLeavesMatcher;
+                    let mapper = LazyLeavesMatcher::<_, _, _, M>::match_it(mapper);
+                    let mappings = mapper.mapping.mappings;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::prep(hyperast, mappings, mapper_owned);
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.decomp.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.decomp.complete(hyperast))),
+                    );
+                    use cd::bottom_up_matcher::BottomUpMatcher;
+                    let mapper_bottom_up = BottomUpMatcher::<_, _, _, _>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("LazyChangeDistiller", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+                    use cd::lazy_leaves_matcher::LazyLeavesMatcher;
+                    let mapper = LazyLeavesMatcher::<_, _, _, M>::match_it(mapper);
+
+                    use cd::lazy_bottom_up_matcher::BottomUpMatcher;
+                    let mapper_bottom_up = BottomUpMatcher::<_, _, _, M>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
             },
         );
     }
     group.finish()
 }
 
-fn prep_bench_subtree<Mea: Measurement>(
+fn prep_bench<Mea: Measurement>(
     group: &mut criterion::BenchmarkGroup<'_, Mea>,
     repositories: &mut PreProcessedRepositories,
     p: &Input,
@@ -159,7 +269,14 @@ fn prep_commits(
         .get_config((&p.repo).clone())
         .ok_or_else(|| "missing config for repository".to_string())
         .unwrap();
-    let repository = if p.fetch {
+    let repository = if p.fetch
+        && repositories
+            .get_commit(
+                &repo.config,
+                &hyperast_vcs_git::git::Oid::from_str(p.commit).unwrap(),
+            )
+            .is_none()
+    {
         repo.fetch()
     } else {
         repo.nofetch()
