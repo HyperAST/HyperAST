@@ -9,6 +9,7 @@ use types::{HyperType as _, LabelStore as _, NodeStore as _};
 
 pub mod change_distiller_bottom_up_matcher;
 pub mod change_distiller_leaves_matcher;
+pub mod lazy_change_distiller_bottom_up_matcher;
 pub mod lazy_change_distiller_leaves_matcher;
 
 pub trait Similarity {
