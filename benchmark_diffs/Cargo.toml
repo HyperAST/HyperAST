@@ -43,8 +43,21 @@ jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
 # [build-dependencies]
 
 [dev-dependencies]
-hyperast_gen_ts_java = { workspace = true }
+criterion = { version = "0.6.0", features = [
+    "rayon",
+    "plotters",
+    "cargo_bench_support",
+    "html_reports",
+] }
 
 # [[bin]]
 # name = "window_combination"
 # path = "binwindow_combination.rs"
+
+[[bench]]
+name = "bottomup_runtime_repo"
+harness = false
+
+[[bench]]
+name = "mapping_runtime_repo"
+harness = false

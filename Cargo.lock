@@ -1983,25 +1983,22 @@ dependencies = [
 
 [[package]]
 name = "criterion"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
+checksum = "3bf7af66b0989381bd0be551bd7cc91912a655a58c6918420c9527b1fd8b4679"
 dependencies = [
  "anes",
  "cast",
  "ciborium",
  "clap 4.5.32",
  "criterion-plot",
- "is-terminal",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "num-traits",
- "once_cell",
  "oorandom",
  "plotters",
  "rayon",
  "regex",
  "serde",
- "serde_derive",
  "serde_json",
  "tinytemplate",
  "walkdir",
@@ -4020,7 +4017,6 @@ name = "hyperast_benchmark"
 version = "0.3.0"
 dependencies = [
  "cfg-if",
- "criterion",
  "env_logger 0.9.3",
  "hyper_diff",
  "hyperast_gen_ts_java",
@@ -4041,6 +4037,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "const-chunks",
+ "criterion",
  "env_logger 0.11.5",
  "hashbrown 0.13.2",
  "hyper_diff",

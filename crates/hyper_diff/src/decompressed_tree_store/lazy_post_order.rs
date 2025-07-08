@@ -44,6 +44,17 @@ impl<IdN: Debug, IdD: PrimInt + Debug> Debug for LazyPostOrder<IdN, IdD> {
     }
 }
 
+impl<IdN: Clone, IdD: Clone> Clone for LazyPostOrder<IdN, IdD> {
+    fn clone(&self) -> Self {
+        Self {
+            id_compressed: self.id_compressed.clone(),
+            id_parent: self.id_parent.clone(),
+            llds: self.llds.clone(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<HAST: HyperAST + Copy, IdD: PrimInt> Decompressible<HAST, &mut LazyPostOrder<HAST::IdN, IdD>>
 where
     HAST::IdN: types::NodeId<IdN = HAST::IdN>,

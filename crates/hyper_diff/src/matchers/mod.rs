@@ -60,7 +60,7 @@ impl<HAST, D> std::ops::Deref for Decompressible<HAST, D> {
 }
 
 impl<HAST, D> Decompressible<HAST, D> {
-    pub(crate) fn map<DD>(self, f: impl Fn(D) -> DD) -> Decompressible<HAST, DD> {
+    pub fn map<DD>(self, f: impl Fn(D) -> DD) -> Decompressible<HAST, DD> {
         Decompressible {
             hyperast: self.hyperast,
             decomp: f(self.decomp),
@@ -78,6 +78,15 @@ impl<HAST, D> Decompressible<HAST, D> {
 impl<HAST, D> std::ops::DerefMut for Decompressible<HAST, D> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.decomp
+    }
+}
+
+impl<HAST: Copy, D: Clone> Clone for Decompressible<HAST, D> {
+    fn clone(&self) -> Self {
+        Self {
+            hyperast: self.hyperast,
+            decomp: self.decomp.clone(),
+        }
     }
 }
 
@@ -123,7 +132,7 @@ impl<HAST: Copy, Dsrc, Ddst, M> Mapper<HAST, Dsrc, Ddst, M> {
         }
     }
 
-    pub(crate) fn with_mut_decompressible(
+    pub fn with_mut_decompressible(
         owned: &mut (Decompressible<HAST, Dsrc>, Decompressible<HAST, Ddst>),
     ) -> Mapper<HAST, Decompressible<HAST, &mut Dsrc>, Decompressible<HAST, &mut Ddst>, M>
     where
@@ -139,16 +148,33 @@ impl<HAST: Copy, Dsrc, Ddst, M> Mapper<HAST, Dsrc, Ddst, M> {
         }
     }
 
-    pub(crate) fn new(
-        hyperast: HAST,
-        mappings: M,
-        owned: (Dsrc, Ddst),
-    ) -> Mapper<HAST, Dsrc, Ddst, M> {
+    pub fn new(hyperast: HAST, mappings: M, owned: (Dsrc, Ddst)) -> Mapper<HAST, Dsrc, Ddst, M> {
         Mapper {
             hyperast,
             mapping: crate::matchers::Mapping {
                 src_arena: owned.0,
                 dst_arena: owned.1,
+                mappings,
+            },
+        }
+    }
+
+    pub fn prep(
+        hyperast: HAST,
+        mappings: M,
+        owned: (Dsrc, Ddst),
+    ) -> Mapper<HAST, Decompressible<HAST, Dsrc>, Decompressible<HAST, Ddst>, M> {
+        Mapper {
+            hyperast,
+            mapping: crate::matchers::Mapping {
+                src_arena: Decompressible {
+                    decomp: owned.0,
+                    hyperast,
+                },
+                dst_arena: Decompressible {
+                    decomp: owned.1,
+                    hyperast,
+                },
                 mappings,
             },
         }
