@@ -1,15 +1,15 @@
 //! further benchmarks query matching,
 //! here focuses on impact of using different precomputed queries
 //! including analyzing tests from spoon
-use std::path::{Path, PathBuf};
-
 use criterion::{
-    AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput, black_box, criterion_group,
+    AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput, criterion_group,
     criterion_main,
 };
+use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
+use std::hint::black_box;
+use std::path::{Path, PathBuf};
 
 mod shared;
-use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[BenchQuery] = &[
