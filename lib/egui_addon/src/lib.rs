@@ -2,6 +2,7 @@
 pub mod async_exec;
 pub mod code_editor;
 pub mod egui_utils;
+#[cfg(feature = "force_layout")]
 pub mod force_layout;
 pub mod hscroll;
 pub mod interactive_split;
