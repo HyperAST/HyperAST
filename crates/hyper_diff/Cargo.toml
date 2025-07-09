@@ -12,6 +12,7 @@ bitvec = "1.0.1"
 str-distance = "0.1.0"
 log = { version = "0.4.6" }
 hyperast = { workspace = true, features = ["native", "legion"] }
+rand = "0.9.1"
 
 logging_timer = "1.1.0"
 

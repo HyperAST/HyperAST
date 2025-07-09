@@ -4076,6 +4076,7 @@ dependencies = [
  "log",
  "logging_timer",
  "num-traits",
+ "rand 0.9.1",
  "specs",
  "str-distance",
  "tikv-jemalloc-ctl",

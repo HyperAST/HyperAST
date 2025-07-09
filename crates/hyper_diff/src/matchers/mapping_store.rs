@@ -61,7 +61,7 @@ pub trait MultiMappingStore: MappingStore {
 pub type DefaultMultiMappingStore<T> = MultiVecStore<T>;
 
 /// TODO try using umax
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct VecStore<T> {
     pub src_to_dst: Vec<T>,
     pub dst_to_src: Vec<T>,

@@ -18,7 +18,7 @@ use hyperast::PrimInt;
 use hyperast::types::{self, AstLending, Children, Childrn, HyperAST, WithChildren, WithStats};
 
 pub struct LazyPostOrder<IdN, IdD> {
-    pub(super) id_compressed: Box<[IdN]>,
+    pub id_compressed: Box<[IdN]>,
     pub id_parent: Box<[IdD]>,
     /// leftmost leaf descendant of nodes
     pub(crate) llds: Box<[IdD]>,
@@ -97,12 +97,11 @@ mod impl_ref {
         }
 
         fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
-            let store = self.hyperast;
             let mut r = *x;
             for d in p {
                 let a = self.original(&r);
-                let node = store.resolve(&a);
-                let cs = node.children().filter(|x| x.is_empty());
+                let node = self.hyperast.resolve(&a);
+                let cs = node.children().filter(|x| !x.is_empty());
                 let Some(cs) = cs else {
                     panic!("no children in this tree")
                 };
@@ -663,7 +662,7 @@ where
         for d in p {
             let a = self.original(&r);
             let node = store.resolve(&a);
-            let cs = node.children().filter(|x| x.is_empty());
+            let cs = node.children().filter(|x| !x.is_empty());
             let Some(cs) = cs else {
                 panic!("no children in this tree")
             };

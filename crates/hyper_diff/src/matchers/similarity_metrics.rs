@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use num_traits::{cast, PrimInt, ToPrimitive};
+use num_traits::{PrimInt, ToPrimitive, cast};
 
 use crate::matchers::mapping_store::MappingStore;
 
@@ -38,8 +38,9 @@ impl SimilarityMeasure {
     }
 
     pub fn chawathe(&self) -> f64 {
-        let max = f64::max(self.src_l as f64, self.dst_l as f64);
-        self.ncd as f64 / max
+        let chawathe = self.ncd as f64 / f64::max(self.src_l as f64, self.dst_l as f64);
+        //dbg!(&chawathe);
+        chawathe
     }
 
     pub fn overlap(&self) -> f64 {
@@ -48,7 +49,9 @@ impl SimilarityMeasure {
     }
 
     pub fn dice(&self) -> f64 {
-        (2.0_f64 * (self.ncd as f64)) / (self.src_l as f64 + self.dst_l as f64)
+        let dice = (2.0_f64 * (self.ncd as f64)) / (self.src_l as f64 + self.dst_l as f64);
+        //dbg!(dice);
+        dice
     }
 
     pub fn jaccard(&self) -> f64 {

@@ -939,7 +939,7 @@ mod tests {
     fn test() {
         println!("{:?}", std::env::current_dir());
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let src_dst = crate::buggy_fixed::buggy_fixed_dataset_roots(root);
+        let src_dst = crate::buggy_fixed::buggy_fixed_dataset_roots(root, "defects4j");
         let [buggy_path, fixed_path] = src_dst.map(|x| x.join("Jsoup/92"));
         let src = buggy_path;
         let dst = fixed_path;

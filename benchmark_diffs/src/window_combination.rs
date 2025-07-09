@@ -646,8 +646,8 @@ mod test {
         // modify filter_mappings to extract redundant mappings
         // the store it alongside other mappings
         dbg!();
-        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(&mut mapper);
+        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
+        LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(&mut mapper);
         // This one matches everingthing as it should but it is much slower
         // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 10_000, 1, 2>::execute(
         //     &mut mapper,

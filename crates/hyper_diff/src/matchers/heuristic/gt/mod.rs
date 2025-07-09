@@ -4,6 +4,7 @@ pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
 pub mod greedy_subtree_matcher;
 pub mod hybrid_bottom_up_matcher;
+pub mod marriage_bottom_up_matcher;
 pub mod simple_bottom_up_matcher3;
 
 // lazy versions, that do not decompress directly subtrees
@@ -13,6 +14,7 @@ pub mod lazy_bottom_up_matcher;
 pub mod lazy_greedy_bottom_up_matcher;
 pub mod lazy_greedy_subtree_matcher;
 pub mod lazy_hybrid_bottom_up_matcher;
+pub mod lazy_marriage_bottom_up_matcher;
 pub mod lazy_simple_bottom_up_matcher;
 
 pub fn size<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize

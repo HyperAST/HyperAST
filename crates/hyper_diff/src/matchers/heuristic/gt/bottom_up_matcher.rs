@@ -49,37 +49,34 @@ where
         }
         candidates
     }
-    pub fn get_dst_candidates2(&self, src: &M::Src) -> Vec<M::Dst> {
-        let src_arena = &self.mapping.src_arena;
-        let dst_arena = &self.mapping.dst_arena;
-        let mappings = &self.mapping.mappings;
+
+    pub(super) fn get_src_candidates(&self, dst: &M::Dst) -> Vec<M::Src> {
         let mut seeds = vec![];
-        let s = &src_arena.original(src);
-        for c in src_arena.descendants(src) {
-            if mappings.is_src(&c) {
-                let m = mappings.get_dst_unchecked(&c);
+        let s = &self.dst_arena.original(dst);
+        for c in self.dst_arena.descendants(dst) {
+            if self.mappings.is_dst(&c) {
+                let m = self.mappings.get_src_unchecked(&c);
                 seeds.push(m);
             }
         }
         let mut candidates = vec![];
-        let mut visited = bitvec::bitbox![0;dst_arena.len()];
+        let mut visited = bitvec::bitbox![0;self.src_arena.len()];
+
         let t = self.hyperast.resolve_type(s);
-        for mut seed in seeds {
-            loop {
-                let Some(parent) = dst_arena.parent(&seed) else {
-                    break;
-                };
+        for seed in seeds {
+            while let Some(parent) = self.src_arena.parent(&seed) {
                 if visited[parent.to_usize().unwrap()] {
                     break;
                 }
                 visited.set(parent.to_usize().unwrap(), true);
-                let p = &dst_arena.original(&parent);
+
+                let p = &self.src_arena.original(&parent);
                 if self.hyperast.resolve_type(p) == t
-                    && !(mappings.is_dst(&parent) || parent == dst_arena.root())
+                    && !self.mappings.is_src(&parent)
+                    && parent != self.src_arena.root()
                 {
                     candidates.push(parent);
                 }
-                seed = parent;
             }
         }
         candidates

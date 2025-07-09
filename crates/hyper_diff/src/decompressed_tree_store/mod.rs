@@ -238,12 +238,6 @@ pub struct Iter<IdD> {
     len: IdD,
 }
 
-impl<IdD> Iter<IdD> {
-    pub(crate) fn new(current: IdD, len: IdD) -> Self {
-        Self { current, len }
-    }
-}
-
 impl<IdD: PrimInt> Iterator for Iter<IdD> {
     type Item = IdD;
 

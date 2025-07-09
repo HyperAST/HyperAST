@@ -14,13 +14,13 @@ use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 const DATASET_FORMAT: i32 = 1; // ok as of 33024da8de4c519bb1c1146b19d91d6cb4c81ea6
 // TODO find when format of dataset changed
 
-pub fn buggy_fixed_dataset_roots(root: &Path) -> [std::path::PathBuf; 2] {
-    let datasets = root.parent().unwrap().join("gt_datasets");
+pub fn buggy_fixed_dataset_roots(root: &Path, datset: impl ToString) -> [std::path::PathBuf; 2] {
+    let datasets = root.parent().unwrap().join("datasets");
     assert!(
         datasets.exists(),
         "you should clone the gumtree dataset:\n`cd ..; git clone git@github.com:GumTreeDiff/datasets.git gt_datasets; cd gt_datasets; git checkout 33024da8de4c519bb1c1146b19d91d6cb4c81ea6`"
     );
-    let data_root = datasets.join("defects4j");
+    let data_root = datasets.join(datset.to_string());
     assert!(
         data_root.exists(),
         "this dataset does not exist or was renamed"
@@ -70,7 +70,7 @@ fn test_crash1() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Cli/22/src_java_org_apache_commons_cli_PosixParser.java"));
     let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
@@ -99,7 +99,7 @@ fn test_perf_mokito() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] = src_dst
         .map(|x| x.join("Mockito/34/src_org_mockito_internal_invocation_InvocationMatcher.java"));
     let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
@@ -1344,7 +1344,7 @@ fn compare_perfs() {
     // let buggy_path = Path::new("../../gt_datasets/defects4j/buggy/JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java");
     // let fixed_path = Path::new("../../gt_datasets/defects4j/fixed/JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap());
+    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap(), "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Cli/22/src_java_org_apache_commons_cli_PosixParser.java"));
 
@@ -1413,7 +1413,7 @@ pub fn bad_perfs() {
         .unwrap();
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap());
+    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap(), "defects4j");
     let [buggy_path, fixed_path] = src_dst.map(|x| {
         x.join(
             "JacksonDatabind/31/src_main_java_com_fasterxml_jackson_databind_util_TokenBuffer.java",
@@ -1469,7 +1469,7 @@ pub fn bad_perfs2() {
         .build()
         .unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Chart/4/source_org_jfree_chart_plot_XYPlot.java"));
     let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
@@ -1518,7 +1518,7 @@ pub fn bad_perfs3() {
     //JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java
     //JxPath/18/src_java_org_apache_commons_jxpath_ri_axes_AttributeContext.java
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Jsoup/91/src_main_java_org_jsoup_UncheckedIOException.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1533,7 +1533,7 @@ pub fn bad_perfs4() {
     //JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java
     //JxPath/18/src_java_org_apache_commons_jxpath_ri_axes_AttributeContext.java
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] = src_dst.map(|x| {
         x.join("JxPath/6/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationCompare.java")
     });
@@ -1544,7 +1544,7 @@ pub fn bad_perfs5() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] = src_dst.map(|x| {
         x.join("Mockito/5/src_org_mockito_internal_verification_VerificationOverTimeImpl.java")
     });
@@ -1555,7 +1555,7 @@ pub fn bad_perfs6() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("JacksonDatabind/25/src_main_java_com_fasterxml_jackson_databind_module_SimpleAbstractTypeResolver.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1565,7 +1565,7 @@ pub fn bad_perfs7() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Chart/19/source_org_jfree_chart_plot_CategoryPlot.simp.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1575,7 +1575,7 @@ pub fn bad_perfs8() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Math/76/src_main_java_org_apache_commons_math_linear_SingularValueDecompositionImpl.simp.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1585,7 +1585,7 @@ pub fn bad_perfs9() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1690,7 +1690,7 @@ fn test_all() {
     //     .build()
     //     .unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root);
+    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root, "defects4j");
     for buggy_project in iter_dirs(&root_buggy) {
         for buggy_case in iter_dirs(&buggy_project.path()) {
             let buggy_path = std::fs::read_dir(buggy_case.path())
@@ -1744,7 +1744,7 @@ fn test_all() {
 /// TODO add to CLI
 pub fn all() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root);
+    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root, "defects4j");
     let args: Vec<String> = env::args().collect();
     let (out_path, mut out_file) = if let Some(op) = args.get(1) {
         (Path::new(op).to_owned(), File::create(&args[1]).unwrap())
@@ -1786,7 +1786,7 @@ pub fn all() {
 /// TODO add to CLI
 pub fn once() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root);
+    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root, "defects4j");
     let args: Vec<String> = env::args().collect();
 
     let buggy_path = root_buggy.join(args.get(1).expect("path to buggy file"));

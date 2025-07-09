@@ -65,6 +65,12 @@ fn bottomup_group(c: &mut Criterion) {
         bench_lazy_hybrid::<100>(&mut group, &mut repositories, p);
         bench_lazy_hybrid::<200>(&mut group, &mut repositories, p);
         bench_lazy_hybrid::<400>(&mut group, &mut repositories, p);
+        bench_stable::<100>(&mut group, &mut repositories, p);
+        bench_stable::<200>(&mut group, &mut repositories, p);
+        bench_stable::<400>(&mut group, &mut repositories, p);
+        bench_lazy_stable::<100>(&mut group, &mut repositories, p);
+        bench_lazy_stable::<200>(&mut group, &mut repositories, p);
+        bench_lazy_stable::<400>(&mut group, &mut repositories, p);
     }
     group.finish();
     let mut group = c.benchmark_group("ChangDistiller_BottomUp_runtime");
@@ -163,9 +169,9 @@ fn bench_lazy_greedy<const MAX_SIZE: usize>(
                             mapper.mapping.dst_arena.as_mut(),
                         ),
                     );
-                    use gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+                    use gt::lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
                     let mapper_bottom_up =
-                        GreedyBottomUpMatcher::<_, _, _, M, M, MAX_SIZE>::match_it(mapper);
+                        LazyGreedyBottomUpMatcher::<_, _, _, M, M, MAX_SIZE>::match_it(mapper);
                     black_box(mapper_bottom_up);
                 },
                 BatchSize::SmallInput,
@@ -263,6 +269,72 @@ fn bench_lazy_hybrid<const MAX_SIZE: usize>(
                     use gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
                     let mapper_bottom_up =
                         LazyHybridBottomUpMatcher::<_, _, _, _, M, MAX_SIZE>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
+}
+
+fn bench_stable<const MAX_SIZE: usize>(
+    group: &mut criterion::BenchmarkGroup<'_, impl Measurement>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::gt;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new(format!("Stable_{}", MAX_SIZE), p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mapper| {
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.complete(hyperast))),
+                    );
+                    use gt::marriage_bottom_up_matcher::MarriageBottomUpMatcher;
+                    let mapper_bottom_up =
+                        MarriageBottomUpMatcher::<_, _, _, _, M, MAX_SIZE>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
+}
+
+fn bench_lazy_stable<const MAX_SIZE: usize>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::gt;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new(format!("LazyStable_{}", MAX_SIZE), p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mut mapper| {
+                    let mapper = Mapper::new(
+                        hyperast,
+                        mapper.mapping.mappings,
+                        (
+                            mapper.mapping.src_arena.as_mut(),
+                            mapper.mapping.dst_arena.as_mut(),
+                        ),
+                    );
+                    use gt::lazy_marriage_bottom_up_matcher::LazyMarriageBottomUpMatcher;
+                    let mapper_bottom_up =
+                        LazyMarriageBottomUpMatcher::<_, _, _, _, M, MAX_SIZE>::match_it(mapper);
                     black_box(mapper_bottom_up);
                 },
                 BatchSize::SmallInput,
