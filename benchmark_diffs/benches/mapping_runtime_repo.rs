@@ -27,7 +27,7 @@ struct Input {
     fetch: bool,
 }
 
-fn construction_group(c: &mut Criterion) {
+fn mapping_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("Mapping_runtime");
 
     let inputs: &[Input] = &[
@@ -182,7 +182,7 @@ fn construction_group(c: &mut Criterion) {
                     );
                     use gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
                     let mapper_bottom_up =
-                        HybridBottomUpMatcher::<_, _, _, _, 200>::match_it(mapper);
+                        HybridBottomUpMatcher::<_, _, _, _, M, 200>::match_it(mapper);
                     black_box(mapper_bottom_up);
                 });
             },
@@ -348,9 +348,27 @@ fn prep_commits(
     (src, dst)
 }
 
+#[cfg(target_os = "linux")]
 criterion_group!(
-    name = construction;
-    config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(10)).configure_from_args();
-    targets = construction_group
+    name = mapping;
+    config = Criterion::default()
+        .sample_size(10)
+        .measurement_time(std::time::Duration::from_secs(10))
+        .with_measurement(criterion_perf_events::Perf::new(
+            perfcnt::linux::PerfCounterBuilderLinux::from_hardware_event(
+                perfcnt::linux::HardwareEventType::Instructions
+            )
+        ))
+        .configure_from_args();
+    targets = mapping_group
 );
-criterion_main!(construction);
+#[cfg(not(target_os = "linux"))]
+criterion_group!(
+    name = mapping;
+    config = Criterion::default()
+        .sample_size(10)
+        .measurement_time(std::time::Duration::from_secs(10))
+        .configure_from_args();
+    targets = mapping_group
+);
+criterion_main!(mapping);

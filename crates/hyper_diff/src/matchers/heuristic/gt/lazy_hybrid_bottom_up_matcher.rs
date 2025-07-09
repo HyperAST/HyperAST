@@ -9,14 +9,9 @@ use crate::decompressed_tree_store::{
 use crate::matchers::Mapper;
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyperast::PrimInt;
-use hyperast::types::Childrn;
-use hyperast::types::Labeled;
-use hyperast::types::{HashKind, HyperAST, NodeId, NodeStore, Tree, WithHashs};
-use hyperast::types::{TypeStore, WithChildren};
+use hyperast::types::{HyperAST, NodeId, WithHashs};
 use num_traits::cast;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -58,7 +53,7 @@ impl<
         + ShallowDecompressedTreeStore<HAST, Ddst::IdD, M::Dst>
         + LazyDecompressedTreeStore<HAST, M::Dst>
         + LazyDecompressed<M::Dst>,
-    MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = <Ddst as LazyDecompressed<M::Dst>>::IdD> + Default,
+    MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
     const SIZE_THRESHOLD: usize,
@@ -110,7 +105,7 @@ where
     pub fn execute<'b>(&mut self) {
         for t in self.internal.src_arena.iter_df_post::<false>() {
             let a = self.internal.src_arena.decompress_to(&t);
-            if !self.internal.mappings.is_src(&t) && self.src_has_children(a) {
+            if !self.internal.mappings.is_src(&t) && self.internal.src_has_children_lazy(a) {
                 let candidates = self.internal.get_dst_candidates_lazily(&a);
                 let mut best = None;
                 let mut max_sim = -1f64;
@@ -170,177 +165,7 @@ where
         {
             self.last_chance_match_zs(src, dst);
         } else {
-            self.last_chance_match_histogram(src, dst);
-        }
-    }
-
-    /// Simple recovery algorithm (finds mappings between src and dst descendants)
-    fn last_chance_match_histogram(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
-        self.lcs_equal_matching(src, dst);
-        self.lcs_structure_matching(src, dst);
-        let src_is_root = self.internal.src_arena.parent(&src).is_none();
-        let dst_is_root = self.internal.dst_arena.parent(&dst).is_none();
-        if src_is_root && dst_is_root {
-            self.histogram_matching(src, dst);
-        } else if !(src_is_root || dst_is_root) {
-            if self.internal.hyperast.resolve_type(
-                &self
-                    .internal
-                    .src_arena
-                    .original(&self.internal.src_arena.parent(&src).unwrap()),
-            ) == self.internal.hyperast.resolve_type(
-                &self
-                    .internal
-                    .dst_arena
-                    .original(&self.internal.dst_arena.parent(&dst).unwrap()),
-            ) {
-                self.histogram_matching(src, dst)
-            }
-        }
-    }
-
-    /// Matches all strictly isomorphic nodes in the descendants of src and dst (step 1 of simple recovery)
-    fn lcs_equal_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
-        self.lcs_matching(src, dst, move |s, src, dst| s.isomorphic::<false>(src, dst))
-    }
-
-    /// Matches all structurally isomorphic nodes in the descendants of src and dst (step 2 of simple recovery)
-    fn lcs_structure_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
-        self.lcs_matching(src, dst, move |s, src, dst| s.isomorphic::<true>(src, dst))
-    }
-
-    fn lcs_matching<F: Fn(&Self, Dsrc::IdD, Ddst::IdD) -> bool>(
-        &mut self,
-        src: Dsrc::IdD,
-        dst: Ddst::IdD,
-        cmp: F,
-    ) {
-        let src_children = &mut Vec::new();
-        for c in self.internal.src_arena.decompress_children(&src) {
-            if !self.internal.mappings.is_src(c.shallow()) {
-                src_children.push(c);
-            }
-        }
-        let dst_children = &mut Vec::new();
-        for c in self.internal.dst_arena.decompress_children(&dst) {
-            if !self.internal.mappings.is_dst(c.shallow()) {
-                dst_children.push(c);
-            }
-        }
-
-        let lcs =
-            longest_common_subsequence::<_, _, usize, _>(src_children, dst_children, |src, dst| {
-                cmp(self, *src, *dst)
-            });
-        for x in lcs {
-            let t1 = src_children.get(x.0).unwrap();
-            let t2 = dst_children.get(x.1).unwrap();
-            if self.internal.are_srcs_unmapped_lazy(&t1)
-                && self.internal.are_dsts_unmapped_lazy(&t2)
-            {
-                self.internal.add_mapping_recursively_lazy(&t1, &t2);
-            }
-        }
-    }
-
-    /// Matches all pairs of nodes whose types appear only once in src and dst (step 3 of simple recovery)
-    fn histogram_matching(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Dsrc::IdD>> =
-            HashMap::new();
-        for c in self.internal.src_arena.decompress_children(&src) {
-            if self.internal.mappings.is_src(c.shallow()) {
-                continue;
-            }
-            let t = &(self.internal.hyperast).resolve_type(&self.internal.src_arena.original(&c));
-            if !src_histogram.contains_key(t) {
-                src_histogram.insert(*t, vec![]);
-            }
-            src_histogram.get_mut(t).unwrap().push(c);
-        }
-
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<Ddst::IdD>> =
-            HashMap::new();
-        for c in self.internal.dst_arena.decompress_children(&dst) {
-            if self.internal.mappings.is_dst(c.shallow()) {
-                continue;
-            }
-            let t = &(self.internal.hyperast).resolve_type(&self.internal.dst_arena.original(&c));
-            if !dst_histogram.contains_key(t) {
-                dst_histogram.insert(*t, vec![]);
-            }
-            dst_histogram.get_mut(t).unwrap().push(c);
-        }
-        for t in src_histogram.keys() {
-            if dst_histogram.contains_key(t)
-                && src_histogram[t].len() == 1
-                && dst_histogram[t].len() == 1
-            {
-                let t1 = src_histogram[t][0];
-                let t2 = dst_histogram[t][0];
-                self.internal.mappings.link(*t1.shallow(), *t2.shallow());
-                self.last_chance_match_histogram(t1, t2);
-            }
-        }
-    }
-
-    /// Checks if src and dst are (structurally) isomorphic
-    fn isomorphic<const STRUCTURAL: bool>(&self, src: Dsrc::IdD, dst: Ddst::IdD) -> bool {
-        let src = self.internal.src_arena.original(&src);
-        let dst = self.internal.dst_arena.original(&dst);
-
-        self.isomorphic_aux::<true, STRUCTURAL>(&src, &dst)
-    }
-
-    fn isomorphic_aux<const USE_HASH: bool, const STRUCTURAL: bool>(
-        &self,
-        src: &HAST::IdN,
-        dst: &HAST::IdN,
-    ) -> bool {
-        if src == dst {
-            return true;
-        }
-
-        let _src = self.internal.hyperast.node_store().resolve(src);
-        let _dst = self.internal.hyperast.node_store().resolve(dst);
-        if USE_HASH {
-            let src_hash = WithHashs::hash(&_src, &HashKind::label());
-            let dst_hash = WithHashs::hash(&_dst, &HashKind::label());
-            if src_hash != dst_hash {
-                return false;
-            }
-        }
-
-        let src_type = self.internal.hyperast.resolve_type(&src);
-        let dst_type = self.internal.hyperast.resolve_type(&dst);
-        if src_type != dst_type {
-            return false;
-        }
-
-        if !STRUCTURAL {
-            let src_label = _src.try_get_label();
-            let dst_label = _dst.try_get_label();
-            if src_label != dst_label {
-                return false;
-            }
-        }
-
-        let src_children: Option<Vec<_>> = _src.children().map(|x| x.iter_children().collect());
-        let dst_children: Option<Vec<_>> = _dst.children().map(|x| x.iter_children().collect());
-        match (src_children, dst_children) {
-            (None, None) => true,
-            (Some(src_c), Some(dst_c)) => {
-                if src_c.len() != dst_c.len() {
-                    false
-                } else {
-                    for (src, dst) in src_c.iter().zip(dst_c.iter()) {
-                        if !self.isomorphic_aux::<false, STRUCTURAL>(src, dst) {
-                            return false;
-                        }
-                    }
-                    true
-                }
-            }
-            _ => false,
+            self.internal.last_chance_match_histogram_lazy(src, dst);
         }
     }
 
@@ -383,13 +208,5 @@ where
                 }
             }
         }
-    }
-
-    fn src_has_children(&mut self, src: Dsrc::IdD) -> bool {
-        self.internal
-            .hyperast
-            .node_store()
-            .resolve(&self.internal.src_arena.original(&src))
-            .has_children()
     }
 }

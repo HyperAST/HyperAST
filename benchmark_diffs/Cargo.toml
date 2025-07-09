@@ -41,7 +41,6 @@ const-chunks = "0.3.0"
 jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
 jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.5.4" }
 
-# [build-dependencies]
 
 [dev-dependencies]
 hyperast_gen_ts_java = { workspace = true }
@@ -54,6 +53,8 @@ criterion = { git = "https://github.com/quentinLeDilavrec/criterion.rs", rev = "
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 iai-callgrind = "0.14.0"
+criterion-perf-events = { version = "=0.4.0" }
+perfcnt = "0.8.0"
 
 # [[bin]]
 # name = "window_combination"

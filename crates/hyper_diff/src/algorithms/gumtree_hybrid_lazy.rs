@@ -1,19 +1,14 @@
 use super::{DiffResult, PreparedMappingDurations};
 use super::{MappingMemoryUsages, get_allocated_memory, tr};
+use crate::actions::script_generator2::{ScriptGenerator, SimpleAction};
 use crate::algorithms::MappingDurations;
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use crate::decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder};
 use crate::matchers::heuristic::gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
-use crate::{
-    actions::script_generator2::{ScriptGenerator, SimpleAction},
-    decompressed_tree_store::{
-        CompletePostOrder, bfs_wrapper::SimpleBfsMapper, lazy_post_order::LazyPostOrder,
-    },
-    matchers::{
-        Decompressible, Mapper,
-        heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-    },
-    tree::tree_path::CompressedTreePath,
-};
+use crate::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
+use crate::matchers::{Decompressible, Mapper};
+use crate::tree::tree_path::CompressedTreePath;
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::time::Duration;
 use std::{fmt::Debug, time::Instant};
@@ -92,7 +87,7 @@ where
         _,
         _,
         _,
-        _,
+        M,
         M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,

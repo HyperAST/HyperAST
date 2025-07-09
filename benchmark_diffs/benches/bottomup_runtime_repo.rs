@@ -22,7 +22,7 @@ struct Input {
     fetch: bool,
 }
 
-fn construction_group(c: &mut Criterion) {
+fn bottomup_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("Gumtree_BottomUp_runtime");
 
     let inputs: &[Input] = &[
@@ -57,6 +57,8 @@ fn construction_group(c: &mut Criterion) {
         bench_lazy_greedy::<100>(&mut group, &mut repositories, p);
         bench_lazy_greedy::<200>(&mut group, &mut repositories, p);
         bench_lazy_greedy::<400>(&mut group, &mut repositories, p);
+        bench_simple(&mut group, &mut repositories, p);
+        bench_lazy_simple(&mut group, &mut repositories, p);
         bench_hybrid::<100>(&mut group, &mut repositories, p);
         bench_hybrid::<200>(&mut group, &mut repositories, p);
         bench_hybrid::<400>(&mut group, &mut repositories, p);
@@ -76,7 +78,6 @@ fn construction_group(c: &mut Criterion) {
             BenchmarkId::new("Baseline", p.repo.name()),
             |b, (repositories, (owned, mappings))| {
                 let hyperast = &repositories.processor.main_stores;
-                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
                 b.iter_batched(
                     || {
                         hyper_diff::matchers::Mapper::prep(
@@ -107,7 +108,6 @@ fn construction_group(c: &mut Criterion) {
             BenchmarkId::new("Lazy", p.repo.name()),
             |b, (repositories, (owned, mappings))| {
                 let hyperast = &repositories.processor.main_stores;
-                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
                 b.iter_batched(
                     || {
                         hyper_diff::matchers::Mapper::prep(
@@ -152,7 +152,6 @@ fn bench_lazy_greedy<const MAX_SIZE: usize>(
         BenchmarkId::new(format!("LazyGreedy_{}", MAX_SIZE), p.repo.name()),
         |b, (repositories, (owned, mappings))| {
             let hyperast = &repositories.processor.main_stores;
-            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
             b.iter_batched(
                 || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
                 |mut mapper| {
@@ -188,7 +187,6 @@ fn bench_greedy<const MAX_SIZE: usize>(
         BenchmarkId::new(format!("Greedy_{}", MAX_SIZE), p.repo.name()),
         |b, (repositories, (owned, mappings))| {
             let hyperast = &repositories.processor.main_stores;
-            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
             b.iter_batched(
                 || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
                 |mapper| {
@@ -220,7 +218,6 @@ fn bench_hybrid<const MAX_SIZE: usize>(
         BenchmarkId::new(format!("Hybrid_{}", MAX_SIZE), p.repo.name()),
         |b, (repositories, (owned, mappings))| {
             let hyperast = &repositories.processor.main_stores;
-            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
             b.iter_batched(
                 || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
                 |mapper| {
@@ -230,7 +227,7 @@ fn bench_hybrid<const MAX_SIZE: usize>(
                     );
                     use gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
                     let mapper_bottom_up =
-                        HybridBottomUpMatcher::<_, _, _, _, MAX_SIZE>::match_it(mapper);
+                        HybridBottomUpMatcher::<_, _, _, _, M, MAX_SIZE>::match_it(mapper);
                     black_box(mapper_bottom_up);
                 },
                 BatchSize::SmallInput,
@@ -252,7 +249,6 @@ fn bench_lazy_hybrid<const MAX_SIZE: usize>(
         BenchmarkId::new(format!("LazyHybrid_{}", MAX_SIZE), p.repo.name()),
         |b, (repositories, (owned, mappings))| {
             let hyperast = &repositories.processor.main_stores;
-            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
             b.iter_batched(
                 || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
                 |mut mapper| {
@@ -266,7 +262,72 @@ fn bench_lazy_hybrid<const MAX_SIZE: usize>(
                     );
                     use gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
                     let mapper_bottom_up =
-                        LazyHybridBottomUpMatcher::<_, _, _, M, M, MAX_SIZE>::match_it(mapper);
+                        LazyHybridBottomUpMatcher::<_, _, _, _, M, MAX_SIZE>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
+}
+
+fn bench_simple(
+    group: &mut criterion::BenchmarkGroup<'_, impl Measurement>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::gt;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new("Simple_{}", p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mapper| {
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.complete(hyperast))),
+                    );
+                    use gt::simple_bottom_up_matcher3::SimpleBottomUpMatcher;
+                    let mapper_bottom_up = SimpleBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
+}
+
+fn bench_lazy_simple(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::gt;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new("LazySimple", p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mut mapper| {
+                    let mapper = Mapper::new(
+                        hyperast,
+                        mapper.mapping.mappings,
+                        (
+                            mapper.mapping.src_arena.as_mut(),
+                            mapper.mapping.dst_arena.as_mut(),
+                        ),
+                    );
+                    use gt::lazy_simple_bottom_up_matcher::LazySimpleBottomUpMatcher;
+                    let mapper_bottom_up =
+                        LazySimpleBottomUpMatcher::<_, _, _, M>::match_it(mapper);
                     black_box(mapper_bottom_up);
                 },
                 BatchSize::SmallInput,
@@ -295,6 +356,7 @@ fn prep_bench_gt_subtree<Mea: Measurement>(
         repositories,
         |group, repositories| {
             let (src, dst) = prep_commits(p, repositories);
+            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
             let hyperast = &repositories.processor.main_stores;
             group.throughput(Throughput::Elements(
                 (hyperast.node_store().resolve(src).size()
@@ -380,9 +442,27 @@ fn prep_commits(
     (src, dst)
 }
 
+#[cfg(target_os = "linux")]
 criterion_group!(
-    name = construction;
-    config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(10)).configure_from_args();
-    targets = construction_group
+    name = bottomup;
+    config = Criterion::default()
+        .sample_size(10)
+        .measurement_time(std::time::Duration::from_secs(10))
+        .with_measurement(criterion_perf_events::Perf::new(
+            perfcnt::linux::PerfCounterBuilderLinux::from_hardware_event(
+                perfcnt::linux::HardwareEventType::Instructions
+            )
+        ))
+        .configure_from_args();
+    targets = bottomup_group
 );
-criterion_main!(construction);
+#[cfg(not(target_os = "linux"))]
+criterion_group!(
+    name = bottomup;
+    config = Criterion::default()
+        .sample_size(10)
+        .measurement_time(std::time::Duration::from_secs(10))
+        .configure_from_args();
+    targets = bottomup_group
+);
+criterion_main!(bottomup);

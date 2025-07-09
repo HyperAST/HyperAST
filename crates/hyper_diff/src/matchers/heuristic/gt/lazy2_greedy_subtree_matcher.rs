@@ -94,6 +94,7 @@ impl<
 > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::IdN: Clone,
     HAST::Label: Clone + Eq,
     Dsrc::IdD: PrimInt + Hash,
@@ -396,7 +397,7 @@ where
                     let is_iso = {
                         let src = src_trees.arena.original(&src);
                         let dst = dst_trees.arena.original(&dst);
-                        Self::isomorphic_aux::<true>(hyperast, &src, &dst)
+                        super::isomorphic::<_, true, false>(hyperast, &src, &dst)
                     };
                     if is_iso {
                         multi_mappings.link(src, dst);

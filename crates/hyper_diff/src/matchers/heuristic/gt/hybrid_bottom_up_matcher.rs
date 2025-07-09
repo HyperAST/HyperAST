@@ -20,11 +20,13 @@ pub struct HybridBottomUpMatcher<
     Ddst,
     HAST,
     M: MonoMappingStore,
+    MZs: MonoMappingStore = M,
     const SIZE_THRESHOLD: usize = 100,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     internal: Mapper<HAST, Dsrc, Ddst, M>,
+    _phantom: std::marker::PhantomData<*const MZs>,
 }
 
 impl<
@@ -45,10 +47,21 @@ impl<
         + POBorrowSlice<HAST, M::Dst>,
     HAST: HyperAST + Copy,
     M: MonoMappingStore + Default,
+    MZs: MonoMappingStore<Src = M::Src, Dst = M::Dst> + Default,
     const SIZE_THRESHOLD: usize,
     const SIM_THRESHOLD_NUM: u64,
     const SIM_THRESHOLD_DEN: u64,
-> HybridBottomUpMatcher<Dsrc, Ddst, HAST, M, SIZE_THRESHOLD, SIM_THRESHOLD_NUM, SIM_THRESHOLD_DEN>
+>
+    HybridBottomUpMatcher<
+        Dsrc,
+        Ddst,
+        HAST,
+        M,
+        MZs,
+        SIZE_THRESHOLD,
+        SIM_THRESHOLD_NUM,
+        SIM_THRESHOLD_DEN,
+    >
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs,
     M::Src: PrimInt,
@@ -60,7 +73,10 @@ where
     pub fn match_it(
         mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M> {
-        let mut matcher = Self { internal: mapping };
+        let mut matcher = Self {
+            internal: mapping,
+            _phantom: std::marker::PhantomData,
+        };
         matcher.internal.mapping.mappings.topit(
             matcher.internal.mapping.src_arena.len(),
             matcher.internal.mapping.dst_arena.len(),
@@ -144,7 +160,7 @@ where
         let src_offset: M::Src = *src - src_arena.root();
         let dst_offset: M::Dst = self.internal.dst_arena.first_descendant(&dst);
 
-        let mappings: M = ZsMatcher::match_with(self.internal.hyperast, src_arena, dst_arena);
+        let mappings: MZs = ZsMatcher::match_with(self.internal.hyperast, src_arena, dst_arena);
 
         for (i, t) in mappings.iter() {
             //remapping

@@ -24,3 +24,5 @@ pub mod hungarian_tests;
 pub mod lazy_decompression_tests;
 pub mod pair_tests;
 pub mod simple_examples;
+pub mod simple_matcher_test;
+pub mod simple_matcher_examples;

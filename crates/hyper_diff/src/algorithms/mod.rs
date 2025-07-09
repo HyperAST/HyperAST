@@ -11,6 +11,8 @@ pub mod gumtree_hybrid_lazy;
 pub mod gumtree_hybrid_partial_lazy;
 pub mod gumtree_lazy;
 pub mod gumtree_partial_lazy;
+pub mod gumtree_simple;
+pub mod gumtree_simple_lazy;
 
 #[derive(Debug, Clone)]
 pub struct MappingDurations<const N: usize, D>(pub [D; N]);

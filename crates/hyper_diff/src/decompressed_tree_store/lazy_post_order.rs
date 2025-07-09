@@ -380,6 +380,12 @@ where
 
 impl<IdN, IdD: PrimInt> LazyPostOrder<IdN, IdD> {
     pub(crate) fn _size(&self, i: &IdD) -> IdD {
+        debug_assert!(
+            i.to_usize().unwrap() < self.llds.len(),
+            "Accessing _size for index {:?} but llds.len() = {}",
+            i,
+            self.llds.len()
+        );
         *i - self.llds[(*i).to_usize().unwrap()] + one()
     }
 
@@ -690,7 +696,9 @@ where
         while i > 0 {
             i -= 1;
             let s = self._size(&c);
-            c = c - s;
+            c = c
+                .checked_sub(&s)
+                .expect("should have called decompress_children before");
             r[i] = c;
         }
         assert_eq!(
