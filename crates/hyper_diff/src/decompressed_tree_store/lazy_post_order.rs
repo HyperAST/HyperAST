@@ -567,7 +567,6 @@ where
                     "i is not initialized"
                 );
 
-                // self.decompress_descendants(store, &i);
                 self.decompress_descendants_continuous(&i);
                 i = self.lld(&i);
             }
@@ -816,6 +815,14 @@ where
         );
         r
     }
+
+    // fn decompress_descendants(&mut self, x: &IdD) {
+    //     let mut q = vec![x.clone()];
+    //     while let Some(x) = q.pop() {
+    //         assert!(self.id_parent[x.to_usize().unwrap()] != zero());
+    //         q.extend(self.decompress_children(&x));
+    //     }
+    // }
 
     fn decompress_to(&mut self, x: &IdD) -> Self::IdD {
         let mut p = *x;

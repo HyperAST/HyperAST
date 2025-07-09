@@ -1,17 +1,13 @@
+use crate::types::{
+    HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
+    WithChildren, WithStats,
+};
+use crate::{store::nodes::compo, types};
+use num::{NumCast, PrimInt, ToPrimitive, cast};
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display},
     marker::PhantomData,
-};
-
-use num::{NumCast, PrimInt, ToPrimitive, cast};
-
-use crate::{
-    store::nodes::compo,
-    types::{
-        self, HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored,
-        Typed, WithChildren, WithStats,
-    },
 };
 
 pub struct SimpleTree<K, DD = ()> {
@@ -643,8 +639,8 @@ pub struct TStore;
 pub struct Ty(u8);
 
 impl Display for Ty {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -662,7 +658,7 @@ impl HyperType for Ty {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
@@ -673,11 +669,14 @@ impl HyperType for Ty {
         todo!()
     }
 
-    fn generic_eq(&self, _other: &dyn HyperType) -> bool
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized,
     {
-        todo!()
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other_concrete) => self == other_concrete,
+            _ => false,
+        }
     }
 
     fn is_file(&self) -> bool {

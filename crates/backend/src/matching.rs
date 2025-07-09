@@ -12,34 +12,6 @@ use hyper_diff::matchers::mapping_store::MappingStore;
 use hyper_diff::matchers::mapping_store::VecStore;
 use hyper_diff::matchers::{Decompressible, Mapping};
 
-// pub trait AAA {
-//     fn aaa<B, A, R, F: Fn(&Self, &mut B, &mut A) -> R>(&self, f: F, b: &mut B, a: &mut A) -> R;
-// }
-
-// impl<'store, HAST> AAA for HAST
-// where
-//     HAST: HyperAST,
-// {
-//     fn aaa<B, A, R, F: Fn(&Self, &mut B, &mut A) -> R>(&self, f: F, b: &mut B, a: &mut A) -> R {
-//         f(self, b, a)
-//     }
-// }
-
-// fn t<'store, HAST: HyperAST + Copy>(
-//     hyperast: &'store HAST,
-//     src_arena: &mut LazyPostOrder<HAST::IdN, u32>,
-//     dst_arena: &mut LazyPostOrder<HAST::IdN, u32>,
-// ) -> DefaultMultiMappingStore<u32>
-// where
-//     HAST::IdN: Clone + Debug + Eq,
-//     HAST::Label: Clone + Copy + Eq + Debug,
-//     <HAST::T as types::Typed>::Type: Debug,
-//     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-//     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: 'store + types::WithHashs + types::WithStats,
-// {
-//     hyperast.aaa(top_down, src_arena, dst_arena)
-// }
-
 pub fn top_down<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src_arena: &mut LazyPostOrder<HAST::IdN, u32>,

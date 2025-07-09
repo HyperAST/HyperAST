@@ -105,6 +105,7 @@ impl<HAST: Copy, D> Decompressible<HAST, D> {
     }
 }
 
+#[derive(Clone)]
 pub struct Mapper<HAST, Dsrc, Ddst, M> {
     /// the hyperAST to whom mappings are coming
     pub hyperast: HAST,
@@ -197,6 +198,7 @@ impl<HAST, Dsrc, Ddst, M> DerefMut for Mapper<HAST, Dsrc, Ddst, M> {
     }
 }
 
+#[derive(Clone)]
 pub struct Mapping<Dsrc, Ddst, M> {
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,

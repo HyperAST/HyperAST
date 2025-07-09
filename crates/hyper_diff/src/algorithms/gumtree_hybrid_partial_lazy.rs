@@ -1,21 +1,14 @@
 use super::{DiffResult, PreparedMappingDurations};
 use super::{MappingMemoryUsages, get_allocated_memory, tr};
+use crate::actions::script_generator2::{ScriptGenerator, SimpleAction};
 use crate::algorithms::MappingDurations;
-use crate::{
-    actions::script_generator2::{ScriptGenerator, SimpleAction},
-    decompressed_tree_store::{
-        CompletePostOrder, bfs_wrapper::SimpleBfsMapper, lazy_post_order::LazyPostOrder,
-    },
-    matchers::{
-        Decompressible, Mapper,
-        heuristic::gt::{
-            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-            lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-        },
-        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-    },
-    tree::tree_path::CompressedTreePath,
-};
+use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+use crate::decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper};
+use crate::matchers::heuristic::gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
+use crate::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
+use crate::matchers::{Decompressible, Mapper};
+use crate::tree::tree_path::CompressedTreePath;
 use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
 use std::time::Duration;
 use std::{fmt::Debug, time::Instant};
@@ -27,7 +20,13 @@ type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::Id
 type M = VecStore<u32>;
 type MM = DefaultMultiMappingStore<u32>;
 
-pub fn diff<HAST: HyperAST + Copy>(
+pub fn diff_with_hyperparameters<
+    HAST: HyperAST + Copy,
+    const MIN_HEIGHT: usize,
+    const SIZE_THRESHOLD: usize,
+    const SIM_THRESHOLD_NUM: u64,
+    const SIM_THRESHOLD_DEN: u64,
+>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
@@ -53,7 +52,7 @@ where
 
     let mem = get_allocated_memory();
     let now = Instant::now();
-    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M, MIN_HEIGHT>::match_it::<MM>(mapper);
     let subtree_matcher_t = now.elapsed().into();
     let subtree_mappings_s = mapper.mappings().len();
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
@@ -71,7 +70,15 @@ where
 
     let mem = get_allocated_memory();
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+    let mapper = HybridBottomUpMatcher::<
+        _,
+        _,
+        _,
+        _,
+        SIZE_THRESHOLD,
+        SIM_THRESHOLD_NUM,
+        SIM_THRESHOLD_DEN,
+    >::match_it(mapper);
     let bottomup_matcher_t = now.elapsed().into();
     let bottomup_mappings_s = mapper.mappings().len();
     let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);

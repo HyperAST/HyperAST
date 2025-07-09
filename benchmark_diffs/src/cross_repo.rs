@@ -1,4 +1,9 @@
-use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Duration,
+};
 
 use hyperast::{
     types::{LabelStore, WithStats},
@@ -200,17 +205,18 @@ pub fn windowed_commits_compare(
             }
 
             log::warn!("ed+mappings size: {}", memusage_linux() - mu);
-            let total_lazy_t: f64 = summarized_lazy.time();
+            let total_lazy_t: Duration = summarized_lazy.time();
             dbg!(&total_lazy_t);
 
             let gt_out_format = "COMPRESSED"; // JSON
+            let timeout = total_lazy_t.mul_f64(20.).as_secs_f64();
             let gt_out = other_tools::gumtree::subprocess(
                 &hyperast,
                 src_tr,
                 dst_tr,
                 "gumtree",
                 diff_algorithm,
-                (total_lazy_t * 20.).ceil().to_u64().unwrap(),
+                timeout.ceil().to_u64().unwrap(),
                 gt_out_format,
             );
             let res = if gt_out_format == "COMPRESSED" {
@@ -291,11 +297,11 @@ pub fn windowed_commits_compare(
                         gt_counts.mappings,
                         gt_counts.actions,
                         0.0,
-                        &gt_timings[0],
+                        &gt_timings[0].as_secs_f64(),
                         0.0,
-                        &gt_timings[1],
+                        &gt_timings[1].as_secs_f64(),
                         0.0,
-                        &gt_timings[2],
+                        &gt_timings[2].as_secs_f64(),
                     )
                     .unwrap();
                 } else {
@@ -369,27 +375,27 @@ pub fn windowed_commits_compare(
                         gt_counts.actions,
                         valid.missing_mappings,
                         valid.additional_mappings,
-                        &gt_timings[0],
-                        &gt_timings[1],
-                        &gt_timings[2],
-                        summarized_lazy.mapping_durations.preparation[0],
-                        summarized_lazy.mapping_durations.mappings.0[0],
-                        summarized_lazy.mapping_durations.preparation[1],
-                        summarized_lazy.mapping_durations.mappings.0[1],
-                        summarized_lazy.gen_t,
-                        summarized_lazy.prepare_gen_t,
-                        not_lazy.mapping_durations.preparation[0],
-                        not_lazy.mapping_durations.mappings.0[0],
-                        not_lazy.mapping_durations.preparation[1],
-                        not_lazy.mapping_durations.mappings.0[1],
-                        not_lazy.prepare_gen_t,
-                        not_lazy.gen_t,
-                        partial_lazy.mapping_durations.preparation[0],
-                        partial_lazy.mapping_durations.mappings.0[0],
-                        partial_lazy.mapping_durations.preparation[1],
-                        partial_lazy.mapping_durations.mappings.0[1],
-                        partial_lazy.prepare_gen_t,
-                        partial_lazy.gen_t,
+                        &gt_timings[0].as_secs_f64(),
+                        &gt_timings[1].as_secs_f64(),
+                        &gt_timings[2].as_secs_f64(),
+                        summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
+                        summarized_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+                        summarized_lazy.mapping_durations.preparation[1].as_secs_f64(),
+                        summarized_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+                        summarized_lazy.gen_t.as_secs_f64(),
+                        summarized_lazy.prepare_gen_t.as_secs_f64(),
+                        not_lazy.mapping_durations.preparation[0].as_secs_f64(),
+                        not_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+                        not_lazy.mapping_durations.preparation[1].as_secs_f64(),
+                        not_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+                        not_lazy.prepare_gen_t.as_secs_f64(),
+                        not_lazy.gen_t.as_secs_f64(),
+                        partial_lazy.mapping_durations.preparation[0].as_secs_f64(),
+                        partial_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
+                        partial_lazy.mapping_durations.preparation[1].as_secs_f64(),
+                        partial_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
+                        partial_lazy.prepare_gen_t.as_secs_f64(),
+                        partial_lazy.gen_t.as_secs_f64(),
                     );
                 }
             }

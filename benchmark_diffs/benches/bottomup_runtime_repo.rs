@@ -57,6 +57,12 @@ fn construction_group(c: &mut Criterion) {
         bench_lazy_greedy::<100>(&mut group, &mut repositories, p);
         bench_lazy_greedy::<200>(&mut group, &mut repositories, p);
         bench_lazy_greedy::<400>(&mut group, &mut repositories, p);
+        bench_hybrid::<100>(&mut group, &mut repositories, p);
+        bench_hybrid::<200>(&mut group, &mut repositories, p);
+        bench_hybrid::<400>(&mut group, &mut repositories, p);
+        bench_lazy_hybrid::<100>(&mut group, &mut repositories, p);
+        bench_lazy_hybrid::<200>(&mut group, &mut repositories, p);
+        bench_lazy_hybrid::<400>(&mut group, &mut repositories, p);
     }
     group.finish();
     let mut group = c.benchmark_group("ChangDistiller_BottomUp_runtime");
@@ -201,6 +207,74 @@ fn bench_greedy<const MAX_SIZE: usize>(
     );
 }
 
+fn bench_hybrid<const MAX_SIZE: usize>(
+    group: &mut criterion::BenchmarkGroup<'_, impl Measurement>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::gt;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new(format!("Hybrid_{}", MAX_SIZE), p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mapper| {
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.complete(hyperast))),
+                    );
+                    use gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
+                    let mapper_bottom_up =
+                        HybridBottomUpMatcher::<_, _, _, _, MAX_SIZE>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
+}
+
+fn bench_lazy_hybrid<const MAX_SIZE: usize>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::gt;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new(format!("LazyHybrid_{}", MAX_SIZE), p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mut mapper| {
+                    let mapper = Mapper::new(
+                        hyperast,
+                        mapper.mapping.mappings,
+                        (
+                            mapper.mapping.src_arena.as_mut(),
+                            mapper.mapping.dst_arena.as_mut(),
+                        ),
+                    );
+                    use gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
+                    let mapper_bottom_up =
+                        LazyHybridBottomUpMatcher::<_, _, _, M, M, MAX_SIZE>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
+}
+
 type OwnedLazyMapping = (
     (
         LazyPostOrder<NodeIdentifier, u32>,
@@ -279,7 +353,14 @@ fn prep_commits(
         .get_config((&p.repo).clone())
         .ok_or_else(|| "missing config for repository".to_string())
         .unwrap();
-    let repository = if p.fetch {
+    let repository = if p.fetch
+        && repositories
+            .get_commit(
+                &repo.config,
+                &hyperast_vcs_git::git::Oid::from_str(p.commit).unwrap(),
+            )
+            .is_none()
+    {
         repo.fetch()
     } else {
         repo.nofetch()

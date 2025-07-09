@@ -139,7 +139,7 @@ fn construction_group(c: &mut Criterion) {
             &mut group,
             &mut repositories,
             &p,
-            BenchmarkId::new("LazyGumtree", p.repo.name()),
+            BenchmarkId::new("LazyGreedyGumtree", p.repo.name()),
             |b, (repositories, (src, dst))| {
                 // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
                 b.iter(|| {
@@ -154,6 +154,58 @@ fn construction_group(c: &mut Criterion) {
                     use gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
                     let mapper_bottom_up =
                         GreedyBottomUpMatcher::<_, _, _, M, M, 200>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("PartialLazyHybridGumtree", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+
+                    use gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+                    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+                    let mappings = mapper.mapping.mappings;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::prep(hyperast, mappings, mapper_owned);
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.decomp.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.decomp.complete(hyperast))),
+                    );
+                    use gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
+                    let mapper_bottom_up =
+                        HybridBottomUpMatcher::<_, _, _, _, 200>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("LazyHybridGumtree", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+
+                    use gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+                    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+
+                    use gt::lazy_hybrid_bottom_up_matcher::LazyHybridBottomUpMatcher;
+                    let mapper_bottom_up =
+                        LazyHybridBottomUpMatcher::<_, _, _, M, M, 200>::match_it(mapper);
                     black_box(mapper_bottom_up);
                 });
             },

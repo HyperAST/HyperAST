@@ -30,30 +30,6 @@ pub struct GreedyBottomUpMatcher<
 /// Enable using a slice instead of recreating a ZsTree for each call to ZsMatch, see last_chance_match
 const SLICE: bool = true;
 
-impl<
-    Dsrc,
-    Ddst,
-    HAST: HyperAST,
-    M: MonoMappingStore,
-    const SIZE_THRESHOLD: usize,  // = 1000,
-    const SIM_THRESHOLD_NUM: u64, // = 1,
-    const SIM_THRESHOLD_DEN: u64, // = 2,
-> Into<Mapper<HAST, Dsrc, Ddst, M>>
-    for GreedyBottomUpMatcher<
-        Dsrc,
-        Ddst,
-        HAST,
-        M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    >
-{
-    fn into(self) -> Mapper<HAST, Dsrc, Ddst, M> {
-        self.internal
-    }
-}
-
 /// TODO PostOrder might not be necessary
 impl<
     'a,

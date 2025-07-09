@@ -41,7 +41,6 @@ criterion = { version = "0.6.0", features = [
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    # "real_blackbox", # need nightly
 ] }
 
 [lib]
