@@ -1,30 +1,24 @@
 use super::tr;
-use super::{DiffResult, PreparedMappingDurations};
-use super::{MappingDurations, MappingMemoryUsages, get_allocated_memory};
-use crate::actions::script_generator2::{ScriptGenerator, SimpleAction};
-use crate::decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper};
-use crate::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
-use crate::matchers::heuristic::xy_bottom_up_matcher::XYBottomUpMatcher;
-use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
-use crate::matchers::{Decompressible, Mapper};
-use crate::tree::tree_path::CompressedTreePath;
-use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
-use std::time::Duration;
+use super::{DiffResult, MappingDurations, PreparedMappingDurations};
+use super::{MappingMemoryUsages, get_allocated_memory};
 use std::{fmt::Debug, time::Instant};
 
-#[allow(type_alias_bounds)]
-type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+use super::CDS;
+use super::DiffRes;
+use crate::actions::script_generator2::ScriptGenerator;
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use crate::matchers::Mapper;
+use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
+use hyperast::types::{self, HyperAST, NodeId};
+
+use crate::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
+use crate::matchers::heuristic::xy_bottom_up_matcher::XYBottomUpMatcher;
 
 pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
-) -> DiffResult<
-    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
-    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
-    PreparedMappingDurations<2, Duration>,
-    Duration,
->
+) -> DiffRes<HAST>
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -47,7 +41,7 @@ where
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
-    let bottomup_prepare_t = Duration::ZERO.into(); // nothing to prepare
+    let bottomup_prepare_t = std::time::Duration::ZERO; // nothing to prepare
 
     let mem = get_allocated_memory();
     let now = Instant::now();

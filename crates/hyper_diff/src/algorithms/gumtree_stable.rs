@@ -1,37 +1,26 @@
-use super::{DiffResult, PreparedMappingDurations};
-use super::{MappingDurations, MappingMemoryUsages};
-use crate::algorithms::tr;
-use crate::{
-    actions::script_generator2::{ScriptGenerator, SimpleAction},
-    decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper},
-    matchers::{
-        Decompressible, Mapper,
-        heuristic::gt::{
-            greedy_subtree_matcher::GreedySubtreeMatcher,
-            marriage_bottom_up_matcher::MarriageBottomUpMatcher,
-        },
-        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-    },
-    tree::tree_path::CompressedTreePath,
-};
-use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
-use std::time::Duration;
+use super::tr;
+use super::{DiffResult, MappingDurations, PreparedMappingDurations};
+use super::{MappingMemoryUsages, get_allocated_memory};
 use std::{fmt::Debug, time::Instant};
 
-#[allow(type_alias_bounds)]
-pub type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+use super::CDS;
+use super::DiffRes;
+use crate::actions::script_generator2::ScriptGenerator;
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use crate::matchers::Mapper;
+use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
+use hyperast::types::{self, HyperAST, NodeId};
+
+use crate::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
+use crate::matchers::heuristic::gt::marriage_bottom_up_matcher::MarriageBottomUpMatcher;
+
 type M = VecStore<u32>;
 
 pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
-) -> DiffResult<
-    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
-    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
-    PreparedMappingDurations<2, Duration>,
-    Duration,
->
+) -> DiffRes<HAST>
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -43,22 +32,32 @@ where
     let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
         hyperast.decompress_pair(src, dst).into();
     let subtree_prepare_t = now.elapsed();
+
+    let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper =
         GreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed();
     let subtree_mappings_s = mapper.mappings().len();
+    let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
+
+    let bottomup_prepare_t = std::time::Duration::ZERO; // nothing to prepare
+
+    let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = MarriageBottomUpMatcher::<_, _, _, _, M, 300>::match_it(mapper);
     let bottomup_matcher_t = now.elapsed();
     let bottomup_mappings_s = mapper.mappings().len();
+    let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(bottomup_matcher_t, bottomup_mappings_s);
     let mapping_durations = PreparedMappingDurations {
         mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
-        preparation: [subtree_prepare_t, Duration::ZERO],
+        preparation: [subtree_prepare_t, bottomup_prepare_t],
     };
-    let mapping_memory_usages = MappingMemoryUsages { memory: [0, 0] };
+    let mapping_memory_usages = MappingMemoryUsages {
+        memory: [subtree_matcher_m, bottomup_matcher_m],
+    };
     let now = Instant::now();
     let mapper = mapper.map(
         |x| x,

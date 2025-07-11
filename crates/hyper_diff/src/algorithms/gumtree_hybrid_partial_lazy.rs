@@ -1,22 +1,22 @@
-use super::{DiffResult, PreparedMappingDurations};
-use super::{MappingMemoryUsages, get_allocated_memory, tr};
-use crate::actions::script_generator2::{ScriptGenerator, SimpleAction};
-use crate::algorithms::MappingDurations;
-use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-use crate::decompressed_tree_store::{CompletePostOrder, bfs_wrapper::SimpleBfsMapper};
-use crate::matchers::heuristic::gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
-use crate::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
-use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
-use crate::matchers::{Decompressible, Mapper};
-use crate::tree::tree_path::CompressedTreePath;
-use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
-use std::time::Duration;
+use super::tr;
+use super::{DiffResult, MappingDurations, PreparedMappingDurations};
+use super::{MappingMemoryUsages, get_allocated_memory};
 use std::{fmt::Debug, time::Instant};
 
-#[allow(type_alias_bounds)]
-type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
-#[allow(type_alias_bounds)]
-type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+use super::CDS;
+use super::DiffRes;
+use crate::actions::script_generator2::ScriptGenerator;
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use crate::matchers::Mapper;
+use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
+use hyperast::types::{self, HyperAST, NodeId};
+
+// use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+use super::DS;
+
+use crate::matchers::heuristic::gt::hybrid_bottom_up_matcher::HybridBottomUpMatcher;
+use crate::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+
 type M = VecStore<u32>;
 type MM = DefaultMultiMappingStore<u32>;
 
@@ -30,12 +30,7 @@ pub fn diff_with_hyperparameters<
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
-) -> DiffResult<
-    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
-    Mapper<HAST, CDS<HAST>, CDS<HAST>, VecStore<u32>>,
-    PreparedMappingDurations<2, Duration>,
-    Duration,
->
+) -> DiffRes<HAST>
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::IdN: NodeId<IdN = HAST::IdN>,

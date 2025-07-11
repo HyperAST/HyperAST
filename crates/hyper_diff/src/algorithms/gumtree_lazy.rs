@@ -1,29 +1,22 @@
-use super::{DiffResult, PreparedMappingDurations};
-use super::{MappingMemoryUsages, get_allocated_memory, tr};
-use crate::algorithms::MappingDurations;
-use crate::{
-    actions::script_generator2::{ScriptGenerator, SimpleAction},
-    decompressed_tree_store::{
-        CompletePostOrder, bfs_wrapper::SimpleBfsMapper, lazy_post_order::LazyPostOrder,
-    },
-    matchers::{
-        Decompressible, Mapper,
-        heuristic::gt::{
-            lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher,
-            lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-        },
-        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
-    },
-    tree::tree_path::CompressedTreePath,
-};
-use hyperast::types::{self, HyperAST, HyperASTShared, NodeId};
-use std::time::Duration;
+use super::tr;
+use super::{DiffResult, MappingDurations, PreparedMappingDurations};
+use super::{MappingMemoryUsages, get_allocated_memory};
 use std::{fmt::Debug, time::Instant};
 
-#[allow(type_alias_bounds)]
-type DS<HAST: HyperASTShared> = Decompressible<HAST, LazyPostOrder<HAST::IdN, u32>>;
-#[allow(type_alias_bounds)]
-type CDS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
+use super::CDS;
+use super::DiffRes;
+use crate::actions::script_generator2::ScriptGenerator;
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use crate::matchers::Mapper;
+use crate::matchers::mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore};
+use hyperast::types::{self, HyperAST, NodeId};
+
+// use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+use super::DS;
+
+use crate::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
+use crate::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+
 type M = VecStore<u32>;
 type MM = DefaultMultiMappingStore<u32>;
 
@@ -31,12 +24,7 @@ pub fn diff<HAST: HyperAST + Copy>(
     hyperast: HAST,
     src: &HAST::IdN,
     dst: &HAST::IdN,
-) -> DiffResult<
-    SimpleAction<HAST::Label, CompressedTreePath<HAST::Idx>, HAST::IdN>,
-    Mapper<HAST, CDS<HAST>, CDS<HAST>, M>,
-    PreparedMappingDurations<2, Duration>,
-    Duration,
->
+) -> DiffRes<HAST>
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -44,13 +32,13 @@ where
     HAST::Idx: hyperast::PrimInt,
     for<'t> types::LendT<'t, HAST>: types::WithHashs + types::WithStats,
 {
+    let mem = get_allocated_memory();
     let now = Instant::now();
     let mut mapper_owned: (DS<HAST>, DS<HAST>) = hyperast.decompress_pair(src, dst).1;
     let mapper = Mapper::with_mut_decompressible(&mut mapper_owned);
     let subtree_prepare_t = now.elapsed().into();
     tr!(subtree_prepare_t);
 
-    let mem = get_allocated_memory();
     let now = Instant::now();
     let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
     let subtree_matcher_t = now.elapsed().into();
@@ -58,7 +46,7 @@ where
     let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
     tr!(subtree_matcher_t, subtree_mappings_s);
 
-    let bottomup_prepare_t = Duration::ZERO.into(); // nothing to prepare
+    let bottomup_prepare_t = std::time::Duration::ZERO.into(); // nothing to prepare
 
     let mem = get_allocated_memory();
     let now = Instant::now();
@@ -107,12 +95,15 @@ where
     }
 }
 
+use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+use crate::matchers::Decompressible;
+
 pub fn lazy_top_down<'a, HAST: HyperAST + Copy + 'a>(
     mapper_owned: &'a mut (DS<HAST>, DS<HAST>),
 ) -> Mapper<
     HAST,
-    Decompressible<HAST, &'a mut LazyPostOrder<<HAST as HyperASTShared>::IdN, u32>>,
-    Decompressible<HAST, &'a mut LazyPostOrder<<HAST as HyperASTShared>::IdN, u32>>,
+    Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, u32>>,
+    Decompressible<HAST, &'a mut LazyPostOrder<HAST::IdN, u32>>,
     VecStore<u32>,
 >
 where
