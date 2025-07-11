@@ -51,6 +51,7 @@ fn bottomup_group(c: &mut Criterion) {
         repositories.register_config(p.repo.clone(), p.config);
     }
     for p in inputs.iter() {
+        bench_xy(&mut group, &mut repositories, p);
         bench_greedy::<100>(&mut group, &mut repositories, p);
         bench_greedy::<200>(&mut group, &mut repositories, p);
         bench_greedy::<400>(&mut group, &mut repositories, p);
@@ -73,6 +74,7 @@ fn bottomup_group(c: &mut Criterion) {
         bench_lazy_stable::<400>(&mut group, &mut repositories, p);
     }
     group.finish();
+
     let mut group = c.benchmark_group("ChangDistiller_BottomUp_runtime");
 
     for p in inputs.iter() {
@@ -143,6 +145,36 @@ fn bottomup_group(c: &mut Criterion) {
         );
     }
     group.finish();
+}
+
+fn bench_xy(
+    group: &mut criterion::BenchmarkGroup<'_, impl Measurement>,
+    repositories: &mut PreProcessedRepositories,
+    p: &Input,
+) {
+    use hyper_diff::matchers::heuristic::xy_bottom_up_matcher;
+    prep_bench_gt_subtree(
+        group,
+        repositories,
+        &p,
+        BenchmarkId::new("Xy", p.repo.name()),
+        |b, (repositories, (owned, mappings))| {
+            let hyperast = &repositories.processor.main_stores;
+            b.iter_batched(
+                || hyper_diff::matchers::Mapper::prep(hyperast, mappings.clone(), owned.clone()),
+                |mapper| {
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.complete(hyperast))),
+                    );
+                    use xy_bottom_up_matcher::XYBottomUpMatcher;
+                    let mapper_bottom_up = XYBottomUpMatcher::<_, _, _, M>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                },
+                BatchSize::SmallInput,
+            );
+        },
+    );
 }
 
 fn bench_lazy_greedy<const MAX_SIZE: usize>(

@@ -16,6 +16,7 @@ pub mod lazy_greedy_subtree_matcher;
 pub mod lazy_hybrid_bottom_up_matcher;
 pub mod lazy_marriage_bottom_up_matcher;
 pub mod lazy_simple_bottom_up_matcher;
+//pub mod lazy_xy_bottom_up_matcher;
 
 pub fn size<'a, IdC: Clone + NodeId<IdN = IdC>, S>(store: &'a S, x: &IdC) -> usize
 where

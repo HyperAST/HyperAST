@@ -81,6 +81,58 @@ fn mapping_group(c: &mut Criterion) {
     for p in inputs.into_iter() {
         use hyper_diff::matchers::heuristic::cd;
         use hyper_diff::matchers::heuristic::gt;
+
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("Xy", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                b.iter(|| {
+                    // let hyperast = hyperast_vcs_git::no_space::as_nospaces2(&repositories.processor.main_stores);
+                    let hyperast = &repositories.processor.main_stores;
+                    let mapper_owned: (CDS<_>, CDS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper = hyper_diff::matchers::Mapper::new(
+                        hyperast,
+                        VecStore::default(),
+                        mapper_owned,
+                    );
+
+                    use gt::greedy_subtree_matcher::GreedySubtreeMatcher;
+                    let mapper = GreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+                    use hyper_diff::matchers::heuristic::xy_bottom_up_matcher::XYBottomUpMatcher;
+                    let mapper_bottom_up = XYBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
+        prep_bench(
+            &mut group,
+            &mut repositories,
+            &p,
+            BenchmarkId::new("PartialLazyXy", p.repo.name()),
+            |b, (repositories, (src, dst))| {
+                b.iter(|| {
+                    let hyperast = &repositories.processor.main_stores;
+                    let mut mapper_owned: (DS<_>, DS<_>) = hyperast.decompress_pair(&src, &dst).1;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::with_mut_decompressible(&mut mapper_owned);
+
+                    use gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+                    let mapper = LazyGreedySubtreeMatcher::<_, _, _, M>::match_it::<MM>(mapper);
+                    let mappings = mapper.mapping.mappings;
+                    let mapper =
+                        hyper_diff::matchers::Mapper::prep(hyperast, mappings, mapper_owned);
+                    let mapper = mapper.map(
+                        |src_arena| CDS::<_>::from(src_arena.map(|x| x.decomp.complete(hyperast))),
+                        |dst_arena| CDS::<_>::from(dst_arena.map(|x| x.decomp.complete(hyperast))),
+                    );
+                    use hyper_diff::matchers::heuristic::xy_bottom_up_matcher::XYBottomUpMatcher;
+                    let mapper_bottom_up = XYBottomUpMatcher::<_, _, _, _>::match_it(mapper);
+                    black_box(mapper_bottom_up);
+                });
+            },
+        );
         prep_bench(
             &mut group,
             &mut repositories,
