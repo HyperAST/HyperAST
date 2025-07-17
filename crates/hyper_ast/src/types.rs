@@ -157,7 +157,7 @@ role_impl!(
     Label => "label",
     Member => "member",
     Function => "function",
-    // Argument => "argument",
+    Argument => "argument",
     InputOperands => "input_operands",
     // Alternative => "alternative",
     // Consequence => "consequence",

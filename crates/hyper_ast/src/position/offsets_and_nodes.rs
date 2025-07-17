@@ -168,6 +168,14 @@ impl<IdN: Copy, Idx: PrimInt> super::position_accessors::SolvedPosition<IdN>
     }
 }
 
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::SolvedPosition<IdN>
+    for &StructuralPosition<IdN, Idx>
+{
+    fn node(&self) -> IdN {
+        *TreePath::node(*self).unwrap()
+    }
+}
+
 pub struct SPIter<'a, Idx>(std::slice::Iter<'a, Idx>);
 
 impl<'a, Idx: PrimInt> Iterator for SPIter<'a, Idx> {

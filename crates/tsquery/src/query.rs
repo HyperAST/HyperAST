@@ -1517,7 +1517,7 @@ impl Query {
         self.capture_quantifiers_vec[index].clone()
     }
 
-    pub fn capture_name(&self, i: CaptureId) -> &str {
+    pub fn capture_name(&self, i: CaptureId) -> &'static str {
         self.capture_names[i.to_usize()]
     }
 

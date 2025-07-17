@@ -91,6 +91,15 @@ pub mod position_accessors {
         fn node(&self) -> IdN;
     }
 
+    #[cfg(feature = "legion")]
+    impl SolvedPosition<crate::store::nodes::legion::NodeIdentifier>
+        for crate::store::nodes::legion::NodeIdentifier
+    {
+        fn node(&self) -> crate::store::nodes::legion::NodeIdentifier {
+            *self
+        }
+    }
+
     pub trait WithOffsets
     where
         Self::Idx: PrimInt,

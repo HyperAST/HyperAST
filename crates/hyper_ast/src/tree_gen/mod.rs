@@ -86,8 +86,6 @@ impl<T, IdN> BasicAccumulator<T, IdN> {
         K: crate::store::nodes::Compo,
         L: crate::store::nodes::Compo,
         IdN: 'static + Send + Sync,
-        // NOTE bounds too verbose an open
-        // TODO use a less explicit formulation
     {
         use crate::store::nodes::compo;
         // TODO better handle the interneds
@@ -621,31 +619,32 @@ pub use zipped::PreResult;
 #[cfg(feature = "ts")]
 pub use zipped::ZippedTreeGen;
 
+#[cfg(feature = "ts_type")]
+pub trait TsEnableTS: crate::types::ETypeStore
+where
+    Self::Ty2: TsType,
+{
+    const ERROR: u16 = u16::MAX;
+    const _ERROR: u16 = u16::MAX - 1;
+    const SPACES: u16 = u16::MAX - 2;
+    const DIRECTORY: u16 = u16::MAX - 3;
+    const META_DIR: u16 = u16::MAX - 4;
+    const LOWEST_RESERVED: u16 = Self::META_DIR;
+    fn try_obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Option<Self::Ty2>;
+    fn obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
+}
+
+#[cfg(feature = "ts_type")]
+pub trait TsType: crate::types::HyperType + Copy {
+    fn spaces() -> Self;
+    fn is_repeat(&self) -> bool;
+}
+
 /// utils for generating code with tree-sitter
 #[cfg(feature = "ts")]
 pub mod utils_ts {
-
-    pub trait TsEnableTS: crate::types::ETypeStore
-    where
-        Self::Ty2: TsType,
-    {
-        const ERROR: u16 = u16::MAX;
-        const _ERROR: u16 = u16::MAX - 1;
-        const SPACES: u16 = u16::MAX - 2;
-        const DIRECTORY: u16 = u16::MAX - 3;
-        const META_DIR: u16 = u16::MAX - 4;
-        const LOWEST_RESERVED: u16 = Self::META_DIR;
-        fn try_obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> Option<Self::Ty2>;
-        fn obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
-    }
-
-    pub trait TsType: crate::types::HyperType + Copy {
-        fn spaces() -> Self;
-        fn is_repeat(&self) -> bool;
-    }
-
+    pub use super::TsEnableTS;
+    pub use super::TsType;
     pub fn tree_sitter_parse(
         text: &[u8],
         language: &tree_sitter::Language,

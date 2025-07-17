@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tree_sitter::CaptureQuantifier as Quant;
 
 use crate::auto::tsq_ser_meta::Conv;
-use crate::legion::TsQueryTreeGen;
+use crate::no_fmt_legion::TsQueryTreeGen;
 use crate::types::TStore;
 
 use hyperast::store::SimpleStores;
@@ -291,8 +291,7 @@ impl<IdN, Idx> CaptureRes<IdN, Idx> {
 }
 
 pub fn ts_query_store() -> SimpleStores<crate::types::TStore> {
-    let stores = SimpleStores::default();
-    stores
+    SimpleStores::default()
 }
 
 pub fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
@@ -316,12 +315,8 @@ pub fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Enti
             t
         }
     };
-    dbg!(tree.root_node().to_sexp());
     let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
-    eprintln!(
-        "{}",
-        hyperast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
-    );
+
     full_node.local.compressed_node
 }
 

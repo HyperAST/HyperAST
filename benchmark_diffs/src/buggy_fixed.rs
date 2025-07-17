@@ -48,7 +48,7 @@ fn test_simple_1() {
     // use hyperast_gen_ts_java::types::TStore;
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, buggy, fixed);
 
     let stores = stores.change_type_store::<hyperast_gen_ts_java::types::TStore>();
 
@@ -119,6 +119,126 @@ fn test_perf_mokito() {
     );
     println!("{:#?}", res.summarize());
     println!("{}", res);
+}
+
+#[test]
+fn test_dir_increasing_ed() {
+    use hyperast::types::{Childrn, HyperAST, WithChildren};
+    println!("{:?}", std::env::current_dir());
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let src_dst = gh_dataset_roots(root);
+    let [buggy_path, fixed_path] =
+        src_dst.map(|x| x.join("google-guava/a194b64f31a7453a9be7e4573b2d92afab3aa37e/"));
+    let md_cache = Default::default();
+    let stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: Default::default(),
+        node_store: NodeStore::new(),
+    };
+
+    let mut java_gen = JavaPreprocessFileSys {
+        main_stores: stores,
+        java_md_cache: md_cache,
+    };
+    let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &buggy_path, &fixed_path);
+
+    let stores = java_gen.main_stores;
+
+    let src_trs = stores.node_store().resolve(src_tr.compressed_node);
+    let src_trs = src_trs.children().unwrap();
+    let src_trs: Vec<_> = src_trs.iter_children().collect();
+    let dst_trs = stores.node_store().resolve(dst_tr.compressed_node);
+    let dst_trs = dst_trs.children().unwrap();
+    let dst_trs: Vec<_> = dst_trs.iter_children().collect();
+    for (src_tr, dst_tr) in src_trs.into_iter().zip(dst_trs.into_iter()) {
+        // to make a diff while ignoring spaces
+        // let stores = hyperast_vcs_git::no_space::as_nospaces2(&stores);
+        let res = algorithms::gumtree::diff_100(&stores, &src_tr, &dst_tr);
+        println!("{:#?}", res.summarize());
+        println!("{}", res);
+        println!("==============================================");
+        println!("==============================================");
+        println!("==============now only subtree================");
+        println!("==============================================");
+        let res2 = algorithms::gumtree::diff_subtree(&stores, &src_tr, &dst_tr);
+        println!("{:#?}", res2.summarize());
+        println!("{}", res2);
+        assert!(
+            res.actions.unwrap().len() < res2.actions.unwrap().len(),
+            "there are more matches so we expect less actions"
+        );
+    }
+}
+
+#[test]
+fn test_increasing_ed() {
+    println!("{:?}", std::env::current_dir());
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let src_dst = gh_dataset_roots(root);
+    let [buggy_path, fixed_path] = src_dst.map(|x| {
+        x.join(
+            "google-guava/a194b64f31a7453a9be7e4573b2d92afab3aa37e/AbstractListenableFuture.java",
+        )
+    });
+    let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
+    let fixed = std::fs::read_to_string(&fixed_path).expect("the fixed code");
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: Default::default(),
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    print!("{:?} len={}: ", buggy_path, buggy.len());
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &fixed, &buggy);
+    let stores = hyperast_vcs_git::no_space::as_nospaces2(&stores);
+    let res = algorithms::gumtree::diff_100(
+        &stores,
+        &src_tr.local.compressed_node,
+        &dst_tr.local.compressed_node,
+    );
+    println!("{:#?}", res.summarize());
+    println!("{}", res);
+    println!("==============================================");
+    println!("====== now only with subtree matches =========");
+    println!("==============================================");
+    let res2 = algorithms::gumtree::diff_subtree(
+        &stores,
+        &src_tr.local.compressed_node,
+        &dst_tr.local.compressed_node,
+    );
+    println!("{:#?}", res2.summarize());
+    println!("{}", res2);
+    assert!(
+        res.actions.unwrap().len() < res2.actions.unwrap().len(),
+        "there are more matches so we expect less actions"
+    );
+}
+
+pub fn gh_dataset_roots(root: &Path) -> [std::path::PathBuf; 2] {
+    let datasets = root.parent().unwrap().join("gt_datasets");
+    assert!(
+        datasets.exists(),
+        "you should clone the gumtree dataset:\n`cd ..; git clone git@github.com:GumTreeDiff/datasets.git gt_datasets; cd gt_datasets; git checkout 33024da8de4c519bb1c1146b19d91d6cb4c81ea6`"
+    );
+    let data_root = datasets.join("gh-java");
+    assert!(
+        data_root.exists(),
+        "this dataset does not exist or was renamed"
+    );
+    let data_root = data_root.as_path();
+    std::fs::read_dir(data_root).expect("should be a dir");
+    let src;
+    let dst;
+    if DATASET_FORMAT == 1 {
+        src = data_root.join("before");
+        dst = data_root.join("after");
+    } else {
+        src = data_root.join("buggy");
+        dst = data_root.join("fixed");
+    }
+    assert!(src.exists(), "probably using the wrong format");
+    assert!(dst.exists(), "probably using the wrong format");
+    [src, dst]
 }
 
 #[cfg(test)]

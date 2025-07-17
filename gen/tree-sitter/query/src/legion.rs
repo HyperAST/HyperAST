@@ -2,9 +2,10 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::{TNode, types::TIdN};
+use hyperast::store::nodes::legion::eq_node;
 use legion::world::EntryRef;
 
-use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
+use hyperast::store::nodes::compo::{self, NoSpacesCS};
 use hyperast::{
     filter::BloomSize,
     full::FullNode,
@@ -99,7 +100,7 @@ impl Accumulator for Acc {
 }
 
 impl AccIndentation for Acc {
-    fn indentation<'a>(&'a self) -> &'a Spaces {
+    fn indentation(&self) -> &Spaces {
         &self.indentation
     }
 }
@@ -209,7 +210,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             text,
             node.start_byte(),
             global.sum_byte_length(),
-            &parent_indentation,
+            parent_indentation,
         );
         Acc {
             labeled: node.has_label(),
@@ -382,38 +383,8 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
-        let full_node = self.make(&mut global, acc, label);
-        full_node
-    }
-}
 
-pub fn eq_node<'a, K>(
-    kind: &'a K,
-    label_id: Option<&'a LabelIdentifier>,
-    children: &'a [NodeIdentifier],
-) -> impl Fn(EntryRef) -> bool + 'a
-where
-    K: 'static + Eq + std::hash::Hash + Copy + std::marker::Send + std::marker::Sync,
-{
-    move |x: EntryRef| {
-        let t = x.get_component::<K>();
-        if t != Ok(kind) {
-            return false;
-        }
-        let l = x.get_component::<LabelIdentifier>().ok();
-        if l != label_id {
-            return false;
-        } else {
-            let cs = x.get_component::<CS<legion::Entity>>();
-            let r = match cs {
-                Ok(CS(cs)) => cs.as_ref() == children,
-                Err(_) => children.is_empty(),
-            };
-            if !r {
-                return false;
-            }
-        }
-        true
+        self.make(&mut global, acc, label)
     }
 }
 
@@ -465,26 +436,20 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
 
             let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
-            dyn_builder.add(hashs.clone());
+            dyn_builder.add(hashs);
             dyn_builder.add(compo::BytesLen(
                 (acc.end_byte - acc.start_byte).try_into().unwrap(),
             ));
-            if let Some(label_id) = label_id {
-                dyn_builder.add(label_id);
-            }
-            match acc.simple.children.len() {
-                0 => {}
-                x => {
-                    let a = acc.simple.children.into_boxed_slice();
-                    dyn_builder.add(compo::Size(size));
-                    dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
-                    dyn_builder.add(compo::Height(height));
-                    dyn_builder.add(CS(a));
-                    if x != acc.no_space.len() {
-                        dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
-                    }
+            if acc.simple.children.len() > 0 {
+                dyn_builder.add(compo::Size(size));
+                dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
+                dyn_builder.add(compo::Height(height));
+                if acc.simple.children.len() != acc.no_space.len() {
+                    dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
                 }
             }
+            acc.simple
+                .add_primary(&mut dyn_builder, interned_kind, label_id);
             let compressed_node =
                 NodeStore::insert_built_after_prepare(insertion.vacant(), dyn_builder.build());
 
@@ -501,11 +466,10 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
             }
         };
 
-        let full_node = FullNode {
+        FullNode {
             global: global.simple(),
             local,
-        };
-        full_node
+        }
     }
 }
 
@@ -539,8 +503,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 // println!();
                 let md = self.md_cache.get(&c);
                 let metrics = if let Some(md) = md {
-                    let metrics = md.metrics;
-                    metrics
+                    md.metrics
                 } else {
                     use hyperast::hashed::SyntaxNodeHashsKinds;
                     use hyperast::types::WithHashs;
@@ -555,14 +518,14 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                     };
                     use hyperast::types::WithStats;
                     use num::ToPrimitive;
-                    let metrics = SubTreeMetrics {
+
+                    SubTreeMetrics {
                         size: node.size().to_u32().unwrap(),
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
                         line_count: node.line_count().to_u16().unwrap(),
-                    };
-                    metrics
+                    }
                 };
                 Local {
                     compressed_node: c,
@@ -610,26 +573,23 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
 
             let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
-            dyn_builder.add(hashs.clone());
+            dyn_builder.add(hashs);
             dyn_builder.add(compo::BytesLen(
                 (acc.end_byte - acc.start_byte).try_into().unwrap(),
             ));
             if let Some(label_id) = label_id {
                 dyn_builder.add(label_id);
             }
-            match acc.simple.children.len() {
-                0 => {}
-                x => {
-                    let a = acc.simple.children.into_boxed_slice();
-                    dyn_builder.add(compo::Size(size));
-                    dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
-                    dyn_builder.add(compo::Height(height));
-                    dyn_builder.add(CS(a));
-                    if x != acc.no_space.len() {
-                        dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
-                    }
+            if acc.simple.children.len() > 0 {
+                dyn_builder.add(compo::Size(size));
+                dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
+                dyn_builder.add(compo::Height(height));
+                if acc.simple.children.len() != acc.no_space.len() {
+                    dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
                 }
             }
+            acc.simple
+                .add_primary(&mut dyn_builder, interned_kind, label_id);
             let compressed_node =
                 NodeStore::insert_built_after_prepare(insertion.vacant(), dyn_builder.build());
 
@@ -689,14 +649,14 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                     };
                     use hyperast::types::WithStats;
                     use num::ToPrimitive;
-                    let metrics = SubTreeMetrics {
+
+                    SubTreeMetrics {
                         size: node.size().to_u32().unwrap(),
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
                         line_count: node.line_count().to_u16().unwrap(),
-                    };
-                    metrics
+                    }
                 };
                 Local {
                     compressed_node: c,

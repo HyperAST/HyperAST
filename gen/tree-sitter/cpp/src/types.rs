@@ -1,57 +1,56 @@
-use hyperast::tree_gen::utils_ts::TsEnableTS;
 use std::fmt::Display;
 
+use hyperast::tree_gen::TsEnableTS;
+use hyperast::tree_gen::TsType;
 use hyperast::types::{
     AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
+
+impl TsEnableTS for TStore {
+    fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
+        let k = n.kind_id();
+        Type::from_u16(k)
+    }
+
+    fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> Option<Self::Ty2> {
+        let k = n.kind_id();
+        const LEN: u16 = S_T_L.len() as u16;
+        if LEN <= k && k < TStore::LOWEST_RESERVED {
+            return None;
+        }
+        debug_assert_eq!(
+            crate::language().node_kind_for_id(k).unwrap(),
+            Type::from_u16(k).to_str()
+        );
+        Some(Type::from_u16(k))
+    }
+}
+
+impl TsType for Type {
+    fn spaces() -> Self {
+        Self::Spaces
+    }
+
+    fn is_repeat(&self) -> bool {
+        self.is_repeat()
+    }
+}
+
+impl TypeStore for TStore {
+    type Ty = TypeU16<Cpp>;
+}
 
 #[cfg(feature = "impl_intern")]
 mod legion_impls {
 
     use super::*;
-    use hyperast::tree_gen::utils_ts::TsEnableTS;
-    use hyperast::tree_gen::utils_ts::TsType;
 
     use hyperast::types::{LangWrapper, RoleStore};
 
-    impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
-            let k = n.kind_id();
-            Type::from_u16(k)
-        }
-
-        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> Option<Self::Ty2> {
-            let k = n.kind_id();
-            dbg!(k);
-            const LEN: u16 = S_T_L.len() as u16;
-            if LEN <= k && k < TStore::LOWEST_RESERVED {
-                return None;
-            }
-            debug_assert_eq!(
-                crate::language().node_kind_for_id(k).unwrap(),
-                Type::from_u16(k).to_str()
-            );
-            Some(Type::from_u16(k))
-        }
-    }
-
-    impl TsType for Type {
-        fn spaces() -> Self {
-            Self::Spaces
-        }
-
-        fn is_repeat(&self) -> bool {
-            self.is_repeat()
-        }
-    }
-
-    impl TypeStore for TStore {
-        type Ty = TypeU16<Cpp>;
-    }
     impl<'a> CppEnabledTypeStore for TStore {
         fn resolve(t: Self::Ty) -> Type {
             t.e()
@@ -100,7 +99,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 
 #[cfg(feature = "impl_intern")]
 pub trait CppEnabledTypeStore:
-    hyperast::types::ETypeStore<Ty2 = Type> + Clone + hyperast::tree_gen::utils_ts::TsEnableTS
+    hyperast::types::ETypeStore<Ty2 = Type> + Clone + hyperast::tree_gen::TsEnableTS
 {
     // fn intern(t: Type) -> Self::Ty;
     fn resolve(t: Self::Ty) -> Type;

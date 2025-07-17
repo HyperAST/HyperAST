@@ -10,6 +10,7 @@ use crate::types::TIdN;
 pub enum Action<Idx, IdN = NodeIdentifier> {
     Delete { path: Vec<Idx> },
     Replace { path: Vec<Idx>, new: IdN },
+    Insert { path: Vec<Idx>, new: IdN },
 }
 type Idx = u16;
 type IdN = NodeIdentifier;
@@ -19,7 +20,7 @@ pub fn regen_query(
     actions: Vec<Action<Idx, IdN>>,
 ) -> Option<NodeIdentifier> {
     let mut md_cache = Default::default();
-    let mut query_tree_gen = crate::legion::TsQueryTreeGen {
+    let mut query_tree_gen = crate::no_fmt_legion::TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
         stores: ast,
         md_cache: &mut md_cache,
@@ -28,6 +29,7 @@ pub fn regen_query(
     enum ActionTree<Idx, IdN = NodeIdentifier> {
         Delete,
         New(IdN),
+        After(IdN),
         Children(Vec<(Idx, ActionTree<Idx, IdN>)>),
     }
     impl<Idx: std::cmp::PartialOrd + Clone + PrimInt> From<Vec<Action<Idx, IdN>>> for ActionTree<Idx> {
@@ -67,18 +69,52 @@ pub fn regen_query(
                             }
                         }
                     }
-                    Action::Replace { mut path, new } => {
+                    Action::Insert { mut path, new } => {
                         let ActionTree::Children(cs) = s else {
                             panic!()
                         };
-                        // dbg!(&cs);
                         let p = path.pop().unwrap();
                         let mut low = 0;
                         let mut high = cs.len();
                         loop {
                             if low == high {
                                 if path.is_empty() {
-                                    // dbg!(cs.len());
+                                    let c = ActionTree::After(new);
+                                    cs.push((p, c));
+                                    break;
+                                }
+                                let mut c = ActionTree::Children(vec![]);
+                                insert(&mut c, Action::Insert { path, new });
+                                cs.insert(low, (p, c));
+                                break;
+                            }
+                            assert!(high >= low);
+                            let mid = low + (high - low) / 2;
+                            if cs[mid].0 == p {
+                                if path.is_empty() {
+                                    let c = ActionTree::After(new);
+                                    cs[mid] = (p, c); // TODO check behavior
+                                    break;
+                                }
+                                insert(&mut cs[mid].1, Action::Insert { path, new });
+                                break;
+                            } else if p < cs[mid].0 {
+                                high = mid.saturating_sub(1);
+                            } else {
+                                low = mid + 1;
+                            }
+                        }
+                    }
+                    Action::Replace { mut path, new } => {
+                        let ActionTree::Children(cs) = s else {
+                            panic!()
+                        };
+                        let p = path.pop().unwrap();
+                        let mut low = 0;
+                        let mut high = cs.len();
+                        loop {
+                            if low == high {
+                                if path.is_empty() {
                                     let c = ActionTree::New(new);
                                     cs.push((p, c));
                                     break;
@@ -117,6 +153,10 @@ pub fn regen_query(
                         path.reverse();
                         Action::Replace { path, new }
                     }
+                    Action::Insert { mut path, new } => {
+                        path.reverse();
+                        Action::Insert { path, new }
+                    }
                 };
                 insert(&mut res, a);
             }
@@ -138,7 +178,7 @@ pub fn regen_query(
     }
     let actions = ActionTree::from(actions);
     fn apply(
-        ast: &mut crate::legion::TsQueryTreeGen<'_, '_, crate::types::TStore>,
+        ast: &mut crate::no_fmt_legion::TsQueryTreeGen<'_, '_, crate::types::TStore>,
         a: ActionTree<Idx>,
         c: NodeIdentifier,
     ) -> Option<NodeIdentifier> {
@@ -147,11 +187,6 @@ pub fn regen_query(
             .stores
             .node_store
             .resolve_with_type::<TIdN<NodeIdentifier>>(&c);
-        // dbg!(t);
-        // println!(
-        //     "{}",
-        //     hyperast::nodes::SyntaxSerializer::<_, _, false>::new(ast.stores, c) // hyperast::nodes::TextSerializer::new(ast.stores, c)
-        // );
         let l = n.try_get_label().copied();
         let mut cs: Vec<NodeIdentifier> = vec![];
         use hyperast::types::WithChildren;
@@ -175,6 +210,10 @@ pub fn regen_query(
                 }
                 ActionTree::New(new) => {
                     cs_nodes.next().unwrap();
+                    cs.push(new);
+                }
+                ActionTree::After(new) => {
+                    cs.push(*cs_nodes.next().unwrap());
                     cs.push(new);
                 }
                 a => cs.push(apply(ast, a, *cs_nodes.next().unwrap())?),
@@ -240,6 +279,10 @@ pub fn try_regen_query(
                             }
                         }
                     }
+                    Action::Insert { path, new } => {
+                        let _ = (path, new);
+                        todo!()
+                    }
                     Action::Replace { mut path, new } => {
                         let ActionTree::Children(cs) = s else {
                             panic!()
@@ -285,6 +328,10 @@ pub fn try_regen_query(
                     Action::Delete { mut path } => {
                         path.reverse();
                         Action::Delete { path }
+                    }
+                    Action::Insert { mut path, new } => {
+                        path.reverse();
+                        Action::Insert { path, new }
                     }
                     Action::Replace { mut path, new } => {
                         path.reverse();
@@ -353,7 +400,7 @@ pub fn try_regen_query(
             }
         }
         cs.extend(cs_nodes);
-        crate::legion::TsQueryTreeGen::try_build(stores, c, t, l, cs)
+        crate::no_fmt_legion::TsQueryTreeGen::try_build(stores, c, t, l, cs)
     }
     assert_ne!(
         actions,

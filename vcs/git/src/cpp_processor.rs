@@ -256,6 +256,10 @@ impl crate::processing::erased::CommitProc for CppProc {
         self.commits.get(&commit_oid)
     }
 
+    fn commit_count(&self) -> usize {
+        self.commits.len()
+    }
+
     fn get_precomp_query(&self) -> Option<hyperast_tsquery::ZeroSepArrayStr> {
         dbg!(&self.parameter.query);
         self.parameter.query.clone()

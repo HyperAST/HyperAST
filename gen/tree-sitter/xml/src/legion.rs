@@ -78,7 +78,7 @@ impl Accumulator for Acc {
 }
 
 impl AccIndentation for Acc {
-    fn indentation<'a>(&'a self) -> &'a Spaces {
+    fn indentation(&self) -> &Spaces {
         &self.indentation
     }
 }
@@ -188,7 +188,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
-        log::warn!("not retrieving roles");
+        // log::warn!("not retrieving roles");
         PreResult::Ok(acc)
     }
     fn pre(
@@ -384,8 +384,8 @@ impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
-        let full_node = self.make(&mut global, acc, label);
-        full_node
+
+        self.make(&mut global, acc, label)
     }
 }
 
@@ -466,11 +466,10 @@ impl<'stores, TS: XmlEnabledTypeStore> TreeGen for XmlTreeGen<'stores, TS> {
             }
         };
 
-        let full_node = FullNode {
+        FullNode {
             global: global.simple(),
             local,
-        };
-        full_node
+        }
     }
 }
 
@@ -510,6 +509,28 @@ fn compress<Ty: std::marker::Send + std::marker::Sync + 'static>(
                         c,
                         (BloomSize::None,)
                     )
+                }
+                1 => {
+                    let a = [simple.children[0]];
+                    let c = c.concat((compo::Size(size), compo::SizeNoSpaces(size_no_spaces), compo::Height(height), ));
+                    let c = c.concat((compo::CS0(a),));
+                    if 1 == no_space.len() {
+                        insert!(c,)
+                    } else {
+                        let b = no_space.into_boxed_slice();
+                        insert!(c, (NoSpacesCS(b),))
+                    }
+                }
+                2 => {
+                    let a = [simple.children[0], simple.children[1]];
+                    let c = c.concat((compo::Size(size), compo::SizeNoSpaces(size_no_spaces), compo::Height(height), ));
+                    let c = c.concat((compo::CS0(a),));
+                    if 2 == no_space.len() {
+                        insert!(c,)
+                    } else {
+                        let b = no_space.into_boxed_slice();
+                        insert!(c, (NoSpacesCS(b),))
+                    }
                 }
                 x => {
                     let a = simple.children.into_boxed_slice();

@@ -662,8 +662,16 @@ where
         Ok(())
     }
 
+    // for i in 0..self.mid_arena.len() {
+    //     let curr: &MidNode<HAST::IdN, IdD> = &self.mid_arena[i];
+    //     if !self.cpy_mappings.is_src(&curr.parent) {
+    //         let ty = self.store.resolve_type(&curr.compressed);
+    //         use hyperast::types::HyperType;
+    //     }
+    // }
+
     pub fn del(&mut self) {
-        let root = *self.mid_root.last().unwrap();
+        let root = *self.mid_root.first().unwrap();
         struct Ele<IdD, Idx, W> {
             // id in arena
             id: IdD,

@@ -58,6 +58,7 @@ hyperast = { path = "../crates/hyper_ast", default-features = false, features = 
     "serialize",
     "web",
     "fetched",
+    "ts_type",
 ] }
 hyperast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
 hyperast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }

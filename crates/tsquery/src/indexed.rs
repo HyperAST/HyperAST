@@ -152,7 +152,7 @@ impl std::ops::Index<StepId> for Steps {
 // }
 
 #[repr(transparent)]
-#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Debug, Hash)]
 pub struct CaptureId(pub(crate) u16);
 
 impl Default for CaptureId {
@@ -238,14 +238,14 @@ impl<Node> Default for CaptureListPool<Node> {
 #[repr(transparent)]
 pub struct Captures<Node>(Vec<Capture<Node>>);
 impl<Node> Captures<Node> {
-    pub(crate) fn nodes_for_capture_index<'a>(
-        &'a self,
-        index: CaptureId,
-    ) -> impl Iterator<Item = &'a Node> {
+    pub(crate) fn nodes_for_capture_index(&self, index: CaptureId) -> impl Iterator<Item = &Node> {
         self.0
             .iter()
             .filter(move |x| x.index == index)
             .map(|x| &x.node)
+    }
+    pub fn iter(&self) -> impl Iterator<Item = &Capture<Node>> {
+        self.0.iter()
     }
     pub(crate) fn captures(&self) -> &[Capture<Node>] {
         &self.0

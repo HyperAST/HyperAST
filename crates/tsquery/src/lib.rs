@@ -1,5 +1,5 @@
 #![allow(unused)]
-mod predicate;
+pub mod predicate;
 
 // static const TSQueryError PARENT_DONE = -1;
 
@@ -82,7 +82,7 @@ pub struct Query {
     text_predicates: predicate::TextPredicateCaptures,
     property_predicates: predicate::PropertyPredicates,
     property_settings: predicate::PropertySettings,
-    general_predicates: predicate::GeneralPredicates,
+    pub general_predicates: predicate::GeneralPredicates,
     immediate_predicates: Vec<predicate::ImmediateTextPredicate>,
     precomputed_patterns: Option<query::PrecomputedPatterns>,
     used_precomputed: Precomps,
@@ -414,9 +414,12 @@ impl<Node: self::Node> QueryMatch<Node> {
             TextPredicateCapture::EqCapture(left, right, is_positive, match_all_nodes) => {
                 // WARN sligntly different sem as we compare nodes structurally and not textually
                 // bad for comparing the name of a type ref with the name of a variable ref
-                let mut nodes_1 = self.nodes_for_capture_index(*left);
+                let nodes_1 = self.nodes_for_capture_index(*left);
                 let mut nodes_2 = self.nodes_for_capture_index(*right);
-                while let (Some(node1), Some(node2)) = (nodes_1.next(), nodes_2.next()) {
+                for node1 in nodes_1 {
+                    let Some(node2) = nodes_2.next() else {
+                        return false;
+                    };
                     let comp = node1.equal(node2, text_provider);
                     if comp != *is_positive && *match_all_nodes {
                         return false;
@@ -425,7 +428,7 @@ impl<Node: self::Node> QueryMatch<Node> {
                         return true;
                     }
                 }
-                nodes_1.next().is_none() && nodes_2.next().is_none()
+                nodes_2.next().is_none()
             }
             TextPredicateCapture::EqString(left, right, is_positive, match_all_nodes) => {
                 let nodes = self.nodes_for_capture_index(*left);

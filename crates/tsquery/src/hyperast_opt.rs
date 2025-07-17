@@ -8,6 +8,7 @@ use hyperast::types::{
 pub struct TreeCursor<'hast, HAST: HyperASTShared> {
     pub stores: &'hast HAST,
     pub pos: structural_pos::CursorWithPersistance<HAST::IdN, HAST::Idx>,
+    pub p: structural_pos::PersistedNode<HAST::IdN, HAST::Idx>,
 }
 
 pub struct Node<'hast, HAST: HyperASTShared> {
@@ -66,9 +67,10 @@ where
 impl<'hast, HAST: HyperAST> TreeCursor<'hast, HAST> {
     pub fn new(
         stores: &'hast HAST,
-        pos: structural_pos::CursorWithPersistance<HAST::IdN, HAST::Idx>,
+        mut pos: structural_pos::CursorWithPersistance<HAST::IdN, HAST::Idx>,
     ) -> Self {
-        Self { stores, pos }
+        let p = pos.persist();
+        Self { stores, pos, p }
     }
 }
 
@@ -150,6 +152,9 @@ where
     //     Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
+        if self.p.ref_node().eq(&self.pos.ref_node()) {
+            return TreeCursorStep::TreeCursorStepNone;
+        }
         goto_next_sibling_internal(self.stores, &mut self.pos)
     }
 
@@ -158,12 +163,15 @@ where
     }
 
     fn goto_parent(&mut self) -> bool {
+        if self.p.ref_node().eq(&self.pos.ref_node()) {
+            return false;
+        }
         goto_parent(self.stores, &mut self.pos)
     }
 
     fn current_node(&self) -> <Self as crate::CNLending<'_>>::NR {
         NodeRef {
-            stores: &self.stores,
+            stores: self.stores,
             pos: self.pos.ref_node(),
         }
     }
@@ -184,14 +192,14 @@ where
 
     fn persist(&mut self) -> Self::Node {
         Node {
-            stores: &self.stores,
+            stores: self.stores,
             pos: self.pos.persist(),
         }
     }
 
     fn persist_parent(&mut self) -> Option<Self::Node> {
         Some(Node {
-            stores: &self.stores,
+            stores: self.stores,
             pos: self.pos.persist_parent()?,
         })
     }
@@ -244,11 +252,14 @@ where
     }
 
     fn text_provider(&self) -> <Self::Node as super::TextLending<'_>>::TP {
-        &self.stores.label_store()
+        self.stores.label_store()
     }
 
     fn is_visible_at_root(&self) -> bool {
-        assert!(self.pos.ref_parent().is_none());
+        // assert!(self.pos.ref_parent().is_none());
+        if self.pos.ref_parent().is_none() {
+            return true;
+        }
         is_visible(self.stores, &self.pos)
     }
 

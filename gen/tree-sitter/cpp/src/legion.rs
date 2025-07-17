@@ -4,7 +4,7 @@ use hyperast::store::nodes::compo;
 use hyperast::store::nodes::legion::dyn_builder;
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
-    self, NoOpMore, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries,
+    self, NoOpMore, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries, try_get_spacing,
 };
 use hyperast::tree_gen::{
     AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
@@ -194,8 +194,8 @@ impl Debug for Acc {
     }
 }
 
-impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
-    for CppTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
+impl<TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
+    for CppTreeGen<'_, '_, TS, More, HIDDEN_NODES>
 where
     TS: CppEnabledTypeStore<Ty2 = Type>,
     More: tree_gen::Prepro<SimpleStores<TS>>
@@ -277,10 +277,7 @@ where
         }
         let mut acc = self.pre(text, &node, stack, global);
         // TODO replace with wrapper
-        if !stack
-            .parent()
-            .map_or(false, |a| a.simple.kind.is_supertype())
-        {
+        if !stack.parent().is_some_and(|a| a.simple.kind.is_supertype()) {
             if let Some(r) = cursor.0.field_name() {
                 if let Ok(r) = r.try_into() {
                     acc.role.current = Some(r);
@@ -310,7 +307,7 @@ where
             text,
             node.start_byte(),
             global.sum_byte_length(),
-            &parent_indentation,
+            parent_indentation,
         );
         Acc {
             labeled: node.has_label(),
@@ -336,7 +333,7 @@ where
         parent: &mut <Self as TreeGen>::Acc,
         global: &mut Self::Global,
         text: &[u8],
-        acc: <Self as TreeGen>::Acc,
+        mut acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let spacing = get_spacing(
             acc.padding_start,
@@ -344,11 +341,24 @@ where
             text,
             parent.indentation(),
         );
-        // dbg!(parent.simple.kind, parent.end_byte);
-        // dbg!(acc.simple.kind, acc.end_byte);
-        // if acc.simple.kind == Type::ExpressionStatement {
-        //     dbg!();
-        // }
+        if global.sum_byte_length() < acc.end_byte {
+            // only create an error node if tree-sitter is skipping non-whitespaces
+            if try_get_spacing(
+                global.sum_byte_length(),
+                acc.end_byte,
+                text,
+                parent.indentation(),
+            )
+            .is_none()
+            {
+                let local = self.make_error(&text[global.sum_byte_length()..acc.end_byte]);
+                acc.push(FullNode {
+                    global: global.simple(),
+                    local,
+                });
+                global.set_sum_byte_length(acc.end_byte);
+            }
+        }
         if let Some(spacing) = spacing {
             let local = self.make_spacing(spacing);
             // debug_assert_ne!(parent.simple.children.len(), 0, "{:?}", parent.simple);
@@ -408,7 +418,7 @@ where
             line_break: self.line_break,
             stores: self.stores,
             md_cache: self.md_cache,
-            more: more,
+            more,
         }
     }
     fn make_spacing(
@@ -457,6 +467,55 @@ where
             NodeStore::insert_after_prepare(
                 vacant,
                 (interned_kind, spacing_id, bytes_len, hashs, BloomSize::None),
+            )
+        };
+        Local {
+            compressed_node,
+            metrics: SubTreeMetrics {
+                size: 1,
+                height: 0,
+                size_no_spaces: 0,
+                hashs,
+                line_count,
+            },
+            ana: Default::default(),
+            role: None,
+            precomp_queries: Default::default(),
+            viz_cs_count: 0,
+        }
+    }
+
+    fn make_error(&mut self, text: &[u8]) -> Local {
+        let kind = Type::ERROR;
+        let interned_kind = TS::intern(kind);
+        debug_assert_eq!(kind, TS::resolve(interned_kind));
+        let bytes_len = text.len();
+        let text = std::str::from_utf8(&text).unwrap().to_string();
+        let line_count = text
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
+        let label_id = self.stores.label_store.get_or_insert(text.clone());
+        let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
+            hashed::HashesBuilder::new(Default::default(), &interned_kind, &text, 1);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
+
+        let eq = eq_node::<_, _, NodeIdentifier>(&interned_kind, Some(&label_id), &[]);
+
+        let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
+
+        let hashs = hbuilder.build();
+
+        let compressed_node = if let Some(id) = insertion.occupied_id() {
+            id
+        } else {
+            let vacant = insertion.vacant();
+            let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
+            NodeStore::insert_after_prepare(
+                vacant,
+                (interned_kind, label_id, bytes_len, hashs, BloomSize::None),
             )
         };
         Local {
@@ -532,8 +591,8 @@ where
             log::warn!("ignoring parsing error at the root of the file");
             acc.simple.kind = Type::TranslationUnit;
         }
-        let full_node = self.make(&mut global, acc, label);
-        full_node
+
+        self.make(&mut global, acc, label)
     }
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {

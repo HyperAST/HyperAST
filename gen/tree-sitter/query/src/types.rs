@@ -1,61 +1,55 @@
 use std::fmt::Display;
 
-use hyperast::{
-    store::defaults::NodeIdentifier,
-    tree_gen::utils_ts::TsEnableTS,
-    types::{
-        AAAA, AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16,
-        TypedNodeId,
-    },
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast::tree_gen::{TsEnableTS, TsType};
+use hyperast::types::{
+    AAAA, AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16,
+    TypedNodeId,
 };
+
+impl<'a> hyperast::types::ETypeStore for TStore {
+    type Ty2 = Type;
+
+    fn intern(ty: Self::Ty2) -> Self::Ty {
+        TType::new(ty)
+    }
+}
+
+impl TsEnableTS for TStore {
+    fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
+        let k = n.kind_id();
+        Type::from_u16(k)
+    }
+
+    fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
+        n: &N,
+    ) -> Option<Self::Ty2> {
+        let k = n.kind_id();
+        static LEN: u16 = S_T_L.len() as u16;
+        if LEN <= k && k < TStore::LOWEST_RESERVED {
+            return None;
+        }
+        Some(Type::from_u16(k))
+    }
+}
+
+impl TsType for Type {
+    fn spaces() -> Self {
+        Self::Spaces
+    }
+
+    fn is_repeat(&self) -> bool {
+        self.is_repeat()
+    }
+}
 
 #[cfg(feature = "legion")]
 mod legion_impls {
     use super::*;
 
-    impl<'a> hyperast::types::ETypeStore for TStore {
-        type Ty2 = Type;
-
-        fn intern(ty: Self::Ty2) -> Self::Ty {
-            TType::new(ty)
-        }
-    }
-
-    impl TsEnableTS for TStore {
-        fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> <Self as hyperast::types::ETypeStore>::Ty2 {
-            let k = n.kind_id();
-            Type::from_u16(k)
-        }
-
-        fn try_obtain_type<N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
-            n: &N,
-        ) -> Option<Self::Ty2> {
-            let k = n.kind_id();
-            static LEN: u16 = S_T_L.len() as u16;
-            if LEN <= k && k < TStore::LOWEST_RESERVED {
-                return None;
-            }
-            Some(Type::from_u16(k))
-        }
-    }
-
-    impl TsType for Type {
-        fn spaces() -> Self {
-            Self::Spaces
-        }
-
-        fn is_repeat(&self) -> bool {
-            self.is_repeat()
-        }
-    }
-
-    use hyperast::{
-        store::nodes::legion::HashedNodeRef,
-        tree_gen::utils_ts::{TsEnableTS, TsType},
-        types::LangWrapper,
-    };
+    use hyperast::{store::nodes::legion::HashedNodeRef, types::LangWrapper};
 
     impl TypeStore for TStore {
         type Ty = TypeU16<TsQuery>;
