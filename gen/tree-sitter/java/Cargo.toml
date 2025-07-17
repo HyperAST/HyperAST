@@ -49,12 +49,11 @@ cc = "*"
 [dev-dependencies]
 pretty_assertions = "1.0.0"
 env_logger = "0.11.3"
-criterion = { version = "0.5.1", features = [
+criterion = { version = "0.6.0", features = [
     "rayon",
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    # "real_blackbox" # need nightly
 ] }
 hyperast_tsquery = { workspace = true }
 hyperast_gen_ts_tsquery = { workspace = true }

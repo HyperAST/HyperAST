@@ -1,17 +1,14 @@
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, LazyDecompressed,
-    LazyDecompressedTreeStore, Shallow,
+    ContiguousDescendants, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
+    Shallow,
 };
-use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Mapper;
+use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
-use hyperast::compat::HashMap;
-use hyperast::types::{
-    Childrn, HashKind, HyperAST, Labeled, NodeId, NodeStore, Tree, WithChildren, WithHashs,
-    WithStats,
-};
 use hyperast::PrimInt;
+use hyperast::compat::HashMap;
+use hyperast::types::{HyperAST, Labeled, NodeId, NodeStore, WithHashs, WithStats};
 use num_traits::ToPrimitive;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -21,12 +18,12 @@ pub struct LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, const MIN_HEIGHT: usize
 }
 
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
@@ -89,14 +86,15 @@ where
 }
 
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+    const MIN_HEIGHT: usize, // = 2
+> LazyGreedySubtreeMatcher<HAST, Dsrc, Ddst, M, MIN_HEIGHT>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::IdN: Clone,
     HAST::Label: Clone + Eq,
     Dsrc::IdD: PrimInt + Hash,
@@ -125,7 +123,7 @@ where
             if multi_mappings.is_src_unique(&src) {
                 let dst = multi_mappings.get_dsts(&src)[0];
                 if multi_mappings.is_dst_unique(&dst) {
-                    mapper.add_mapping_recursively(&src, &dst); // TODO subtree opti, do not do explicitly
+                    mapper.add_mapping_recursively_lazy(&src, &dst); // TODO subtree opti, do not do explicitly
                     is_mapping_unique = true;
                 }
             }
@@ -152,7 +150,7 @@ where
             let src_i = src.shallow().to_usize().unwrap();
             let dst_i = dst.shallow().to_usize().unwrap();
             if !(src_ignored[src_i] || dst_ignored[dst_i]) {
-                mapper.add_mapping_recursively(&src, &dst);
+                mapper.add_mapping_recursively_lazy(&src, &dst);
                 src_ignored.set(src_i, true);
                 mapper
                     .src_arena
@@ -177,7 +175,7 @@ where
         let mut sib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         let mut psib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         let mut p_in_p_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
-        dbg!(&ambiguous_mappings.len());
+        // dbg!(&ambiguous_mappings.len());
         ambiguous_mappings.sort_by(|a, b| {
             let cached_coef_sib = |l: &(Dsrc::IdD, Ddst::IdD)| {
                 sib_sim
@@ -334,37 +332,12 @@ where
         );
     }
 }
-
-impl<'a, HAST: HyperAST + Copy, Dsrc, Ddst, M: MonoMappingStore>
-    crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
-where
-    M::Src: Debug + Copy,
-    M::Dst: Debug + Copy,
-{
-    pub(crate) fn add_mapping_recursively<Src, Dst>(&mut self, src: &Src, dst: &Dst)
-    where
-        Src: Shallow<M::Src>,
-        Dst: Shallow<M::Dst>,
-        Dsrc: DecompressedWithParent<HAST, Src> + DecompressedTreeStore<HAST, Src, M::Src>,
-        Ddst: DecompressedWithParent<HAST, Dst> + DecompressedTreeStore<HAST, Dst, M::Dst>,
-    {
-        self.mappings
-            .link(src.shallow().clone(), dst.shallow().clone());
-        // WARN check if it works well
-        let src = self.src_arena.descendants(src);
-        let dst = self.dst_arena.descendants(dst);
-        src.iter()
-            .zip(dst.iter())
-            .for_each(|(src, dst)| self.mappings.link(*src, *dst));
-    }
-}
-
 impl<
-        Dsrc: LazyDecompressed<M::Src>,
-        Ddst: LazyDecompressed<M::Dst>,
-        HAST: HyperAST + Copy,
-        M: MonoMappingStore,
-    > crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
+> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
 where
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
@@ -377,7 +350,6 @@ where
     Ddst: DecompressedWithParent<HAST, Ddst::IdD> + LazyDecompressedTreeStore<HAST, M::Dst>,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
-    // #[time("warn")]
     pub fn compute_multimapping<
         MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>,
         const MIN_HEIGHT: usize,
@@ -387,8 +359,6 @@ where
         dst_arena: &mut Ddst,
         multi_mappings: &mut MM,
     ) {
-        // use crate::matchers::heuristic::gt::lazy_greedy_subtree_matcher::PriorityTreeList;
-        let now = std::time::Instant::now();
         let mut src_trees = PriorityTreeList::<'_, Dsrc, M::Src, Dsrc::IdD, HAST, MIN_HEIGHT>::new(
             hyperast,
             src_arena.starter(),
@@ -399,8 +369,6 @@ where
             dst_arena.starter(),
             dst_arena,
         );
-        let match_init_t = now.elapsed().as_secs_f64();
-        dbg!(match_init_t);
         while src_trees.peek_height() != -1 && dst_trees.peek_height() != -1 {
             // println!("multi_mappings={}", multi_mappings.len());
             while src_trees.peek_height() != dst_trees.peek_height() {
@@ -429,7 +397,7 @@ where
                     let is_iso = {
                         let src = src_trees.arena.original(&src);
                         let dst = dst_trees.arena.original(&dst);
-                        Self::isomorphic_aux::<true>(hyperast, &src, &dst)
+                        super::isomorphic::<_, true, false>(hyperast, &src, &dst)
                     };
                     if is_iso {
                         multi_mappings.link(src, dst);
@@ -452,57 +420,6 @@ where
             src_trees.update_height();
             dst_trees.update_height();
         }
-    }
-
-    /// if H then test the hash otherwise do not test it,
-    /// considering hash colisions testing it should only be useful once.
-    pub(crate) fn isomorphic_aux<const H: bool>(
-        stores: HAST,
-        src: &HAST::IdN,
-        dst: &HAST::IdN,
-    ) -> bool {
-        if src == dst {
-            return true;
-        }
-        let src = stores.node_store().resolve(src);
-        let dst = stores.node_store().resolve(dst);
-        if H {
-            let src_h = WithHashs::hash(&src, &<HAST::RT as WithHashs>::HK::label());
-            let dst_h = WithHashs::hash(&dst, &<HAST::RT as WithHashs>::HK::label());
-            if src_h != dst_h {
-                return false;
-            }
-        };
-        if !stores.type_eq(&src, &dst) {
-            return false;
-        }
-        if dst.has_label() && src.has_label() {
-            if src.get_label_unchecked() != dst.get_label_unchecked() {
-                return false;
-            }
-        } else if dst.has_label() || src.has_label() {
-            return false;
-        };
-
-        if src.child_count() != dst.child_count() {
-            return false;
-        }
-        if !src.has_children() {
-            return true;
-        }
-        let r = match (src.children(), dst.children()) {
-            (None, None) => true,
-            (Some(src_c), Some(dst_c)) => {
-                for (src, dst) in src_c.iter_children().zip(dst_c.iter_children()) {
-                    if !Self::isomorphic_aux::<false>(stores, &src, &dst) {
-                        return false;
-                    }
-                }
-                true
-            }
-            _ => false,
-        };
-        r
     }
 }
 

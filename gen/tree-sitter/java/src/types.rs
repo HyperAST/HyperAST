@@ -619,6 +619,10 @@ impl TypeTrait for Type {
     }
 }
 impl Type {
+    pub fn is_member(&self) -> bool {
+        self.is_value_member() || self.is_executable_member() || self.is_type_declaration()
+    }
+
     pub fn literal_type(&self) -> &str {
         // TODO make the difference btw int/long and float/double
         match self {

@@ -339,6 +339,8 @@ fn make(
             mcc: Mcc::new(&kind),
             role: None,
             precomp_queries: Default::default(),
+            stmt_count: 0,
+            member_import_count: 0,
         };
     }
 
@@ -366,6 +368,8 @@ fn make(
         mcc: Mcc::new(&kind),
         role: None,
         precomp_queries: Default::default(),
+        stmt_count: 0,
+        member_import_count: 0,
     };
     full_node
 }

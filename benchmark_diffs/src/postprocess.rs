@@ -113,12 +113,12 @@ pub mod compressed_bf_post_process {
     }
 
     impl PP1 {
-        pub fn performances(mut self) -> (PP2, Vec<f64>) {
+        pub fn performances(mut self) -> (PP2, Vec<Duration>) {
             use byteorder::{BigEndian, ReadBytesExt};
             let t_len = self.file.read_u32::<BigEndian>().unwrap() as usize;
             let timings: Vec<_> = (0..t_len)
                 .map(|_| self.file.read_u64::<BigEndian>().unwrap())
-                .map(|x| Duration::from_nanos(x as u64).as_secs_f64())
+                .map(|x| Duration::from_nanos(x as u64))
                 .collect();
             (PP2 { file: self.file }, timings)
         }
@@ -443,11 +443,11 @@ impl SimpleJsonPostProcess {
         dbg!(gt_out_parsing_t);
         Self { file: gt_out }
     }
-    pub fn performances(&self) -> Vec<f64> {
+    pub fn performances(&self) -> Vec<Duration> {
         self.file
             .times
             .iter()
-            .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
+            .map(|x| Duration::from_nanos(*x as u64))
             .collect::<Vec<_>>()
     }
     pub fn counts(&self) -> Counts {
@@ -580,11 +580,11 @@ impl PathJsonPostProcess {
         dbg!(gt_out_parsing_t);
         Self { file: gt_out }
     }
-    pub fn performances(&self) -> Vec<f64> {
+    pub fn performances(&self) -> Vec<Duration> {
         self.file
             .times
             .iter()
-            .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
+            .map(|x| Duration::from_nanos(*x as u64))
             .collect::<Vec<_>>()
     }
     pub fn counts(&self) -> Counts {
@@ -933,13 +933,13 @@ mod tests {
     };
     use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
     // use hyperast_gen_ts_java::types::TStore;
-    use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
+    use hyper_diff::algorithms::{self, DiffResult, RuntimeMeasurement as _};
 
     #[test]
     fn test() {
         println!("{:?}", std::env::current_dir());
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let src_dst = crate::buggy_fixed::buggy_fixed_dataset_roots(root);
+        let src_dst = crate::buggy_fixed::buggy_fixed_dataset_roots(root, "defects4j");
         let [buggy_path, fixed_path] = src_dst.map(|x| x.join("Jsoup/92"));
         let src = buggy_path;
         let dst = fixed_path;
@@ -975,11 +975,9 @@ mod tests {
         .unwrap();
 
         let DiffResult {
-            mapping_durations,
             mapper: mapping,
             actions,
-            prepare_gen_t,
-            gen_t,
+            exec_data,
         } = algorithms::gumtree::diff(
             &java_gen.main_stores,
             &src_tr.compressed_node,
@@ -991,9 +989,13 @@ mod tests {
         //     dst_arena,
         //     mappings,
         // } = mapping;
-        let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
-        let hast_timings = vec![subtree_matcher_t, bottomup_matcher_t, prepare_gen_t + gen_t];
+        let hast_timings = [
+            exec_data.phase1().sum::<std::time::Duration>(),
+            exec_data.phase2().sum(),
+            exec_data.phase3().sum(),
+        ]
+        .map(|x| x.unwrap());
 
         dbg!(&hast_timings);
         let pp = CompressedBfPostProcess::create(&gt_out);

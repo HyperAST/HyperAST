@@ -39,12 +39,35 @@ const-chunks = "0.3.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
+jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.5.4" }
 
-# [build-dependencies]
 
 [dev-dependencies]
 hyperast_gen_ts_java = { workspace = true }
+criterion = { git = "https://github.com/quentinLeDilavrec/criterion.rs", rev = "0301588ad4e88e7911330a77c4bc1edee6677c27", features = [
+    "rayon",
+    "plotters",
+    "cargo_bench_support",
+    "html_reports",
+] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+iai-callgrind = "0.14.0"
+criterion-perf-events = { version = "=0.4.0" }
+perfcnt = "0.8.0"
 
 # [[bin]]
 # name = "window_combination"
 # path = "binwindow_combination.rs"
+
+[[bench]]
+name = "bottomup_runtime_repo"
+harness = false
+
+[[bench]]
+name = "mapping_runtime_repo"
+harness = false
+
+[[bench]]
+name = "iai_gumtree_comparison"
+harness = false

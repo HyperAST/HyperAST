@@ -1,4 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use std::hint::black_box;
+
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use hyper_diff::tree::tree_path::{self, CompressedTreePath};
 
 fn compare_compressed_path_iter(c: &mut Criterion) {

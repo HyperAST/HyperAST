@@ -18,7 +18,7 @@ use hyperast::PrimInt;
 use hyperast::types::{self, AstLending, Children, Childrn, HyperAST, WithChildren, WithStats};
 
 pub struct LazyPostOrder<IdN, IdD> {
-    pub(super) id_compressed: Box<[IdN]>,
+    pub id_compressed: Box<[IdN]>,
     pub id_parent: Box<[IdD]>,
     /// leftmost leaf descendant of nodes
     pub(crate) llds: Box<[IdD]>,
@@ -41,6 +41,17 @@ impl<IdN: Debug, IdD: PrimInt + Debug> Debug for LazyPostOrder<IdN, IdD> {
             // .field("id_parent", &self.id_parent)
             // .field("llds", &self.llds)
             .finish()
+    }
+}
+
+impl<IdN: Clone, IdD: Clone> Clone for LazyPostOrder<IdN, IdD> {
+    fn clone(&self) -> Self {
+        Self {
+            id_compressed: self.id_compressed.clone(),
+            id_parent: self.id_parent.clone(),
+            llds: self.llds.clone(),
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
@@ -86,12 +97,11 @@ mod impl_ref {
         }
 
         fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
-            let store = self.hyperast;
             let mut r = *x;
             for d in p {
                 let a = self.original(&r);
-                let node = store.resolve(&a);
-                let cs = node.children().filter(|x| x.is_empty());
+                let node = self.hyperast.resolve(&a);
+                let cs = node.children().filter(|x| !x.is_empty());
                 let Some(cs) = cs else {
                     panic!("no children in this tree")
                 };
@@ -369,6 +379,12 @@ where
 
 impl<IdN, IdD: PrimInt> LazyPostOrder<IdN, IdD> {
     pub(crate) fn _size(&self, i: &IdD) -> IdD {
+        debug_assert!(
+            i.to_usize().unwrap() < self.llds.len(),
+            "Accessing _size for index {:?} but llds.len() = {}",
+            i,
+            self.llds.len()
+        );
         *i - self.llds[(*i).to_usize().unwrap()] + one()
     }
 
@@ -556,7 +572,6 @@ where
                     "i is not initialized"
                 );
 
-                // self.decompress_descendants(store, &i);
                 self.decompress_descendants_continuous(&i);
                 i = self.lld(&i);
             }
@@ -647,7 +662,7 @@ where
         for d in p {
             let a = self.original(&r);
             let node = store.resolve(&a);
-            let cs = node.children().filter(|x| x.is_empty());
+            let cs = node.children().filter(|x| !x.is_empty());
             let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
@@ -680,7 +695,9 @@ where
         while i > 0 {
             i -= 1;
             let s = self._size(&c);
-            c = c - s;
+            c = c
+                .checked_sub(&s)
+                .expect("should have called decompress_children before");
             r[i] = c;
         }
         assert_eq!(
@@ -805,6 +822,14 @@ where
         );
         r
     }
+
+    // fn decompress_descendants(&mut self, x: &IdD) {
+    //     let mut q = vec![x.clone()];
+    //     while let Some(x) = q.pop() {
+    //         assert!(self.id_parent[x.to_usize().unwrap()] != zero());
+    //         q.extend(self.decompress_children(&x));
+    //     }
+    // }
 
     fn decompress_to(&mut self, x: &IdD) -> Self::IdD {
         let mut p = *x;

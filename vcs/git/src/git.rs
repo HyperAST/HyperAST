@@ -5,8 +5,10 @@ use std::{
     process,
 };
 
+pub use git2::Error;
 pub use git2::Oid;
-use git2::{RemoteCallbacks, Repository, Revwalk, TreeEntry};
+pub use git2::Repository;
+use git2::{RemoteCallbacks, Revwalk, TreeEntry};
 use hyperast::{position::Position, utils::Url};
 
 use crate::processing::ObjectName;

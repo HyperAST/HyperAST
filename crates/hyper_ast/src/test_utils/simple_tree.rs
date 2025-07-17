@@ -1,28 +1,40 @@
+use crate::types::{
+    HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
+    WithChildren, WithStats,
+};
+use crate::{store::nodes::compo, types};
+use num::{NumCast, PrimInt, ToPrimitive, cast};
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display},
     marker::PhantomData,
 };
 
-use num::{NumCast, PrimInt, ToPrimitive, cast};
-
-use crate::types::{
-    HashKind, HyperType, LabelStore, Labeled, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
-    WithChildren, WithStats,
-};
-
-pub struct SimpleTree<K> {
+pub struct SimpleTree<K, DD = ()> {
     kind: K,
     label: Option<String>,
-    children: Vec<SimpleTree<K>>,
+    children: Vec<SimpleTree<K, DD>>,
+    derived_data: DD,
 }
 
-impl<K> SimpleTree<K> {
-    pub fn new(k: K, l: Option<&str>, c: Vec<SimpleTree<K>>) -> Self {
+impl<K, DD: Default> SimpleTree<K, DD> {
+    pub fn new(k: K, l: Option<&str>, c: Vec<SimpleTree<K, DD>>) -> Self {
         Self {
             kind: k,
             label: l.map(|s| s.to_owned()),
             children: c,
+            derived_data: Default::default(),
+        }
+    }
+}
+
+impl<K, DD> SimpleTree<K, DD> {
+    pub fn with_dd(k: K, l: Option<&str>, c: Vec<SimpleTree<K, DD>>, derived_data: DD) -> Self {
+        Self {
+            kind: k,
+            label: l.map(|s| s.to_owned()),
+            children: c,
+            derived_data,
         }
     }
 }
@@ -98,12 +110,7 @@ impl<'a, 'b> DisplayTree<'a, 'b, u16, Tree> {
     }
 }
 
-impl<'a, 'b> Display for DisplayTree<'a, 'b, u16, Tree>
-where
-// T: 'a,// + AsTreeRef<TreeRef<'b, T>>,
-// T: Typed + WithChildren<TreeId = u16> + Labeled<Label = I> + Eq,
-// T::Type: Display,
-{
+impl<'a, 'b> Display for DisplayTree<'a, 'b, u16, Tree> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cs = self.ns.resolve(&self.node);
         writeln!(
@@ -136,16 +143,11 @@ where
 impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cs = self.ns.resolve(&self.node);
-        writeln!(
-            f,
-            "{}|-{}:{}    \t({})\ts{}\th{}",
-            " ".repeat(self.depth),
-            cs.get_type(),
-            self.ls.resolve(cs.get_label_unchecked()),
-            self.node,
-            cs.size(),
-            cs.height(),
-        )?;
+        write!(f, "{}|-{}", " ".repeat(self.depth), cs.get_type(),)?;
+        if let Some(label) = cs.try_get_label() {
+            write!(f, ":{}", self.ls.resolve(label),)?;
+        }
+        writeln!(f, "    \t({})\ts{}\th{}", self.node, cs.size(), cs.height(),)?;
         if let Some(cs) = cs.children() {
             let cs: Vec<_> = cs.into();
             for n in cs {
@@ -167,7 +169,6 @@ impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
 #[allow(dead_code)]
 fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
     let label_store = LS::<u16> {
-        // v: RefCell::new(vec![b"".to_vec()]),
         v: Default::default(),
         phantom: PhantomData,
     };
@@ -184,41 +185,12 @@ pub struct Tree {
     pub height: u16,
 }
 
-// impl<'a> ApplicableActions<Tree,TreeRef<'a,Tree>> for ActionsVec<SimpleAction<Tree>> {
-//     fn build(
-//         t: <Tree as Typed>::Type,
-//         l: <Tree as Labeled>::Label,
-//         cs: Vec<<Tree as Stored>::TreeId>,
-//     ) -> Tree {
-//         Tree {
-//             t,
-//             label: l,
-//             children: cs,
-//         }
-//     }
-// }
-// impl<'a> crate::types::NodeStoreExt<'a, Tree, TreeRef<'a, Tree>> for NS<Tree> {
-//     fn build_then_insert(
-//         &mut self,
-//         t: <TreeRef<'a, Tree> as crate::types::Typed>::Type,
-//         l: <TreeRef<'a, Tree> as crate::types::Labeled>::Label,
-//         cs: Vec<<Tree as Stored>::TreeId>,
-//     ) -> <Tree as Stored>::TreeId {
-//         let node = Tree {
-//             t,
-//             label: l,
-//             children: cs,
-//         };
-//         self.get_or_insert(node)
-//     }
-// }
-
-impl crate::types::NodeStoreExt<Tree> for NS<Tree> {
+impl types::NodeStoreExt<Tree> for NS<Tree> {
     fn build_then_insert(
         &mut self,
-        _i: <Tree as crate::types::Stored>::TreeId,
-        t: <Tree as crate::types::Typed>::Type,
-        _l: Option<<Tree as crate::types::Labeled>::Label>,
+        _i: <Tree as types::Stored>::TreeId,
+        t: <Tree as types::Typed>::Type,
+        _l: Option<<Tree as types::Labeled>::Label>,
         cs: Vec<<Tree as Stored>::TreeId>,
     ) -> <Tree as Stored>::TreeId {
         let node = Tree {
@@ -232,7 +204,7 @@ impl crate::types::NodeStoreExt<Tree> for NS<Tree> {
     }
 }
 
-impl crate::types::Typed for Tree {
+impl types::Typed for Tree {
     type Type = u8;
 
     fn get_type(&self) -> Self::Type {
@@ -240,13 +212,13 @@ impl crate::types::Typed for Tree {
     }
 }
 
-impl crate::types::WithSerialization for Tree {
+impl types::WithSerialization for Tree {
     fn try_bytes_len(&self) -> Option<usize> {
         todo!()
     }
 }
 
-impl<T> crate::types::WithSerialization for TreeRef<'_, T> {
+impl<T> types::WithSerialization for TreeRef<'_, T> {
     fn try_bytes_len(&self) -> Option<usize> {
         todo!()
     }
@@ -257,14 +229,14 @@ impl<T> Clone for TreeRef<'_, T> {
     }
 }
 
-impl<T: crate::types::Typed> crate::types::Typed for TreeRef<'_, T> {
+impl<T: types::Typed> types::Typed for TreeRef<'_, T> {
     type Type = T::Type;
 
     fn get_type(&self) -> Self::Type {
         self.0.get_type()
     }
 }
-impl crate::types::Labeled for Tree {
+impl types::Labeled for Tree {
     type Label = u16;
 
     fn get_label_unchecked(&self) -> &Self::Label {
@@ -272,10 +244,10 @@ impl crate::types::Labeled for Tree {
     }
 
     fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
-        Some(self.get_label_unchecked())
+        (self.label != 0).then_some(self.get_label_unchecked())
     }
 }
-impl<T: crate::types::Labeled> crate::types::Labeled for TreeRef<'_, T> {
+impl<T: types::Labeled> types::Labeled for TreeRef<'_, T> {
     type Label = T::Label;
 
     fn get_label_unchecked(&self) -> &Self::Label {
@@ -283,12 +255,12 @@ impl<T: crate::types::Labeled> crate::types::Labeled for TreeRef<'_, T> {
     }
 
     fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
-        Some(self.get_label_unchecked())
+        self.0.try_get_label()
     }
 }
-impl crate::types::Node for Tree {}
-impl<T: crate::types::Node> crate::types::Node for TreeRef<'_, T> {}
-impl crate::types::Tree for Tree {
+impl types::Node for Tree {}
+impl<T: types::Node> types::Node for TreeRef<'_, T> {}
+impl types::Tree for Tree {
     fn has_children(&self) -> bool {
         self.children.len() > 0
     }
@@ -298,7 +270,7 @@ impl crate::types::Tree for Tree {
     }
 }
 
-impl crate::types::ErasedHolder for Tree {
+impl types::ErasedHolder for Tree {
     fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<Ty>() {
             let t = &self.t;
@@ -310,13 +282,13 @@ impl crate::types::ErasedHolder for Tree {
     }
 }
 
-impl<'a, T: crate::types::Tree> crate::types::ErasedHolder for TreeRef<'_, T> {
+impl<'a, T: types::Tree> types::ErasedHolder for TreeRef<'_, T> {
     fn unerase_ref<TT: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&TT> {
         self.0.unerase_ref(tid)
     }
 }
 
-impl<T: crate::types::Tree> crate::types::Tree for TreeRef<'_, T>
+impl<T: types::Tree> types::Tree for TreeRef<'_, T>
 where
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
@@ -329,19 +301,19 @@ where
     }
 }
 
-impl crate::types::Stored for Tree {
+impl types::Stored for Tree {
     type TreeId = u16;
 }
-impl<T: crate::types::Stored> crate::types::Stored for TreeRef<'_, T> {
+impl<T: types::Stored> types::Stored for TreeRef<'_, T> {
     type TreeId = T::TreeId;
 }
 
-impl<'a> crate::types::CLending<'a, u8, u16> for Tree {
-    type Children = crate::types::ChildrenSlice<'a, u16>;
+impl<'a> types::CLending<'a, u8, u16> for Tree {
+    type Children = types::ChildrenSlice<'a, u16>;
 }
 
-impl<'a> crate::types::CLending<'a, u16, u16> for Tree {
-    type Children = crate::types::ChildrenSlice<'a, u16>;
+impl<'a> types::CLending<'a, u16, u16> for Tree {
+    type Children = types::ChildrenSlice<'a, u16>;
 }
 
 impl WithChildren for Tree {
@@ -360,16 +332,16 @@ impl WithChildren for Tree {
         self.children.get(idx.to_usize().unwrap()).copied()
     }
 
-    fn children(&self) -> Option<crate::types::LendC<'_, Self, u8, u16>> {
+    fn children(&self) -> Option<types::LendC<'_, Self, u8, u16>> {
         Some(self.children.as_slice().into())
     }
 }
 
-impl<'a, T: WithChildren> crate::types::CLending<'a, T::ChildIdx, T::TreeId> for TreeRef<'_, T>
+impl<'a, T: WithChildren> types::CLending<'a, T::ChildIdx, T::TreeId> for TreeRef<'_, T>
 where
-    T: crate::types::CLending<'a, T::ChildIdx, T::TreeId>,
+    T: types::CLending<'a, T::ChildIdx, T::TreeId>,
 {
-    type Children = <T as crate::types::CLending<'a, T::ChildIdx, T::TreeId>>::Children;
+    type Children = <T as types::CLending<'a, T::ChildIdx, T::TreeId>>::Children;
 }
 
 impl<T: WithChildren> WithChildren for TreeRef<'_, T>
@@ -397,7 +369,7 @@ where
 
     fn children(
         &self,
-    ) -> Option<crate::types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
+    ) -> Option<types::LendC<'_, Self, Self::ChildIdx, <Self::TreeId as NodeId>::IdN>> {
         self.0.children()
     }
 }
@@ -416,6 +388,26 @@ impl WithStats for Tree {
     }
 }
 
+impl types::WithMetaData<compo::StmtCount> for Tree {
+    fn get_metadata(&self) -> Option<&compo::StmtCount> {
+        if (42..52).contains(&self.t) {
+            return Some(&compo::StmtCount(1));
+        }
+        (52..62).contains(&self.t).then_some(&compo::StmtCount(2))
+    }
+}
+
+impl types::WithMetaData<compo::MemberImportCount> for Tree {
+    fn get_metadata(&self) -> Option<&compo::MemberImportCount> {
+        if (100..120).contains(&self.t) {
+            return Some(&compo::MemberImportCount(1));
+        }
+        (100..140)
+            .contains(&self.t)
+            .then_some(&compo::MemberImportCount(2))
+    }
+}
+
 impl<T: Stored + WithStats> WithStats for TreeRef<'_, T>
 where
     T::TreeId: Clone,
@@ -430,6 +422,22 @@ where
 
     fn line_count(&self) -> usize {
         self.0.line_count()
+    }
+}
+
+impl<T: Stored + types::WithMetaData<compo::StmtCount>> types::WithMetaData<compo::StmtCount>
+    for TreeRef<'_, T>
+{
+    fn get_metadata(&self) -> Option<&compo::StmtCount> {
+        self.0.get_metadata()
+    }
+}
+
+impl<T: Stored + types::WithMetaData<compo::MemberImportCount>>
+    types::WithMetaData<compo::MemberImportCount> for TreeRef<'_, T>
+{
+    fn get_metadata(&self) -> Option<&compo::MemberImportCount> {
+        self.0.get_metadata()
     }
 }
 
@@ -456,7 +464,7 @@ impl std::ops::Deref for H {
     }
 }
 
-impl crate::types::WithHashs for Tree {
+impl types::WithHashs for Tree {
     type HK = H;
     type HP = u8;
     fn hash(&self, _kind: impl std::ops::Deref<Target = Self::HK>) -> u8 {
@@ -464,7 +472,7 @@ impl crate::types::WithHashs for Tree {
     }
 }
 
-impl<T: crate::types::WithHashs> crate::types::WithHashs for TreeRef<'_, T> {
+impl<T: types::WithHashs> types::WithHashs for TreeRef<'_, T> {
     type HK = T::HK;
     type HP = T::HP;
     fn hash(&self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
@@ -476,19 +484,19 @@ pub struct NS<T> {
     v: Vec<T>,
 }
 
-impl<T: 'static + crate::types::Tree> crate::types::NStore for NS<T> {
-    type IdN = <T as crate::types::Stored>::TreeId;
+impl<T: 'static + types::Tree> types::NStore for NS<T> {
+    type IdN = <T as types::Stored>::TreeId;
     type Idx = T::ChildIdx;
 }
 
-impl<'a, T: crate::types::Tree> crate::types::NLending<'a, T::TreeId> for NS<T>
+impl<'a, T: types::Tree> types::NLending<'a, T::TreeId> for NS<T>
 where
     T::TreeId: ToPrimitive,
 {
     type N = TreeRef<'a, T>;
 }
 
-impl<T: crate::types::Tree> NodeStore<T::TreeId> for NS<T>
+impl<T: types::Tree> NodeStore<T::TreeId> for NS<T>
 where
     T::TreeId: ToPrimitive,
 {
@@ -500,54 +508,7 @@ where
 #[derive(PartialEq, Eq)]
 pub struct TreeRef<'a, T>(&'a T);
 
-// impl<'a> AsTreeRef<TreeRef<'a, Tree>> for Tree {
-//     fn as_tree_ref(&self) -> TreeRef<'a,Tree> {
-//         TreeRef(self)
-//     }
-// }
-// impl<'a, T> AsTreeRef<TreeRef<'a, T>> for TreeRef<'a, T> {
-//     fn as_tree_ref(&self) -> TreeRef<T> {
-//         TreeRef(&self.0)
-//     }
-// }
-
-// impl<'a> AsTreeRef<TreeRef<'a, SimpleTree<u8>>> for SimpleTree<u8> {
-//     fn as_tree_ref(&self) -> TreeRef<SimpleTree<u8>> {
-//         TreeRef(self)
-//     }
-// }
-
-// impl<'a, T: AsTreeRef<R> + WithChildren + Eq, R: 'a + WithChildren<TreeId = T::TreeId> + Eq>
-//     NodeStoreMut<'a, T, R> for NS<T>
-// where
-//     <T as Stored>::TreeId: PrimInt,
-// {
-//     fn get_or_insert(&mut self, node: T) -> <T as Stored>::TreeId {
-//         let p = self.v.iter().position(|x| node.eq(x));
-//         if let Some(p) = p {
-//             self.v[p] = node;
-//             cast::<usize, R::TreeId>(p).unwrap()
-//         } else {
-//             self.v.push(node);
-//             cast::<usize, R::TreeId>(self.v.len() - 1).unwrap()
-//         }
-//     }
-// }
-
-// impl NodeStoreMut2<Tree> for NS<Tree> {
-//     fn get_or_insert(&mut self, node: Tree) -> u16 {
-//         let p = self.v.iter().position(|x| node.eq(x));
-//         if let Some(p) = p {
-//             self.v[p] = node;
-//             cast::<usize, u16>(p).unwrap()
-//         } else {
-//             self.v.push(node);
-//             cast::<usize, u16>(self.v.len() - 1).unwrap()
-//         }
-//     }
-// }
-
-impl<T: crate::types::Tree + Eq> NodeStoreMut<T> for NS<T>
+impl<T: types::Tree + Eq> NodeStoreMut<T> for NS<T>
 where
     T::TreeId: ToPrimitive + NumCast,
 {
@@ -613,17 +574,17 @@ where
 
 pub struct LS<I> {
     // v: RefCell<Vec<crate::types::OwnedLabel>>,
-    v: Vec<crate::types::OwnedLabel>,
+    v: Vec<types::OwnedLabel>,
     phantom: PhantomData<*const I>,
 }
 
-impl<'a, I> crate::types::LStore for LS<I> {
+impl<'a, I> types::LStore for LS<I> {
     type I = I;
 }
 
-impl<'a, I: PrimInt> LabelStore<crate::types::SlicedLabel> for LS<I> {
+impl<'a, I: PrimInt> LabelStore<types::SlicedLabel> for LS<I> {
     type I = I;
-    fn get_or_insert<T: Borrow<crate::types::SlicedLabel>>(&mut self, node: T) -> Self::I {
+    fn get_or_insert<T: Borrow<types::SlicedLabel>>(&mut self, node: T) -> Self::I {
         let a = &mut self.v;
         let b = a
             .iter()
@@ -631,26 +592,26 @@ impl<'a, I: PrimInt> LabelStore<crate::types::SlicedLabel> for LS<I> {
             .find_map(|(i, x)| if x.eq(node.borrow()) { Some(i) } else { None })
             .to_owned();
         if let Some(i) = b {
-            cast(i).unwrap()
+            cast(i + 1).unwrap()
         } else {
             let l = a.len();
             a.push(node.borrow().to_owned());
-            cast(l).unwrap()
+            cast(l + 1).unwrap()
         }
     }
 
-    fn get<T: Borrow<crate::types::SlicedLabel>>(&self, node: T) -> Option<Self::I> {
+    fn get<T: Borrow<types::SlicedLabel>>(&self, node: T) -> Option<Self::I> {
         let a = &self.v;
         let b = a
             .iter()
             .enumerate()
             .find_map(|(i, x)| if x.eq(node.borrow()) { Some(i) } else { None })
             .to_owned();
-        b.map(|i| cast(i).unwrap())
+        b.map(|i| cast(i + 1).unwrap())
     }
 
-    fn resolve(&self, id: &Self::I) -> &crate::types::SlicedLabel {
-        &self.v[cast::<Self::I, usize>(*id).unwrap()]
+    fn resolve(&self, id: &Self::I) -> &types::SlicedLabel {
+        &self.v[cast::<Self::I, usize>(*id).unwrap() - 1]
     }
 }
 
@@ -678,22 +639,26 @@ pub struct TStore;
 pub struct Ty(u8);
 
 impl Display for Ty {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
 impl HyperType for Ty {
-    fn as_shared(&self) -> crate::types::Shared {
+    fn as_shared(&self) -> types::Shared {
         todo!()
     }
 
-    fn as_abstract(&self) -> crate::types::Abstracts {
-        todo!()
+    fn as_abstract(&self) -> types::Abstracts {
+        if (42..62).contains(&self.0) {
+            types::Abstract::Statement.into()
+        } else {
+            Default::default()
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
@@ -704,19 +669,22 @@ impl HyperType for Ty {
         todo!()
     }
 
-    fn generic_eq(&self, _other: &dyn HyperType) -> bool
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized,
     {
-        todo!()
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other_concrete) => self == other_concrete,
+            _ => false,
+        }
     }
 
     fn is_file(&self) -> bool {
-        todo!()
+        false
     }
 
     fn is_directory(&self) -> bool {
-        todo!()
+        false
     }
 
     fn is_spaces(&self) -> bool {
@@ -739,18 +707,18 @@ impl HyperType for Ty {
         todo!()
     }
 
-    fn get_lang(&self) -> crate::types::LangWrapper<Self>
+    fn get_lang(&self) -> types::LangWrapper<Self>
     where
         Self: Sized,
     {
         todo!()
     }
 
-    fn lang_ref(&self) -> crate::types::LangWrapper<crate::types::AnyType> {
+    fn lang_ref(&self) -> types::LangWrapper<types::AnyType> {
         todo!()
     }
 }
 
-impl crate::types::TypeStore for TStore {
+impl types::TypeStore for TStore {
     type Ty = self::Ty;
 }

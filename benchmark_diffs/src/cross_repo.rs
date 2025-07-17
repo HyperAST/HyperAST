@@ -1,25 +1,16 @@
-use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
-
-use hyperast::{
-    types::{LabelStore, WithStats},
-    utils::memusage_linux,
-};
-use hyperast_vcs_git::{
-    maven::MavenModuleAcc,
-    maven_processor::MavenProcessorHolder,
-    multi_preprocessed::PreProcessedRepositories,
-    processing::{
-        CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait, erased::ParametrizedCommitProc2,
-    },
-};
+use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess};
+use crate::{other_tools, window_combination::write_perfs};
+use hyper_diff::algorithms;
+use hyperast::types::{LabelStore, WithStats};
+use hyperast::utils::memusage_linux;
+use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
+use hyperast_vcs_git::processing::ConfiguredRepoHandle2;
+use hyperast_vcs_git::processing::erased::ParametrizedCommitProc2 as _;
+use hyperast_vcs_git::processing::{CacheHolding as _, ConfiguredRepoTrait as _};
+use hyperast_vcs_git::{maven::MavenModuleAcc, maven_processor::MavenProcessorHolder};
 use num_traits::ToPrimitive;
-
-use crate::{
-    other_tools,
-    postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
-    window_combination::write_perfs,
-};
-use hyper_diff::algorithms::{self, ComputeTime};
+use std::io::Write;
+use std::path::PathBuf;
 
 pub struct CommitCompareParameters<'a> {
     pub configured_repo: ConfiguredRepoHandle2,
@@ -76,14 +67,13 @@ pub fn windowed_commits_compare(
     // );
     let mut loop_count = 0;
 
-    let mut buf = out
-        .map(|out| (File::create(out.0).unwrap(), File::create(out.1).unwrap()))
-        .map(|file| {
-            (
-                BufWriter::with_capacity(4 * 8 * 1024, file.0),
-                BufWriter::with_capacity(4 * 8 * 1024, file.1),
-            )
-        });
+    use std::fs::File;
+    use std::io::BufWriter;
+    let prep_buf = |out| {
+        let f = File::create(out).unwrap();
+        BufWriter::with_capacity(4 * 8 * 1024, f)
+    };
+    let mut buf = out.map(|out| (prep_buf(out.0), prep_buf(out.1)));
     if let Some((buf_validity, buf_perfs)) = &mut buf {
         writeln!(
             buf_validity,
@@ -200,17 +190,18 @@ pub fn windowed_commits_compare(
             }
 
             log::warn!("ed+mappings size: {}", memusage_linux() - mu);
-            let total_lazy_t: f64 = summarized_lazy.time();
+            let total_lazy_t: std::time::Duration = summarized_lazy.exec_data.sum().unwrap();
             dbg!(&total_lazy_t);
 
             let gt_out_format = "COMPRESSED"; // JSON
+            let timeout = total_lazy_t.mul_f64(20.).as_secs_f64();
             let gt_out = other_tools::gumtree::subprocess(
                 &hyperast,
                 src_tr,
                 dst_tr,
                 "gumtree",
                 diff_algorithm,
-                (total_lazy_t * 20.).ceil().to_u64().unwrap(),
+                timeout.ceil().to_u64().unwrap(),
                 gt_out_format,
             );
             let res = if gt_out_format == "COMPRESSED" {
@@ -291,11 +282,11 @@ pub fn windowed_commits_compare(
                         gt_counts.mappings,
                         gt_counts.actions,
                         0.0,
-                        &gt_timings[0],
+                        &gt_timings[0].as_secs_f64(),
                         0.0,
-                        &gt_timings[1],
+                        &gt_timings[1].as_secs_f64(),
                         0.0,
-                        &gt_timings[2],
+                        &gt_timings[2].as_secs_f64(),
                     )
                     .unwrap();
                 } else {
@@ -356,42 +347,41 @@ pub fn windowed_commits_compare(
                 .unwrap();
                 buf_validity.flush().unwrap();
                 buf_perfs.flush().unwrap();
-            } else {
-                if let Some((gt_timings, gt_counts, valid)) = res {
-                    dbg!(&gt_timings);
-                    println!(
-                        "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                        src_s,
-                        dst_s,
-                        Into::<isize>::into(&src_mem),
-                        Into::<isize>::into(&dst_mem),
-                        summarized_lazy.actions.map_or(-1, |x| x as isize),
-                        gt_counts.actions,
-                        valid.missing_mappings,
-                        valid.additional_mappings,
-                        &gt_timings[0],
-                        &gt_timings[1],
-                        &gt_timings[2],
-                        summarized_lazy.mapping_durations.preparation[0],
-                        summarized_lazy.mapping_durations.mappings.0[0],
-                        summarized_lazy.mapping_durations.preparation[1],
-                        summarized_lazy.mapping_durations.mappings.0[1],
-                        summarized_lazy.gen_t,
-                        summarized_lazy.prepare_gen_t,
-                        not_lazy.mapping_durations.preparation[0],
-                        not_lazy.mapping_durations.mappings.0[0],
-                        not_lazy.mapping_durations.preparation[1],
-                        not_lazy.mapping_durations.mappings.0[1],
-                        not_lazy.prepare_gen_t,
-                        not_lazy.gen_t,
-                        partial_lazy.mapping_durations.preparation[0],
-                        partial_lazy.mapping_durations.mappings.0[0],
-                        partial_lazy.mapping_durations.preparation[1],
-                        partial_lazy.mapping_durations.mappings.0[1],
-                        partial_lazy.prepare_gen_t,
-                        partial_lazy.gen_t,
-                    );
-                }
+            } else if let Some((gt_timings, gt_counts, valid)) = res {
+                dbg!(&gt_timings);
+                let sumrzd_lazy = summarized_lazy;
+                println!(
+                    "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    src_s,
+                    dst_s,
+                    Into::<isize>::into(&src_mem),
+                    Into::<isize>::into(&dst_mem),
+                    sumrzd_lazy.actions.map_or(-1, |x| x as isize),
+                    gt_counts.actions,
+                    valid.missing_mappings,
+                    valid.additional_mappings,
+                    &gt_timings[0].as_secs_f64(),
+                    &gt_timings[1].as_secs_f64(),
+                    &gt_timings[2].as_secs_f64(),
+                    sumrzd_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                    sumrzd_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                    sumrzd_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                    sumrzd_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                    sumrzd_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                    sumrzd_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                    not_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                    not_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                    not_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                    not_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                    not_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                    not_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                    partial_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                    partial_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                    partial_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                    partial_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                    partial_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                    partial_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                );
             }
         }
         log::warn!("done computing diff {loop_count}");

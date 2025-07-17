@@ -12,23 +12,26 @@ bitvec = "1.0.1"
 str-distance = "0.1.0"
 log = { version = "0.4.6" }
 hyperast = { workspace = true, features = ["native", "legion"] }
+rand = "0.9.1"
 
 logging_timer = "1.1.0"
 
+jemallocator = { package = "tikv-jemallocator", version = "0.5.0" }
+jemalloc-ctl = { package = "tikv-jemalloc-ctl", version = "0.5.4" }
+
 [dev-dependencies]
-criterion = { version = "0.5.1", features = [
+criterion = { version = "0.6.0", features = [
     "rayon",
     "plotters",
     "cargo_bench_support",
     "html_reports",
-    # "real_blackbox", # need nightly
 ] }
 env_logger = "0.11.3"
 hungarian = "1.1.1"
 
 hyperast_gen_ts_java = { workspace = true, features = ["impl"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(target_os = "linux")'.dev-dependencies]
 iai-callgrind = "0.14.0"
 
 [features]

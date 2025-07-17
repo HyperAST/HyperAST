@@ -104,6 +104,14 @@ pub trait LazyDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
     #[must_use]
     fn decompress_children(&mut self, x: &Self::IdD) -> Vec<Self::IdD>;
     fn decompress_to(&mut self, x: &IdS) -> Self::IdD;
+
+    fn decompress_descendants(&mut self, x: &Self::IdD) {
+        let mut q = self.decompress_children(x);
+        while let Some(x) = q.pop() {
+            // assert!(self.id_parent[x.to_usize().unwrap()] != zero());
+            q.extend(self.decompress_children(&x));
+        }
+    }
 }
 
 pub trait DecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD>:
@@ -228,14 +236,6 @@ pub trait PostOrderKeyRoots<HAST: HyperAST + Copy, IdD>:
 pub struct Iter<IdD> {
     current: IdD,
     len: IdD,
-}
-
-#[cfg(debug_assertions)]
-#[allow(unused)]
-impl<IdD> Iter<IdD> {
-    pub(crate) fn new(current: IdD, len: IdD) -> Self {
-        Self { current, len }
-    }
 }
 
 impl<IdD: PrimInt> Iterator for Iter<IdD> {

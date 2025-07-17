@@ -1,9 +1,9 @@
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
+use std::hint::black_box;
 use std::path::Path;
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-
 mod shared;
-use hyperast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[BenchQuery] = &[

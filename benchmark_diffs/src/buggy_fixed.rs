@@ -1,26 +1,22 @@
-use std::{env, fs::File, io::Write, path::Path, time::Instant};
-
-use crate::{
-    other_tools,
-    postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess},
-    preprocess::{JavaPreprocessFileSys, iter_dirs, parse_dir_pair, parse_string_pair},
-    tempfile,
-};
-use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
-// use hyperast_gen_ts_java::types::TStore;
+use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess};
+use crate::preprocess::{JavaPreprocessFileSys, iter_dirs, parse_dir_pair, parse_string_pair};
+use crate::{other_tools, tempfile};
 use hyper_diff::actions::Actions;
-use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
+use hyper_diff::algorithms;
+use hyper_diff::algorithms::{DiffResult, RuntimeMeasurement};
+use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
+use std::{env, fs::File, io::Write, path::Path, time::Instant};
 
 const DATASET_FORMAT: i32 = 1; // ok as of 33024da8de4c519bb1c1146b19d91d6cb4c81ea6
 // TODO find when format of dataset changed
 
-pub fn buggy_fixed_dataset_roots(root: &Path) -> [std::path::PathBuf; 2] {
-    let datasets = root.parent().unwrap().join("gt_datasets");
+pub fn buggy_fixed_dataset_roots(root: &Path, dataset: impl ToString) -> [std::path::PathBuf; 2] {
+    let datasets = root.parent().unwrap().join("datasets");
     assert!(
         datasets.exists(),
         "you should clone the gumtree dataset:\n`cd ..; git clone git@github.com:GumTreeDiff/datasets.git gt_datasets; cd gt_datasets; git checkout 33024da8de4c519bb1c1146b19d91d6cb4c81ea6`"
     );
-    let data_root = datasets.join("defects4j");
+    let data_root = datasets.join(dataset.to_string());
     assert!(
         data_root.exists(),
         "this dataset does not exist or was renamed"
@@ -57,7 +53,7 @@ fn test_simple_1() {
         algorithms::gumtree::diff(
             &stores,
             &src_tr.local.compressed_node,
-            &dst_tr.local.compressed_node
+            &dst_tr.local.compressed_node,
         )
         .actions
         .unwrap()
@@ -70,7 +66,7 @@ fn test_crash1() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Cli/22/src_java_org_apache_commons_cli_PosixParser.java"));
     let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
@@ -99,7 +95,7 @@ fn test_perf_mokito() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] = src_dst
         .map(|x| x.join("Mockito/34/src_org_mockito_internal_invocation_InvocationMatcher.java"));
     let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
@@ -1344,7 +1340,7 @@ fn compare_perfs() {
     // let buggy_path = Path::new("../../gt_datasets/defects4j/buggy/JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java");
     // let fixed_path = Path::new("../../gt_datasets/defects4j/fixed/JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap());
+    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap(), "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Cli/22/src_java_org_apache_commons_cli_PosixParser.java"));
 
@@ -1413,7 +1409,7 @@ pub fn bad_perfs() {
         .unwrap();
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap());
+    let src_dst = buggy_fixed_dataset_roots(root.parent().unwrap(), "defects4j");
     let [buggy_path, fixed_path] = src_dst.map(|x| {
         x.join(
             "JacksonDatabind/31/src_main_java_com_fasterxml_jackson_databind_util_TokenBuffer.java",
@@ -1469,7 +1465,7 @@ pub fn bad_perfs2() {
         .build()
         .unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Chart/4/source_org_jfree_chart_plot_XYPlot.java"));
     let buggy = std::fs::read_to_string(&buggy_path).expect("the buggy code");
@@ -1518,7 +1514,7 @@ pub fn bad_perfs3() {
     //JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java
     //JxPath/18/src_java_org_apache_commons_jxpath_ri_axes_AttributeContext.java
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Jsoup/91/src_main_java_org_jsoup_UncheckedIOException.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1533,7 +1529,7 @@ pub fn bad_perfs4() {
     //JxPath/8/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationRelationalExpression.java
     //JxPath/18/src_java_org_apache_commons_jxpath_ri_axes_AttributeContext.java
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] = src_dst.map(|x| {
         x.join("JxPath/6/src_java_org_apache_commons_jxpath_ri_compiler_CoreOperationCompare.java")
     });
@@ -1544,7 +1540,7 @@ pub fn bad_perfs5() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] = src_dst.map(|x| {
         x.join("Mockito/5/src_org_mockito_internal_verification_VerificationOverTimeImpl.java")
     });
@@ -1555,7 +1551,7 @@ pub fn bad_perfs6() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("JacksonDatabind/25/src_main_java_com_fasterxml_jackson_databind_module_SimpleAbstractTypeResolver.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1565,7 +1561,7 @@ pub fn bad_perfs7() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Chart/19/source_org_jfree_chart_plot_CategoryPlot.simp.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1575,7 +1571,7 @@ pub fn bad_perfs8() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Math/76/src_main_java_org_apache_commons_math_linear_SingularValueDecompositionImpl.simp.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1585,7 +1581,7 @@ pub fn bad_perfs9() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let src_dst = buggy_fixed_dataset_roots(root);
+    let src_dst = buggy_fixed_dataset_roots(root, "defects4j");
     let [buggy_path, fixed_path] =
         src_dst.map(|x| x.join("Jsoup/17/src_main_java_org_jsoup_parser_TreeBuilderState.java"));
     bad_perfs_helper(&buggy_path, &fixed_path);
@@ -1613,18 +1609,16 @@ fn bad_perfs_helper(buggy_path: &Path, fixed_path: &Path) {
         .build()
         .unwrap();
     let DiffResult {
-        mapping_durations,
         mapper,
         actions,
-        prepare_gen_t,
-        gen_t,
+        exec_data,
     } = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
     let actions = actions.unwrap();
-    let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
+    // let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
     match guard.report().build() {
         Ok(report) => {
             let file = File::create("flamegraph.svg").unwrap();
@@ -1638,7 +1632,8 @@ fn bad_perfs_helper(buggy_path: &Path, fixed_path: &Path) {
         }
         Err(_) => {}
     };
-    let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
+    let hast_timings = algorithms::Phased::sum::<std::time::Duration>(&exec_data);
+    // let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
     let gt_out = other_tools::gumtree::subprocess(
         &stores,
         src_tr.local.compressed_node,
@@ -1689,7 +1684,7 @@ fn test_all() {
     //     .build()
     //     .unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root);
+    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root, "defects4j");
     for buggy_project in iter_dirs(&root_buggy) {
         for buggy_case in iter_dirs(&buggy_project.path()) {
             let buggy_path = std::fs::read_dir(buggy_case.path())
@@ -1743,7 +1738,7 @@ fn test_all() {
 /// TODO add to CLI
 pub fn all() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root);
+    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root, "defects4j");
     let args: Vec<String> = env::args().collect();
     let (out_path, mut out_file) = if let Some(op) = args.get(1) {
         (Path::new(op).to_owned(), File::create(&args[1]).unwrap())
@@ -1785,7 +1780,7 @@ pub fn all() {
 /// TODO add to CLI
 pub fn once() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root);
+    let [root_buggy, root_fixed] = buggy_fixed_dataset_roots(root, "defects4j");
     let args: Vec<String> = env::args().collect();
 
     let buggy_path = root_buggy.join(args.get(1).expect("path to buggy file"));
@@ -1843,19 +1838,21 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     .unwrap();
 
     let DiffResult {
-        mapping_durations,
         mapper,
         actions,
-        prepare_gen_t,
-        gen_t,
+        exec_data,
     } = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
-    let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
-    let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
+    let timings = [
+        exec_data.phase1().sum::<std::time::Duration>(),
+        exec_data.phase2().sum(),
+        exec_data.phase3().sum(),
+    ]
+    .map(|x| x.unwrap());
 
     let hast_actions = actions.unwrap().len();
     dbg!(&timings);
@@ -1874,6 +1871,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     } else {
         unimplemented!("gt_out_format {} is not implemented", gt_out_format)
     };
+
     res.map(|(gt_timings, gt_counts, valid)| {
         format!(
             "{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -1884,12 +1882,12 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
             gt_counts.actions,
             valid.missing_mappings,
             valid.additional_mappings,
-            &timings[0],
-            &timings[1],
-            &timings[2],
-            &gt_timings[0],
-            &gt_timings[1],
-            &gt_timings[2],
+            &timings[0].as_secs_f64(),
+            &timings[1].as_secs_f64(),
+            &timings[2].as_secs_f64(),
+            &gt_timings[0].as_secs_f64(),
+            &gt_timings[1].as_secs_f64(),
+            &gt_timings[2].as_secs_f64(),
         )
     })
 }
@@ -1920,13 +1918,10 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let gt_out_format = "COMPRESSED"; // JSON
 
     let DiffResult {
-        mapping_durations,
         mapper,
         actions: hast_actions,
-        prepare_gen_t,
-        gen_t,
+        exec_data,
     } = algorithms::gumtree::diff(&stores, &src_tr.compressed_node, &dst_tr.compressed_node);
-    let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
     let gt_out = other_tools::gumtree::subprocess(
         &stores,
         src_tr.compressed_node,
@@ -1938,7 +1933,12 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     )
     .unwrap();
 
-    let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
+    let timings = [
+        exec_data.phase1().sum::<std::time::Duration>(),
+        exec_data.phase2().sum(),
+        exec_data.phase3().sum(),
+    ]
+    .map(|x| x.unwrap());
 
     dbg!(&timings);
     let res = if gt_out_format == "COMPRESSED" {
@@ -1956,6 +1956,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     } else {
         unimplemented!("gt_out_format {} is not implemented", gt_out_format)
     };
+
     res.map(|(gt_timings, gt_counts, valid)| {
         format!(
             "{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -1966,12 +1967,12 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
             gt_counts.actions,
             valid.missing_mappings,
             valid.additional_mappings,
-            &timings[0],
-            &timings[1],
-            &timings[2],
-            &gt_timings[0],
-            &gt_timings[1],
-            &gt_timings[2],
+            &timings[0].as_secs_f64(),
+            &timings[1].as_secs_f64(),
+            &timings[2].as_secs_f64(),
+            &gt_timings[0].as_secs_f64(),
+            &gt_timings[1].as_secs_f64(),
+            &gt_timings[2].as_secs_f64(),
         )
     })
 }
