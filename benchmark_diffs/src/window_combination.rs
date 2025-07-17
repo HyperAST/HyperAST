@@ -3,12 +3,11 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
-    time::Duration,
 };
 
 use crate::other_tools;
 use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess};
-use hyper_diff::algorithms;
+use hyper_diff::algorithms::{self, RuntimeMeasurement as _};
 use hyperast::{types::WithStats, utils::memusage_linux};
 use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 use hyperast_vcs_git::{git::fetch_github_repository, no_space::as_nospaces2 as as_nospaces};
@@ -254,6 +253,7 @@ pub fn windowed_commits_compare(
                 buf_perfs.flush().unwrap();
             } else {
                 if let Some((gt_timings, gt_counts, valid)) = res {
+                    let sumrzd_lazy = summarized_lazy;
                     dbg!(&gt_timings);
                     println!(
                         "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -261,31 +261,31 @@ pub fn windowed_commits_compare(
                         dst_s,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        summarized_lazy.actions.map_or(-1, |x| x as isize),
+                        sumrzd_lazy.actions.map_or(-1, |x| x as isize),
                         gt_counts.actions,
                         valid.missing_mappings,
                         valid.additional_mappings,
                         &gt_timings[0].as_secs_f64(),
                         &gt_timings[1].as_secs_f64(),
                         &gt_timings[2].as_secs_f64(),
-                        summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
-                        summarized_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
-                        summarized_lazy.mapping_durations.preparation[1].as_secs_f64(),
-                        summarized_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
-                        summarized_lazy.gen_t.as_secs_f64(),
-                        summarized_lazy.prepare_gen_t.as_secs_f64(),
-                        not_lazy.mapping_durations.preparation[0].as_secs_f64(),
-                        not_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
-                        not_lazy.mapping_durations.preparation[1].as_secs_f64(),
-                        not_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
-                        not_lazy.prepare_gen_t.as_secs_f64(),
-                        not_lazy.gen_t.as_secs_f64(),
-                        partial_lazy.mapping_durations.preparation[0].as_secs_f64(),
-                        partial_lazy.mapping_durations.mappings.0[0].as_secs_f64(),
-                        partial_lazy.mapping_durations.preparation[1].as_secs_f64(),
-                        partial_lazy.mapping_durations.mappings.0[1].as_secs_f64(),
-                        partial_lazy.prepare_gen_t.as_secs_f64(),
-                        partial_lazy.gen_t.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                        not_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                        not_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                        not_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                        not_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                        not_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                        not_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
                     );
                 }
             }
@@ -305,9 +305,8 @@ pub(crate) fn write_perfs<Id: Display>(
     oid_dst: &Id,
     src_s: usize,
     dst_s: usize,
-    summarized_lazy: &hyper_diff::algorithms::ResultsSummary<
-        hyper_diff::algorithms::PreparedMappingDurations<2, Duration>,
-        Duration,
+    sumrzd_lazy: &hyper_diff::algorithms::ResultsSummary<
+        hyper_diff::algorithms::PreparedPhased3<hyper_diff::algorithms::LatMem>,
     >,
 ) -> Result<(), std::io::Error> {
     writeln!(
@@ -318,16 +317,20 @@ pub(crate) fn write_perfs<Id: Display>(
         kind,
         src_s,
         dst_s,
-        summarized_lazy.mappings,
-        summarized_lazy.actions.map_or(-1, |x| x as isize),
-        summarized_lazy.mapping_durations.preparation[0].as_secs_f64(),
-        summarized_lazy.mapping_durations.mappings.0[0].as_millis(),
-        summarized_lazy.mapping_durations.preparation[1].as_millis(),
-        summarized_lazy.mapping_durations.mappings.0[1].as_millis(),
-        summarized_lazy.prepare_gen_t.as_millis(),
-        summarized_lazy.gen_t.as_millis(),
-        summarized_lazy.mapping_memory_usages.memory[0],
-        summarized_lazy.mapping_memory_usages.memory[1],
+        sumrzd_lazy.mappings,
+        sumrzd_lazy.actions.map_or(-1, |x| x as isize),
+        sumrzd_lazy.exec_data.phase1().prep.0.as_millis(),
+        sumrzd_lazy.exec_data.phase1().mapping.0.as_millis(),
+        sumrzd_lazy.exec_data.phase2().prep.0.as_millis(),
+        sumrzd_lazy.exec_data.phase2().mapping.0.as_millis(),
+        sumrzd_lazy.exec_data.phase3().prep.0.as_millis(),
+        sumrzd_lazy.exec_data.phase3().mapping.0.as_millis(),
+        (sumrzd_lazy.exec_data.phase1())
+            .sum::<algorithms::AllocatedMemory>()
+            .unwrap(),
+        (sumrzd_lazy.exec_data.phase2())
+            .sum::<algorithms::AllocatedMemory>()
+            .unwrap(),
     )
 }
 
@@ -540,11 +543,7 @@ mod test {
 
         let hyperast = as_nospaces(stores);
         let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
-        dbg!(
-            &partial_lazy.mapping_durations,
-            partial_lazy.prepare_gen_t,
-            partial_lazy.gen_t
-        );
+        dbg!(&partial_lazy.exec_data,);
     }
     #[test]
     fn issue_logging_log4j2_pom() {

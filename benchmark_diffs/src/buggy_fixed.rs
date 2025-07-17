@@ -1,26 +1,22 @@
-use std::{env, fs::File, io::Write, path::Path, time::Instant};
-
-use crate::{
-    other_tools,
-    postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess},
-    preprocess::{JavaPreprocessFileSys, iter_dirs, parse_dir_pair, parse_string_pair},
-    tempfile,
-};
-use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
-// use hyperast_gen_ts_java::types::TStore;
+use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess};
+use crate::preprocess::{JavaPreprocessFileSys, iter_dirs, parse_dir_pair, parse_string_pair};
+use crate::{other_tools, tempfile};
 use hyper_diff::actions::Actions;
-use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
+use hyper_diff::algorithms;
+use hyper_diff::algorithms::{DiffResult, RuntimeMeasurement};
+use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
+use std::{env, fs::File, io::Write, path::Path, time::Instant};
 
 const DATASET_FORMAT: i32 = 1; // ok as of 33024da8de4c519bb1c1146b19d91d6cb4c81ea6
 // TODO find when format of dataset changed
 
-pub fn buggy_fixed_dataset_roots(root: &Path, datset: impl ToString) -> [std::path::PathBuf; 2] {
+pub fn buggy_fixed_dataset_roots(root: &Path, dataset: impl ToString) -> [std::path::PathBuf; 2] {
     let datasets = root.parent().unwrap().join("datasets");
     assert!(
         datasets.exists(),
         "you should clone the gumtree dataset:\n`cd ..; git clone git@github.com:GumTreeDiff/datasets.git gt_datasets; cd gt_datasets; git checkout 33024da8de4c519bb1c1146b19d91d6cb4c81ea6`"
     );
-    let data_root = datasets.join(datset.to_string());
+    let data_root = datasets.join(dataset.to_string());
     assert!(
         data_root.exists(),
         "this dataset does not exist or was renamed"
@@ -1613,19 +1609,16 @@ fn bad_perfs_helper(buggy_path: &Path, fixed_path: &Path) {
         .build()
         .unwrap();
     let DiffResult {
-        mapping_durations,
         mapper,
         actions,
-        prepare_gen_t,
-        gen_t,
-        ..
+        exec_data,
     } = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
     let actions = actions.unwrap();
-    let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
+    // let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
     match guard.report().build() {
         Ok(report) => {
             let file = File::create("flamegraph.svg").unwrap();
@@ -1639,7 +1632,8 @@ fn bad_perfs_helper(buggy_path: &Path, fixed_path: &Path) {
         }
         Err(_) => {}
     };
-    let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
+    let hast_timings = algorithms::Phased::sum::<std::time::Duration>(&exec_data);
+    // let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
     let gt_out = other_tools::gumtree::subprocess(
         &stores,
         src_tr.local.compressed_node,
@@ -1844,20 +1838,21 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     .unwrap();
 
     let DiffResult {
-        mapping_durations,
         mapper,
         actions,
-        prepare_gen_t,
-        gen_t,
-        ..
+        exec_data,
     } = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
-    let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
-    let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
+    let timings = [
+        exec_data.phase1().sum::<std::time::Duration>(),
+        exec_data.phase2().sum(),
+        exec_data.phase3().sum(),
+    ]
+    .map(|x| x.unwrap());
 
     let hast_actions = actions.unwrap().len();
     dbg!(&timings);
@@ -1876,6 +1871,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     } else {
         unimplemented!("gt_out_format {} is not implemented", gt_out_format)
     };
+
     res.map(|(gt_timings, gt_counts, valid)| {
         format!(
             "{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -1922,14 +1918,10 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let gt_out_format = "COMPRESSED"; // JSON
 
     let DiffResult {
-        mapping_durations,
         mapper,
         actions: hast_actions,
-        prepare_gen_t,
-        gen_t,
-        ..
+        exec_data,
     } = algorithms::gumtree::diff(&stores, &src_tr.compressed_node, &dst_tr.compressed_node);
-    let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
     let gt_out = other_tools::gumtree::subprocess(
         &stores,
         src_tr.compressed_node,
@@ -1941,7 +1933,12 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     )
     .unwrap();
 
-    let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
+    let timings = [
+        exec_data.phase1().sum::<std::time::Duration>(),
+        exec_data.phase2().sum(),
+        exec_data.phase3().sum(),
+    ]
+    .map(|x| x.unwrap());
 
     dbg!(&timings);
     let res = if gt_out_format == "COMPRESSED" {
@@ -1959,6 +1956,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     } else {
         unimplemented!("gt_out_format {} is not implemented", gt_out_format)
     };
+
     res.map(|(gt_timings, gt_counts, valid)| {
         format!(
             "{},{},{},{},{},{},{},{},{},{},{},{},{}",

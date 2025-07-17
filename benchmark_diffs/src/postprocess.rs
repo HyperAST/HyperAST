@@ -933,7 +933,7 @@ mod tests {
     };
     use hyperast::store::{SimpleStores, labels::LabelStore, nodes::legion::NodeStore};
     // use hyperast_gen_ts_java::types::TStore;
-    use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
+    use hyper_diff::algorithms::{self, DiffResult, RuntimeMeasurement as _};
 
     #[test]
     fn test() {
@@ -975,12 +975,9 @@ mod tests {
         .unwrap();
 
         let DiffResult {
-            mapping_durations,
             mapper: mapping,
             actions,
-            prepare_gen_t,
-            gen_t,
-            ..
+            exec_data,
         } = algorithms::gumtree::diff(
             &java_gen.main_stores,
             &src_tr.compressed_node,
@@ -992,9 +989,13 @@ mod tests {
         //     dst_arena,
         //     mappings,
         // } = mapping;
-        let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
-        let hast_timings = vec![subtree_matcher_t, bottomup_matcher_t, prepare_gen_t + gen_t];
+        let hast_timings = [
+            exec_data.phase1().sum::<std::time::Duration>(),
+            exec_data.phase2().sum(),
+            exec_data.phase3().sum(),
+        ]
+        .map(|x| x.unwrap());
 
         dbg!(&hast_timings);
         let pp = CompressedBfPostProcess::create(&gt_out);

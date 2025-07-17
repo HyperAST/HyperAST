@@ -114,8 +114,7 @@ fn single(
             &hyperast, &src_tr, &dst_tr,
         );
     let summarized_lazy = &lazy.summarize();
-    use hyper_diff::algorithms::ComputeTime;
-    let total_lazy_t: Duration = summarized_lazy.time();
+    let total_lazy_t: Duration = summarized_lazy.exec_data.sum().unwrap();
     dbg!(summarized_lazy);
     log::warn!("ed+mappings size: {}", memusage_linux() - mu);
     log::warn!("done computing diff");

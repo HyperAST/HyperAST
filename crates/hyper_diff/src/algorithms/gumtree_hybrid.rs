@@ -1,7 +1,6 @@
+use super::DiffResult;
 use super::tr;
-use super::{DiffResult, MappingDurations, PreparedMappingDurations};
-use super::{MappingMemoryUsages, get_allocated_memory};
-use std::{fmt::Debug, time::Instant};
+use std::fmt::Debug;
 
 use super::CDS;
 use super::DiffRes;
@@ -52,29 +51,23 @@ where
     HAST::Label: Debug + Clone + Copy + Eq,
     for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: types::WithHashs + types::WithStats,
 {
-    let mem = get_allocated_memory();
-    let now = Instant::now();
+    let measure = super::DefaultMetricSetup::prepare();
     let mapper: Mapper<_, CDS<HAST>, CDS<HAST>, VecStore<_>> =
         hyperast.decompress_pair(src, dst).into();
     if cfg!(debug_assertions) {
         check_oneshot_decompressed_against_lazy(hyperast, src, dst, &mapper);
     }
-    let subtree_prepare_t = now.elapsed().into();
-    tr!(subtree_prepare_t);
+    let measure = measure.start();
 
-    let now = Instant::now();
     let mapper = GreedySubtreeMatcher::<_, _, _, _, MIN_HEIGHT>::match_it::<
         DefaultMultiMappingStore<_>,
     >(mapper);
-    let subtree_matcher_t = now.elapsed().into();
     let subtree_mappings_s = mapper.mappings().len();
-    let subtree_matcher_m = get_allocated_memory().saturating_sub(mem);
-    tr!(subtree_matcher_t, subtree_mappings_s);
 
-    let bottomup_prepare_t = std::time::Duration::ZERO.into(); // nothing to prepare
+    tr!(subtree_mappings_s);
 
-    let mem = get_allocated_memory();
-    let now = Instant::now();
+    let measure = measure.stop_then_skip_prepare();
+
     let mapper = HybridBottomUpMatcher::<
         _,
         _,
@@ -85,40 +78,29 @@ where
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
     >::match_it(mapper);
-    dbg!(&now.elapsed().as_secs_f64());
-    let bottomup_matcher_t = now.elapsed().into();
+
     let bottomup_mappings_s = mapper.mappings().len();
-    let bottomup_matcher_m = get_allocated_memory().saturating_sub(mem);
 
-    tr!(bottomup_matcher_t, bottomup_mappings_s);
-    let mapping_durations = PreparedMappingDurations {
-        mappings: MappingDurations([subtree_matcher_t, bottomup_matcher_t]),
-        preparation: [subtree_prepare_t, bottomup_prepare_t],
-    };
-    let mapping_memory_usages = MappingMemoryUsages {
-        memory: [subtree_matcher_m, bottomup_matcher_m],
-    };
+    tr!(bottomup_mappings_s);
 
-    let now = Instant::now();
+    let measure = measure.stop_then_prepare();
+
     let mapper = mapper.map(
         |x| x,
         // the dst side has to be traversed in bfs for chawathe
         |dst_arena| SimpleBfsMapper::with_store(hyperast, dst_arena),
     );
-    let prepare_gen_t = now.elapsed().into();
-    tr!(prepare_gen_t);
-    let now = Instant::now();
+    let measure = measure.start();
     let actions = ScriptGenerator::compute_actions(hyperast, &mapper.mapping).ok();
-    let gen_t = now.elapsed().into();
-    tr!(gen_t);
+
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
+
+    let exec_data = measure.stop();
+
     DiffResult {
-        mapping_durations,
-        mapping_memory_usages,
         mapper,
         actions,
-        prepare_gen_t,
-        gen_t,
+        exec_data,
     }
 }
 
