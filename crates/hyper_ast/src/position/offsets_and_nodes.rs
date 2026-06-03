@@ -147,13 +147,7 @@ impl<IdN: Copy, Idx: PrimInt> super::position_accessors::RootedPosition<IdN>
     for StructuralPosition<IdN, Idx>
 {
     fn root(&self) -> IdN {
-        *self.parents.first().unwrap()
-    }
-}
-
-impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
-    pub fn iter_nodes(&self) -> impl Iterator<Item = IdN> {
-        self.parents.iter().rev().skip(1).rev().cloned()
+        self.parents.first().unwrap().clone()
     }
 }
 
@@ -184,7 +178,7 @@ impl<IdN: Copy, Idx: PrimInt> super::position_accessors::SolvedPosition<IdN>
 
 pub struct SPIter<'a, Idx>(std::slice::Iter<'a, Idx>);
 
-impl<Idx: PrimInt> Iterator for SPIter<'_, Idx> {
+impl<'a, Idx: PrimInt> Iterator for SPIter<'a, Idx> {
     type Item = Idx;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -200,9 +194,9 @@ pub struct SolvedStructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
     pub(super) node: IdN,
     _phantom: std::marker::PhantomData<Config>,
 }
-impl<IdN, Idx, C> From<SolvedStructuralPosition<IdN, Idx, C>> for (IdN, Vec<Idx>) {
-    fn from(val: SolvedStructuralPosition<IdN, Idx, C>) -> Self {
-        (val.node, val.offsets)
+impl<IdN, Idx, C> Into<(IdN, Vec<Idx>)> for SolvedStructuralPosition<IdN, Idx, C> {
+    fn into(self) -> (IdN, Vec<Idx>) {
+        (self.node, self.offsets)
     }
 }
 impl<IdN, Idx, C> From<SolvedStructuralPosition<IdN, Idx, C>> for StructuralPosition<IdN, Idx, C> {
@@ -238,9 +232,10 @@ impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx
         self.offsets.last()
     }
 
-    fn check<HAST>(&self, stores: &HAST) -> Result<(), ()>
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
         HAST: HyperAST<IdN = IdN::IdN>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         IdN: NodeId,
         IdN::IdN: NodeId<IdN = IdN::IdN>,
@@ -256,7 +251,7 @@ impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx
             let e = self.parents[i];
             let o = self.offsets[i] - one();
             let p = self.parents[i - 1];
-            let b = stores.node_store().resolve(p.as_id());
+            let b = stores.node_store().resolve(&p.as_id());
             if !b.has_children()
                 || Some(e.as_id()) != b.child(&num::cast(o).expect("too big")).as_ref()
             {

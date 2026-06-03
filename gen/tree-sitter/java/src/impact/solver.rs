@@ -1,17 +1,23 @@
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::ops::{Deref, Index};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    ops::{Deref, Index},
+};
 
 use num::ToPrimitive;
 use string_interner::Symbol;
 
 use crate::impact::declaration::DebugDecls;
 
-use super::declaration::{self, DeclType, Declarator};
-use super::element::{
-    self, Arguments, ExplorableRef, IdentifierFormat, LabelPtr, ListSet, Nodes, RefPtr, RefsEnum,
+use super::{
+    declaration::{self, DeclType, Declarator},
+    element::{
+        self, Arguments, ExplorableRef, IdentifierFormat, LabelPtr, ListSet, Nodes, RefPtr,
+        RefsEnum,
+    },
+    java_element::Primitive,
+    reference,
 };
-use super::{java_element::Primitive, reference};
 
 /// Allow to handle referencial relations i.e. resolve references
 #[derive(Debug, Clone)]

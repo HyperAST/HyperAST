@@ -34,7 +34,7 @@ impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
             "{}",
             self.iter()
                 .map(|x| cast::<_, usize>(x).unwrap().to_string())
-                .fold(String::new(), |a, b| if a.is_empty() { a } else { a + "." }
+                .fold(String::new(), |a, b| if a.len() == 0 { a } else { a + "." }
                     + b.as_str())
         )
     }
@@ -95,14 +95,14 @@ impl<Idx: ToPrimitive> From<&[Idx]> for CompressedTreePath<Idx> {
             loop {
                 let mut br = false;
                 let b = if a >= 128 {
-                    a -= 128;
-                    16 - 1_u8
+                    a = a - 128;
+                    16 - 1 as u8
                 } else if a >= 32 {
-                    a -= 32;
-                    16 - 2_u8
+                    a = a - 32;
+                    16 - 2 as u8
                 } else if a >= 16 - 3 {
-                    a -= 16 - 3;
-                    16 - 3_u8
+                    a = a - (16 - 3);
+                    16 - 3 as u8
                 } else {
                     br = true;
                     a as u8
@@ -175,7 +175,7 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
                 br = true;
                 a
             };
-            c += cast(b).unwrap();
+            c = c + cast(b).unwrap();
             if self.side {
                 self.slice = &self.slice[1..];
             }

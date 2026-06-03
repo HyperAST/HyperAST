@@ -5,7 +5,7 @@ use std::{
 
 use num::ToPrimitive;
 
-use crate::{Capture, utils::SafeUpcast};
+use crate::{utils::SafeUpcast, Capture};
 
 // TODO use indexes on typed collections, it will for me to remove some casts and will help to normalize/generify indexes.
 // it will also make it easier to maintain and change stuff later.
@@ -90,7 +90,7 @@ impl Steps {
         let step_index = step_index.0 as usize;
         step_index < self.0.len()
     }
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &crate::query::QueryStep> {
+    pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &'a crate::query::QueryStep> {
         self.0.iter()
     }
 
@@ -110,7 +110,9 @@ impl Steps {
         }
     }
 
-    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut crate::query::QueryStep> {
+    pub(crate) fn iter_mut<'a>(
+        &'a mut self,
+    ) -> impl Iterator<Item = &'a mut crate::query::QueryStep> {
         self.0.iter_mut()
     }
 
@@ -161,11 +163,7 @@ impl Default for CaptureId {
 
 impl From<u32> for CaptureId {
     fn from(value: u32) -> Self {
-        CaptureId(
-            value
-                .to_u16()
-                .unwrap_or_else(|| panic!("an u16 and not an u32 {value}")),
-        )
+        CaptureId(value.to_u16().expect("an u16 and not an u32"))
     }
 }
 
@@ -194,7 +192,7 @@ impl CaptureId {
     // fn one() -> Self {
     //     Self(1)
     // }
-    pub(crate) fn to_usize(self) -> usize {
+    pub(crate) fn to_usize(&self) -> usize {
         self.0 as usize
     }
 }
@@ -369,7 +367,7 @@ impl<Node> CaptureListPool<Node> {
         if id.0 >= self.list.len() {
             return CaptureSlice::empty();
         };
-        self.list[id.0].as_ref().unwrap()
+        return self.list[id.0].as_ref().unwrap();
     }
     pub(super) fn pop(&mut self, id: CaptureListId) -> Captures<Node> {
         if id.0 >= self.list.len() {
@@ -377,7 +375,7 @@ impl<Node> CaptureListPool<Node> {
         };
         let r = self.list[id.0].take();
         self.free_list_count += 1;
-        r.unwrap()
+        return r.unwrap();
     }
     pub(super) fn acquire(&mut self) -> CaptureListId {
         // First see if any already allocated list is currently unused.
@@ -403,7 +401,7 @@ impl<Node> CaptureListPool<Node> {
             return CaptureListId::MAX;
         }
         self.list.push(Some(Captures(vec![])));
-        CaptureListId(i)
+        return CaptureListId(i);
     }
 }
 
@@ -459,9 +457,9 @@ impl IndexMut<PatternId> for Patterns {
     }
 }
 
-impl From<&crate::utils::Array<crate::ffi_extra::QueryPattern>> for Patterns {
-    fn from(val: &crate::utils::Array<crate::ffi_extra::QueryPattern>) -> Self {
-        Patterns(val.iter().map(|x| x.into()).collect())
+impl Into<Patterns> for &crate::utils::Array<crate::ffi_extra::QueryPattern> {
+    fn into(self) -> Patterns {
+        Patterns(self.iter().map(|x| x.into()).collect())
     }
 }
 
@@ -475,7 +473,7 @@ impl NegatedFields {
         self.0[negated_field_list_id as usize..]
             .iter()
             .take_while(|i| **i != 0)
-            .copied()
+            .map(|x| *x)
     }
 
     pub(crate) fn extend(&self, negated_fields: NegatedFields) -> Vec<u16> {
@@ -491,9 +489,9 @@ impl NegatedFields {
     }
 }
 
-impl From<&crate::utils::Array<crate::ffi::TSFieldId>> for NegatedFields {
-    fn from(val: &crate::utils::Array<crate::ffi::TSFieldId>) -> Self {
-        NegatedFields(val.iter().copied().collect())
+impl Into<NegatedFields> for &crate::utils::Array<crate::ffi::TSFieldId> {
+    fn into(self) -> NegatedFields {
+        NegatedFields(self.iter().map(|x| *x).collect())
     }
 }
 
@@ -503,30 +501,21 @@ pub struct Symbol(u16);
 
 impl Symbol {
     pub const ERROR: Symbol = Symbol(u16::MAX - 1);
-    pub const _ERROR: Symbol = Symbol(u16::MAX - 2);
     pub const NONE: Symbol = Symbol(u16::MAX);
     pub const END: Symbol = Symbol(0);
     pub const WILDCARD_SYMBOL: Symbol = Symbol(0);
     // const WILDCARD_SYMBOL: index::Symbol = index::Symbol(0);
 
-    pub(crate) fn to_usize(self) -> usize {
+    pub(crate) fn to_usize(&self) -> usize {
         self.0 as usize
     }
     pub fn is_error(&self) -> bool {
-        self == &Self::ERROR || self == &Self::_ERROR
+        self == &Self::ERROR
     }
 }
 
 impl From<u16> for Symbol {
     fn from(value: u16) -> Self {
         Symbol(value)
-    }
-}
-
-#[cfg(feature = "hyperast")]
-impl Symbol {
-    pub fn from_type<Ty: 'static + hyperast::types::HyperType>(ty: Ty) -> Self {
-        use hyperast::types::LangRef;
-        Symbol(ty.get_lang().ts_symbol(ty))
     }
 }

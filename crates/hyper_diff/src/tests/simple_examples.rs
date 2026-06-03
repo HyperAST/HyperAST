@@ -1,5 +1,5 @@
-use super::tree;
 use hyperast::test_utils::simple_tree::SimpleTree;
+use super::tree;
 type ST<K> = SimpleTree<K>;
 
 /// example of simple delete

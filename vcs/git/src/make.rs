@@ -1,7 +1,9 @@
 use std::{fmt::Debug, path::PathBuf};
 
-use hyperast::store::defaults::{LabelIdentifier, NodeIdentifier};
-use hyperast::tree_gen::SubTreeMetrics;
+use hyperast::{
+    store::defaults::{LabelIdentifier, NodeIdentifier},
+    tree_gen::SubTreeMetrics,
+};
 use hyperast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyperast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
 

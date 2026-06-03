@@ -87,7 +87,7 @@ pub fn format_pos_as_github_diff_url(repo: &str, oid: &CommitId, position: impl 
     let hash = Sha256::digest(data);
 
     // use base16ct::{Base16, Encoding};
-    let mut buffer = vec![0; 200];
+    let mut buffer = vec![0;200];
     // let base16_hash = Base16::encode(&hash, &mut buffer).unwrap();
     // eprintln!("Base16-encoded hash: {}", base16_hash);
 
@@ -102,7 +102,11 @@ pub fn format_pos_as_github_diff_url(repo: &str, oid: &CommitId, position: impl 
     } else {
         let end = position.line_start() + position.line_count();
         // NOTE the `+ 1` is a standard thing with editors starting at line one and not line zero
-        format!("L{}-L{}", position.line_start() + 1, end + 1)
+        format!(
+            "L{}-L{}",
+            position.line_start() + 1,
+            end + 1
+        )
     };
     let f = position.file();
     format!("{f} https://github.com/{repo}/commit/{oid}#diff-{hash}{value}")
@@ -137,10 +141,9 @@ pub struct PositionWithContext {
     pub start: usize,
     pub end: usize,
     pub id: NodeIdentifier,
-    pub pos: hyperast::position::StructuralPosition<NodeIdentifier, u16>,
-    // pub test_method: Option<NodeIdentifier>,
-    // pub test_class: Option<NodeIdentifier>,
-    // pub blob: NodeIdentifier,
+    pub pos: hyperast::position::StructuralPosition<NodeIdentifier, u16>, // pub test_method: Option<NodeIdentifier>,
+                                                                           // pub test_class: Option<NodeIdentifier>,
+                                                                           // pub blob: NodeIdentifier,
 }
 
 pub fn compute_postions_with_context(

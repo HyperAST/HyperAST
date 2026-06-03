@@ -1,8 +1,9 @@
 use std::fmt::Display;
 
 use hyperast::tree_gen::utils_ts::{TsEnableTS, TsType};
-use hyperast::types::{AnyType, HyperType, LangRef, TypeStore, TypeTrait, TypeU16, TypedNodeId};
-use hyperast::types::{NodeId, UniformNodeId};
+use hyperast::types::{
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
+};
 
 #[cfg(feature = "legion")]
 mod legion_impls {
@@ -38,7 +39,7 @@ mod legion_impls {
         }
     }
 
-    impl hyperast::types::ETypeStore for TStore {
+    impl<'a> hyperast::types::ETypeStore for TStore {
         type Ty2 = Type;
 
         fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -70,7 +71,7 @@ impl Type {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + UniformNodeId> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -95,7 +96,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
-impl<IdN: Clone + Eq + UniformNodeId> TypedNodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
     type TyErazed = TType;
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
@@ -187,7 +188,6 @@ impl LangRef<TType> for Lang {
 }
 
 impl hyperast::types::Lang<Type> for Ts {
-    const INST: Self = Lang;
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -232,9 +232,6 @@ impl HyperType for Type {
 
     fn as_shared(&self) -> hyperast::types::Shared {
         use hyperast::types::Shared;
-        if self.is_error() {
-            return Shared::Error;
-        }
 
         match self {
             Type::ClassDeclaration => Shared::TypeDeclaration,
@@ -247,10 +244,6 @@ impl HyperType for Type {
             Type::Identifier => Shared::Identifier,
             _ => Shared::Other,
         }
-    }
-
-    fn is_error(&self) -> bool {
-        self == &Self::ERROR || self == &Self::_ERROR
     }
 
     fn as_abstract(&self) -> hyperast::types::Abstracts {
@@ -292,7 +285,7 @@ impl HyperType for Type {
     where
         Self: Sized,
     {
-        From::<&'static dyn LangRef<Self>>::from(&Lang)
+        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
     }
     fn lang_ref(&self) -> hyperast::types::LangWrapper<AnyType> {
         todo!()
@@ -401,7 +394,7 @@ impl hyperast::types::LLang<TType> for Ts {
     const TE: &[Self::E] = S_T_L;
 
     fn as_lang_wrapper() -> hyperast::types::LangWrapper<TType> {
-        From::<&'static dyn LangRef<_>>::from(&Lang)
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }
 

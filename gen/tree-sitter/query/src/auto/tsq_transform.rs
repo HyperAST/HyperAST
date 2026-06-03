@@ -1,23 +1,16 @@
-use hyperast::PrimInt;
-use hyperast::store::{SimpleStores, defaults::NodeIdentifier};
-use hyperast::types::{Childrn, Labeled};
+use hyperast::{
+    PrimInt,
+    store::{SimpleStores, defaults::NodeIdentifier},
+    types::{Childrn, Labeled},
+};
 
 use crate::types::TIdN;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Action<Idx, IdN = NodeIdentifier> {
     Delete { path: Vec<Idx> },
     Replace { path: Vec<Idx>, new: IdN },
     Insert { path: Vec<Idx>, new: IdN },
-}
-impl Action<Idx, IdN> {
-    pub fn path(&self) -> &Vec<Idx> {
-        match self {
-            Action::Delete { path } => path,
-            Action::Replace { path, .. } => path,
-            Action::Insert { path, .. } => path,
-        }
-    }
 }
 type Idx = u16;
 type IdN = NodeIdentifier;

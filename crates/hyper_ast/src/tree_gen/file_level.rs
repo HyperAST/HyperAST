@@ -3,7 +3,7 @@ pub trait Accumulator: crate::tree_gen::Accumulator {
 }
 
 impl Accumulator for Acc {
-    type Unlabeled = (Local,);
+    type Unlabeled = (Local, );
 }
 
 trait ProcessorSke<Acc: Accumulator, O = PathBuf> {
@@ -88,12 +88,13 @@ impl PreprocessFileSys {
         &mut self,
         path: PathBuf,
         filesys: &mut FileSys,
-    ) -> (Local,) {
+    ) -> (Local, ) {
         JavaProcessor::<JavaAcc>::new(self, filesys, path).process()
     }
 }
 
-pub fn parse_filesys(r#gen: &mut PreprocessFileSys, path: &Path) -> Local {
+
+pub fn parse_filesys(gen: &mut PreprocessFileSys, path: &Path) -> Local {
     let a = std::fs::read_dir(path)
         .expect(&format!("{:?} should be a dir", path))
         .into_iter()
@@ -113,7 +114,7 @@ pub fn parse_filesys(r#gen: &mut PreprocessFileSys, path: &Path) -> Local {
                             Ok(t) => t,
                             Err(t) => t,
                         };
-                        let full_node = r#gen.generator(file.as_bytes()).generate_file(
+                        let full_node = gen.generator(file.as_bytes()).generate_file(
                             name.as_bytes(),
                             file.as_bytes(),
                             tree.walk(),
@@ -122,14 +123,14 @@ pub fn parse_filesys(r#gen: &mut PreprocessFileSys, path: &Path) -> Local {
                         {
                             let local = full_node.local;
                             let skiped_ana = false; // TODO ez upgrade to handle skipping in files
-                            let name = r#gen.main_stores.label_store.get_or_insert(name);
+                            let name = gen.main_stores.label_store.get_or_insert(name);
                             w.push(name, local, skiped_ana);
                         }
                     }
                 } else if t.is_dir() {
-                    let local = parse_filesys(r#gen, &x.path());
+                    let local = parse_filesys(gen, &x.path());
                     let skiped_ana = false; // TODO ez upgrade to handle skipping in files
-                    let name = r#gen.main_stores.label_store.get_or_insert(
+                    let name = gen.main_stores.label_store.get_or_insert(
                         x.path()
                             .components()
                             .last()
@@ -145,7 +146,7 @@ pub fn parse_filesys(r#gen: &mut PreprocessFileSys, path: &Path) -> Local {
             Err(_) => panic!("no file type"),
         };
     }
-    make(w, &mut r#gen.main_stores)
+    make(w, &mut gen.main_stores)
 }
 
 pub(crate) struct Processor<'fs, 'prepro, Acc> {
@@ -245,7 +246,7 @@ where
             panic!("not file nor dir: {:?}", path);
         }
     }
-    fn post(&mut self, acc: Acc) -> Option<(<Acc as Makeable>::Local,)> {
+    fn post(&mut self, acc: Acc) -> Option<(<Acc as Makeable>::Local, )> {
         let name = acc.name();
         let full_node = acc.make(&mut self.prepro.main_stores);
         let key = full_node.compressed_node.clone();

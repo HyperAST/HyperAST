@@ -1,8 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use tree_sitter::Parser;
-
 use hyperast::store::SimpleStores;
+use tree_sitter::Parser;
 
 use crate::{
     legion::{XmlTreeGen, tree_sitter_parse_xml},

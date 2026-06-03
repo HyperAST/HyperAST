@@ -1,22 +1,7 @@
-//! fully compress all subtrees from a cpp CST
-
-use std::{collections::HashMap, fmt::Debug, vec};
-
-use legion::world::EntryRef;
-use num::ToPrimitive as _;
-
-use hyperast::filter::BloomSize;
-use hyperast::full::FullNode;
-use hyperast::hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs};
-use hyperast::nodes::Space;
-use hyperast::store::SimpleStores;
+use crate::TNode;
+use crate::types::{CEnabledTypeStore, Type};
 use hyperast::store::nodes::compo;
-use hyperast::store::nodes::legion::subtree_builder;
-use hyperast::store::nodes::{
-    DefaultNodeStore as NodeStore, EntityBuilder,
-    legion::{NodeIdentifier, eq_node},
-};
-use hyperast::tree_gen::parser::{Node as _, TreeCursor};
+use hyperast::store::nodes::legion::dyn_builder;
 use hyperast::tree_gen::utils_ts::TTreeCursor;
 use hyperast::tree_gen::{
     self, NoOpMore, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries,
@@ -25,12 +10,27 @@ use hyperast::tree_gen::{
     AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
     SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
     ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+    parser::{Node as _, TreeCursor},
 };
 use hyperast::types;
-use hyperast::types::{LabelStore as _, Role};
-
-use crate::TNode;
-use crate::types::{CEnabledTypeStore, Type};
+use hyperast::{
+    filter::BloomSize,
+    full::FullNode,
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    nodes::Space,
+    store::{
+        SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore, EntityBuilder,
+            legion::{NodeIdentifier, eq_node},
+        },
+    },
+    types::{LabelStore as _, Role},
+};
+use legion::world::EntryRef;
+use num::ToPrimitive as _;
+///! fully compress all subtrees from a cpp CST
+use std::{collections::HashMap, fmt::Debug, vec};
 
 pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
 
@@ -113,7 +113,7 @@ impl Accumulator for Acc {
 }
 
 impl AccIndentation for Acc {
-    fn indentation(&self) -> &Spaces {
+    fn indentation<'a>(&'a self) -> &'a Spaces {
         &self.indentation
     }
 }
@@ -335,7 +335,7 @@ impl<'store, 'cache, TS: CEnabledTypeStore> CTreeGen<'store, 'cache, TS, NoOpMor
     }
 }
 
-impl<'store, 'cache, TS, More> CTreeGen<'store, 'cache, TS, More, true> {
+impl<'store, 'cache, 'acc, TS, More> CTreeGen<'store, 'cache, TS, More, true> {
     pub fn without_hidden_nodes(self) -> CTreeGen<'store, 'cache, TS, More, false> {
         CTreeGen {
             line_break: self.line_break,
@@ -373,7 +373,7 @@ where
         let line_count = spacing
             .matches("\n")
             .count()
-            .to_u32()
+            .to_u16()
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
@@ -497,7 +497,7 @@ where
         let kind = acc.simple.kind;
         let interned_kind = TS::intern(kind);
         let own_line_count = label.as_ref().map_or(0, |l| {
-            l.matches("\n").count().to_u32().expect("too many newlines")
+            l.matches("\n").count().to_u16().expect("too many newlines")
         });
         let metrics = acc.metrics.finalize(&interned_kind, &label, own_line_count);
 
@@ -532,7 +532,7 @@ where
             let vacant = insertion.vacant();
             let node_store: &_ = vacant.1.1;
             let stores = SimpleStores {
-                type_store: self.stores.type_store,
+                type_store: self.stores.type_store.clone(),
                 label_store: &self.stores.label_store,
                 node_store,
             };
@@ -541,7 +541,7 @@ where
                 .match_precomp_queries(stores, &acc, label.as_deref());
             let children_is_empty = acc.simple.children.is_empty();
 
-            let mut dyn_builder = subtree_builder::<TS>(interned_kind);
+            let mut dyn_builder = dyn_builder::EntityBuilder::new();
             dyn_builder.add(bytes_len);
 
             let current_role = Option::take(&mut acc.role.current);
@@ -566,8 +566,8 @@ where
             self.md_cache.insert(
                 compressed_node,
                 MD {
-                    metrics: metrics,
-                    precomp_queries: acc.precomp_queries,
+                    metrics: metrics.clone(),
+                    precomp_queries: acc.precomp_queries.clone(),
                 },
             );
             Local {

@@ -67,12 +67,12 @@ impl<TS: Clone, NS: Clone, LS: Clone> Clone for SimpleStores<TS, NS, LS> {
         Self {
             label_store: self.label_store.clone(),
             node_store: self.node_store.clone(),
-            type_store: self.type_store,
+            type_store: self.type_store.clone(),
         }
     }
 }
 
-impl<TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
+impl<'store, TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
 where
     TS: crate::types::RoleStore,
 {
@@ -91,7 +91,7 @@ where
 impl<IdN, TS, NS, LS> crate::types::NodeStoreLean<IdN> for SimpleStores<TS, NS, LS>
 where
     NS::R: crate::types::Tree<TreeId = IdN>,
-    IdN: crate::types::UniformNodeId,
+    IdN: crate::types::NodeId<IdN = IdN>,
     NS: crate::types::NodeStoreLean<IdN>,
 {
     type R = NS::R;
@@ -101,7 +101,7 @@ where
     }
 }
 
-impl<TS, NS, LS> crate::types::LabelStore<str> for SimpleStores<TS, NS, LS>
+impl<'store, TS, NS, LS> crate::types::LabelStore<str> for SimpleStores<TS, NS, LS>
 where
     LS: crate::types::LabelStore<str>,
 {
@@ -120,7 +120,7 @@ where
     }
 }
 
-impl<TS, NS, LS> crate::types::TypeStore for SimpleStores<TS, NS, LS>
+impl<'store, TS, NS, LS> crate::types::TypeStore for SimpleStores<TS, NS, LS>
 where
     TS::Ty: 'static + std::hash::Hash,
     TS: TypeStore,

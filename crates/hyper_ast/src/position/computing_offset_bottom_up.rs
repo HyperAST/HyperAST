@@ -34,6 +34,7 @@ pub fn extract_position<'store, HAST>(
 where
     HAST: HyperAST,
     for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
     HAST::IdN: Copy,
 {
     if parents.is_empty() {
@@ -67,7 +68,10 @@ where
     }
 }
 
-pub fn extract_file_postion_it_rec<HAST, It>(stores: &HAST, mut nodes: It) -> Position
+pub fn extract_file_postion_it_rec<'store, HAST, It>(
+    stores: &'store HAST,
+    mut nodes: It,
+) -> Position
 where
     HAST: HyperAST,
     It: Iterator<Item = HAST::IdN>,
@@ -86,9 +90,10 @@ where
 pub fn extract_position_it_rec<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST,
-    for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>,
     It2: Iterator<Item = HAST::IdN>,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
 {
     let Some((p, o)) = it.next() else {
         return Position::default();
@@ -117,7 +122,7 @@ where
     }
 }
 
-pub fn extract_file_postion_it<HAST, It>(stores: &HAST, nodes: It) -> Position
+pub fn extract_file_postion_it<'store, HAST, It>(stores: &'store HAST, nodes: It) -> Position
 where
     HAST: HyperAST,
     It: Iterator<Item = HAST::IdN>,
@@ -139,9 +144,10 @@ where
 pub fn extract_position_it<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST,
-    for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator<Item = (HAST::IdN, HAST::Idx)> + Into<It2>,
     It2: Iterator<Item = HAST::IdN>,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
 {
     let x = Some(0);
     let Some(a) = x else { panic!() };

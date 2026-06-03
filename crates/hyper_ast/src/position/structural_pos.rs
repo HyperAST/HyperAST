@@ -1,14 +1,21 @@
-use num::{one, zero};
+use super::{
+    Position, TreePath, WithHyperAstPositionConverter,
+    building::{self, bottom_up, top_down},
+    position_accessors, tags,
+};
 use std::{fmt::Debug, path::PathBuf};
 
-use super::building;
-use super::building::{ReceiveRows, bottom_up, top_down, top_down::SetNode};
-use super::{Position, WithHyperAstPositionConverter, position_accessors, tags};
-use crate::types::{
-    AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, LendT, NodeId, NodeStore,
-    Typed, TypedNodeId, WithChildren, WithSerialization, WithStats,
+use num::{one, zero};
+
+use crate::{
+    PrimInt,
+    position::building::{ReceiveRows, top_down::SetNode},
+    store::defaults::NodeIdentifier,
+    types::{
+        AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, LendT, NodeId,
+        NodeStore, Typed, TypedNodeId, WithChildren, WithSerialization, WithStats,
+    },
 };
-use crate::{PrimInt, store::defaults::NodeIdentifier};
 
 pub use super::offsets_and_nodes::StructuralPosition;
 
@@ -26,36 +33,36 @@ pub struct ExploreStructuralPositions<'a, IdN, Idx = usize, Config = tags::Botto
     i: usize,
     _phantom: std::marker::PhantomData<Config>,
 }
-impl<IdN, Idx> super::node_filter_traits::Full for ExploreStructuralPositions<'_, IdN, Idx> {}
-impl<IdN, Idx> super::node_filter_traits::NoSpace
-    for ExploreStructuralPositions<'_, IdN, Idx, tags::BottomUpNoSpace>
+impl<'a, IdN, Idx> super::node_filter_traits::Full for ExploreStructuralPositions<'a, IdN, Idx> {}
+impl<'a, IdN, Idx> super::node_filter_traits::NoSpace
+    for ExploreStructuralPositions<'a, IdN, Idx, tags::BottomUpNoSpace>
 {
 }
 
 mod esp_impl {
     use super::super::position_accessors::*;
     use super::*;
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> SolvedPosition<IdN>
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> SolvedPosition<IdN>
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
         fn node(&self) -> IdN {
             self.sps.nodes[self.i]
         }
     }
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> RootedPosition<IdN>
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> RootedPosition<IdN>
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
         fn root(&self) -> IdN {
             todo!("value must be computed")
         }
     }
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> WithOffsets
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithOffsets
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
         type Idx = Idx;
     }
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPostOrderOffsets
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPostOrderOffsets
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
         fn iter(&self) -> impl Iterator<Item = Self::Idx> {
             IterOffsets(self.clone())
@@ -64,7 +71,7 @@ mod esp_impl {
 
     pub struct IterOffsets<'a, IdN, Idx = usize>(ExploreStructuralPositions<'a, IdN, Idx>);
 
-    impl<IdN, Idx: PrimInt> Iterator for IterOffsets<'_, IdN, Idx> {
+    impl<'a, IdN, Idx: PrimInt> Iterator for IterOffsets<'a, IdN, Idx> {
         type Item = Idx;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -73,19 +80,19 @@ mod esp_impl {
         }
     }
 
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPath<IdN>
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPath<IdN>
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
     }
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPostOrderPath<IdN>
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPostOrderPath<IdN>
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
         fn iter_offsets_and_parents(&self) -> impl Iterator<Item = (Self::Idx, IdN)> {
             IterOffsetsNodes(self.clone())
         }
     }
-    impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> WithFullPostOrderPath<IdN>
-        for ExploreStructuralPositions<'_, IdN, Idx>
+    impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithFullPostOrderPath<IdN>
+        for ExploreStructuralPositions<'a, IdN, Idx>
     {
         fn iter_with_nodes(&self) -> (IdN, impl Iterator<Item = (Self::Idx, IdN)>) {
             (self.node(), IterOffsetsNodes(self.clone()))
@@ -94,7 +101,7 @@ mod esp_impl {
 
     pub struct IterOffsetsNodes<'a, IdN, Idx = usize>(ExploreStructuralPositions<'a, IdN, Idx>);
 
-    impl<IdN: Copy, Idx: PrimInt> Iterator for IterOffsetsNodes<'_, IdN, Idx> {
+    impl<'a, IdN: Copy, Idx: PrimInt> Iterator for IterOffsetsNodes<'a, IdN, Idx> {
         type Item = (Idx, IdN);
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -125,7 +132,7 @@ impl<IdN, Idx> Debug for StructuralPositionStore<IdN, Idx> {
     }
 }
 
-impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'_, IdN, Idx> {
+impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, IdN, Idx> {
     pub(super) fn peek_parent_node(&self) -> Option<IdN> {
         if self.i == 0 {
             return None;
@@ -152,7 +159,7 @@ impl<IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'_, IdN, 
     }
 }
 
-impl<IdN: Copy, Idx> Iterator for ExploreStructuralPositions<'_, IdN, Idx> {
+impl<'a, IdN: Copy, Idx> Iterator for ExploreStructuralPositions<'a, IdN, Idx> {
     type Item = IdN;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -170,7 +177,7 @@ impl<IdN: Copy, Idx> Iterator for ExploreStructuralPositions<'_, IdN, Idx> {
         // Some(r)
     }
 }
-impl<IdN, Idx> ExploreStructuralPositions<'_, IdN, Idx> {
+impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
     /// return previous index
     #[inline]
     fn try_go_up(&mut self) -> Option<SpHandle> {
@@ -188,7 +195,104 @@ impl<IdN, Idx> ExploreStructuralPositions<'_, IdN, Idx> {
     }
 }
 
-impl<HAST, S> WithHyperAstPositionConverter<'_, '_, S, HAST>
+// impl<'store, 'src, 'a, IdN: NodeId + Eq + Copy, Idx: PrimInt, HAST>
+//     WithHyperAstPositionConverter<'store, 'src, ExploreStructuralPositions<'a, IdN, Idx>, HAST>
+// {
+//     // TODO rename to compute_file_and_offset ?
+//     // pub fn make_file_and_offset(&self) -> Position
+//     // where
+//     //     'a: 'store,
+//     //     HAST: HyperAST<'store, IdN = IdN::IdN>,
+//     //     for<'t> LendT<'t, HAST>: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     //     <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+//     //     IdN: Debug + NodeId,
+//     //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+//     // {
+//     //     self.src.clone().make_position(self.stores)
+//     // }
+//     // fn make_position2(&self) -> Position
+//     // where
+//     //     'a: 'store,
+//     //     HAST: HyperAST<'store, IdN = IdN::IdN>,
+//     //     for<'t> LendT<'t, HAST>: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     //     <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+//     //     IdN: Debug + NodeId,
+//     //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+//     // {
+//     //     let mut from_file = false;
+//     //     let sss: ExploreStructuralPositions<'_, IdN, Idx> = self.src.clone();
+//     //     let len = if let Some(x) = sss.peek_node() {
+//     //         let b = self.stores.node_store().resolve(x.as_id());
+//     //         let t = self.stores.resolve_type(x.as_id());
+//     //         if let Some(y) = b.try_bytes_len() {
+//     //             if t.is_file() {
+//     //                 from_file = true;
+//     //             }
+//     //             y as usize
+//     //         } else {
+//     //             0
+//     //         }
+//     //     } else {
+//     //         0
+//     //     };
+//     //     let offset = 0;
+//     //     let path = vec![];
+//     //     Self::make_position2_aux(sss, self.stores, from_file, len, offset, path)
+//     // }
+
+//     // fn make_position2_aux(
+//     //     mut sss: ExploreStructuralPositions<'a, IdN, Idx>,
+//     //     stores: &'store HAST,
+//     //     from_file: bool,
+//     //     len: usize,
+//     //     mut offset: usize,
+//     //     mut path: Vec<&'store str>,
+//     // ) -> Position
+//     // where
+//     //     'a: 'store,
+//     //     HAST: HyperAST<'store, IdN = IdN::IdN>,
+//     //     for<'t> LendT<'t, HAST>: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//     //     IdN: Copy + Debug + NodeId,
+//     //     IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+//     // {
+//     //     if from_file {
+//     //         while let Some(p) = sss.peek_parent_node() {
+//     //             let b = stores.node_store().resolve(p.as_id());
+//     //             let t = stores.resolve_type(p.as_id());
+//     //             let o = sss.peek_offset().unwrap();
+//     //             let o: <HAST::T as WithChildren>::ChildIdx =
+//     //                 num::cast(o).expect("failed to cast, cannot put value of Idx in ChildIdx");
+//     //             let c: usize = {
+//     //                 let v: Vec<_> = b
+//     //                     .children()
+//     //                     .unwrap()
+//     //                     .before(o - one())
+//     //                     .iter_children()
+//     //                     .collect();
+//     //                 v.iter()
+//     //                     .map(|x| stores.node_store().resolve(x).try_bytes_len().unwrap())
+//     //                     .sum()
+//     //             };
+//     //             offset += c;
+//     //             if t.is_file() {
+//     //                 sss.next();
+//     //                 break;
+//     //             } else {
+//     //                 sss.next();
+//     //             }
+//     //         }
+//     //     }
+//     //     for p in sss {
+//     //         let b = stores.node_store().resolve(p.as_id());
+//     //         let l = stores.label_store().resolve(b.get_label_unchecked());
+//     //         path.push(l)
+//     //     }
+//     //     let file = PathBuf::from_iter(path.iter().rev());
+//     //     Position::new(file, offset, len)
+//     // }
+// }
+
+impl<'store, 'src, 'a, HAST, S> WithHyperAstPositionConverter<'store, 'src, S, HAST>
 where
     S: super::node_filter_traits::Full,
     HAST: HyperAST,
@@ -199,7 +303,7 @@ where
     where
         S: position_accessors::WithFullPostOrderPath<HAST::IdN, Idx = HAST::Idx>
             + position_accessors::SolvedPosition<HAST::IdN>,
-        for<'t> LendT<'t, HAST>: WithSerialization + WithStats,
+        for<'t> LendT<'t, HAST>: WithSerialization + WithChildren + WithStats,
         B: bottom_up::ReceiveInFile<HAST::IdN, HAST::Idx, usize, O> + bottom_up::CreateBuilder,
         B::SB1<O>: bottom_up::ReceiveDir<HAST::IdN, HAST::Idx, O>,
     {
@@ -245,10 +349,10 @@ where
                     HAST::IdN: NodeId<IdN = HAST::IdN> + Eq + Debug,
                     for<'t> LendT<'t, HAST>: WithStats + WithSerialization + WithChildren,
                 {
-                    let b = stores.node_store().resolve(x);
+                    let b = stores.node_store().resolve(&x);
                     let l = b.line_count();
                     if l == 0 {
-                        *col += b.try_bytes_len().unwrap_or_default();
+                        *col += b.try_bytes_len().unwrap_or_default() as usize;
                     } else if let Some(cs) = b.children() {
                         for x in cs.iter_children() {
                             if compute(stores, &x, col) > 0 {
@@ -256,7 +360,7 @@ where
                             }
                         }
                     } else {
-                        *col += b.try_bytes_len().unwrap_or_default() - b.line_count();
+                        *col += b.try_bytes_len().unwrap_or_default() as usize - b.line_count();
                     }
                     l
                 }
@@ -322,6 +426,7 @@ where
         use top_down::ReceiveIdx;
         use top_down::ReceiveParent;
         loop {
+            dbg!(stores.resolve_type(&x));
             if stores.resolve_type(&x).is_file() {
                 break;
             }
@@ -339,26 +444,32 @@ where
             builder = builder.push(parent).push(idx).push(dir_name);
         }
         let n = stores.resolve(&x);
+        dbg!(stores.resolve_type(&x));
         let file_name = stores.label_store().resolve(n.get_label_unchecked());
         let mut builder = builder.set_file_name(file_name);
 
         loop {
             let Some(o) = it.next() else { break };
+            dbg!(o);
             let n = stores.resolve(&x);
+            dbg!(stores.resolve_type(&x));
             let cs = n.children().unwrap();
             let c = cs.get(o).unwrap();
             let parent = x;
             x = *c;
             let idx1 = o;
             let bytes = cs
-                .before(o)
+                .before(o.clone())
                 .map(|x| stores.resolve(&x).try_bytes_len().unwrap_or_default())
                 .sum();
-            let rows = cs.before(o).map(|x| stores.resolve(&x).line_count()).sum();
+            let rows = cs
+                .before(o.clone())
+                .map(|x| stores.resolve(&x).line_count())
+                .sum();
             let mut no_s_idx = zero();
-            for y in cs.before(o).iter_children() {
+            for y in cs.before(o.clone()).iter_children() {
                 if !stores.resolve_type(&y).is_spaces() {
-                    no_s_idx += one();
+                    no_s_idx = no_s_idx + one();
                 }
             }
             use top_down::ReceiveIdxNoSpace;
@@ -383,7 +494,7 @@ where
 }
 
 // TODO separate concerns
-// TODO make_position should be a From<ExploreStructuralPositions> for FileAndOffsetPositionT and moved to relevant place
+// TODO make_position should be a From<ExploreStructuralPositions> for FileAndOffsetPostionT and moved to relevant place
 // TODO here the remaining logic should be about giving an iterator through the structural position
 impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, IdN, Idx> {
     pub fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
@@ -405,7 +516,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
                 if t.is_file() {
                     from_file = true;
                 }
-                y
+                y as usize
             } else {
                 0
             }
@@ -474,7 +585,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
                             let b = stores.node_store().resolve(x);
                             // println!("{:?}", b.get_type());
                             // println!("T1:{:?}", b.get_type());
-                            b.try_bytes_len().unwrap()
+                            b.try_bytes_len().unwrap() as usize
                         })
                         .sum()
                 };
@@ -504,6 +615,90 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
         Position::new(file, offset, len)
     }
 }
+
+// impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, IdN, Idx> {
+//     fn make_position2<'store, HAST>(self, stores: &'store HAST) -> Position
+//     where
+//         'a: 'store,
+//         HAST: HyperAST<'store, IdN = IdN::IdN>,
+//         for<'t> LendT<'t, HAST>: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+//         IdN: Debug + NodeId,
+//         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+//     {
+//         self.sps.check(stores).unwrap();
+//         let mut from_file = false;
+//         let len = if let Some(x) = self.peek_node() {
+//             let b = stores.node_store().resolve(x.as_id());
+//             let t = stores.resolve_type(x.as_id());
+//             if let Some(y) = b.try_bytes_len() {
+//                 if t.is_file() {
+//                     from_file = true;
+//                 }
+//                 y as usize
+//             } else {
+//                 0
+//             }
+//         } else {
+//             0
+//         };
+//         let offset = 0;
+//         let path = vec![];
+//         self.make_position2_aux(stores, from_file, len, offset, path)
+//     }
+
+//     fn make_position2_aux<'store: 'a, HAST>(
+//         mut self,
+//         stores: &'store HAST,
+//         from_file: bool,
+//         len: usize,
+//         mut offset: usize,
+//         mut path: Vec<&'a str>,
+//     ) -> Position
+//     where
+//         HAST: HyperAST<'store, IdN = IdN::IdN>,
+//         for<'t> LendT<'t, HAST>: Typed<Type = AnyType> + WithSerialization + WithChildren,
+//         IdN: Copy + Debug + NodeId,
+//         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+//     {
+//         if from_file {
+//             while let Some(p) = self.peek_parent_node() {
+//                 let b = stores.node_store().resolve(p.as_id());
+//                 let t = stores.resolve_type(p.as_id());
+//                 let o = self
+//                     .peek_offset()
+//                     .expect("there should be an offset if there is a parent");
+//                 let o: <HAST::T as WithChildren>::ChildIdx =
+//                     num::cast(o).expect("failed to cast, cannot put value of Idx in ChildIdx");
+//                 let c: usize = {
+//                     let v: Vec<_> = b
+//                         .children()
+//                         .unwrap()
+//                         .before(o)
+//                         .iter_children()
+//                         .collect();
+//                     v.iter()
+//                         .map(|x| stores.node_store().resolve(x).try_bytes_len().unwrap())
+//                         .sum()
+//                 };
+//                 offset += c;
+//                 if t.is_file() {
+//                     self.next();
+//                     break;
+//                 } else {
+//                     self.next();
+//                 }
+//             }
+//         }
+//         for p in self {
+//             let b = stores.node_store().resolve(p.as_id());
+//             let l = stores.label_store().resolve(b.get_label_unchecked());
+//             path.push(l)
+//         }
+//         let file = PathBuf::from_iter(path.iter().rev());
+//         Position::new(file, offset, len)
+//     }
+// }
 
 impl<TIdN: TypedNodeId, Idx> From<TypedScout<TIdN, Idx>> for Scout<TIdN::IdN, Idx> {
     fn from(value: TypedScout<TIdN, Idx>) -> Self {
@@ -537,7 +732,7 @@ impl<IdN, Idx> Debug for StructuralPositionStore2<IdN, Idx> {
 
 impl<IdN, Idx> StructuralPositionStore2<IdN, Idx> {
     fn persist(&mut self, h: Handle) {
-        if self.persisted.0 < h.0 {
+        if self.persisted.0 <= h.0 - 1 {
             self.persisted.0 = h.0;
         }
     }
@@ -637,13 +832,13 @@ impl<IdN, Idx> StructuralPositionStore2<IdN, Idx> {
     }
 }
 
-pub trait CursorHead<IdN, Idx> {
+pub trait AAA<IdN, Idx> {
     fn node(&self) -> IdN;
     fn offset(&self) -> Idx;
     fn parent(&self) -> Option<IdN>;
     fn up(&mut self) -> bool;
 }
-pub trait CursorHeadMove<IdN, Idx>: CursorHead<IdN, Idx> {
+pub trait BBB<IdN, Idx>: AAA<IdN, Idx> {
     fn inc(&mut self, node: IdN);
     fn down(&mut self, node: IdN, offset: Idx);
 }
@@ -654,46 +849,27 @@ use std::rc::Rc;
 /// Cursor backed by a store, thus allowing to efficiently yield nodes, while sharing the shared sub path between all nodes.
 /// As long as a node is not persisted, this cursor reuses and mutate to update itself.
 // only tags::BottomUpFull is possible for efficiency
-pub struct CursorWithPersistence<IdN, Idx = u16> {
+pub struct CursorWithPersistance<IdN, Idx = u16> {
     s: Rc<RefCell<StructuralPositionStore2<IdN, Idx>>>,
     h: Handle,
 }
 
-impl<IdN, Idx> PartialEq for CursorWithPersistence<IdN, Idx> {
+impl<IdN, Idx> PartialEq for CursorWithPersistance<IdN, Idx> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.s, &other.s) && self.h.0 == other.h.0
     }
 }
 
-pub struct CursorWithPersistenceOrderedSet<IdN, Idx = u16> {
+pub struct CursorWithPersistanceOrderedSet<IdN, Idx = u16> {
     s: Rc<RefCell<StructuralPositionStore2<IdN, Idx>>>,
     handles: Vec<usize>,
 }
 
-impl<IdN, Idx> CursorWithPersistenceOrderedSet<IdN, Idx> {
+impl<IdN, Idx> CursorWithPersistanceOrderedSet<IdN, Idx> {
     pub fn register(&mut self, p: &PersistedNode<IdN, Idx>) {
         assert!(Rc::ptr_eq(&self.s, &p.s));
         if !self.handles.contains(&p.h.0) {
             self.handles.push(p.h.0);
-        }
-    }
-    pub fn register_ref(&mut self, p: RefNode<'_, IdN, Idx>) {
-        use std::ops::Deref;
-        let x = self.s.deref().borrow();
-        let x = x.deref();
-        let y = p.s.deref();
-        assert!(std::ptr::addr_eq(x, y));
-        if !self.handles.contains(&p.h.0) {
-            self.handles.push(p.h.0);
-        }
-    }
-    pub fn remove(&mut self, p: &PersistedNode<IdN, Idx>) -> bool {
-        assert!(Rc::ptr_eq(&self.s, &p.s));
-        if let Some(pos) = self.handles.iter().position(|&h| h == p.h.0) {
-            self.handles.swap_remove(pos);
-            true
-        } else {
-            false
         }
     }
     pub fn collect_vec<R>(self, f: impl Fn(RefNode<IdN, Idx>) -> R) -> Vec<R> {
@@ -705,19 +881,9 @@ impl<IdN, Idx> CursorWithPersistenceOrderedSet<IdN, Idx> {
             })
             .collect()
     }
-    pub fn into_iter<R>(self, f: impl Fn(RefNode<IdN, Idx>) -> R) -> impl Iterator<Item = R> {
-        self.handles.into_iter().map(move |h| {
-            let s = self.s.borrow();
-            f(RefNode { s, h: Handle(h) })
-        })
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.handles.is_empty()
-    }
 }
 
-impl<'a, IdN: 'a, Idx: 'a> CursorWithPersistenceOrderedSet<IdN, Idx> {
+impl<'a, IdN: 'a, Idx: 'a> CursorWithPersistanceOrderedSet<IdN, Idx> {
     pub fn iter(&'a self) -> impl Iterator<Item = RefNode<'a, IdN, Idx>> {
         self.handles.iter().map(move |h| {
             let s = self.s.borrow();
@@ -726,9 +892,9 @@ impl<'a, IdN: 'a, Idx: 'a> CursorWithPersistenceOrderedSet<IdN, Idx> {
     }
 }
 
-impl<IdN, Idx> Eq for CursorWithPersistence<IdN, Idx> {}
+impl<IdN, Idx> Eq for CursorWithPersistance<IdN, Idx> {}
 
-impl<IdN, Idx> CursorWithPersistence<IdN, Idx> {
+impl<IdN, Idx> CursorWithPersistance<IdN, Idx> {
     pub fn new(node: IdN) -> Self
     where
         Idx: PrimInt,
@@ -737,11 +903,11 @@ impl<IdN, Idx> CursorWithPersistence<IdN, Idx> {
         n.h = n.s.borrow_mut().down(n.h, node, num::zero());
         n
     }
-    pub fn build_empty_set(&mut self) -> CursorWithPersistenceOrderedSet<IdN, Idx>
+    pub fn build_empty_set(&mut self) -> CursorWithPersistanceOrderedSet<IdN, Idx>
     where
         Idx: PrimInt,
     {
-        CursorWithPersistenceOrderedSet {
+        CursorWithPersistanceOrderedSet {
             s: self.s.clone(),
             handles: vec![],
         }
@@ -756,14 +922,14 @@ impl<IdN, Idx> CursorWithPersistence<IdN, Idx> {
         let s = Rc::new(RefCell::new(s));
         Self { s, h: Handle(0) }
     }
-    pub fn persist(&self) -> PersistedNode<IdN, Idx> {
+    pub fn persist(&mut self) -> PersistedNode<IdN, Idx> {
         self.s.borrow_mut().persist(self.h);
         PersistedNode {
             s: self.s.clone(),
             h: self.h,
         }
     }
-    pub fn persist_parent(&self) -> Option<PersistedNode<IdN, Idx>> {
+    pub fn persist_parent(&mut self) -> Option<PersistedNode<IdN, Idx>> {
         let p = self.s.borrow().parent(self.h)?;
         self.s.borrow_mut().persist(p);
         Some(PersistedNode {
@@ -771,22 +937,22 @@ impl<IdN, Idx> CursorWithPersistence<IdN, Idx> {
             h: p,
         })
     }
-    pub fn ref_node(&self) -> RefNode<'_, IdN, Idx> {
+    pub fn ref_node(&self) -> RefNode<IdN, Idx> {
         let s = self.s.borrow();
         RefNode { s, h: self.h }
     }
-    pub fn ref_parent(&self) -> Option<RefNode<'_, IdN, Idx>> {
+    pub fn ref_parent(&self) -> Option<RefNode<IdN, Idx>> {
         let p = self.s.borrow().parent(self.h)?;
         let s = self.s.borrow();
         Some(RefNode { s, h: p })
     }
-    pub fn ext(&self) -> ExtRefNode<'_, IdN, Idx> {
+    pub fn ext(&self) -> ExtRefNode<IdN, Idx> {
         let s = self.s.borrow();
         ExtRefNode::new(s, self.h)
     }
 }
 
-impl<IdN, Idx> CursorHeadMove<IdN, Idx> for CursorWithPersistence<IdN, Idx>
+impl<IdN, Idx> BBB<IdN, Idx> for CursorWithPersistance<IdN, Idx>
 where
     IdN: Copy,
     Idx: PrimInt,
@@ -800,7 +966,7 @@ where
     }
 }
 
-impl<IdN, Idx> CursorHead<IdN, Idx> for CursorWithPersistence<IdN, Idx>
+impl<IdN, Idx> AAA<IdN, Idx> for CursorWithPersistance<IdN, Idx>
 where
     IdN: Copy,
     Idx: Copy,
@@ -824,7 +990,7 @@ where
     }
 }
 
-/// Node that was persisted i.e. mutating the cursor guarantee that this node observable values won't change.
+/// Node that was persited i.e. mutating the cursor guarantee that this node observable values won't change.
 #[derive(Clone)]
 pub struct PersistedNode<IdN, Idx = u16> {
     s: Rc<RefCell<StructuralPositionStore2<IdN, Idx>>>,
@@ -842,7 +1008,10 @@ impl<IdN, Idx> Eq for PersistedNode<IdN, Idx> {}
 
 impl<IdN, Idx> PartialOrd for PersistedNode<IdN, Idx> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+        if !Rc::ptr_eq(&self.s, &other.s) {
+            return None;
+        }
+        self.h.0.partial_cmp(&other.h.0)
     }
 }
 
@@ -860,12 +1029,12 @@ where
     IdN: Copy,
     Idx: Copy,
 {
-    pub fn build(&self) -> ExtRefNode<'_, IdN, Idx> {
+    pub fn build(&self) -> ExtRefNode<IdN, Idx> {
         let s = self.s.borrow();
         ExtRefNode::new(s, self.h)
     }
 
-    pub fn ext(&self) -> ExtRefNode<'_, IdN, Idx> {
+    pub fn ext(&self) -> ExtRefNode<IdN, Idx> {
         let s = self.s.borrow();
         ExtRefNode::new(s, self.h)
     }
@@ -881,13 +1050,13 @@ where
         r
     }
 
-    pub fn ref_node(&self) -> RefNode<'_, IdN, Idx> {
+    pub fn ref_node(&self) -> RefNode<IdN, Idx> {
         let s = self.s.borrow();
         RefNode { s, h: self.h }
     }
 }
 
-impl<IdN, Idx> CursorHead<IdN, Idx> for PersistedNode<IdN, Idx>
+impl<IdN, Idx> AAA<IdN, Idx> for PersistedNode<IdN, Idx>
 where
     IdN: Copy,
     Idx: Copy,
@@ -910,29 +1079,32 @@ where
         Some(self.s.borrow().node(p))
     }
 }
-/// Node that is possibly not persisted i.e. cannot safely mutate the cursor at the same time.
+/// Node that is possibly not persited i.e. cannot safely mutate the cursor at the same time.
 /// If you need to read a node and modify the cursor at the same time, make a [`PersistedNode`].
 pub struct RefNode<'a, IdN, Idx = u16> {
     s: std::cell::Ref<'a, StructuralPositionStore2<IdN, Idx>>,
     h: Handle,
 }
 
-impl<IdN, Idx> Clone for RefNode<'_, IdN, Idx> {
+impl<'a, IdN, Idx> Clone for RefNode<'a, IdN, Idx> {
     fn clone(&self) -> Self {
         Self {
             s: std::cell::Ref::clone(&self.s),
-            h: self.h,
+            h: self.h.clone(),
         }
     }
 }
 
-impl<IdN, Idx> PartialOrd for RefNode<'_, IdN, Idx> {
+impl<'a, IdN, Idx> PartialOrd for RefNode<'a, IdN, Idx> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+        if !std::ptr::eq(&self.s, &other.s) {
+            return None;
+        }
+        self.h.0.partial_cmp(&other.h.0)
     }
 }
 
-impl<IdN, Idx> Ord for RefNode<'_, IdN, Idx> {
+impl<'a, IdN, Idx> Ord for RefNode<'a, IdN, Idx> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if !std::ptr::eq(&self.s, &other.s) {
             panic!()
@@ -963,7 +1135,7 @@ where
     }
 }
 
-impl<IdN, Idx> CursorHead<IdN, Idx> for RefNode<'_, IdN, Idx>
+impl<'a, IdN, Idx> AAA<IdN, Idx> for RefNode<'a, IdN, Idx>
 where
     IdN: Copy,
     Idx: Copy,
@@ -987,15 +1159,15 @@ where
     }
 }
 
-impl<IdN, Idx> PartialEq for RefNode<'_, IdN, Idx> {
+impl<'a, IdN, Idx> PartialEq for RefNode<'a, IdN, Idx> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(&*self.s, &*other.s) && self.h.0 == other.h.0
     }
 }
 
-impl<IdN, Idx> Eq for RefNode<'_, IdN, Idx> {}
+impl<'a, IdN, Idx> Eq for RefNode<'a, IdN, Idx> {}
 
-impl<IdN: std::hash::Hash, Idx: std::hash::Hash> std::hash::Hash for RefNode<'_, IdN, Idx>
+impl<'a, IdN: std::hash::Hash, Idx: std::hash::Hash> std::hash::Hash for RefNode<'a, IdN, Idx>
 where
     IdN: Copy,
     Idx: Copy,
@@ -1026,11 +1198,11 @@ pub struct ExtRefNode<'a, IdN, Idx = u16> {
     ext_nodes: Vec<IdN>,
     ext_offsets: Vec<Idx>,
 }
-impl<IdN: Clone, Idx: Clone> Clone for ExtRefNode<'_, IdN, Idx> {
+impl<'a, IdN: Clone, Idx: Clone> Clone for ExtRefNode<'a, IdN, Idx> {
     fn clone(&self) -> Self {
         Self {
             s: std::cell::Ref::clone(&self.s),
-            h: self.h,
+            h: self.h.clone(),
             ext_nodes: self.ext_nodes.clone(),
             ext_offsets: self.ext_offsets.clone(),
         }
@@ -1047,7 +1219,7 @@ impl<'a, IdN, Idx> ExtRefNode<'a, IdN, Idx> {
     }
 }
 
-impl<IdN, Idx> CursorHeadMove<IdN, Idx> for ExtRefNode<'_, IdN, Idx>
+impl<'a, IdN, Idx> BBB<IdN, Idx> for ExtRefNode<'a, IdN, Idx>
 where
     IdN: Copy,
     Idx: PrimInt,
@@ -1074,7 +1246,7 @@ where
     }
 }
 
-impl<IdN, Idx> CursorHead<IdN, Idx> for ExtRefNode<'_, IdN, Idx>
+impl<'a, IdN, Idx> AAA<IdN, Idx> for ExtRefNode<'a, IdN, Idx>
 where
     IdN: Copy,
     Idx: Copy,
@@ -1121,7 +1293,7 @@ mod tests {
 
     #[test]
     fn simple2() {
-        let mut c = CursorWithPersistence::default();
+        let mut c = CursorWithPersistance::default();
         c.down(0u32, 0u32);
         assert_eq!(c.node(), 0);
         assert_eq!(c.offset(), 0);

@@ -1,4 +1,4 @@
-use crate::store::nodes::{Compo, CompoRegister, ErasedHolder, ErasedInserter};
+use crate::store::nodes::{CompoRegister, ErasedHolder, ErasedInserter, Compo};
 
 use super::ByteLen;
 use bevy_ecs::archetype::ArchetypeGeneration;
@@ -19,10 +19,7 @@ trait CompressedCompo {
 }
 
 impl ErasedHolder for Ptr<'_> {
-    unsafe fn unerase_ref_unchecked<T: 'static + Compo>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&T> {
+    unsafe fn unerase_ref_unchecked<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             Some(unsafe { self.deref() })
         } else {
@@ -114,12 +111,11 @@ impl CompressionRegistry {
     }
 
     pub fn add_components(&mut self, components: Vec<ComponentId>) {
-        assert!(
-            self.compressed
-                .iter()
-                .find(|x| components[0] == x[0])
-                .is_none()
-        );
+        assert!(self
+            .compressed
+            .iter()
+            .find(|x| components[0] == x[0])
+            .is_none());
         self.arch_generation = ArchetypeGeneration::initial();
         self.compressed.push(components);
     }
@@ -197,7 +193,7 @@ impl CompressedCompo for ByteLen {
 #[cfg(test)]
 mod tests {
     use crate::store::nodes::bevy_ecs::{
-        Children, Lab, Leaf, Node, Type, md_simple::precompute_byte_len, precompute_md,
+        md_simple::precompute_byte_len, precompute_md, Children, Lab, Leaf, Node, Type,
     };
 
     use super::*;

@@ -1,12 +1,16 @@
-use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
+use std::{
+    fmt::Debug,
+    hash::{Hash, Hasher},
+};
 
+use crate::{
+    PrimInt,
+    types::{AnyType, HashKind, HyperType, NodeId},
+};
+use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use num::traits::WrappingAdd;
 
-use crate::PrimInt;
 use crate::nodes::{CompressedNode, HashSize};
-use crate::types::{AnyType, HashKind, HyperType, NodeId};
-use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 
 pub type HashedNode = HashedCompressedNode<
     SyntaxNodeHashs<HashSize>,
@@ -161,7 +165,7 @@ impl ComputableNodeHashs for SyntaxNodeHashs<u32> {
         l: Self::Hash,
         size: Self::Hash,
     ) -> Self::Hash {
-        inner_node_hash(k, l, size, self.hash(kind))
+        inner_node_hash(k, l, size as u32, self.hash(kind))
     }
 }
 
@@ -231,7 +235,7 @@ impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L: Eq, T> crate::types::Label
         self.node.get_label_unchecked()
     }
 
-    fn try_get_label(&self) -> Option<&Self::Label> {
+    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
         self.node.try_get_label()
     }
 }
@@ -289,14 +293,6 @@ impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::ErasedHol
 {
     fn unerase_ref<TT: 'static + Send + Sync>(&self, _tid: std::any::TypeId) -> Option<&TT> {
         unimplemented!("CompressedNode should be deprecated anyway")
-    }
-}
-
-impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::store::nodes::PolyglotHolder
-    for HashedCompressedNode<U, N, L, T>
-{
-    fn lang_id(&self) -> crate::store::nodes::LangId {
-        unimplemented!()
     }
 }
 

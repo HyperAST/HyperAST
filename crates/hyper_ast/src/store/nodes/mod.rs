@@ -59,7 +59,7 @@ macro_rules! traits_compose {
 }
 
 traits_compose! { pub Compo:
-    #[feature = "legion"] ::legion::storage::Component,
+    #[feature = "legion"] ::legion::storage::Component, 
     #[feature = "bevy_ecs"] ::bevy_ecs::component::Component
     { 'static + Send + Sync }
 }
@@ -71,6 +71,7 @@ pub trait EntityBuilder {
 pub trait DerivedData<EB: EntityBuilder>: Sized {
     fn persist(self, builder: &mut EB);
 }
+
 
 pub trait CompressedCompo {
     fn decomp(ptr: impl ErasedHolder, tid: std::any::TypeId) -> Self
@@ -111,31 +112,3 @@ pub trait CompoRegister {
     fn register_compo<T: 'static + Compo>(&mut self) -> Self::Id;
 }
 
-pub struct LangId {
-    id: std::any::TypeId,
-    #[cfg(debug_assertions)]
-    name: &'static str,
-}
-
-impl LangId {
-    pub fn new<T: 'static>() -> Self {
-        LangId {
-            id: std::any::TypeId::of::<T>(),
-            #[cfg(debug_assertions)]
-            name: std::any::type_name::<T>(),
-        }
-    }
-
-    pub fn is<T: 'static>(&self) -> bool {
-        self.id == std::any::TypeId::of::<T>()
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-}
-
-pub trait PolyglotHolder: ErasedHolder {
-    fn lang_id(&self) -> LangId;
-}

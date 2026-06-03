@@ -1,17 +1,15 @@
-#[cfg(test)]
 pub mod recursive_query;
 
-#[cfg(test)]
 pub mod stepped_query;
 
 #[cfg(any(test, feature = "all_examples"))]
 pub(crate) mod resources;
 #[cfg(any(test, feature = "all_examples"))]
 pub use resources::*;
-#[cfg(all(test, feature = "all_examples"))]
+#[cfg(any(test, feature = "all_examples"))]
 use tree_sitter_graph::graph::GraphErazing;
 
-#[cfg(all(test, feature = "all_examples"))]
+#[cfg(any(test, feature = "all_examples"))]
 pub type Functions<Node> = tree_sitter_graph::functions::Functions<GraphErazing<Node>>;
 
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
@@ -22,7 +20,7 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_NAME: &str = "a/b/AAA.java";
 
-#[cfg(all(test, feature = "all_examples"))]
+#[cfg(any(test, feature = "all_examples"))]
 pub fn configure<'a, 'g, Node>(
     globals: &'a tree_sitter_graph::Variables<'g>,
     functions: &'a tree_sitter_graph::functions::Functions<GraphErazing<Node>>,
@@ -40,7 +38,7 @@ pub fn configure<'a, 'g, Node>(
     config
 }
 
-#[cfg(all(test, feature = "all_examples"))]
+#[cfg(any(test, feature = "all_examples"))]
 pub fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
     globals: &mut tree_sitter_graph::Variables,
     graph: &mut tree_sitter_graph::graph::Graph<Node>,

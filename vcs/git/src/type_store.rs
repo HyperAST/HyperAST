@@ -18,7 +18,7 @@ impl Default for TStore {
     }
 }
 
-impl hyperast::types::RoleStore for TStore {
+impl<'a> hyperast::types::RoleStore for TStore {
     type IdF = u16;
 
     type Role = hyperast::types::Role;
@@ -81,41 +81,37 @@ impl hyperast::types::RoleStore for TStore {
 
 impl TypeStore for TStore {
     type Ty = AnyType;
-    fn try_decompress_type(
-        erazed: &impl hyperast::store::nodes::PolyglotHolder,
-        _tid: std::any::TypeId,
-    ) -> Option<Self::Ty> {
-        use HyperType;
-        let id = erazed.lang_id();
-        macro_rules! decomp_t {
-            ($p:path) => {{
-                use $p as types;
-                if id.is::<types::Lang>() {
-                    let tid = std::any::TypeId::of::<types::TType>();
-                    return erazed
-                        .unerase_ref::<types::TType>(tid)
-                        .map(|x| *x)
-                        .map(|x| x.as_static().into());
-                }
-            }};
-        }
-        decomp_t!(hyperast_gen_ts_java::types);
-        decomp_t!(hyperast_gen_ts_cpp::types);
-        decomp_t!(hyperast_gen_ts_xml::types);
-        None
-    }
+
     fn decompress_type(
-        erazed: &impl hyperast::store::nodes::PolyglotHolder,
-        _tid: std::any::TypeId,
+        erazed: &impl hyperast::types::ErasedHolder,
+        tid: std::any::TypeId,
     ) -> Self::Ty {
-        if let Some(t) = Self::try_decompress_type(erazed, _tid) {
-            return t;
+        unsafe {
+            erazed.unerase_ref_unchecked::<hyperast_gen_ts_java::types::TType>(
+                std::any::TypeId::of::<hyperast_gen_ts_java::types::TType>(),
+            )
         }
-        #[cfg(not(debug_assertions))]
-        panic!();
-        #[cfg(debug_assertions)]
-        let id = erazed.lang_id();
-        #[cfg(debug_assertions)]
-        panic!("{} is not handled", id.name());
+        .map(|t| t.as_static().into())
+        .or_else(|| {
+            unsafe {
+                erazed.unerase_ref_unchecked::<hyperast_gen_ts_cpp::types::TType>(
+                    std::any::TypeId::of::<hyperast_gen_ts_cpp::types::TType>(),
+                )
+            }
+            .map(|t| t.as_static().into())
+        })
+        .or_else(|| {
+            unsafe {
+                erazed.unerase_ref_unchecked::<hyperast_gen_ts_xml::types::TType>(
+                    std::any::TypeId::of::<hyperast_gen_ts_xml::types::TType>(),
+                )
+            }
+            .map(|t| t.as_static().into())
+        })
+        .unwrap_or_else(|| {
+            dbg!(tid);
+            dbg!(std::any::type_name::<Self::Ty>());
+            unreachable!()
+        })
     }
 }

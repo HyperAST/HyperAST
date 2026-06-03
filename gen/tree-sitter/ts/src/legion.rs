@@ -1,26 +1,29 @@
-//! fully compress all subtrees from a typescript CST
+///! fully compress all subtrees from a typescript CST
 use std::{collections::HashMap, fmt::Debug};
 
+use crate::TNode;
+use hyperast::tree_gen::{PreResult, ZippedTreeGen};
 use legion::world::EntryRef;
 
-use hyperast::filter::BloomSize;
-use hyperast::full::FullNode;
-use hyperast::hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs};
-use hyperast::nodes::Space;
-use hyperast::store::SimpleStores;
 use hyperast::store::nodes::compo::{self, CS, NoSpacesCS};
-use hyperast::store::nodes::legion::subtree_builder;
-use hyperast::store::nodes::{DefaultNodeStore as NodeStore, legion::NodeIdentifier};
-use hyperast::tree_gen::parser::{Node as _, TreeCursor};
-use hyperast::tree_gen::{
-    AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
-    SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-    compute_indentation, get_spacing, has_final_space,
+use hyperast::{
+    filter::BloomSize,
+    full::FullNode,
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    nodes::Space,
+    store::{
+        SimpleStores,
+        nodes::{DefaultNodeStore as NodeStore, legion::NodeIdentifier},
+    },
+    tree_gen::{
+        AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+        SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
+        compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
+    },
+    types::LabelStore as _,
 };
-use hyperast::tree_gen::{PreResult, ZippedTreeGen};
-use hyperast::types::LabelStore as _;
 
-use crate::TNode;
 use crate::types::{TsEnabledTypeStore, Type};
 
 pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
@@ -91,7 +94,7 @@ impl Accumulator for Acc {
 }
 
 impl AccIndentation for Acc {
-    fn indentation(&self) -> &Spaces {
+    fn indentation<'a>(&'a self) -> &'a Spaces {
         &self.indentation
     }
 }
@@ -479,9 +482,9 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
             let hashs = hbuilder.build();
             use hyperast::store::nodes::EntityBuilder as _;
 
-            let mut dyn_builder = subtree_builder::<TS>(interned_kind);
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
             dyn_builder.add(interned_kind);
-            dyn_builder.add(hashs);
+            dyn_builder.add(hashs.clone());
             dyn_builder.add(compo::BytesLen(
                 (acc.end_byte - acc.start_byte).try_into().unwrap(),
             ));
@@ -499,7 +502,6 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
                     if x != acc.no_space.len() {
                         dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
                     }
-                    panic!("use CS0<_,1>, CS0<_,2>, and corresponding eq_node");
                 }
             }
             let compressed_node =

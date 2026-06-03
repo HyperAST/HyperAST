@@ -30,17 +30,17 @@ impl<K: Ord, V> Searchable<K, V> for std::collections::BTreeMap<K, V> {
 struct SortedVecSoA<K, V>(Vec<K>, Vec<V>);
 
 impl<K: Clone + Ord, V: Clone> SortedVecSoA<K, V> {
-    fn new(v: &[(K, V)]) -> Self {
-        let mut v: Vec<(K, V)> = v.to_vec();
-        v.sort_by_key(|x| x.0.clone());
-        let (ks, vs) = v.into_iter().unzip();
+    fn new(collec: &[(K, V)]) -> Self {
+        let mut collec: Vec<(K, V)> = collec.into_iter().map(|x| x.clone()).collect();
+        collec.sort_by_key(|x| x.0.clone());
+        let (ks, vs) = collec.into_iter().unzip();
         Self(ks, vs)
     }
 }
 
 impl<K: Ord, V> Searchable<K, V> for SortedVecSoA<K, V> {
     fn search(&self, seek: &K) -> Option<&V> {
-        let i = self.0.binary_search_by(|probe| probe.cmp(seek)).ok()?;
+        let i = self.0.binary_search_by(|probe| probe.cmp(&seek)).ok()?;
         Some(&self.1[i])
     }
 }
@@ -100,7 +100,7 @@ fn compare_hashmaps(c: &mut Criterion) {
     simple.sort_by_key(|x| x.0);
     simple.dedup_by_key(|x| x.0);
     #[allow(non_snake_case)]
-    let INPUTS = &[
+    let INPUTS: &[(&[(K, V)], &[K])] = &[
         (&simple[0..10], k),
         (&simple[0..100], k),
         (&simple[0..500], k),
@@ -110,19 +110,19 @@ fn compare_hashmaps(c: &mut Criterion) {
         (&simple[0..4000], k),
     ];
 
-    for (collec, keys) in INPUTS.iter() {
+    for (_i, (collec, keys)) in INPUTS.into_iter().enumerate() {
         let id = collec.len();
         group.throughput(Throughput::Elements(collec.len() as u64));
         let mut hashmap = None;
         let mut ahash = None;
         let mut sorted_vec_soa = None;
         let mut direct_indexing = None;
-        for key in keys.iter().take(1) {
+        for key in keys.into_iter().take(1) {
             group.bench_with_input(BenchmarkId::new("HashMap", id), key, |b, key| {
                 let collec = hashmap.get_or_insert_with(|| {
                     collec
-                        .iter()
-                        .copied()
+                        .into_iter()
+                        .map(|x| x.clone())
                         .collect::<std::collections::HashMap<K, V>>()
                 });
                 b.iter(|| collec.search(key))
@@ -130,8 +130,8 @@ fn compare_hashmaps(c: &mut Criterion) {
             group.bench_with_input(BenchmarkId::new("AHash", id), key, |b, key| {
                 let collec = ahash.get_or_insert_with(|| {
                     collec
-                        .iter()
-                        .copied()
+                        .into_iter()
+                        .map(|x| x.clone())
                         .collect::<hyperast::compat::HashMap<K, V>>()
                 });
                 b.iter(|| collec.search(key))

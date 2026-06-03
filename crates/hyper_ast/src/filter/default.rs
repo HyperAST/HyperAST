@@ -1,6 +1,8 @@
-use std::borrow::Borrow;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::{
+    borrow::Borrow,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 
 use super::pearson_hashing::T;
 

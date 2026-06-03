@@ -567,13 +567,17 @@ impl<T> FixedVec<T> {
     /// Return a slice containing all elements of the vector.
     fn as_slice(&self) -> &[T] {
         let len = self.len();
-        unsafe { slice::from_raw_parts(self.as_ptr(), len) }
+        unsafe {
+            slice::from_raw_parts(self.as_ptr(), len)
+        }
     }
 
     /// Return a mutable slice containing all elements of the vector.
     fn as_mut_slice(&mut self) -> &mut [T] {
         let len = self.len();
-        unsafe { std::slice::from_raw_parts_mut(self.as_mut_ptr(), len) }
+        unsafe {
+            std::slice::from_raw_parts_mut(self.as_mut_ptr(), len)
+        }
     }
 
     // /// Return a raw pointer to the vector's buffer.

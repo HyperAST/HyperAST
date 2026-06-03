@@ -5,7 +5,7 @@ use crate::compat::{DefaultHashBuilder, HashMap};
 
 use num::ToPrimitive;
 use string_interner::DefaultSymbol;
-use string_interner::{Symbol, symbol::SymbolU16};
+use string_interner::{symbol::SymbolU16, Symbol};
 
 #[derive(Debug)]
 pub struct BytesBackend<S = DefaultSymbol> {
@@ -265,10 +265,12 @@ pub trait Backend: Default {
     unsafe fn resolve_unchecked(&self, symbol: Self::Symbol) -> &[u8];
 }
 
-use core::fmt;
-use core::fmt::{Debug, Formatter};
-use core::hash::{BuildHasher, Hash, Hasher};
-use core::iter::FromIterator;
+use core::{
+    fmt,
+    fmt::{Debug, Formatter},
+    hash::{BuildHasher, Hash, Hasher},
+    iter::FromIterator,
+};
 
 /// Creates the `u64` hash value for the given value using the given hash builder.
 fn make_hash<T>(builder: &impl BuildHasher, value: &T) -> u64

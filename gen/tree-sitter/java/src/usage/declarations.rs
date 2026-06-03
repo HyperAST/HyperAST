@@ -2,12 +2,15 @@
 use core::fmt;
 use std::fmt::Debug;
 
+use hyperast::{
+    position::{TreePath, TreePathMut},
+    store::defaults::NodeIdentifier,
+    types::{
+        AAAA, AnyType, Children, HyperAST, HyperType, NodeId, NodeStore, Tree, TypeTrait, Typed,
+        TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
+    },
+};
 use num::ToPrimitive;
-
-use hyperast::position::TreePath;
-use hyperast::store::defaults::NodeIdentifier;
-use hyperast::types::{HyperAST, TypedNodeStore};
-use hyperast::types::{NodeId, UniformNodeId};
 
 use crate::types::Type;
 
@@ -22,7 +25,7 @@ enum Id<IdN> {
     Other(IdN),
 }
 
-impl<IdN: Clone + Eq + UniformNodeId> Id<IdN> {
+impl<IdN: Clone + Eq + AAAA> Id<IdN> {
     fn id(&self) -> &IdN {
         match self {
             Id::Java(node) => node.as_id(),
@@ -31,7 +34,7 @@ impl<IdN: Clone + Eq + UniformNodeId> Id<IdN> {
     }
 }
 
-impl<T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'_, T, HAST> {
+impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'a, T, HAST> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IterDeclarations2")
             // .field("parents", &self.parents())
@@ -39,7 +42,20 @@ impl<T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'_, T, H
     }
 }
 
-impl<T, HAST> Iterator for IterDeclarations<'_, T, HAST> {
+impl<'a, T, HAST> Iterator for IterDeclarations<'a, T, HAST>
+where
+// T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
+// HAST: TypedHyperAST<crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
+// HAST::TS: JavaEnabledTypeStore<HAST::T>,
+// for<'t> <HAST::TT<'t> as Typed>::Type: Copy + Send + Sync,
+// HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
+// HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
+// for<'b> <HAST::NS as hyperast::types::TyNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
+//     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+// // for<'t> <HAST as hyperast::types::AstLending<'t, HAST::IdN>>::RT:
+// // // <HAST::NS as hyperast::types::NodStore<HAST::IdN>>::R<'a>:
+// //     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+{
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -265,7 +281,7 @@ mod experiment {
         remaining: Vec<Option<NodeIdentifier>>,
     }
 
-    impl<HAST> Debug for IterDeclarationsUnstableOpti<'_, HAST> {
+    impl<'a, HAST> Debug for IterDeclarationsUnstableOpti<'a, HAST> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.debug_struct("IterDeclarations")
                 .field("parents", &self.parents())
@@ -275,7 +291,7 @@ mod experiment {
         }
     }
 
-    impl<HAST: HyperAST> Iterator for IterDeclarationsUnstableOpti<'_, HAST> {
+    impl<'a, HAST: HyperAST> Iterator for IterDeclarationsUnstableOpti<'a, HAST> {
         type Item = NodeIdentifier;
 
         fn next(&mut self) -> Option<Self::Item> {

@@ -17,7 +17,7 @@ where
     phantom: PhantomData<(*const H, &'a ())>,
 }
 
-impl<It, S, H> From<It> for BulkHasher<'_, It, S, H>
+impl<'a, It, S, H> From<It> for BulkHasher<'a, It, S, H>
 where
     It: Iterator,
     H: VaryHasher<S>,
@@ -32,7 +32,7 @@ where
     }
 }
 
-impl<It, H> Iterator for BulkHasher<'_, It, u8, H>
+impl<'a, It, H> Iterator for BulkHasher<'a, It, u8, H>
 where
     It: Iterator,
     It::Item: MySerialize + Keyed<usize>,
@@ -52,7 +52,7 @@ where
     }
 }
 
-impl<It, H> Iterator for BulkHasher<'_, It, u16, H>
+impl<'a, It, H> Iterator for BulkHasher<'a, It, u16, H>
 where
     It: Iterator,
     It::Item: MySerialize + Keyed<usize>,

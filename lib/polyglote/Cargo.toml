@@ -1,15 +1,14 @@
 [package]
 name = "polyglote"
-version = "0.5.0"
+version = "0.3.0"
 edition = "2024"
 
-[lints]
-workspace = true
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # enums = { git = "https://github.com/mozilla/rust-code-analysis", branch = "master", package = "enums", version = "0.0.1" }
 tree-sitter = { workspace = true }
-tree-sitter-loader = "0.25.0"
+tree-sitter-loader = "0.23.0"
 tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query.git", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0" }
 # tree-sitter-tsq = "0.19.0"
 

@@ -1,14 +1,14 @@
-use std::fmt::{Debug, Display};
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process;
+use std::{
+    fmt::{Debug, Display},
+    fs,
+    path::{Path, PathBuf},
+    process,
+};
 
 pub use git2::Error;
-pub use git2::ErrorCode;
 pub use git2::Oid;
 pub use git2::Repository;
 use git2::{RemoteCallbacks, Revwalk, TreeEntry};
-
 use hyperast::{position::Position, utils::Url};
 
 use crate::processing::ObjectName;
@@ -146,7 +146,7 @@ pub fn retrieve_commit<'a>(
     }
 }
 
-pub fn all_commits_from_head(repository: &Repository) -> Revwalk<'_> {
+pub fn all_commits_from_head(repository: &Repository) -> Revwalk {
     use git2::*;
     // let REMOTE_REFS_PREFIX = "refs/remotes/origin/";
     // let branch: Option<&str> = None;
@@ -174,7 +174,7 @@ pub fn all_commits_from_head(repository: &Repository) -> Revwalk<'_> {
     // return walk;
 }
 
-pub fn fetch_repository<T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository
+pub fn fetch_repository<'a, T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository
 where
     <T as TryInto<Url>>::Error: std::fmt::Debug,
 {
@@ -211,7 +211,7 @@ where
     nofetch_repository(url, path)
 }
 
-pub fn nofetch_repository<T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository
+pub fn nofetch_repository<'a, T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository
 where
     <T as TryInto<Url>>::Error: std::fmt::Debug,
 {
@@ -292,12 +292,12 @@ impl Repo {
     }
     pub fn fetch(&self) -> Repository {
         let url = self.url();
-        let path = "/tmp/hyperastgitresources/repo/".to_string();
+        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
         fetch_repository(url, path)
     }
     pub fn nofetch(&self) -> Repository {
         let url = self.url();
-        let path = "/tmp/hyperastgitresources/repo/".to_string();
+        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
         nofetch_repository(url, path)
     }
 
@@ -353,17 +353,16 @@ impl std::str::FromStr for Repo {
 
 pub fn fetch_github_repository(repo_name: &str) -> Repository {
     let url = format!("{}{}", "https://github.com/", repo_name);
-    let path = "/tmp/hyperastgitresources/repo/".to_string();
+    let path = format!("{}", "/tmp/hyperastgitresources/repo/");
     fetch_repository(url, path)
 }
 
-pub fn fetch_remote(mut x: git2::Remote, head: &str) -> Result<(), git2::Error> {
-    let name = x.name().unwrap_or("").to_string();
+pub fn fetch_fork(mut x: git2::Remote, head: &str) -> Result<(), git2::Error> {
     let mut callbacks = RemoteCallbacks::new();
-    callbacks.transfer_progress(move |x| {
+
+    callbacks.transfer_progress(|x| {
         log::info!(
-            "{}/{head} transfer {}/{}",
-            name,
+            "fork transfer {}/{}",
             x.received_objects(),
             x.total_objects()
         );

@@ -4,9 +4,13 @@ use bevy_ecs::component::Component;
 use hashbrown::hash_map::DefaultHashBuilder;
 use num::ToPrimitive as _;
 
-use crate::store::defaults::LabelIdentifier;
-use crate::store::nodes::{self, compo};
-use crate::utils::make_hash;
+use crate::{
+    store::{
+        defaults::LabelIdentifier,
+        nodes::{self, compo},
+    },
+    utils::make_hash,
+};
 
 #[derive(Default)]
 pub struct NodeStore {

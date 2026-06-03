@@ -72,14 +72,14 @@ fn test_construction_dedup_entry_raw_md1() {
         init,
         fn_zip0(md_sys_tree_size::init, md_sys_tree_hash::init),
         md_sys_byte_len::init,
-        || (),
+        || ()
     );
 
     let acc = fn_zip_data_acc(
         |a, x| acc(a, *x),
         fn_zip3(md_sys_tree_size::acc, md_sys_tree_hash::acc),
         md_sys_byte_len::acc,
-        |_, _| (),
+        |_, _| ()
     );
 
     let finish = fn_zip_data_finish(
@@ -87,14 +87,13 @@ fn test_construction_dedup_entry_raw_md1() {
         |acc, prim| {
             fn_zip12(md_sys_tree_size::finish, |a, (x, s): ((_, _), _)| {
                 md_sys_tree_hash::finish(a, (x.0, x.1, s))
-            })(acc, (&prim.0, prim.1.0.as_ref()))
+            })(acc, (&prim.0, prim.1 .0.as_ref()))
         },
-        |acc, prim| md_sys_byte_len::finish(acc, (&prim.0, prim.1.0.as_ref(), !prim.2.is_empty())),
-        |_, _| (),
+        |acc, prim| md_sys_byte_len::finish(acc, (&prim.0, prim.1 .0.as_ref(), !prim.2.is_empty())),
+        |_, _| ()
     );
 
-    let insert =
-        |backend: &mut World, t, md0, md1, md2| insert(backend, t).insert((md0, md1, md2)).id();
+    let insert = |backend: &mut World, t, md0, md1, md2| insert(backend, t).insert((md0, md1, md2)).id();
 
     let x = construction(it, init, acc, |acc: _, l: Option<IdL>| {
         let (t, md0, md1, md2) = finish(acc, l);

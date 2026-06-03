@@ -3,8 +3,10 @@
 use hyperast_vcs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use std::{path::PathBuf, str::FromStr};
 
-use hyperast_benchmark_diffs::cross_repo::{CommitCompareParameters, windowed_commits_compare};
-use hyperast_benchmark_diffs::setup_env_logger;
+use hyperast_benchmark_diffs::{
+    cross_repo::{CommitCompareParameters, windowed_commits_compare},
+    setup_env_logger,
+};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;

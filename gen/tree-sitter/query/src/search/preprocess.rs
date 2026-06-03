@@ -95,9 +95,9 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 assert_eq!(*query_store.resolve_type(&ty), Type::Identifier);
                 let ty = query_store.node_store.resolve(ty);
                 let l = ty.try_get_label();
-                let l = query_store.label_store.resolve(l.unwrap());
+                let l = query_store.label_store.resolve(&l.unwrap());
                 let l = C::conv(l).expect("the node type does not exist");
-                let patt = Self::process_named_node(query_store, rule_id, &mut res);
+                let patt = Self::process_named_node(query_store, rule_id, &mut res).into();
                 res.root_types.push(l);
                 res.patterns.push(patt);
             } else if t == Type::AnonymousNode {
@@ -121,7 +121,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                         let ty = query_store.node_store.resolve(name);
                         assert_eq!(*query_store.resolve_type(&name), Type::Identifier);
                         let name = ty.try_get_label().unwrap();
-                        let name = query_store.label_store.resolve(name);
+                        let name = query_store.label_store.resolve(&name);
                         dbg!(name);
                         dbg!(&res.captures);
                         capture.push(res.add_or_insert_capture(name));
@@ -148,7 +148,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                             .unwrap();
                         assert_eq!(ty.get_type(), Type::Identifier);
                         let l = ty.try_get_label();
-                        let l = query_store.label_store.resolve(l.unwrap());
+                        let l = query_store.label_store.resolve(&l.unwrap());
                         let l = C::conv(l).expect("the node type does not exist");
                         let patt = Self::process_named_node(query_store, id, &mut res);
                         res.root_types.push(l);
@@ -220,7 +220,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         } else {
             assert_eq!(Type::Identifier, ty.get_type());
             let l = ty.try_get_label();
-            let l = query_store.label_store.resolve(l.unwrap());
+            let l = query_store.label_store.resolve(&l.unwrap());
             let l = C::conv(l).expect("the node type does not exist");
             Some(l)
         };
@@ -232,15 +232,11 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 .unwrap();
             let t = rule.get_type();
             if t == Type::NamedNode {
-                patterns.push(Self::process_named_node(query_store, *rule_id, preparing))
+                patterns.push(Self::process_named_node(query_store, *rule_id, preparing).into())
             } else if t == Type::Spaces {
             } else if t == Type::RParen {
             } else if t == Type::AnonymousNode {
-                patterns.push(Self::process_anonymous_node(
-                    query_store,
-                    *rule_id,
-                    preparing,
-                ))
+                patterns.push(Self::process_anonymous_node(query_store, *rule_id, preparing).into())
             } else if t == Type::Capture {
                 break;
             } else if t == Type::Predicate {
@@ -255,11 +251,8 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             } else if t == Type::Quantifier {
                 break;
             } else if t == Type::FieldDefinition {
-                patterns.push(Self::process_field_definition(
-                    query_store,
-                    *rule_id,
-                    preparing,
-                ))
+                patterns
+                    .push(Self::process_field_definition(query_store, *rule_id, preparing).into())
             } else if t == Type::Dot {
                 patterns.push(Pattern::Dot);
             } else if t == Type::NegatedField {
@@ -278,7 +271,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 assert_eq!(Type::Identifier, field_name.get_type());
                 assert!(cs.next().is_none());
                 let field_name = field_name.try_get_label();
-                let field_name = query_store.label_store.resolve(field_name.unwrap());
+                let field_name = query_store.label_store.resolve(&field_name.unwrap());
                 let field_name = field_name.to_string();
                 patterns.push(Pattern::NegatedField(field_name));
             } else if t == Type::Slash {
@@ -294,7 +287,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 supertype = l;
                 l = {
                     let l = ty.try_get_label();
-                    let l = query_store.label_store.resolve(l.unwrap());
+                    let l = query_store.label_store.resolve(&l.unwrap());
                     let l = C::conv(l).expect("the node type does not exist");
                     Some(l)
                 };
@@ -341,7 +334,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     .unwrap();
                 assert_eq!(ty.get_type(), Type::Identifier);
                 let name = ty.try_get_label().unwrap();
-                let name = query_store.label_store.resolve(name);
+                let name = query_store.label_store.resolve(&name);
                 dbg!(name);
                 let capture_id = preparing.add_or_insert_capture(name);
                 dbg!(capture_id);
@@ -372,7 +365,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     },
                 }
                 res = Pattern::Capture {
-                    name: capture_id,
+                    name: capture_id as u32,
                     pat: Arc::new(res),
                 };
             } else if t == Type::Quantifier {
@@ -396,13 +389,9 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     quantifier,
                     pat: Arc::new(res),
                 };
-                log::error!("when should we go out of the loop ?");
-                break;
-                // NOTE before we were breaking on quantifiers
-
-                // } else if t == Type::Quantifier {
-                //     break;
             } else if t == Type::Spaces {
+            } else if t == Type::Quantifier {
+                break;
             } else {
                 todo!("{}", t)
             }
@@ -446,7 +435,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             .try_resolve_typed3::<TsQuery>(&field_name)
             .unwrap();
         let field_name = field_name.try_get_label();
-        let field_name = query_store.label_store.resolve(field_name.unwrap());
+        let field_name = query_store.label_store.resolve(&field_name.unwrap());
         let colon = cs.next().unwrap();
         let colon = query_store
             .node_store
@@ -514,7 +503,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 } else if t == Type::Spaces {
                 } else if t == Type::Identifier {
                     let l = rule.try_get_label();
-                    let l = query_store.label_store().resolve(l.unwrap());
+                    let l = query_store.label_store().resolve(&l.unwrap());
                     dbg!(l);
                     let l = &l[1..l.len() - 1];
                     dbg!(l);
@@ -570,7 +559,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                         .unwrap();
                     assert_eq!(ty.get_type(), Type::Identifier);
                     let name = ty.try_get_label().unwrap();
-                    let name = query_store.label_store.resolve(name);
+                    let name = query_store.label_store.resolve(&name);
                     dbg!(name);
                     let capture_id = preparing.add_or_insert_capture(name);
                     dbg!(capture_id);
@@ -650,7 +639,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         assert_eq!(t, Type::Identifier);
 
         let l = pred.try_get_label();
-        let l = query_store.label_store().resolve(l.unwrap());
+        let l = query_store.label_store().resolve(&l.unwrap());
         match l {
             "eq" => {
                 let pred = cs.next().unwrap();
@@ -661,7 +650,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                 let t = pred.get_type();
                 assert_eq!(t, Type::PredicateType);
                 let l = pred.try_get_label();
-                let l = query_store.label_store().resolve(l.unwrap());
+                let l = query_store.label_store().resolve(&l.unwrap());
                 assert_eq!(l, "?");
                 for rule_id in cs {
                     let rule = query_store
@@ -744,11 +733,11 @@ pub(crate) fn preprocess_capture_pred_arg(
         let t = id.get_type();
         assert_eq!(t, Type::Identifier);
         let l = id.try_get_label();
-        let l = query_store.label_store().resolve(l.unwrap());
+        let l = query_store.label_store().resolve(&l.unwrap());
         l.to_string()
     } else if let Type::String = arg.get_type() {
         let l = arg.try_get_label();
-        let l = query_store.label_store().resolve(l.unwrap());
+        let l = query_store.label_store().resolve(&l.unwrap());
         l[1..l.len() - 1].to_string()
     } else {
         unreachable!()

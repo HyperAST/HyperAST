@@ -96,7 +96,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
         //     continue;
         // }
 
-        if v.get::<&Named>().is_none() {
+        if !v.get::<&Named>().is_some() {
             // leaf/token
             let camel_case = t.try_format_ident(dup_count);
             let raw = t.clone();
@@ -187,7 +187,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                         #kind,
                     });
                 } else {
-                    let kind = if v.get::<&Named>().is_none() {
+                    let kind = if !v.get::<&Named>().is_some() {
                         let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                         format_ident!("{}", &k)
                     } else {
@@ -267,7 +267,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                             #kind,
                         });
                     } else {
-                        let kind = if v.get::<&Named>().is_none() {
+                        let kind = if !v.get::<&Named>().is_some() {
                             let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                             format_ident!("{}", &k)
                         } else {
@@ -310,7 +310,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                             #kind,
                         });
                     } else {
-                        let kind = if v.get::<&Named>().is_none() {
+                        let kind = if !v.get::<&Named>().is_some() {
                             let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                             format_ident!("{}", &k)
                         } else {
@@ -398,7 +398,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                         #kind,
                     });
                 } else {
-                    let kind = if v.get::<&Named>().is_none() {
+                    let kind = if !v.get::<&Named>().is_some() {
                         let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                         format_ident!("{}", &k)
                     } else {
@@ -658,7 +658,7 @@ pub fn serialize_types2(typesys: &TypeSys) {
     for (t, e) in &typesys.index {
         let v = typesys.types.entity(*e).unwrap();
 
-        if v.get::<&Named>().is_none() {
+        if !v.get::<&Named>().is_some() {
             // leaf/token
             let k = leafs.fmt(t, |k| format!("cpp_TS{}", &k.to_upper_camel_case()));
             let kind = format_ident!("{}", &k);

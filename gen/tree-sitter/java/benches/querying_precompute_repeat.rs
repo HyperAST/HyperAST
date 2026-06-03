@@ -57,16 +57,17 @@ fn compare_querying_group(c: &mut Criterion) {
     let codes = "../../../../spoon/src/main/java";
     let codes = Path::new(&codes).to_owned();
     let codes = It::new(codes).map(|x| {
-        let Ok(text) = std::fs::read_to_string(&x) else {
-            panic!("{x:?} is not a java file or a dir containing java files")
-        };
+        let text = std::fs::read_to_string(&x).expect(&format!(
+            "{:?} is not a java file or a dir containing java files: ",
+            x
+        ));
         (x, text)
     });
     let codes: Box<[_]> = codes.collect();
     // let queries: Vec<_> = QUERIES.iter().enumerate().collect();
 
-    for p in QUERIES.iter().map(|x| (x, codes.as_ref())) {
-        group.throughput(Throughput::Elements(p.0.4));
+    for p in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
+        group.throughput(Throughput::Elements(p.0.4 as u64));
 
         group.bench_with_input(
             BenchmarkId::new(format!("baseline-{}", p.0.3), p.0.4),
@@ -74,10 +75,9 @@ fn compare_querying_group(c: &mut Criterion) {
             |b, (q, f)| {
                 b.iter(|| {
                     for _ in 0..p.0.4 {
-                        for p in f.iter() {
+                        for p in f.into_iter() {
                             let (q, t, text) = prep_baseline(q.2)(p);
                             let mut cursor = tree_sitter::QueryCursor::default();
-                            use streaming_iterator::StreamingIterator;
                             black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
                         }
                     }
@@ -101,7 +101,7 @@ fn compare_querying_group(c: &mut Criterion) {
                             &mut md_cache,
                         );
                     let roots: Vec<_> = f
-                        .iter()
+                        .into_iter()
                         .map(|(name, text)| {
                             let tree =
                                 match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(
@@ -153,7 +153,7 @@ fn compare_querying_group(c: &mut Criterion) {
                     let mut java_tree_gen =
                         JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, more);
                     let roots: Vec<_> = f
-                        .iter()
+                        .into_iter()
                         .map(|(name, text)| {
                             let tree =
                                 match hyperast_gen_ts_java::legion_with_refs::tree_sitter_parse(

@@ -1,13 +1,12 @@
-use num::{one, traits::NumAssign, zero};
-use std::fmt::Debug;
-
-use super::{Position, StructuralPosition, StructuralPositionStore};
-use crate::PrimInt;
-use crate::position::{TreePath, TreePathMut};
+use super::super::TreePathMut;
+use super::{Position, StructuralPosition, StructuralPositionStore, TreePath};
 use crate::types::{
     AnyType, Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, NodeId, Typed,
     WithChildren, WithSerialization,
 };
+use crate::PrimInt;
+use num::{one, traits::NumAssign, zero};
+use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 pub struct Scout<IdN, Idx> {
@@ -41,7 +40,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> TreePath<IdN, Idx> for Scout<IdN, Idx> {
     fn offset(&self) -> Option<&Idx> {
         self.path.offset()
     }
-    fn check<HAST>(&self, stores: &HAST) -> Result<(), ()>
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
         HAST: HyperAST<IdN = IdN::IdN>,
         HAST::IdN: Eq,
@@ -110,7 +109,8 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
     ) -> Position
     where
         HAST: HyperAST<IdN = IdN, Idx = Idx>,
-        for<'t> crate::types::LendT<'t, HAST>: Typed<Type = AnyType> + WithSerialization,
+        for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+            Typed<Type = AnyType> + WithSerialization,
         HAST::Idx: Debug,
         IdN: Copy + Debug + NodeId<IdN = IdN>,
     {
@@ -123,7 +123,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             if !(t.is_file() || t.is_directory()) {
                 from_file = true;
             }
-            y
+            y as usize
         } else {
             0
         };
@@ -152,7 +152,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
                     v.iter()
                         .map(|x| {
                             let b = stores.resolve(x);
-                            b.try_bytes_len().unwrap()
+                            b.try_bytes_len().unwrap() as usize
                         })
                         .sum()
                 };
@@ -201,6 +201,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             offset += c;
             if t.is_file() {
                 from_file = false;
+            } else {
             }
         }
         sp.get(super::SpHandle(self.ancestors + 1))

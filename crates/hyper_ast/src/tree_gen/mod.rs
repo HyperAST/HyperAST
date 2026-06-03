@@ -25,7 +25,6 @@ use crate::store::nodes::EntityBuilder;
 use crate::types::{ETypeStore, HyperAST, HyperASTShared};
 use crate::{hashed::NodeHashs, nodes::Space};
 
-#[cfg(feature = "ts")]
 use self::parser::Visibility;
 
 pub type Spaces = Vec<Space>;
@@ -153,7 +152,7 @@ impl<T, Id> Accumulator for BasicAccumulator<T, Id> {
 
 /// Builder of a node aware of its indentation for the hyperAST
 pub trait AccIndentation: Accumulator {
-    fn indentation(&self) -> &Spaces;
+    fn indentation<'a>(&'a self) -> &'a Spaces;
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,9 +161,9 @@ pub struct SubTreeMetrics<U> {
     pub size: u32,
     pub height: u32,
     pub size_no_spaces: u32,
-    // pub byte_len: u32,
-    /// count newlines inside labels
-    pub line_count: u32, // TODO u16 is definitely not enough at the directory level e.g. 1.6MLoCs for Hadoop
+    /// should include lines inside labels
+    pub line_count: u16, // TODO u16 is definitely not enough at the directory level e.g. 1.6MLoCs for Hadoop
+                         // pub byte_len: u32,
 }
 
 impl<U: NodeHashs> SubTreeMetrics<U> {
@@ -214,7 +213,7 @@ impl<U: crate::hashed::ComputableNodeHashs> SubTreeMetrics<U> {
         self,
         k: &K,
         l: &L,
-        line_count: u32,
+        line_count: u16,
     ) -> SubTreeMetrics<crate::hashed::HashesBuilder<U>> {
         let size_no_spaces = self.size_no_spaces + 1;
         use crate::hashed::IndexingHashBuilder;
@@ -287,7 +286,7 @@ impl<'a, GD> TextedGlobalData<'a, GD> {
     }
 }
 
-impl<GD: GlobalData> GlobalData for TextedGlobalData<'_, GD> {
+impl<'a, GD: GlobalData> GlobalData for TextedGlobalData<'a, GD> {
     fn up(&mut self) {
         self.inner.up();
     }
@@ -308,14 +307,14 @@ pub struct SpacedGlobalData<'a, GD = BasicGlobalData> {
     inner: TextedGlobalData<'a, GD>,
 }
 
-impl<GD> std::ops::Deref for SpacedGlobalData<'_, GD> {
+impl<'a, GD> std::ops::Deref for SpacedGlobalData<'a, GD> {
     type Target = GD;
 
     fn deref(&self) -> &Self::Target {
         &self.inner.inner
     }
 }
-impl<GD> std::ops::DerefMut for SpacedGlobalData<'_, GD> {
+impl<'a, GD> std::ops::DerefMut for SpacedGlobalData<'a, GD> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner.inner
     }
@@ -329,25 +328,25 @@ impl<'a, GD> From<TextedGlobalData<'a, GD>> for SpacedGlobalData<'a, GD> {
         }
     }
 }
-impl<GD: Clone> SpacedGlobalData<'_, GD> {
+impl<'a, GD: Clone> SpacedGlobalData<'a, GD> {
     pub fn simple(&self) -> GD {
         self.inner.inner.clone()
     }
 }
 
-impl<GD: Clone> TextedGlobalData<'_, GD> {
+impl<'a, GD: Clone> TextedGlobalData<'a, GD> {
     pub fn simple(&self) -> GD {
         self.inner.clone()
     }
 }
 
-impl<GD> SpacedGlobalData<'_, GD> {
+impl<'a, GD> SpacedGlobalData<'a, GD> {
     pub fn sum_byte_length(&self) -> usize {
         self.sum_byte_length
     }
 }
 
-impl<GD> TotalBytesGlobalData for SpacedGlobalData<'_, GD> {
+impl<'a, GD> TotalBytesGlobalData for SpacedGlobalData<'a, GD> {
     fn set_sum_byte_length(&mut self, sum_byte_length: usize) {
         // assert!(self.sum_byte_length <= sum_byte_length);
         assert!(
@@ -360,7 +359,7 @@ impl<GD> TotalBytesGlobalData for SpacedGlobalData<'_, GD> {
     }
 }
 
-impl<GD: GlobalData> GlobalData for SpacedGlobalData<'_, GD> {
+impl<'a, GD: GlobalData> GlobalData for SpacedGlobalData<'a, GD> {
     fn up(&mut self) {
         self.inner.up();
     }
@@ -449,20 +448,15 @@ pub trait TreeGen {
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 }
 
-#[cfg(feature = "ts")]
 #[derive(Debug)]
 pub struct Parents<Acc>(Vec<P<Acc>>);
-
-#[cfg(feature = "ts")]
 impl<Acc> From<Acc> for Parents<Acc> {
     fn from(value: Acc) -> Self {
         Self::new(P::Visible(value))
     }
 }
 
-#[cfg(feature = "ts")]
 #[derive(Debug)]
-#[allow(unused)]
 enum P<Acc> {
     ManualyHidden,
     BothHidden,
@@ -470,7 +464,6 @@ enum P<Acc> {
     Visible(Acc),
 }
 
-#[cfg(feature = "ts")]
 impl<Acc> P<Acc> {
     fn s(&self) -> &str {
         match self {
@@ -512,7 +505,6 @@ impl<Acc> P<Acc> {
     }
 }
 
-#[cfg(feature = "ts")]
 impl<Acc> P<Acc> {
     fn ok(self) -> Option<Acc> {
         match self {
@@ -532,7 +524,6 @@ impl<Acc> P<Acc> {
     }
 }
 
-#[cfg(feature = "ts")]
 impl<Acc> Parents<Acc> {
     fn new(value: P<Acc>) -> Self {
         Self(vec![value])
@@ -560,12 +551,11 @@ impl<Acc> Parents<Acc> {
             .find_map(|x| x.as_mut().visibility())
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.0.len()
     }
 }
 
-#[derive(Debug)]
 pub struct RoleAcc<R> {
     pub current: Option<R>,
     pub roles: Vec<R>,
@@ -603,7 +593,7 @@ impl<R> RoleAcc<R> {
     {
         use crate::store::nodes::compo;
         debug_assert!(self.current.is_none());
-        if !self.roles.is_empty() {
+        if self.roles.len() > 0 {
             dyn_builder.add(compo::Roles(self.roles.into_boxed_slice()));
             dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
         }
@@ -653,8 +643,6 @@ pub trait TsType: crate::types::HyperType + Copy {
 /// utils for generating code with tree-sitter
 #[cfg(feature = "ts")]
 pub mod utils_ts {
-    use crate::tree_gen::parser::Node;
-
     pub use super::TsEnableTS;
     pub use super::TsType;
     pub fn tree_sitter_parse(
@@ -703,40 +691,12 @@ pub mod utils_ts {
         fn ts_tree_cursor_goto_next_sibling_internal(
             self_: *mut tree_sitter::ffi::TSTreeCursor,
         ) -> TreeCursorStep;
-
-    }
-
-    // typedef struct {
-    //   const TSTree *tree;
-    //   Array(TreeCursorEntry) stack;
-    //   TSSymbol root_alias_symbol;
-    // } TreeCursor;
-    #[repr(C)]
-    struct TreeCursor {
-        pub tree: *const tree_sitter::ffi::TSTree,
-        pub stack: Array<TreeCursorEntry>,
-        pub root_alias_symbol: tree_sitter::ffi::TSSymbol,
-    }
-
-    type TreeCursorEntry = ();
-
-    // Array(T)       \
-    //   struct {             \
-    //     T *contents;       \
-    //     uint32_t size;     \
-    //     uint32_t capacity; \
-    //   }
-    #[repr(C)]
-    struct Array<T> {
-        pub contents: *mut T,
-        pub size: u32,
-        pub capacity: u32,
     }
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub tree_sitter::Node<'a>);
 
-    impl crate::tree_gen::parser::Node for TNode<'_> {
+    impl<'a> crate::tree_gen::parser::Node for TNode<'a> {
         fn kind(&self) -> &str {
             self.0.kind()
         }
@@ -770,7 +730,7 @@ pub mod utils_ts {
         }
     }
 
-    impl crate::tree_gen::parser::NodeWithU16TypeId for TNode<'_> {
+    impl<'a> crate::tree_gen::parser::NodeWithU16TypeId for TNode<'a> {
         fn kind_id(&self) -> u16 {
             self.0.kind_id()
         }
@@ -780,7 +740,7 @@ pub mod utils_ts {
     #[derive(Clone)]
     pub struct TTreeCursor<'a, const HIDDEN_NODES: bool = false>(pub tree_sitter::TreeCursor<'a>);
 
-    impl<const HIDDEN_NODES: bool> std::fmt::Debug for TTreeCursor<'_, HIDDEN_NODES> {
+    impl<'a, const HIDDEN_NODES: bool> std::fmt::Debug for TTreeCursor<'a, HIDDEN_NODES> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.debug_tuple("TTreeCursor")
                 .field(&self.0.node().kind())
@@ -801,38 +761,7 @@ pub mod utils_ts {
         }
 
         fn goto_parent(&mut self) -> bool {
-            self.goto_parent_extended().is_some()
-        }
-
-        fn goto_parent_extended(&mut self) -> Option<Visibility> {
-            if HIDDEN_NODES {
-                // dbg!(self.0.depth());
-                // dbg!(self.0.node().kind());
-                unsafe {
-                    let s: &mut tree_sitter::TreeCursor<'a> = &mut self.0;
-                    // let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-                    let s: *mut TreeCursor = std::mem::transmute(s);
-                    if (*s).stack.size <= 1 {
-                        TreeCursorStep::TreeCursorStepNone
-                    } else {
-                        log::trace!("prepro2 goto parent then {:?}", self.0.node().kind());
-                        // dbg!(self.0.depth());
-                        // dbg!((*s).stack.size);
-                        // dbg!(self.0.node().kind());
-                        (*s).stack.size -= 1;
-                        // dbg!(self.0.depth());
-                        // dbg!(self.0.node().kind());
-                        log::trace!("prepro2 goto parent now {:?}", self.0.node().kind());
-                        // WARN is should call ts_tree_cursor_is_entry_visible(s, ...)
-                        TreeCursorStep::TreeCursorStepHidden
-                    }
-                }
-                .ok()
-            } else if self.0.goto_parent() {
-                Some(Visibility::Visible)
-            } else {
-                None
-            }
+            self.0.goto_parent()
         }
 
         fn goto_first_child(&mut self) -> bool {
@@ -848,63 +777,60 @@ pub mod utils_ts {
                 unsafe {
                     let s = &mut self.0;
                     let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-                    // // dbg!(self.0.node().kind());
-                    // let r = dbg!(ts_tree_cursor_goto_first_child_internal(s));
-                    // // dbg!(self.0.node().kind());
-                    // r
                     ts_tree_cursor_goto_first_child_internal(s)
                 }
                 .ok()
-            } else if self.0.goto_first_child() {
-                Some(Visibility::Visible)
             } else {
-                None
+                if self.0.goto_first_child() {
+                    Some(Visibility::Visible)
+                } else {
+                    None
+                }
             }
         }
 
         fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
             if HIDDEN_NODES {
-                unsafe {
+                let r = unsafe {
                     let s = &mut self.0;
                     let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-                    // dbg!(self.0.node().kind());
-                    // let r = dbg!(ts_tree_cursor_goto_next_sibling_internal(s));
-                    // dbg!(self.0.node().kind());
-                    // r
                     ts_tree_cursor_goto_next_sibling_internal(s)
                 }
-                .ok()
-            } else if self.0.goto_next_sibling() {
-                Some(Visibility::Visible)
+                .ok();
+                r
             } else {
-                None
+                if self.0.goto_next_sibling() {
+                    Some(Visibility::Visible)
+                } else {
+                    None
+                }
             }
         }
     }
 
     /// Guaranteed to work even when considering hidden nodes,
-    /// i.e., goto_next_children() skips hidden parents...
+    /// i.e., goto_next_cchildren() skips hidden parents...
     pub struct PrePost<C> {
         has: super::zipped::Has,
         stack: Vec<C>,
         vis: bitvec::vec::BitVec,
     }
 
-    impl<C: super::parser::TreeCursor + Clone> PrePost<C> {
+    impl<'a, C: super::parser::TreeCursor + Clone> PrePost<C> {
         pub fn new(cursor: &C) -> Self {
             use bitvec::prelude::Lsb0;
             let mut vis = bitvec::bitvec![];
-            let v = Visibility::Hidden;
-            vis.push(v == Visibility::Hidden);
-            Self {
+            vis.push(Visibility::Hidden == Visibility::Hidden);
+            let pre_post = Self {
                 has: super::zipped::Has::Down,
                 stack: vec![cursor.clone()],
                 vis,
-            }
+            };
+            pre_post
         }
 
-        pub fn current(&mut self) -> (Option<&C>, &mut super::zipped::Has) {
-            (self.stack.last(), &mut self.has)
+        pub fn current(&mut self) -> Option<(&C, &mut super::zipped::Has)> {
+            self.stack.last().map(|c| (c, &mut self.has))
         }
 
         pub fn next(&mut self) -> Option<Visibility> {
@@ -966,125 +892,6 @@ pub mod utils_ts {
             }
         }
     }
-
-    /// Guaranteed to work even when considering hidden nodes,
-    /// now it directly uses a goto_parent_extended I implemented,
-    /// so no need to keep a stack of cursors !
-    /// NOTE from profiling it was taking about 30% of the runtime.
-    pub struct PrePost2<C> {
-        #[doc(hidden)]
-        pub has: super::zipped::Has,
-        pub cursor: C,
-        pub stack: Vec<usize>,
-        vis: bitvec::vec::BitVec,
-        waiting: Option<Visibility>,
-    }
-
-    impl<C: super::parser::TreeCursor> PrePost2<C> {
-        pub fn new(cursor: C) -> Self {
-            use bitvec::prelude::Lsb0;
-            let mut vis = bitvec::bitvec![];
-            vis.push(Visibility::Visible == Visibility::Hidden);
-            let mut stack = vec![cursor.node().end_byte()];
-            stack.reserve(30);
-            Self {
-                has: super::zipped::Has::Down,
-                cursor,
-                stack,
-                vis,
-                waiting: None,
-            }
-        }
-    }
-
-    impl<C: super::parser::TreeCursor> PrePost2<C> {
-        pub fn current(&mut self) -> (Option<&C>, &mut super::zipped::Has) {
-            (Some(&self.cursor), &mut self.has)
-        }
-
-        pub fn next(&mut self) -> Option<Visibility> {
-            use super::zipped::Has;
-            if self.vis.is_empty() {
-                return None;
-            };
-            assert_eq!(self.stack.len(), self.vis.len());
-            if self.has != Has::Up {
-                if let Some(visibility) = self.cursor.goto_first_child_extended() {
-                    let node = self.cursor.node();
-                    self.stack.push(node.end_byte());
-                    self.has = Has::Down;
-                    self.vis.push(visibility == Visibility::Hidden);
-                    return Some(visibility);
-                }
-            }
-
-            let _ = self.stack.pop().unwrap();
-            let _ = self.vis.pop().unwrap();
-            // TODO check if it could be relaxed to self.has != Has::Down
-            if self.has == Has::Up && self.waiting.is_some() && !self.stack.is_empty() {
-                let node = self.cursor.node();
-                if *self.stack.last().unwrap() <= node.start_byte()
-                    && node.start_byte() < node.end_byte()
-                {
-                    self.has = Has::Up;
-                    let vis = if *self.vis.last().unwrap() {
-                        Visibility::Hidden
-                    } else {
-                        Visibility::Visible
-                    };
-                    Some(vis)
-                } else {
-                    let vis = self.waiting.take().unwrap();
-                    self.has = Has::Right;
-                    self.stack.push(node.end_byte());
-                    self.vis.push(vis == Visibility::Hidden);
-                    Some(vis)
-                }
-            } else if let Some(visibility) = self.cursor.goto_next_sibling_extended() {
-                let node = self.cursor.node();
-                if *self.stack.last().unwrap() <= node.start_byte()
-                    && node.start_byte() < node.end_byte()
-                {
-                    self.waiting = Some(visibility);
-                    self.has = Has::Up;
-                    let vis = if *self.vis.last().unwrap() {
-                        Visibility::Hidden
-                    } else {
-                        Visibility::Visible
-                    };
-                    return Some(vis);
-                }
-                self.stack.push(node.end_byte());
-                self.vis.push(visibility == Visibility::Hidden);
-                assert_eq!(self.stack.len(), self.vis.len());
-                self.has = Has::Right;
-                Some(visibility)
-            } else if let Some(_) = self.cursor.goto_parent_extended() {
-                // NOTE do not need the visibility
-                // I don't have a good way of getting the correct one anyway
-                self.has = Has::Up;
-                if let Some(vis) = self.vis.last() {
-                    let vis = if *vis {
-                        Visibility::Hidden
-                    } else {
-                        Visibility::Visible
-                    };
-                    Some(vis)
-                } else {
-                    None
-                }
-            } else if let Some(vis) = self.vis.last() {
-                let vis = if *vis {
-                    Visibility::Hidden
-                } else {
-                    Visibility::Visible
-                };
-                Some(vis)
-            } else {
-                None
-            }
-        }
-    }
 }
 
 #[cfg(feature = "ts")]
@@ -1112,7 +919,7 @@ pub(crate) fn things_after_last_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'
         .windows(lb.len())
         .rev()
         .position(|window| window == lb)
-        .map(|i| &spaces[spaces.len() - i - 1..])
+        .and_then(|i| Some(&spaces[spaces.len() - i - 1..]))
 }
 
 pub fn compute_indentation<'a>(
@@ -1127,7 +934,7 @@ pub fn compute_indentation<'a>(
     // let Some(spaces) = spaces else {
     //     return parent_indentation.to_vec()
     // };
-    let spaces_after_lb = things_after_last_lb(line_break, spaces);
+    let spaces_after_lb = things_after_last_lb(&*line_break, spaces);
     match spaces_after_lb {
         Some(s) => Space::format_indentation(s),
         None => parent_indentation.to_vec(),
@@ -1142,7 +949,7 @@ pub fn try_compute_indentation<'a>(
     parent_indentation: &'a [Space],
 ) -> Vec<Space> {
     let spaces = { &text[padding_start..pos] };
-    let spaces_after_lb = things_after_last_lb(line_break, spaces);
+    let spaces_after_lb = things_after_last_lb(&*line_break, spaces);
     match spaces_after_lb {
         Some(s) => Space::try_format_indentation(s).unwrap_or(parent_indentation.to_vec()),
         None => parent_indentation.to_vec(),
@@ -1172,14 +979,14 @@ pub fn get_spacing(
                     "{} {} {:?}",
                     x,
                     padding_start,
-                    std::str::from_utf8(spaces).unwrap()
+                    std::str::from_utf8(&spaces).unwrap()
                 )
             }
         });
         debug_assert!(
             !bslash,
             "{}",
-            std::str::from_utf8(&text[padding_start.saturating_sub(100)..pos + 50]).unwrap()
+            std::str::from_utf8(&&text[padding_start.saturating_sub(100)..pos + 50]).unwrap()
         );
         let spaces = spaces.to_vec();
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
@@ -1202,7 +1009,8 @@ pub fn try_get_spacing(
         // println!("{:?}",std::str::from_utf8(spaces).unwrap());
         if spaces
             .iter()
-            .any(|x| *x != b' ' && *x != b'\n' && *x != b'\t' && *x != b'\r')
+            .find(|&x| *x != b' ' && *x != b'\n' && *x != b'\t' && *x != b'\r')
+            .is_some()
         {
             return None;
         }

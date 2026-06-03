@@ -1,5 +1,4 @@
 use crate::app::types::Config;
-use crate::app::utils::{Commit, Forge, Repo};
 
 #[derive(Clone)]
 pub(super) struct Query {
@@ -13,6 +12,41 @@ pub(super) struct Example {
     pub(crate) config: Config,
     pub(crate) commits: usize,
     pub(crate) query: Query,
+}
+
+#[derive(Clone)]
+pub(crate) enum Forge {
+    GitHub,
+    GitLab,
+}
+
+#[derive(Clone)]
+pub(crate) struct Repo {
+    pub(crate) forge: Forge,
+    pub(crate) user: &'static str,
+    pub(crate) name: &'static str,
+}
+#[derive(Clone)]
+pub(crate) struct Commit {
+    pub(crate) repo: Repo,
+    pub(crate) id: &'static str,
+}
+
+impl From<&Repo> for super::super::types::Repo {
+    fn from(value: &Repo) -> Self {
+        Self {
+            user: value.user.into(),
+            name: value.name.into(),
+        }
+    }
+}
+impl From<&Commit> for super::super::types::Commit {
+    fn from(value: &Commit) -> Self {
+        Self {
+            repo: (&value.repo).into(),
+            id: value.id.into(),
+        }
+    }
 }
 
 const BASE_SPOON_EX: Example = Example {
@@ -49,10 +83,10 @@ pub(super) const EXAMPLES: &[Example] = &[
         query: Query {
             description: "Count the number of public class with a superclass and interfaces and that starts with a method.
     ",
-            query: r#"(class_declaration
-    (modifiers "public")
-    superclass: (_)
-    interfaces: (_)
+            query: r#"(class_declaration 
+    (modifiers "public") 
+    superclass: (_) 
+    interfaces: (_) 
     (class_body
         .
         (method_declaration)
@@ -67,7 +101,7 @@ pub(super) const EXAMPLES: &[Example] = &[
     ",
             query: r#"(program
   (package_declaration (_)@pkg)
-  (class_declaration
+  (class_declaration 
     (modifiers "public")
     name: (_) @name
     body: (_
@@ -76,7 +110,7 @@ pub(super) const EXAMPLES: &[Example] = &[
             (modifiers
               . ; this is very important otherwise the complexity explodes
               [
-                (marker_annotation
+                (marker_annotation 
                   name: (_)@_anot (#any-eq? @_anot "Test")
                 )
                 (_)

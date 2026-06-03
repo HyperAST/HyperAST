@@ -1,22 +1,27 @@
 #![allow(unused)]
 use std::collections::HashSet;
 
-use hyperast::position::compute_position_with_no_spaces;
-use hyperast::position::position_accessors::WithPreOrderOffsets;
-use hyperast::types::{Childrn as _, DecompressedFrom as _, HyperAST as _};
-use hyperast::types::{HyperType, LabelStore, Labeled, WithChildren};
-use hyperast::utils::memusage_linux;
+use hyperast::{
+    position::{self, compute_position_with_no_spaces, position_accessors::WithPreOrderOffsets},
+    types::{
+        Children, Childrn as _, DecompressedFrom as _, HyperAST as _, HyperType, LabelStore,
+        Labeled, NodeStore, TypedNodeStore, WithChildren,
+    },
+    utils::memusage_linux,
+};
+use hyperast_benchmark_smells::{
+    DATASET, diffing,
+    github_ranges::{Pos, PositionWithContext, format_pos_as_github_url},
+    simple::count_matches,
+};
 use hyperast_vcs_git::preprocessed::PreProcessedRepository;
 
-use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-use hyper_diff::decompressed_tree_store::{DecompressedWithParent, ShallowDecompressedTreeStore};
-use hyper_diff::mappings::MonoMappingStore;
-use hyper_diff::matchers::Decompressible;
-
-use hyperast_benchmark_smells::github_ranges::format_pos_as_github_url;
-use hyperast_benchmark_smells::github_ranges::{Pos, PositionWithContext};
-use hyperast_benchmark_smells::{DATASET, diffing};
-
+use hyper_diff::{
+    decompressed_tree_store::{
+        DecompressedWithParent, ShallowDecompressedTreeStore, lazy_post_order::LazyPostOrder,
+    },
+    matchers::{Decompressible, mapping_store::MonoMappingStore},
+};
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -73,7 +78,7 @@ fn removed_tracking(
 ) {
     let query = if INCREMENTAL_QUERIES {
         hyperast_tsquery::Query::with_precomputed(
-            query,
+            &query,
             hyperast_gen_ts_java::language(),
             precomputeds,
         )
@@ -81,12 +86,12 @@ fn removed_tracking(
         .unwrap()
         .1
     } else {
-        hyperast_tsquery::Query::new(query, hyperast_gen_ts_java::language()).unwrap()
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language()).unwrap()
     };
 
     assert!(query.enabled_pattern_count() > 0);
 
-    let mut preprocessed = PreProcessedRepository::new(repo_name);
+    let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oids = preprocessed.pre_process_first_parents_with_limit(
         &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         "",
@@ -97,7 +102,7 @@ fn removed_tracking(
     eprintln!("computing matches of {oids:?}");
 
     let stores = &preprocessed.processor.main_stores;
-    let nospace = &hyperast_vcs_git::no_space::as_nospaces(stores);
+    let nospace = &hyperast_vcs_git::no_space::as_nospaces2(stores);
 
     if CSV_FORMATING {
         println!("commit_sha, ast_size, memory_used, processing_time, matches_count");
@@ -127,7 +132,10 @@ fn removed_tracking(
             .map(|x| format!(",{}", x))
             .collect::<String>();
 
-        let matches_positions: Vec<Vec<_>> = matches.iter().map(|x| x.to_vec()).collect();
+        let matches_positions: Vec<Vec<_>> = matches
+            .iter()
+            .map(|x| x.into_iter().cloned().collect())
+            .collect();
         let matches_links: Vec<String> = matches
             .into_iter()
             .map(|x| {
@@ -194,7 +202,7 @@ fn removed_tracking(
                                 format_pos_as_github_url(repo_name, &prev_oid.to_string(), p_ctx);
                             eprintln!("prev: {}", formated);
                             let mut src_parents = mapper.src_arena.parents(src);
-                            'aaa: for src_parent in src_parents {
+                            'aaa: while let Some(src_parent) = src_parents.next() {
                                 let parent_id = mapper.src_arena.original(&src_parent);
                                 let t = nospace.resolve_type(&parent_id);
                                 if let Some(dst_parent) =
@@ -309,7 +317,7 @@ fn track_heuristic2(
     // (old.difference(new).collect(), new.difference(old).collect()) // NOTE same
     let mut new_b = Vec::new();
     for b in old_b.into_iter() {
-        if let Some(i) = old_a.iter().find(|a| a.id == b.id && a.file == b.file) {
+        if let Some(i) = old_a.iter().find(|a| a.id == b.id && &a.file == &b.file) {
             old_a.remove(&i.clone());
             new_b.push(b); // no copying here
         }

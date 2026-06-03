@@ -15,14 +15,14 @@ impl<'a> PendingInsert<'a> {
         }
     }
     pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
-        self.1.1.entity(id).map(|x| HashedNodeRef::new(x)).unwrap()
+        self.1 .1.entity(id).map(|x| HashedNodeRef::new(x)).unwrap()
     }
     pub fn occupied(
         &'a self,
     ) -> Option<(NodeIdentifier, (u64, &'a World, &'a DefaultHashBuilder))> {
         match &self.0 {
             hashbrown::hash_map::RawEntryMut::Occupied(occupied) => {
-                Some((occupied.key().clone(), (self.1.0, self.1.1, self.1.2)))
+                Some((occupied.key().clone(), (self.1 .0, self.1 .1, self.1 .2)))
             }
             _ => None,
         }

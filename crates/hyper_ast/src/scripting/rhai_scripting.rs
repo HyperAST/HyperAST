@@ -9,7 +9,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::Instant;
 
-pub static PREPRO_SIZE: &str = r#"
+pub static PREPRO_SIZE: &'static str = r#"
 let size = 1; # init
 
 fn acc(c) {
@@ -17,7 +17,7 @@ fn acc(c) {
 }
 "#;
 
-pub static PREPRO_SIZE_WITH_FINISH: &str = r#"
+pub static PREPRO_SIZE_WITH_FINISH: &'static str = r#"
 let size = 1; # init
 
 fn acc(c) {
@@ -29,7 +29,7 @@ fn finish() {
 }
 "#;
 
-pub static PREPRO_MCC: &str = r#"
+pub static PREPRO_MCC: &'static str = r#"
 let mcc = if is_branch(TY) {1} else {0};
 
 fn acc(c) {
@@ -37,7 +37,7 @@ fn acc(c) {
 }
 "#;
 
-pub static PREPRO_MCC_WITH_FINISH: &str = r#"
+pub static PREPRO_MCC_WITH_FINISH: &'static str = r#"
 let mcc = 0
 
 fn acc(c) {
@@ -52,7 +52,7 @@ fn finish() {
 }
 "#;
 
-pub static PREPRO_LOC: &str = r#"
+pub static PREPRO_LOC: &'static str = r#"
 let LoC = 0;
 let b = true;
 
@@ -143,7 +143,7 @@ struct StorePtr(*const (), std::any::TypeId);
 impl StorePtr {
     fn new<HAST: crate::types::StoreRefAssoc + 'static>(store: &HAST::S<'_>) -> Self {
         let store = store as *const HAST::S<'_>;
-        let store = unsafe { std::mem::transmute::<*const _, *const ()>(store) };
+        let store = unsafe { std::mem::transmute(store) };
         let hid = std::any::TypeId::of::<HAST>();
         Self(store, hid)
     }
@@ -157,13 +157,14 @@ impl StorePtr {
 
 impl super::Accumulable for Acc {
     fn acc<
+        'a,
         T: crate::types::HyperType + 'static,
         T2: crate::types::HyperType + Send + Sync + 'static,
         HAST: mlua::UserData + 'static,
     >(
         &mut self,
         _scripts: &Self::Scripts,
-        _store: &HAST,
+        _store: &'a HAST,
         _ty: T,
         _child: crate::scripting::SubtreeHandle<T2>,
     ) -> Result<(), Self::Error> {
@@ -171,13 +172,14 @@ impl super::Accumulable for Acc {
     }
 
     fn acc2<
+        'a,
         T: crate::types::HyperType + 'static,
         T2: crate::types::HyperType + Send + Sync + 'static,
         HAST: crate::scripting::ScriptingHyperAST + 'static,
     >(
         &mut self,
         scripts: &Self::Scripts,
-        store: &HAST::S<'_>,
+        store: &'a HAST::S<'_>,
         ty: T,
         child: crate::scripting::SubtreeHandle<T2>,
     ) -> Result<(), Self::Error> {

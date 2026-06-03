@@ -113,7 +113,7 @@ fn preps_default(
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let roots: Vec<_> = f
-        .iter()
+        .into_iter()
         .map(|(name, text)| {
             let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
                 Ok(t) => t,
@@ -153,7 +153,7 @@ fn preps_precomputed(
         );
     let mut java_tree_gen = JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, more);
     let roots: Vec<_> = f
-        .iter()
+        .into_iter()
         .map(|(name, text)| {
             let name = &name.to_str().unwrap();
             let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
@@ -203,15 +203,16 @@ fn compare_querying_group(c: &mut Criterion) {
     // spoon dataset (only source code to avoid including resources), could add tests if necessary
     let codes = project_path.join("src/main/java");
     let codes = It::new(codes).map(|x| {
-        let Ok(text) = std::fs::read_to_string(&x) else {
-            panic!("{x:?} is not a java file or a dir containing java files")
-        };
+        let text = std::fs::read_to_string(&x).expect(&format!(
+            "{:?} is not a java file or a dir containing java files: ",
+            x
+        ));
         (x, text)
     });
     let codes: Box<[_]> = codes.collect();
 
-    for parameter in QUERIES.iter().map(|x| (x, codes.as_ref())) {
-        group.throughput(Throughput::Elements(parameter.0.4));
+    for parameter in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
+        group.throughput(Throughput::Elements(parameter.0.4 as u64));
         bench_baseline(&mut group, parameter);
         bench_rust_baseline(&mut group, parameter);
 
@@ -242,7 +243,7 @@ fn compare_querying_group(c: &mut Criterion) {
                 b.iter(|| {
                     let mut count = 0;
                     for &n in roots {
-                        let pos = hyperast::position::structural_pos::CursorWithPersistence::new(n);
+                        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
                         let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
@@ -280,7 +281,7 @@ fn compare_querying_group(c: &mut Criterion) {
                 b.iter(|| {
                     let mut count = 0;
                     for &n in roots {
-                        let pos = hyperast::position::structural_pos::CursorWithPersistence::new(n);
+                        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(n);
                         let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
@@ -299,15 +300,16 @@ fn bench_baseline(
 ) {
     let id = BenchmarkId::new("baseline", parameter.0.3);
     group.bench_with_input(id, &parameter, |b, parameter| {
-        let f: Box<[_]> = (parameter.1.iter())
+        let f: Box<[_]> = parameter
+            .1
+            .into_iter()
             .map(prep_baseline(parameter.0.2))
             .collect();
         b.iter(|| {
             let mut count = 0;
             for (q, t, text) in f.iter() {
                 let mut cursor = tree_sitter::QueryCursor::default();
-                use streaming_iterator::StreamingIterator;
-                count += black_box(cursor.matches(q, t.root_node(), text.as_bytes()).count());
+                count += black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
             }
             assert_eq!(count as u64, parameter.0.4, "{}", parameter.0.3);
         })
@@ -322,7 +324,9 @@ fn bench_rust_baseline(
         BenchmarkId::new("baseline_query_cursor", parameter.0.3),
         &parameter,
         |b, parameter| {
-            let p: Box<[_]> = (parameter.1.iter())
+            let p: Box<[_]> = parameter
+                .1
+                .into_iter()
                 .map(prep_baseline_query_cursor(parameter.0.2))
                 .collect();
             b.iter(|| {

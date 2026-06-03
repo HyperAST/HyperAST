@@ -24,7 +24,7 @@ impl<T> BasicInterner<T> {
             x if x < 4 => {
                 let i = self.backends[x].len();
                 self.backends[x].extend(value);
-                BasicIdentifier((i << 2) | x)
+                BasicIdentifier(i << 2 | x)
             }
             x => {
                 let i = self.offsets_n.len();
@@ -88,27 +88,27 @@ impl<T> MinimalInterner<T> {
     where
         T: Copy + Into<usize>,
     {
-        if value.iter().all(|x| (*x).into() <= u16::MAX as usize) {
+        if value.iter().all(|x| x.clone().into() <= u16::MAX as usize) {
             let i = self.offsets_u16.len();
             self.backend_u16
-                .extend(value.iter().map(|x| (*x).into() as u16));
+                .extend(value.iter().map(|x| x.clone().into() as u16));
             let ii = self.backend_u16.len();
             self.offsets_u16.push(ii.to_u32().unwrap());
-            MinimalIdentifier(i << 2)
-        } else if value.iter().all(|x| (*x).into() <= u32::MAX as usize) {
+            MinimalIdentifier(i << 2 | 0)
+        } else if value.iter().all(|x| x.clone().into() <= u32::MAX as usize) {
             let i = self.offsets_u32.len();
             self.backend_u32
-                .extend(value.iter().map(|x| (*x).into() as u32));
+                .extend(value.iter().map(|x| x.clone().into() as u32));
             let ii = self.backend_u32.len();
             self.offsets_u32.push(ii.to_u32().unwrap());
-            MinimalIdentifier((i << 2) | 1)
+            MinimalIdentifier(i << 2 | 1)
         } else {
             let i = self.offsets_u64.len();
             self.backend_u64
-                .extend(value.iter().map(|x| (*x).into() as u64));
+                .extend(value.iter().map(|x| x.clone().into() as u64));
             let ii = self.backend_u64.len();
             self.offsets_u64.push(ii.to_u32().unwrap());
-            MinimalIdentifier((i << 2) | 2)
+            MinimalIdentifier(i << 2 | 2)
         }
     }
     fn resolver(&self, id: MinimalIdentifier) -> impl Iterator<Item = T> + use<'_, T>
@@ -121,7 +121,7 @@ impl<T> MinimalInterner<T> {
             left: usize,
             right: usize,
         }
-        impl<T: From<usize>> Iterator for It<'_, T> {
+        impl<'a, T: From<usize>> Iterator for It<'a, T> {
             type Item = T;
 
             fn next(&mut self) -> Option<Self::Item> {

@@ -1,11 +1,11 @@
-use hyperast::position::structural_pos::CursorHead;
+use hyperast::tree_gen::NoOpMore;
 use tree_sitter::Parser;
 
-use crate::legion::tree_sitter_parse;
-use crate::tests::{EX_ISSUE_MISSING_NODE2, EX_ISSUE_MISSING_NODE3};
+use crate::{legion::tree_sitter_parse, types::TStore};
 
-use super::EX_ISSUE_MISSING_NODE;
-use super::{CppTreeGen, SimpleStores};
+type CppTreeGen<'store, 'cache, HAST, Acc> =
+    crate::legion::CppTreeGen<'store, 'cache, TStore, NoOpMore<HAST, Acc>, true>;
+type SimpleStores = hyperast::store::SimpleStores<TStore>;
 
 static EX: &str = r#"
 void read_string(char *buf) {
@@ -54,7 +54,7 @@ pub(crate) fn cpp_preproc_call_decl_test() {
         hyperast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
     );
     let (query, stores, code) = (query, stores, full_node.local.compressed_node);
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
     let mut matches = query.matches(cursor);
     let Some(_) = matches.next() else {
@@ -62,123 +62,6 @@ pub(crate) fn cpp_preproc_call_decl_test() {
     };
 }
 
-static EX2: &str = r#"
-    extern int foo;
-
-    // this one has a comment
-    extern int bar;
-
-    // this one has two comments
-    // ooOoOoOOOo
-    extern int baz;
-"#;
-
-/// https://github.com/tree-sitter/tree-sitter/issues/3683
-#[test]
-pub(crate) fn cpp_multi_repeat_incomplete_test() {
-    let text = EX2.as_bytes();
-    let tree = match tree_sitter_parse(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
-    println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores::default();
-    let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    use hyperast::nodes;
-    let id = x.compressed_node;
-    println!("{}", nodes::SyntaxSerializer::new(&stores, id));
-    println!("{}", nodes::TextSerializer::new(&stores, id));
-    println!("{}", nodes::SexpSerializer::new(&stores, id));
-    println!("{}", nodes::SyntaxWithFieldsSerializer::new(&stores, id));
-
-    let query = r#"
-        (translation_unit
-          ((comment)*
-          .
-          (declaration)) @decl
-        )
-    "#;
-    let query = hyperast_tsquery::Query::new(query, crate::language()).unwrap();
-    let cid = query.capture_index_for_name("decl").unwrap();
-    // let cid2 = query.capture_index_for_name("comment").unwrap();
-
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(x.compressed_node);
-    let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
-    let mut matches = query.matches(cursor);
-    while let Some(x) = matches.next() {
-        dbg!();
-        // for c in x.nodes_for_capture_index(cid2) {
-        //     let id = c.pos.node();
-        //     dbg!();
-        //     println!("{}", nodes::TextSerializer::new(&stores, id));
-        // }
-        for c in x.nodes_for_capture_index(cid) {
-            let id = c.pos.node();
-            dbg!();
-            println!("{}", nodes::TextSerializer::new(&stores, id));
-        }
-    }
-}
-#[test_log::test]
-pub(crate) fn cpp_parsing_error_test() {
-    let text = EX_ISSUE_MISSING_NODE.as_bytes();
-    let tree = match tree_sitter_parse(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
-    println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores::default();
-    let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    use hyperast::nodes;
-    let id = x.compressed_node;
-    println!("{}", nodes::SyntaxSerializer::new(&stores, id));
-    println!("{}", nodes::TextSerializer::new(&stores, id));
-    println!("{}", nodes::SexpSerializer::new(&stores, id));
-    println!("{}", nodes::SyntaxWithFieldsSerializer::new(&stores, id));
-}
-
-#[test_log::test]
-pub(crate) fn cpp_parsing_missing_systemd_dbus_cred_c_test() {
-    let text = EX_ISSUE_MISSING_NODE2.as_bytes();
-    let tree = match tree_sitter_parse(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
-    println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores::default();
-    let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    use hyperast::nodes;
-    let id = x.compressed_node;
-    println!("{}", nodes::SyntaxSerializer::new(&stores, id));
-    println!("{}", nodes::TextSerializer::new(&stores, id));
-    println!("{}", nodes::SexpSerializer::new(&stores, id));
-    println!("{}", nodes::SyntaxWithFieldsSerializer::new(&stores, id));
-}
-#[test_log::test]
-pub(crate) fn cpp_parsing_missing_systemd_pam_systemd_c_test() {
-    let text = EX_ISSUE_MISSING_NODE3.as_bytes();
-    let tree = match tree_sitter_parse(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
-    println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores::default();
-    let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    use hyperast::nodes;
-    let id = x.compressed_node;
-    println!("{}", nodes::SyntaxSerializer::new(&stores, id));
-    println!("{}", nodes::TextSerializer::new(&stores, id));
-    println!("{}", nodes::SexpSerializer::new(&stores, id));
-    println!("{}", nodes::SyntaxWithFieldsSerializer::new(&stores, id));
-}
 #[allow(unused)]
 static Q2: &str = r#"
 (translation_unit

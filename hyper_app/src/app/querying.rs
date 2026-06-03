@@ -1,30 +1,35 @@
-use poll_promise::Promise;
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
-
-use egui_addon::{InteractiveSplitter, code_editor::EditorInfo};
-
-use super::types::{CodeRange, Commit, CommitId, Config, QueryEditor, SelectedConfig};
-use super::types::{EditorHolder, WithDesc};
-use super::utils_edition::{EditStatus, EditingContext};
-use super::utils_edition::{
-    show_available_remote_docs, show_interactions, show_locals_and_interact,
-    show_shared_code_edition, update_shared_editors,
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    ops::DerefMut,
+    sync::{Arc, Mutex},
 };
-use super::utils_results_batched::show_long_result;
-use super::utils_results_batched::{ComputeError, PartialError};
-use super::utils_results_batched::{ComputeResultIdentified, ComputeResults, ComputeResultsProm};
-use super::{Sharing, code_editor_automerge, show_repo_menu};
-use crate::utils_poll::Resource;
 
-pub(crate) mod example_queries;
+use poll_promise::Promise;
+
+use crate::app::{
+    types::EditorHolder,
+    utils_edition::{self, show_available_remote_docs, show_locals_and_interact},
+    utils_results_batched::ComputeResultIdentified,
+};
+
 use self::example_queries::EXAMPLES;
+
+use egui_addon::{
+    code_editor::EditorInfo, interactive_split::interactive_splitter::InteractiveSplitter,
+};
+
+use super::{
+    Sharing, code_editor_automerge, show_repo_menu,
+    types::{Commit, Config, QueryEditor, Resource, SelectedConfig, WithDesc},
+    utils_edition::{EditStatus, show_interactions, update_shared_editors},
+    utils_results_batched::{self, ComputeResults, show_long_result},
+};
+pub(crate) mod example_queries;
 
 const INFO_QUERY: EditorInfo<&'static str> = EditorInfo {
     title: "Query",
     short: "the query",
-    long: "follows the tree sitter query syntax",
+    long: concat!("follows the tree sitter query syntax"),
 };
 
 const INFO_DESCRIPTION: EditorInfo<&'static str> = EditorInfo {
@@ -41,11 +46,11 @@ where
     C: From<(EditorInfo<String>, String)> + egui_addon::code_editor::CodeHolder,
 {
     fn from(value: &example_queries::Query) -> Self {
-        let mut description: C = (INFO_DESCRIPTION.into(), value.description.into()).into();
+        let mut description: C = (INFO_DESCRIPTION.copied(), value.description.into()).into();
         description.set_lang("md");
         Self {
             description, // TODO config with markdown, not js
-            query: (INFO_QUERY.into(), value.query.into()).into(),
+            query: (INFO_QUERY.copied(), value.query.into()).into(),
         }
     }
 }
@@ -65,7 +70,7 @@ impl<T> WithDesc<T> for QueryEditor<T> {
     }
 }
 
-impl<T> EditorHolder for QueryEditor<T> {
+impl<T> super::types::EditorHolder for QueryEditor<T> {
     type Item = T;
 
     fn iter_editors_mut(&mut self) -> impl Iterator<Item = &mut Self::Item> {
@@ -85,8 +90,8 @@ impl<T> QueryEditor<T> {
     }
 }
 
-impl Into<QueryEditor<code_editor_automerge::CodeEditor>> for QueryEditor {
-    fn into(self) -> QueryEditor<code_editor_automerge::CodeEditor> {
+impl Into<QueryEditor<super::code_editor_automerge::CodeEditor>> for QueryEditor {
+    fn into(self) -> QueryEditor<super::code_editor_automerge::CodeEditor> {
         self.to_shared()
     }
 }
@@ -116,37 +121,45 @@ impl Default for ComputeConfigQuery {
     }
 }
 
-pub(crate) type QueryingContext =
-    EditingContext<QueryEditor, QueryEditor<code_editor_automerge::CodeEditor>>;
+pub(crate) type QueryingContext = super::utils_edition::EditingContext<
+    super::types::QueryEditor,
+    super::types::QueryEditor<code_editor_automerge::CodeEditor>,
+>;
 
 pub(super) fn remote_compute_query(
     ctx: &egui::Context,
     api_addr: &str,
     single: &Sharing<ComputeConfigQuery>,
     query_editors: &mut QueryingContext,
-) -> ComputeResultsProm<QueryingError> {
+) -> Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>> {
     let language = match single.content.config {
         Config::Any => "",
         Config::MavenJava => "Java",
         Config::MakeCpp => "Cpp",
     }
     .to_string();
-    let query = match &mut query_editors.current {
+    let script = match &mut query_editors.current {
         EditStatus::Shared(_, shared_script) | EditStatus::Sharing(shared_script) => {
             let code_editors = shared_script.lock().unwrap();
-            code_editors.query.code().to_string()
+            QueryContent {
+                language,
+                query: code_editors.query.code().to_string(),
+                precomp: None,
+                commits: single.content.len,
+                max_matches: u64::MAX,
+                timeout: u64::MAX,
+            }
         }
         EditStatus::Local { name: _, content } | EditStatus::Example { i: _, content } => {
-            content.query.code().to_string()
+            QueryContent {
+                language,
+                query: content.query.code().to_string(),
+                precomp: None,
+                commits: single.content.len,
+                max_matches: u64::MAX,
+                timeout: u64::MAX,
+            }
         }
-    };
-    let script = QueryContent {
-        language,
-        query,
-        precomp: None,
-        commits: single.content.len,
-        max_matches: u64::MAX,
-        timeout: u64::MAX,
     };
     remote_compute_query_aux_old(ctx, api_addr, &single.content, script)
 }
@@ -174,7 +187,6 @@ pub(crate) struct StreamedDataTable<H, R> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub(crate) struct Rows<R>(
-    /// hash of content
     pub(crate) u64,
     pub(crate) Vec<R>,
     #[serde(skip)]
@@ -196,7 +208,7 @@ pub(crate) fn remote_compute_query_aux(
     api_addr: &str,
     single: &ComputeConfigQuery,
     script: QueryContent,
-    additional_commits: impl Iterator<Item = CommitId>,
+    additional_commits: impl Iterator<Item = super::types::CommitId>,
 ) -> Promise<Result<StreamedComputeResults, QueryingError>> {
     // TODO multi requests from client
     // if single.len > 1 {
@@ -212,6 +224,7 @@ pub(crate) fn remote_compute_query_aux(
         "http://{}/query-st/github/{}/{}/{}/{}",
         api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id, addi,
     );
+    wasm_rs_dbg::dbg!(&url, &script);
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
     request.headers.insert(
@@ -315,7 +328,7 @@ pub(crate) fn remote_compute_query_aux_old(
     api_addr: &str,
     single: &ComputeConfigQuery,
     script: QueryContent,
-) -> ComputeResultsProm<QueryingError> {
+) -> Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>> {
     // TODO multi requests from client
     // if single.len > 1 {
     //     let parents = fetch_commit_parents(&ctx, &single.commit, single.len);
@@ -326,6 +339,7 @@ pub(crate) fn remote_compute_query_aux_old(
         "http://{}/query/github/{}/{}/{}",
         api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
     );
+    wasm_rs_dbg::dbg!(&url, &script);
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
     request.headers.insert(
@@ -348,7 +362,7 @@ pub(crate) fn remote_compute_query_differential(
     api_addr: &str,
     single: &ComputeConfigQueryDifferential,
     script: QueryContent,
-) -> DetailsResultsProm<QueryingError> {
+) -> Promise<Result<Resource<Result<DetailsResults, QueryingError>>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     assert_eq!(single.baseline.repo, single.commit.repo);
@@ -360,6 +374,7 @@ pub(crate) fn remote_compute_query_differential(
         &single.commit.id,
         &single.baseline.id,
     );
+    wasm_rs_dbg::dbg!(&url, &script);
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
     request.headers.insert(
@@ -384,16 +399,17 @@ pub enum QueryingError {
     MissingLanguage(String),
     ParsingError(String),
     MatchingErrOnFirst(MatchingError),
-    DifferentialError(DetailsResults, DifferentialErrorFlags),
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Hash)]
 pub enum MatchingError {
-    TimeOut(ComputeResultIdentified),
-    MaxMatches(ComputeResultIdentified),
+    TimeOut(utils_results_batched::ComputeResultIdentified),
+    MaxMatches(utils_results_batched::ComputeResultIdentified),
 }
 
-impl PartialError<ComputeResultIdentified> for MatchingError {
+impl utils_results_batched::PartialError<utils_results_batched::ComputeResultIdentified>
+    for MatchingError
+{
     fn error(&self) -> impl ToString {
         match self {
             MatchingError::TimeOut(_) => "time out",
@@ -401,7 +417,7 @@ impl PartialError<ComputeResultIdentified> for MatchingError {
         }
     }
 
-    fn try_partial(&self) -> Option<&ComputeResultIdentified> {
+    fn try_partial(&self) -> Option<&utils_results_batched::ComputeResultIdentified> {
         match self {
             MatchingError::TimeOut(x) => Some(x),
             MatchingError::MaxMatches(x) => Some(x),
@@ -415,32 +431,17 @@ impl std::fmt::Display for MatchingError {
     }
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Hash)]
-pub struct DifferentialErrorFlags {
-    root_missing: bool,
-    single_pattern_details: bool,
-}
-impl DifferentialErrorFlags {
-    fn as_static_str(&self) -> &'static str {
-        if self.root_missing && self.single_pattern_details {
-            "Missing @root on the pattern of your choice and for now only show details on a single pattern"
-        } else if self.root_missing {
-            "Missing @root on the pattern of your choice"
-        } else if self.single_pattern_details {
-            "For now only show details on a single pattern"
-        } else {
-            unreachable!()
-        }
-    }
-}
-
 pub(super) fn show_querying(
     ui: &mut egui::Ui,
     api_addr: &str,
     query: &mut Sharing<ComputeConfigQuery>,
     query_editors: &mut QueryingContext,
     trigger_compute: &mut bool,
-    querying_result: &mut Option<ComputeResultsProm<QueryingError>>,
+    querying_result: &mut Option<
+        poll_promise::Promise<
+            Result<super::types::Resource<Result<ComputeResults, QueryingError>>, String>,
+        >,
+    >,
 ) {
     let api_endpoint = &end_point(api_addr);
     update_shared_editors(ui, query, api_endpoint, query_editors);
@@ -472,7 +473,9 @@ pub(crate) fn end_point(api_addr: &str) -> String {
 pub(crate) fn handle_interactions(
     ui: &mut egui::Ui,
     code_editors: &mut QueryingContext,
-    querying_result: &mut Option<ComputeResultsProm<QueryingError>>,
+    querying_result: &mut Option<
+        Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>>,
+    >,
     single: &mut Sharing<ComputeConfigQuery>,
     trigger_compute: &mut bool,
 ) {
@@ -487,7 +490,7 @@ pub(crate) fn handle_interactions(
         code_editors.current = EditStatus::Sharing(content.clone());
         let mut content = content.lock().unwrap();
         let db = &mut single.doc_db.as_mut().unwrap();
-        db.create_doc_attempt(&single.rt, name, content.deref_mut());
+        db.create_doc_atempt(&single.rt, name, content.deref_mut());
     } else if interaction.save_button.map_or(false, |x| x.clicked()) {
         let (name, content) = interaction.editor.unwrap();
         log::warn!("saving query: {:#?}", content.clone());
@@ -524,8 +527,9 @@ pub(crate) fn show_scripts_edition(
     show_available_remote_docs(ui, api_endpoint, single, querying_context);
     let local = querying_context
         .when_local(|code_editors| code_editors.iter_editors_mut().for_each(|c| c.ui(ui)));
-    let shared = querying_context
-        .when_shared(|query_editors| show_shared_code_edition(ui, query_editors, single));
+    let shared = querying_context.when_shared(|query_editors| {
+        utils_edition::show_shared_code_edition(ui, query_editors, single)
+    });
     assert!(local.or(shared).is_some());
 }
 
@@ -535,7 +539,8 @@ fn show_examples(
     querying_context: &mut QueryingContext,
 ) {
     ui.horizontal_wrapped(|ui| {
-        for (j, ex) in EXAMPLES.iter().enumerate() {
+        let mut j = 0;
+        for ex in EXAMPLES {
             let mut text = egui::RichText::new(ex.name);
             if let EditStatus::Example { i, .. } = &querying_context.current {
                 if &j == i {
@@ -553,17 +558,12 @@ fn show_examples(
                 };
             }
             if button.hovered() {
-                egui::Tooltip::always_open(
-                    ui.ctx().clone(),
-                    ui.layer_id(),
-                    button.id.with("tooltip"),
-                    button,
-                )
-                .show(|ui| {
+                egui::show_tooltip(ui.ctx(), ui.layer_id(), button.id.with("tooltip"), |ui| {
                     let desc = ex.query.description;
                     egui_demo_lib::easy_mark::easy_mark(ui, desc);
                 });
             }
+            j += 1;
         }
     });
 }
@@ -573,6 +573,7 @@ impl Resource<Result<ComputeResults, QueryingError>> {
         _ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
+        wasm_rs_dbg::dbg!(&response);
         let content_type = response.content_type().unwrap_or_default();
         if !content_type.starts_with("application/json") {
             return Err(format!("Wrong content type: {}", content_type));
@@ -620,21 +621,8 @@ impl Resource<Result<ComputeResults, QueryingError>> {
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct DetailsResults {
     pub prepare_time: f64,
-    pub results: Vec<(CodeRange, CodeRange)>,
+    pub results: Vec<(super::types::CodeRange, super::types::CodeRange)>,
 }
-
-impl DetailsResults {
-    pub(crate) fn iter_nodes_ids(
-        &self,
-    ) -> impl Iterator<Item = hyperast::store::nodes::fetched::NodeIdentifier> {
-        self.results
-            .iter()
-            .flat_map(|x| x.0.path_ids.iter().chain(x.1.path_ids.iter()))
-            .copied()
-    }
-}
-
-pub type DetailsResultsProm<Err> = Promise<Result<Resource<Result<DetailsResults, Err>>, String>>;
 
 impl std::hash::Hash for DetailsResults {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -647,12 +635,19 @@ impl Resource<Result<DetailsResults, QueryingError>> {
         _ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
+        wasm_rs_dbg::dbg!(&response);
         let content_type = response.content_type().unwrap_or_default();
         if !content_type.starts_with("application/json") {
             return Err(format!("Wrong content type: {}", content_type));
         }
+        // let image = if content_type.starts_with("image/") {
+        //     RetainedImage::from_image_bytes(&response.url, &response.bytes).ok()
+        // } else {
+        //     None
+        // };
         if response.status != 200 {
             let Some(text) = response.text() else {
+                wasm_rs_dbg::dbg!();
                 return Err("".to_string());
             };
             let json = match serde_json::from_str::<QueryingError>(text) {
@@ -669,6 +664,7 @@ impl Resource<Result<DetailsResults, QueryingError>> {
         }
 
         let text = response.text();
+        // let colored_text = text.and_then(|text| syntax_highlighting(ctx, &response, text));
         let text = text.and_then(|text| {
             serde_json::from_str(text)
                 .inspect_err(|err| {
@@ -689,7 +685,7 @@ pub(crate) const WANTED: SelectedConfig = SelectedConfig::Querying;
 pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQuery>) {
     show_repo_menu(ui, &mut single.content.commit.repo);
     ui.push_id(ui.id().with("commit"), |ui| {
-        egui::TextEdit::singleline(&mut single.content.commit.id.tb())
+        egui::TextEdit::singleline(&mut single.content.commit.id)
             .clip_text(true)
             .desired_width(150.0)
             .desired_rows(1)
@@ -712,7 +708,7 @@ pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQ
     selected.show_combo_box(ui, "Repo Config");
 }
 
-impl ComputeError for QueryingError {
+impl utils_results_batched::ComputeError for QueryingError {
     fn head(&self) -> &str {
         match self {
             QueryingError::NetworkError(_) => "Network Error:",
@@ -725,7 +721,6 @@ impl ComputeError for QueryingError {
             QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(_)) => {
                 "Too many matches on first commit:"
             }
-            QueryingError::DifferentialError(_, err) => err.as_static_str(),
         }
     }
 
@@ -735,102 +730,8 @@ impl ComputeError for QueryingError {
             QueryingError::MissingLanguage(err) => err,
             QueryingError::ProcessingError(err) => err,
             QueryingError::ParsingError(err) => err,
-            QueryingError::MatchingErrOnFirst(MatchingError::TimeOut(_)) => "",
-            QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(_)) => "",
-            QueryingError::DifferentialError(_, err) => err.as_static_str(),
+            QueryingError::MatchingErrOnFirst(MatchingError::TimeOut(res)) => "",
+            QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(res)) => "",
         }
     }
 }
-
-pub(crate) const ACTION: fn(&mut super::AppData, &mut egui::Ui) -> egui::Response = |data, ui| {
-    let button = egui::Button::new("Find JUnit tests in Java projects");
-    let resp = ui.add_enabled(true, button);
-    if resp.clicked() {
-        let precomp = data.queries.push(crate::app::QueryData {
-            name: "JUnit test annotation".to_string(),
-            lang: "Java".to_string(),
-            query: egui_addon::code_editor::CodeEditor::new(
-                egui_addon::code_editor::EditorInfo::default().into(),
-                r#"(marker_annotation
-    name: (_) (#EQ? "Test")
-)"#
-                .to_string(),
-            ),
-            ..Default::default()
-        });
-        log::info!("created subquery {precomp:?} to help find JUnit tests in Java projects");
-        let query = data.queries.push(crate::app::QueryData {
-            name: "JUnit Tests".to_string(),
-            lang: "Java".to_string(),
-            query: egui_addon::code_editor::CodeEditor::new(
-                egui_addon::code_editor::EditorInfo::default().into(),
-                r#"(class_declaration
-  body: (_
-    (method_declaration
-      (modifiers
-        (marker_annotation
-          name: (_) (#EQ? "Test")
-        )
-      )
-    )
-  )
-)"#
-                .to_string(),
-            ),
-            precomp: Some(precomp),
-            ..Default::default()
-        });
-        log::info!("created query {query:?} to find JUnit tests in Java projects");
-
-        use crate::command::UICommand;
-        use crate::command::UICommandSender;
-        data.command_sender.send_ui(UICommand::OpenLastCreatedQuery);
-    }
-    let button = egui::Button::new("Find Try fail catches in Java projects");
-    let resp2 = ui.add_enabled(true, button);
-    if resp2.clicked() {
-        let precomp = data.queries.push(crate::app::QueryData {
-            name: "try_stmt + JUnit fail".to_string(),
-            lang: "Java".to_string(),
-            query: egui_addon::code_editor::CodeEditor::new(
-                egui_addon::code_editor::EditorInfo::default().into(),
-                r#"(try_statement)
-
-(method_invocation
-  (identifier) (#EQ? "fail")
-)"#
-                .to_string(),
-            ),
-            ..Default::default()
-        });
-        log::info!(
-            "created query {precomp:?} to find try_statements and calls to JUnit fail in Java projects"
-        );
-        let query = data.queries.push(crate::app::QueryData {
-            name: "Try fail catches".to_string(),
-            lang: "Java".to_string(),
-            query: egui_addon::code_editor::CodeEditor::new(
-                egui_addon::code_editor::EditorInfo::default().into(),
-                r#"(try_statement
-  (block
-    (expression_statement
-      (method_invocation
-        (identifier) (#EQ? "fail")
-      )
-    )
-  )
-  (catch_clause)
-)"#
-                .to_string(),
-            ),
-            precomp: Some(precomp),
-            ..Default::default()
-        });
-        log::info!("created query {query:?} to find Try fail catches in Java projects");
-
-        use crate::command::UICommand;
-        use crate::command::UICommandSender;
-        data.command_sender.send_ui(UICommand::OpenLastCreatedQuery);
-    }
-    resp | resp2
-};

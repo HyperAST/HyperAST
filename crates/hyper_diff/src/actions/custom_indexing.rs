@@ -1,16 +1,20 @@
+
 enum A {
-    Bot,
+    Bot
 }
 
 impl Enum for A {
-    type SizeT = u16;
+    type SizeT=u16;
 
     const SIZE: u16 = 1;
 }
 
+
 impl From<u16> for A {
     fn from(x: u16) -> Self {
-        if x == 0 { A::Bot } else { panic!() }
+        if x == 0 {
+            A::Bot
+        } else {panic!()}
     }
 }
 
@@ -73,7 +77,7 @@ impl Restricted for u16 {
     }
 }
 
-struct CustomIdxVec<Idx: Restricted, T, const D: T> {
+struct CustomIdxVec<Idx: Restricted, T,const D:T> {
     internal: Vec<T>,
     phantom: PhantomData<*const Idx>,
 }

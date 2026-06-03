@@ -110,18 +110,17 @@ impl Default for EditorInfo<&'static str> {
         }
     }
 }
-impl From<EditorInfo<&'static str>> for EditorInfo<String> {
-    fn from(value: EditorInfo<&'static str>) -> Self {
+impl EditorInfo<&'static str> {
+    pub fn copied(&self) -> EditorInfo<String> {
         EditorInfo {
-            title: value.title.to_string(),
-            short: value.short.to_string(),
-            long: value.long.to_string(),
+            title: self.title.to_string(),
+            short: self.short.to_string(),
+            long: self.long.to_string(),
         }
     }
 }
-
 pub fn default_info() -> EditorInfo<String> {
-    EditorInfo::default().into()
+    EditorInfo::default().copied()
 }
 
 #[cfg(feature = "ts_highlight")]
@@ -158,7 +157,7 @@ function f() { return 2; }
             parser: default_parser(),
             languages: Default::default(),
             lang,
-            info: EditorInfo::default().into(),
+            info: EditorInfo::default().copied(),
         }
     }
 }
@@ -183,7 +182,11 @@ impl<L: Default> CodeEditor<L> {
         self.code.as_str()
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        let Self { code, info, .. } = self;
+        let Self {
+            code, lang, info, ..
+        } = self;
+
+        let theme = crate::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
 
         let id = ui.make_persistent_id(&info.title);
         let mut col =
@@ -226,12 +229,12 @@ pub fn show_edit_syntect(ui: &mut egui::Ui, code: &mut EditAwareString) {
     let language = "rs";
     let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
-    let mut layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, _wrap_width: f32| {
+    let mut layouter = |ui: &egui::Ui, string: &EditAwareString, _wrap_width: f32| {
         let layout_job = egui_extras::syntax_highlighting::highlight(
             ui.ctx(),
             ui.style(),
             &theme,
-            &string.as_str(),
+            string.as_str(),
             language,
         );
         ui.fonts(|f| f.layout_job(layout_job))
@@ -290,7 +293,7 @@ fn checkbox_heading(
         });
 
         if ui.is_rect_visible(rect) {
-            let visuals = ui.style().interact(response);
+            let visuals = ui.style().interact(&response);
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
             ui.painter().add(epaint::RectShape::new(
                 big_icon_rect.expand(visuals.expansion),

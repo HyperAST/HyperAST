@@ -1,39 +1,35 @@
 [package]
 name = "hyper_app"
-version = "0.5.0"
+version = "0.3.0"
 edition = "2024"
 
-[lints]
-workspace = true
-
 [dependencies]
-egui = { version = "0.32.0", default-features = false }
-eframe = { version = "0.32.0", default-features = false, features = [
+egui = { version = "0.31.1", default-features = false }
+eframe = { version = "0.31.1", default-features = false, features = [
     # "accesskit",   # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     # "wgpu",        # Use the wgpu rendering backend. Alternative: "glow".
     "glow",        # Use the glow rendering backend. Alternative: "wgpu".
     "persistence", # Enable restoring app state when restarting the app.
 ] }
-epaint = { version = "0.32.0", default-features = false }
-egui_demo_lib = { version = "0.32.0", default-features = false, features = [
+epaint = { version = "0.31.1", default-features = false }
+egui_demo_lib = { version = "0.31.1", default-features = false, features = [
     "syntect",
 ] }
-egui_extras = { version = "0.32.0", default-features = false, features = [
+egui_extras = { version = "0.31.1", default-features = false, features = [
     "http",
     "file",
     "image",
     "svg",
 ] }
-re_ui = "0.24.1"
-re_log = "0.24.1"
-egui_tiles = "0.13.0"
-egui_commonmark = "0.21.1"
-egui_plot = "0.33.0"
+re_ui = "0.23.2"
+re_log = "0.23.2"
+egui_tiles = "0.12.0"
+egui_commonmark = "0.20.0"
+# egui_plot = "0.32.1"
+egui_plot = { version = "0.32.1", git = "https://github.com/emilk/egui_plot", rev = "45159daa475170cd3cb3cd228377ad54aab691ad" }
 
-egui_double_slider = "0.9.0"
-
-ahash = { version = "0.8", default-features = false, features = ["compile-time-rng", "std"] }
+egui_double_slider = "0.7.1"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -67,7 +63,6 @@ hyperast = { path = "../crates/hyper_ast", default-features = false, features = 
 hyperast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
 hyperast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }
 hyperast_gen_ts_xml = { path = "../gen/tree-sitter/xml", default-features = false }
-hyperast_gen_ts_tsquery = { path = "../gen/tree-sitter/query", default-features = false }
 egui_addon = { path = "../lib/egui_addon" }
 
 nohash-hasher = "0.2.0"
@@ -101,8 +96,8 @@ poll-promise = { version = "0.3", default-features = false }
 tracing-subscriber = "0.3"
 tree-sitter-javascript = "0.23.1"
 # tree-sitter = { version = "0.22.2", package = "tree-sitter-facade-sg" }
-tree-sitter-highlight = "0.25.0"
-tree-sitter = { version = "0.25.0" }
+tree-sitter-highlight = "0.23.2"
+tree-sitter = { version = "0.23.2" }
 # tree-sitter-native = { version = "0.23.2", package = "tree-sitter" }
 tokio = { version = "1.26.0", features = ["rt", "rt-multi-thread"] }
 
@@ -125,7 +120,6 @@ syntect = { version = "5", features = [
     "default-fancy",
 ], default-features = false }
 web-sys = "^0.3.70"
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
 
 [target.'cfg(all(target_os = "macos", not(target_arch = "wasm32")))'.dependencies]
 objc2 = "0.5.2"
@@ -137,7 +131,7 @@ objc2-app-kit = { version = "0.2.2", features = [
 ] }
 
 [features]
-default = ["serde", "force_layout"]
+default = ["serde"]
 
 # Allow serialization using [`serde`](https://docs.rs/serde).
 serde = ["egui/serde", "dep:serde"]
@@ -148,8 +142,6 @@ ts_highlight = [
     # "dep:web-tree-sitter-sg"
 ]
 alt_grammar = ["hyperast_gen_ts_cpp/alt_grammar"]
-
-force_layout = ["egui_addon/force_layout"]
 
 # [patch.crates-io]
 

@@ -4,6 +4,7 @@ use backend::AppState;
 #[test_log::test]
 // slow test, more of an integration test, try using release
 fn test_querying() -> Result<(), Box<dyn std::error::Error>> {
+
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
     let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
     let query = r#"(try_statement
@@ -47,14 +48,14 @@ fn compare_querying_with_and_without_skipping(
     let commits = state.repositories.write().unwrap().pre_process_with_limit(
         &mut repository,
         "",
-        commit,
+        &commit,
         1,
     )?;
     let repositories = state.repositories.read().unwrap();
     let commit = repositories
         .get_commit(&repository.config, &commits[0])
         .unwrap();
-    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(lang).unwrap();
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&lang).unwrap();
 
     let precomputeds = state
         .repositories
@@ -63,22 +64,24 @@ fn compare_querying_with_and_without_skipping(
         .get_precomp_query(repository.config, lang)
         .expect("some precomputed patterns");
     let query_incr =
-        hyperast_tsquery::Query::with_precomputed(query, language.clone(), precomputeds)
+        hyperast_tsquery::Query::with_precomputed(&query, language.clone(), precomputeds)
             .map(|x| x.1)
             .unwrap();
-    let query = hyperast_tsquery::Query::new(query, language).unwrap();
+    let query = hyperast_tsquery::Query::new(&query, language).unwrap();
     let code = commit.ast_root;
     let stores = &repositories.processor.main_stores;
     let mut qcursor_incr = {
         let pos = hyperast::position::StructuralPosition::new(code);
         let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
         query_incr.matches(cursor)
-    };
+    }
+    .into_iter();
     let mut qcursor = {
         let pos = hyperast::position::StructuralPosition::new(code);
         let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
         query.matches(cursor)
-    };
+    }
+    .into_iter();
     let root_incr = query_incr.capture_index_for_name("root").unwrap();
     let root = query.capture_index_for_name("root").unwrap();
     loop {
@@ -166,14 +169,14 @@ fn compare_querying_cpp_with_and_without_skipping(
     let commits = state.repositories.write().unwrap().pre_process_with_limit(
         &mut repository,
         "",
-        commit,
+        &commit,
         1,
     )?;
     let repositories = state.repositories.read().unwrap();
     let commit = repositories
         .get_commit(&repository.config, &commits[0])
         .unwrap();
-    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(lang).unwrap();
+    let language: tree_sitter::Language = hyperast_vcs_git::resolve_language(&lang).unwrap();
 
     let precomputeds = state
         .repositories
@@ -182,22 +185,24 @@ fn compare_querying_cpp_with_and_without_skipping(
         .get_precomp_query(repository.config, lang)
         .expect("some precomputed patterns");
     let query_incr =
-        hyperast_tsquery::Query::with_precomputed(query, language.clone(), precomputeds)
+        hyperast_tsquery::Query::with_precomputed(&query, language.clone(), precomputeds)
             .map(|x| x.1)
             .unwrap();
-    let query = hyperast_tsquery::Query::new(query, language).unwrap();
+    let query = hyperast_tsquery::Query::new(&query, language).unwrap();
     let code = commit.ast_root;
     let stores = &repositories.processor.main_stores;
     let mut qcursor_incr = {
         let pos = hyperast::position::StructuralPosition::new(code);
         let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
         query_incr.matches(cursor)
-    };
+    }
+    .into_iter();
     let mut qcursor = {
         let pos = hyperast::position::StructuralPosition::new(code);
         let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(stores, pos);
         query.matches(cursor)
-    };
+    }
+    .into_iter();
     let root_incr = query_incr.capture_index_for_name("root").unwrap();
     let root = query.capture_index_for_name("root").unwrap();
     loop {

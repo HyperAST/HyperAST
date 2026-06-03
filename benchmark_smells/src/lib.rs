@@ -39,13 +39,16 @@ pub fn with_profiling<F: Fn()>(out: &path::Path, f: F) {
         .build()
         .unwrap();
     f();
-    if let Ok(report) = guard.report().build() {
-        let mut file = fs::File::create(out).unwrap();
-        let profile = report.pprof().unwrap();
-        use pprof::protos::Message;
-        let mut content = Vec::new();
-        profile.encode(&mut content).unwrap();
-        use io::Write;
-        file.write_all(&content).unwrap();
+    match guard.report().build() {
+        Ok(report) => {
+            let mut file = fs::File::create(out).unwrap();
+            let profile = report.pprof().unwrap();
+            use pprof::protos::Message;
+            let mut content = Vec::new();
+            profile.encode(&mut content).unwrap();
+            use io::Write;
+            file.write_all(&content).unwrap();
+        }
+        Err(_) => {}
     };
 }

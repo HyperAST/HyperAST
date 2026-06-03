@@ -2,7 +2,7 @@ use crate::auto::tsq_transform;
 use crate::code2query::{self, QueryLattice};
 use hashbrown::{HashMap, HashSet};
 use hyperast::position::StructuralPosition;
-use hyperast::position::structural_pos::CursorHead;
+use hyperast::position::structural_pos::AAA;
 
 type IdN = hyperast::store::defaults::NodeIdentifier;
 type Idx = u16;
@@ -66,13 +66,13 @@ pub fn try_pattern_union(
     >::new();
     for (top, count) in roots {
         let mut union = HashMap::new();
-        let unions = HashMap::new();
-        let global_preds = HashMap::new();
+        let mut unions = HashMap::new();
+        let mut global_preds = HashMap::new();
         {
             let query_store = &lattice.query_store;
             let query = *top;
             let meta_simp: &hyperast_tsquery::Query = &meta_simp;
-            let pos = hyperast::position::structural_pos::CursorWithPersistence::new(query);
+            let mut pos = hyperast::position::structural_pos::CursorWithPersistance::new(query);
             let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
             let mut matches = meta_simp.matches(cursor);
             loop {
@@ -213,10 +213,10 @@ pub fn try_pattern_union(
         let p = lattice.pretty(p);
         let count = count.len();
         println!(";;count: {count}");
-        let mut p = p.to_string();
+        let mut p = format!("{p}");
         for (name, subs) in subs {
             let name = lattice.pretty(name);
-            let name = name.to_string();
+            let name = format!("{name}");
             let mut alternation = " [\n".to_string();
             for sub in subs {
                 let p = lattice.pretty(sub.0);
@@ -276,7 +276,7 @@ pub fn try_pattern_removes(
         let p = if actions.is_empty() {
             None
         } else {
-            actions.sort();
+            actions.sort_by(|a, b| a.cmp(&b));
             dbg!(&actions);
             let actions: Vec<_> = actions
                 .into_iter()
@@ -317,7 +317,7 @@ pub fn try_pattern_captures(
             let query_store = &lattice.query_store;
             let query = *top;
             let meta_simp: &hyperast_tsquery::Query = &meta_simp;
-            let pos = hyperast::position::structural_pos::CursorWithPersistence::new(query);
+            let mut pos = hyperast::position::structural_pos::CursorWithPersistance::new(query);
             let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
             let mut matches = meta_simp.matches(cursor);
             loop {
@@ -348,7 +348,7 @@ pub fn try_pattern_captures(
             let mut actions: Vec<_> = values
                 .into_iter()
                 // .filter(|l| l.len() == 2)
-                .map(|x| {
+                .filter_map(|x| {
                     let new = if x.0.is_empty() {
                         unimplemented!()
                     } else {
@@ -358,7 +358,7 @@ pub fn try_pattern_captures(
                     path.pop();
                     path.reverse();
                     // dbg!(&path);
-                    (path, new)
+                    Some((path, new))
                 })
                 .collect();
             if !actions.is_empty() {
@@ -414,7 +414,7 @@ pub fn try_pattern_renames(
             let query_store = &lattice.query_store;
             let query = *top;
             let meta_simp: &hyperast_tsquery::Query = &meta_simp;
-            let pos = hyperast::position::structural_pos::CursorWithPersistence::new(query);
+            let mut pos = hyperast::position::structural_pos::CursorWithPersistance::new(query);
             let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(query_store, pos);
             let mut matches = meta_simp.matches(cursor);
             let mut count = 0;
@@ -467,12 +467,7 @@ pub fn try_pattern_renames(
         let per_label_values = per_label.values_mut().collect();
         let query_store = &mut lattice.query_store;
         let query = *top;
-        let p = code2query::replace_preds_with_caps(
-            query_store,
-            query,
-            per_label_values,
-            &mut lattice.auto_caps,
-        );
+        let p = code2query::replace_preds_with_caps(query_store, query, per_label_values);
         if let Some(p) = p {
             new_tops.entry(p).or_default().extend(count);
             let p = lattice.pretty(&p);

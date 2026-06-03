@@ -639,7 +639,7 @@ pub trait Cursor {
 
     type Status: Status<IdF = <Self::Node as Node>::IdF>;
 
-    fn current_status(&self) -> <Self as StatusLending<'_>>::Status;
+    fn current_status(&self) -> Self::Status;
 
     // fn is_subtree_repetition(&self) -> bool {
     //     unimplemented!("related to query analysis, don't know how to handle that for now")

@@ -1,24 +1,34 @@
-//! fully compress all subtrees from a tree-sitter query CST
+///! fully compress all subtrees from a tree-sitter query CST
 use std::{collections::HashMap, fmt::Debug};
 
+use crate::{TNode, types::TIdN};
+use hyperast::store::nodes::legion::eq_node;
 use legion::world::EntryRef;
 
-use hyperast::hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs};
-use hyperast::store::SimpleStores;
 use hyperast::store::nodes::compo::{self, NoSpacesCS};
-use hyperast::store::nodes::legion::{HashedNodeRef, NodeIdentifier, eq_node, subtree_builder};
-use hyperast::store::nodes::{DefaultNodeStore as NodeStore, EntityBuilder};
-use hyperast::tree_gen::parser::{Node as _, TreeCursor};
-use hyperast::tree_gen::{
-    AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
-    SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-    ZippedTreeGen, compute_indentation, get_spacing, has_final_space, utils_ts::TTreeCursor,
+use hyperast::{
+    filter::BloomSize,
+    full::FullNode,
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    nodes::Space,
+    store::{
+        SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore, EntityBuilder,
+            legion::{HashedNodeRef, NodeIdentifier},
+        },
+    },
+    tree_gen::{
+        AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
+        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
+        utils_ts::TTreeCursor,
+    },
+    types::{ETypeStore as _, LabelStore as _},
 };
-use hyperast::types::{ETypeStore as _, LabelStore as _};
-use hyperast::{filter::BloomSize, full::FullNode, nodes::Space};
 
-use crate::TNode;
-use crate::types::{TIdN, TsQueryEnabledTypeStore, Type};
+use crate::types::{TsQueryEnabledTypeStore, Type};
 
 pub type LabelIdentifier = hyperast::store::labels::DefaultLabelIdentifier;
 
@@ -123,8 +133,8 @@ impl Debug for Acc {
     }
 }
 
-impl<'store, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdentifier>>> ZippedTreeGen
-    for TsQueryTreeGen<'store, '_, TS>
+impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdentifier>>>
+    ZippedTreeGen for TsQueryTreeGen<'store, 'cache, TS>
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -132,7 +142,7 @@ impl<'store, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdentifier>>>
     type TreeCursor<'b> = TTreeCursor<'b>;
 
     fn stores(&mut self) -> &mut Self::Stores {
-        self.stores
+        &mut self.stores
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
@@ -263,7 +273,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         let line_count = spacing
             .matches("\n")
             .count()
-            .to_u32()
+            .to_u16()
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
@@ -378,8 +388,8 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
     }
 }
 
-impl<'stores, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>>> TreeGen
-    for TsQueryTreeGen<'stores, '_, TS>
+impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>>> TreeGen
+    for TsQueryTreeGen<'stores, 'cache, TS>
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
@@ -424,12 +434,13 @@ impl<'stores, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>
         } else {
             let hashs = hbuilder.build();
 
-            let mut dyn_builder = subtree_builder::<TS>(interned_kind);
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            dyn_builder.add(interned_kind);
             dyn_builder.add(hashs);
             dyn_builder.add(compo::BytesLen(
                 (acc.end_byte - acc.start_byte).try_into().unwrap(),
             ));
-            if !acc.simple.children.is_empty() {
+            if acc.simple.children.len() > 0 {
                 dyn_builder.add(compo::Size(size));
                 dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
                 dyn_builder.add(compo::Height(height));
@@ -462,7 +473,7 @@ impl<'stores, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>
     }
 }
 
-impl<'stores> TsQueryTreeGen<'stores, '_, crate::types::TStore> {
+impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
     pub fn build_then_insert(
         &mut self,
         _i: <hashed::HashedNode as hyperast::types::Stored>::TreeId,
@@ -513,7 +524,7 @@ impl<'stores> TsQueryTreeGen<'stores, '_, crate::types::TStore> {
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
-                        line_count: node.line_count().to_u32().unwrap(),
+                        line_count: node.line_count().to_u16().unwrap(),
                     }
                 };
                 Local {
@@ -560,7 +571,8 @@ impl<'stores> TsQueryTreeGen<'stores, '_, crate::types::TStore> {
         } else {
             let hashs = hbuilder.build();
 
-            let mut dyn_builder = subtree_builder::<crate::types::TStore>(interned_kind);
+            let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            dyn_builder.add(interned_kind);
             dyn_builder.add(hashs);
             dyn_builder.add(compo::BytesLen(
                 (acc.end_byte - acc.start_byte).try_into().unwrap(),
@@ -568,7 +580,7 @@ impl<'stores> TsQueryTreeGen<'stores, '_, crate::types::TStore> {
             if let Some(label_id) = label_id {
                 dyn_builder.add(label_id);
             }
-            if !acc.simple.children.is_empty() {
+            if acc.simple.children.len() > 0 {
                 dyn_builder.add(compo::Size(size));
                 dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
                 dyn_builder.add(compo::Height(height));
@@ -643,7 +655,7 @@ impl<'stores> TsQueryTreeGen<'stores, '_, crate::types::TStore> {
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
-                        line_count: node.line_count().to_u32().unwrap(),
+                        line_count: node.line_count().to_u16().unwrap(),
                     }
                 };
                 Local {

@@ -1,10 +1,12 @@
 use poll_promise::Promise;
 
+use crate::app::types;
+use crate::app::utils;
+use crate::app::utils::SecFmt;
+
 use super::types::CommitId;
-use super::utils::SecFmt;
-use super::utils::file_save;
-use crate::app::utils_egui::MyUiExt;
-use crate::utils_poll::Resource;
+use super::types::Resource;
+use super::ProjectId;
 
 pub(crate) trait ComputeError {
     fn head(&self) -> &str;
@@ -12,7 +14,7 @@ pub(crate) trait ComputeError {
 }
 
 pub(super) fn show_short_result(
-    promise: &Option<ComputeResultsProm<impl ComputeError + Send + Sync>>,
+    promise: &Option<RemoteResult<impl ComputeError + Send + Sync>>,
     ui: &mut egui::Ui,
 ) {
     let Some(promise) = &promise else {
@@ -24,16 +26,16 @@ pub(super) fn show_short_result(
         return;
     };
     let Ok(resource) = result else {
-        ui.label("compute time: N/A".to_string());
+        ui.label(format!("compute time: N/A"));
         return;
     };
     let Some(Ok(content)) = &resource.content else {
-        ui.label("compute time: N/A".to_string());
+        ui.label(format!("compute time: N/A"));
         return;
     };
     if ui.add(egui::Button::new("Export")).clicked() {
         if let Ok(text) = serde_json::to_string_pretty(content) {
-            file_save("query_results", ".json", &text);
+            utils::file_save("query_results", ".json", &text);
         }
     };
     show_short_result_aux(content, ui);
@@ -62,76 +64,47 @@ pub(crate) fn show_short_result_aux(content: &ComputeResults, ui: &mut egui::Ui)
     }
 }
 
+pub(super) type Remote<R> = Promise<ehttp::Result<Resource<R>>>;
+pub(super) type RemoteResult<E> = Remote<Result<ComputeResults, E>>;
+
 pub(crate) fn show_long_result(
-    promise: &Option<ComputeResultsProm<impl ComputeError + Send + Sync>>,
+    promise: &Option<RemoteResult<impl ComputeError + Send + Sync>>,
     ui: &mut egui::Ui,
 ) {
-    let Some(content) = prep_compute_res_prom(promise, ui) else {
-        return;
-    };
-    if let Err(error) = content {
-        show_long_result_compute_failure(ui, error);
-    } else if let Ok(content) = content {
-        show_long_result_success(ui, content);
-    }
-}
-
-pub fn prep_compute_res_prom<'a, T: ComputeError + Send + Sync>(
-    promise: &'a Option<ComputeResultsProm<T>>,
-    ui: &mut egui::Ui,
-) -> Option<&'a Result<ComputeResults, T>> {
-    let Some(promise) = promise else {
+    let Some(promise) = &promise else {
         ui.label("click on Compute");
-        return None;
+        return;
     };
     let Some(result) = promise.ready() else {
         ui.spinner();
-        return None;
+        return;
     };
-    if let Err(error) = result {
-        // This should only happen if the fetch API isn't available or something similar.
-        ui.colored_label(
-            ui.visuals().error_fg_color,
-            if error.is_empty() { "Error" } else { error },
-        );
-        return None;
+    match result {
+        Ok(resource) => match &resource.content {
+            Some(Ok(content)) => {
+                show_long_result_success(ui, content);
+            }
+            Some(Err(error)) => {
+                show_long_result_compute_failure(ui, error);
+            }
+            _ => (),
+        },
+        Err(error) => {
+            wasm_rs_dbg::dbg!();
+            // This should only happen if the fetch API isn't available or something similar.
+            ui.colored_label(
+                ui.visuals().error_fg_color,
+                if error.is_empty() { "Error" } else { error },
+            );
+        }
     }
-    result.as_ref().ok().and_then(|x| x.content.as_ref())
-}
-
-pub fn prep_compute_res_prom_mut<'a, T: ComputeError + Send + Sync>(
-    promise: &'a mut Option<ComputeResultsProm<T>>,
-    ui: &mut egui::Ui,
-) -> Option<&'a mut Result<ComputeResults, T>> {
-    let Some(promise) = promise else {
-        ui.label("click on Compute");
-        return None;
-    };
-    let Some(result) = promise.ready_mut() else {
-        ui.spinner();
-        return None;
-    };
-    if let Err(error) = result {
-        // This should only happen if the fetch API isn't available or something similar.
-        ui.colored_label(
-            ui.visuals().error_fg_color,
-            if error.is_empty() { "Error" } else { error },
-        );
-        return None;
-    }
-    result.as_mut().ok().and_then(|x| x.content.as_mut())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct ComputeResults {
     pub prepare_time: f64,
     pub results: Vec<Result<ComputeResultIdentified, String>>,
-    #[cfg(feature = "force_layout")]
-    #[serde(skip)]
-    pub graph: Option<Box<dyn std::any::Any + Send + Sync>>,
 }
-
-pub type ComputeResultsProm<Err> = Promise<Result<Resource<Result<ComputeResults, Err>>, String>>;
 
 impl std::hash::Hash for ComputeResults {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -141,7 +114,7 @@ impl std::hash::Hash for ComputeResults {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Hash)]
 pub struct ComputeResultIdentified {
-    pub commit: CommitId,
+    pub commit: types::CommitId,
     #[serde(flatten)]
     pub inner: ComputeResult,
 }
@@ -158,51 +131,50 @@ impl std::hash::Hash for ComputeResult {
     }
 }
 
-fn show_long_result_compute_failure(ui: &mut egui::Ui, error: &impl ComputeError) {
+fn show_long_result_compute_failure<'a>(ui: &mut egui::Ui, error: &impl ComputeError) {
     ui.label(
         egui::RichText::new(error.head())
             .heading()
             .color(ui.visuals().error_fg_color),
     );
-    ui.probable_fetch_error(error.content());
+    ui.colored_label(ui.visuals().error_fg_color, error.content());
 }
 
 pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResults) {
     if content.results.len() > 5 {
-        ui.label("TODO");
-        // let header = content.results.iter().find(|x| x.is_ok());
-        // let Some(header) = header.as_ref() else {
-        //     wasm_rs_dbg::dbg!("issue with header");
-        //     return;
-        // };
+        let header = content.results.iter().find(|x| x.is_ok());
+        let Some(header) = header.as_ref() else {
+            wasm_rs_dbg::dbg!("issue with header");
+            return;
+        };
+        let header = header.as_ref().unwrap();
         // TODO
-        // let header = header.as_ref().unwrap();
-        // let header = if let Some(result) = header.inner.result.as_object() {
-        //     // for (name, v) in result {
-        //     //     f(&mut head, name, v)
-        //     // }
-        //     (todo!(), Some(todo!()))
-        // } else if let Some(result) = header.inner.result.as_array() {
-        //     // for (i, v) in result.iter().enumerate() {
-        //     //     f(&mut head, &i.to_string(), v)
-        //     // }
-        //     (todo!(), None)
-        // } else {
-        //     panic!()
-        // };
-        // egui::ScrollArea::horizontal()
-        //     .scroll_bar_visibility(
-        //         egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
-        //     )
-        //     .auto_shrink([false, false])
-        //     .show(ui, |ui| {
-        //         show_long_result_table(
-        //             ui,
-        //             (header.0, header.1, &content.results[1..]),
-        //             &mut None,
-        //             |_| None,
-        //         )
-        //     });
+        let header = if let Some(result) = header.inner.result.as_object() {
+            // for (name, v) in result {
+            //     f(&mut head, name, v)
+            // }
+            (todo!(), Some(todo!()))
+        } else if let Some(result) = header.inner.result.as_array() {
+            // for (i, v) in result.iter().enumerate() {
+            //     f(&mut head, &i.to_string(), v)
+            // }
+            (todo!(), None)
+        } else {
+            panic!()
+        };
+        egui::ScrollArea::horizontal()
+            .scroll_bar_visibility(
+                egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
+            )
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                show_long_result_table(
+                    ui,
+                    (header.0, header.1, &content.results[1..]),
+                    &mut None,
+                    |_| None,
+                )
+            });
     } else {
         egui::CollapsingHeader::new("Results (JSON)")
             .default_open(true)
@@ -225,19 +197,17 @@ pub(crate) fn show_long_result_list(ui: &mut egui::Ui, content: &ComputeResults)
                 let language = "json";
                 let theme =
                     egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
-                let mut layouter =
-                    |ui: &egui::Ui, string: &dyn egui::TextBuffer, _wrap_width: f32| {
-                        let string: &str = string.as_str();
-                        let layout_job = egui_extras::syntax_highlighting::highlight(
-                            ui.ctx(),
-                            ui.style(),
-                            &theme,
-                            &string,
-                            language,
-                        );
-                        // layout_job.wrap.max_width = wrap_width; // no wrapping
-                        ui.fonts(|f| f.layout_job(layout_job))
-                    };
+                let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
+                    let layout_job = egui_extras::syntax_highlighting::highlight(
+                        ui.ctx(),
+                        ui.style(),
+                        &theme,
+                        string,
+                        language,
+                    );
+                    // layout_job.wrap.max_width = wrap_width; // no wrapping
+                    ui.fonts(|f| f.layout_job(layout_job))
+                };
                 if content.results.len() > 1 {
                     ui.label(format!(
                         "compute time: {:.3}",
@@ -275,14 +245,12 @@ impl<T> PartialError<T> for String {
     }
 }
 
-type ComputeResultRows<E> = [Result<ComputeResultIdentified, E>];
-
 pub(crate) fn show_long_result_table(
     ui: &mut egui::Ui,
     content: (
         &[String],
         Option<&[String]>,
-        &ComputeResultRows<impl PartialError<ComputeResultIdentified>>,
+        &[Result<ComputeResultIdentified, impl PartialError<ComputeResultIdentified>>],
     ),
     selected_commit: &mut Option<usize>,
     commit_info: impl Fn(&str) -> Option<String>,
@@ -323,7 +291,7 @@ pub(crate) fn show_long_result_table(
 fn show_table_header(
     mut head: egui_extras::TableRow<'_, '_>,
     header: &[String],
-    _sub_header: Option<&[String]>,
+    sub_header: Option<&[String]>,
 ) {
     let hf = |ui: &mut egui::Ui, name: &str| {
         ui.label(
@@ -401,6 +369,7 @@ fn show_table_body(
         // if let Some((_, c)) = &selected_commit {
         //     row.set_selected(c == &cont.commit);
         // }
+        let i = row.index();
         row.col(|ui| {
             // if let Some((_, c)) = &selected_commit {
             //     // if c == &cont.commit {
@@ -409,22 +378,22 @@ fn show_table_body(
             // }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if err.is_some() {
-                    ui.colored_label(egui::Color32::RED, cont.commit.prefix(8))
+                    ui.colored_label(egui::Color32::RED, &cont.commit[..8])
                 } else {
-                    ui.label(cont.commit.prefix(8))
+                    ui.label(&cont.commit[..8])
                 }
                 .on_hover_ui(|ui| {
                     if let Some(err) = err {
                         ui.colored_label(ui.visuals().error_fg_color, err);
                     } else {
-                        ui.label(cont.commit.as_str());
+                        ui.label(&cont.commit);
                     }
                 })
             });
         })
         .1
         .on_hover_ui(|ui| {
-            if let Some(text) = commit_info(&cont.commit.as_str()) {
+            if let Some(text) = commit_info(&cont.commit) {
                 ui.label("commit message:");
                 ui.label(text);
             }

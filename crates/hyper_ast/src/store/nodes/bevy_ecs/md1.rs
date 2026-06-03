@@ -52,7 +52,7 @@ pub fn _fn_zip_data_finish<Ty: Clone, L, CS: ChildHolder, IdL, Md0, Md1, _P, _Md
         let b = &a.0;
         let md0 = f_md0(a.1, prep_prim(b));
         let md1 = f_md1(a.2, prep_prim(b));
-        (primary(a.0.0, x, a.0.2), md0, md1)
+        (primary(a.0 .0, x, a.0 .2), md0, md1)
     }
 }
 
@@ -209,10 +209,10 @@ fn test_construction_dedup_entry_raw_md1() {
         |acc, prim: (_, &LabelAcc, _)| {
             fn_zip12(md_sys_tree_size::finish, fn_aaa(md_sys_tree_hash::finish))(
                 acc,
-                (&prim.0, prim.1.0.as_ref()),
+                (&prim.0, prim.1 .0.as_ref()),
             )
         },
-        |acc, prim| md_sys_byte_len::finish(acc, (&prim.0, prim.1.0.as_ref(), !prim.2)),
+        |acc, prim| md_sys_byte_len::finish(acc, (&prim.0, prim.1 .0.as_ref(), !prim.2)),
     );
 
     let insert = |backend: &mut World, t, md0, md1| insert(backend, t).insert((md0, md1)).id();
@@ -955,8 +955,8 @@ mod exp_optics_md {
 
     #[test]
     fn test_finish_hash() {
-        use optics::Current as C;
         use optics::positional::*;
+        use optics::Current as C;
         finish_tree_hash(
             TreeHashAcc,
             (TreeSizeAcc, LabelAcc, Type),
@@ -2117,10 +2117,7 @@ mod exp_frunk2 {
     //     }
     // }
 
-    impl<F> HMappable<Poly<F>> for TypeMap
-    where
-        F: for<'a> Func<&'a dyn std::any::Any>,
-    {
+    impl<F> HMappable<Poly<F>> for TypeMap where F: for<'a> Func<&'a dyn std::any::Any> {
         type Output = TypeMap;
 
         fn map(self, _: Poly<F>) -> Self::Output {

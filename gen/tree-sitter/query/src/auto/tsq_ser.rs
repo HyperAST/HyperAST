@@ -20,11 +20,11 @@ pub struct TreeToQuery<
     pred: F, // TODO use a TS query, the list. Could even validate at compile time with proc macro
 }
 
-pub fn to_query<HAST: types::HyperAST>(
-    stores: &HAST,
+pub fn to_query<'store, HAST: types::HyperAST>(
+    stores: &'store HAST,
     root: HAST::IdN,
 ) -> TreeToQuery<
-    '_,
+    'store,
     HAST,
     impl for<'a> Fn(&'a <HAST as AstLending<'_>>::RT) -> bool,
     true,
@@ -36,14 +36,14 @@ pub fn to_query<HAST: types::HyperAST>(
 }
 
 impl<
-    'store,
-    HAST: types::HyperAST,
-    F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
-    const TY: bool,
-    const LABELS: bool,
-    const IDS: bool,
-    const SPC: bool,
-> TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
+        'store,
+        HAST: types::HyperAST,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
+        const TY: bool,
+        const LABELS: bool,
+        const IDS: bool,
+        const SPC: bool,
+    > TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 {
     pub fn with_pred(stores: &'store HAST, root: HAST::IdN, pred: F) -> Self {
         Self { stores, root, pred }
@@ -51,13 +51,14 @@ impl<
 }
 
 impl<
-    HAST: types::HyperAST,
-    F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
-    const TY: bool,
-    const LABELS: bool,
-    const IDS: bool,
-    const SPC: bool,
-> Display for TreeToQuery<'_, HAST, F, TY, LABELS, IDS, SPC>
+        'store,
+        HAST: types::HyperAST,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
+        const TY: bool,
+        const LABELS: bool,
+        const IDS: bool,
+        const SPC: bool,
+    > Display for TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 where
     HAST::IdN: NodeId<IdN = HAST::IdN>,
     HAST::IdN: Debug,
@@ -68,13 +69,14 @@ where
 }
 
 impl<
-    HAST: types::HyperAST,
-    F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
-    const TY: bool,
-    const LABELS: bool,
-    const IDS: bool,
-    const SPC: bool,
-> TreeToQuery<'_, HAST, F, TY, LABELS, IDS, SPC>
+        'store,
+        HAST: types::HyperAST,
+        F: Fn(&<HAST as AstLending<'_>>::RT) -> bool,
+        const TY: bool,
+        const LABELS: bool,
+        const IDS: bool,
+        const SPC: bool,
+    > TreeToQuery<'store, HAST, F, TY, LABELS, IDS, SPC>
 where
     HAST::IdN: Debug,
     HAST::IdN: NodeId<IdN = HAST::IdN>,
@@ -93,20 +95,25 @@ where
         use types::WithChildren;
         let b = self.stores.node_store().resolve(id);
         // let kind = (self.stores.type_store(), b);
-        let kind = self.stores.resolve_type(id);
+        let kind = self.stores.resolve_type(&id);
         let label = b.try_get_label();
         let children = b.children();
 
         if kind.is_spaces() {
             if SPC {
-                let s = LabelStore::resolve(self.stores.label_store(), label.unwrap());
+                let s = LabelStore::resolve(self.stores.label_store(), &label.unwrap());
                 let b: String = Space::format_indentation(s.as_bytes())
                     .iter()
                     .map(|x| x.to_string())
                     .collect();
                 write!(out, "(")?;
-                if IDS { write!(out, "{:?}", id) } else { Ok(()) }
-                    .and_then(|x| if TY { write!(out, "_",) } else { Ok(x) })?;
+                if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                    if TY {
+                        write!(out, "_",)
+                    } else {
+                        Ok(x)
+                    }
+                })?;
                 if LABELS0 {
                     write!(out, " {:?}", Space::format_indentation(b.as_bytes()))?;
                 }
@@ -116,8 +123,13 @@ where
         }
 
         let w_kind = |out: &mut std::fmt::Formatter<'_>| {
-            if IDS { write!(out, "{:?}", id) } else { Ok(()) }
-                .and_then(|x| if TY { write!(out, "{}", kind) } else { Ok(x) })
+            if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                if TY {
+                    write!(out, "{}", kind.to_string())
+                } else {
+                    Ok(x)
+                }
+            })
         };
 
         match (label, children) {
@@ -125,7 +137,7 @@ where
                 // w_kind(out)?;
                 if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
                     if TY {
-                        write!(out, "\"{}\"", kind)
+                        write!(out, "\"{}\"", kind.to_string())
                     } else {
                         Ok(x)
                     }
@@ -171,7 +183,7 @@ where
                 }
             }
         }
-        Ok(())
+        return Ok(());
     }
 }
 

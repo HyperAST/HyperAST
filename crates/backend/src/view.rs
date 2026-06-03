@@ -2,13 +2,13 @@ use std::hash::{Hash, Hasher};
 
 use axum::Json;
 use const_chunks::IteratorConstChunks;
+use hyperast::{
+    compat::HashMap,
+    store::defaults::{LabelIdentifier, NodeIdentifier},
+    types::{self, Children, Childrn, HyperAST, LabelStore, Labeled, NodeStore, WithChildren},
+};
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
-
-use hyperast::compat::HashMap;
-use hyperast::store::defaults::{LabelIdentifier, NodeIdentifier};
-use hyperast::types::{Children, Childrn, HyperAST, Labeled, WithChildren};
-use hyperast::types::{LabelStore, NodeStore, TypeStore};
 
 use crate::SharedState;
 
@@ -162,17 +162,18 @@ fn resolve_path(
     curr
 }
 
-fn make_view<HAST>(
+fn make_view<'a, HAST>(
     mut queue: Vec<(HAST::IdN, usize)>,
-    stores: &HAST,
+    stores: &'a HAST,
     // node_store: &hyperast::store::nodes::legion::NodeStore,
     // label_store: &hyperast::store::labels::LabelStore,
 ) -> View
 where
     HAST::IdN: Hash,
-    <HAST::TS as TypeStore>::Ty: Into<u16>,
+    <HAST::TS as types::TypeStore>::Ty: Into<u16>,
     // HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
     HAST: HyperAST<Label = LabelIdentifier>,
+    HAST::IdN: hyperast::types::NodeId<IdN = HAST::IdN>,
 {
     use num::cast::ToPrimitive;
     let mut label_list = vec![];
@@ -192,7 +193,14 @@ where
     pub struct EntityHasher(u64);
     impl Hasher for EntityHasher {
         fn write(&mut self, a: &[u8]) {
-            self.0 = u64::from_be_bytes(a.iter().cloned().const_chunks::<8>().next().unwrap())
+            self.0 = u64::from_be_bytes(
+                a.into_iter()
+                    .cloned()
+                    .const_chunks::<8>()
+                    .next()
+                    .unwrap()
+                    .clone(),
+            )
         }
         fn finish(&self) -> u64 {
             self.0
@@ -203,8 +211,8 @@ where
     let root = {
         let mut id = EntityHasher::default();
         queue[0].0.hash(&mut id);
-
-        id.finish()
+        let nid = id.finish();
+        nid
     };
 
     while let Some((curr, advance)) = queue.pop() {
@@ -230,8 +238,8 @@ where
                     }
                     let mut id = EntityHasher::default();
                     curr.hash(&mut id);
-
-                    id.finish()
+                    let id = id.finish();
+                    id
                 }));
                 with_both.labels.push(*l);
             } else {
@@ -256,8 +264,8 @@ where
                     }
                     let mut id = EntityHasher::default();
                     curr.hash(&mut id);
-
-                    id.finish()
+                    let id = id.finish();
+                    id
                 }));
         } else {
             only_typed.ids.push(nid);
@@ -272,15 +280,15 @@ where
         .into_iter()
         .map(|l| stores.label_store().resolve(&l).to_string())
         .collect();
-
-    View {
+    let view = View {
         label_list,
         root,
         labeled,
         children: with_children,
         both: with_both,
         typed: only_typed,
-    }
+    };
+    view
 }
 
 #[derive(Default)]
@@ -290,8 +298,7 @@ struct BuffOut {
 
 impl std::fmt::Write for BuffOut {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.buff.push_str(s);
-        Ok(())
+        Ok(self.buff.extend(s.chars()))
     }
 }
 

@@ -1,28 +1,35 @@
 #![allow(unused)]
-//! fully compress all subtrees from a cpp CST
+use super::utils_ts::*;
 
+use crate::store::nodes::compo;
+use crate::store::nodes::legion::{RawHAST, dyn_builder};
+use crate::tree_gen::{self, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries};
+use crate::types::{self, HyperType};
+use crate::{
+    filter::BloomSize,
+    full::FullNode,
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    nodes::Space,
+    store::{
+        SimpleStores,
+        nodes::{
+            DefaultNodeStore as NodeStore,
+            legion::{NodeIdentifier, eq_node},
+        },
+    },
+    tree_gen::{
+        AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
+        WithByteRange, ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
+    },
+    types::{LabelStore as _, Role},
+};
 use legion::world::EntryRef;
 use num::ToPrimitive as _;
-use std::{collections::HashMap, fmt::Debug};
 
-use crate::hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs};
-use crate::store::SimpleStores;
-use crate::store::nodes::DefaultNodeStore as NodeStore;
-use crate::store::nodes::compo;
-use crate::store::nodes::legion::{NodeIdentifier, eq_node};
-use crate::store::nodes::legion::{RawHAST, dyn_builder, subtree_builder};
-use crate::tree_gen::parser::{Node as _, TreeCursor};
-use crate::tree_gen::{self, RoleAcc, TotalBytesGlobalData as _, add_md_precomp_queries};
-use crate::tree_gen::{
-    AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
-    SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-    ZippedTreeGen, compute_indentation, get_spacing, has_final_space,
-};
-use crate::types::{self, HyperType};
-use crate::types::{LabelStore as _, Role};
-use crate::{filter::BloomSize, full::FullNode, nodes::Space};
-
-use super::utils_ts::*;
+///! fully compress all subtrees from a cpp CST
+use std::{collections::HashMap, fmt::Debug, vec};
 
 pub type LabelIdentifier = crate::store::labels::DefaultLabelIdentifier;
 
@@ -111,7 +118,7 @@ impl<T> Accumulator for Acc<T> {
 }
 
 impl<T> AccIndentation for Acc<T> {
-    fn indentation(&self) -> &Spaces {
+    fn indentation<'a>(&'a self) -> &'a Spaces {
         &self.indentation
     }
 }
@@ -174,7 +181,7 @@ impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
     type L = &'acc str;
 }
 
-impl<'store, 'cache, TS: TsEnableTS>
+impl<'store, 'cache, 's, TS: TsEnableTS>
     TsTreeGen<'store, 'cache, TS, tree_gen::NoOpMore<TS, Acc<TS::Ty2>>, true>
 where
     TS::Ty2: TsType,
@@ -193,7 +200,7 @@ pub trait TsEnableTS: crate::types::ETypeStore
 where
     Self::Ty2: TsType,
 {
-    fn obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
+    fn obtain_type<'a, N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
 }
 
 pub trait TsType: HyperType + Copy {
@@ -201,7 +208,7 @@ pub trait TsType: HyperType + Copy {
     fn is_repeat(&self) -> bool;
 }
 
-impl<TS, More> TsTreeGen<'_, '_, TS, More>
+impl<'store, 'cache, TS, More> TsTreeGen<'store, 'cache, TS, More>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
@@ -209,7 +216,8 @@ where
 {
 }
 
-impl<TS, More, const HIDDEN_NODES: bool> ZippedTreeGen for TsTreeGen<'_, '_, TS, More, HIDDEN_NODES>
+impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
+    for TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
@@ -221,7 +229,7 @@ where
     type TreeCursor<'b> = TTreeCursor<'b>;
 
     fn stores(&mut self) -> &mut Self::Stores {
-        self.stores
+        &mut self.stores
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
@@ -262,9 +270,11 @@ where
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let node = cursor.node();
         let kind = TS::obtain_type(&node);
-        if HIDDEN_NODES && (kind.is_hidden() || kind.is_repeat()) {
-            // dbg!(kind);
-            // return PreResult::Ignore;
+        if HIDDEN_NODES {
+            if kind.is_hidden() || kind.is_repeat() {
+                // dbg!(kind);
+                // return PreResult::Ignore;
+            }
         }
         if node.0.is_missing() {
             // dbg!(kind);
@@ -277,7 +287,10 @@ where
         }
         let mut acc = self.pre(text, &node, stack, global);
         // TODO replace with wrapper
-        if !stack.parent().is_some_and(|a| a.simple.kind.is_supertype()) {
+        if !stack
+            .parent()
+            .map_or(false, |a| a.simple.kind.is_supertype())
+        {
             if let Some(r) = cursor.0.field_name() {
                 if let Ok(r) = r.try_into() {
                     acc.role.current = Some(r);
@@ -302,7 +315,7 @@ where
             text,
             node.start_byte(),
             global.sum_byte_length(),
-            parent_indentation,
+            &parent_indentation,
         );
         Acc {
             labeled: node.has_label(),
@@ -353,7 +366,8 @@ where
     }
 }
 
-impl<'store, TS, More, const HIDDEN_NODES: bool> TsTreeGen<'store, '_, TS, More, HIDDEN_NODES>
+impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
+    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
@@ -370,7 +384,7 @@ where
         let line_count = spacing
             .matches("\n")
             .count()
-            .to_u32()
+            .to_u16()
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
@@ -468,13 +482,13 @@ where
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
-
-        self.make(&mut global, acc, label)
+        let full_node = self.make(&mut global, acc, label);
+        full_node
     }
 }
 
-impl<'store, TS, More, const HIDDEN_NODES: bool> TreeGen
-    for TsTreeGen<'store, '_, TS, More, HIDDEN_NODES>
+impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
+    for TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
@@ -491,7 +505,7 @@ where
         let kind = acc.simple.kind;
         let interned_kind = TS::intern(kind);
         let own_line_count = label.as_ref().map_or(0, |l| {
-            l.matches("\n").count().to_u32().expect("too many newlines")
+            l.matches("\n").count().to_u16().expect("too many newlines")
         });
         let metrics = acc.metrics.finalize(&interned_kind, &label, own_line_count);
 
@@ -525,11 +539,11 @@ where
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let mut dyn_builder = subtree_builder::<TS>(interned_kind);
+            let mut dyn_builder = dyn_builder::EntityBuilder::new();
             {
                 let node_store = &*vacant.1.1;
                 let stores = SimpleStores {
-                    type_store: self.stores.type_store,
+                    type_store: self.stores.type_store.clone(),
                     label_store: &self.stores.label_store,
                     node_store,
                 };
@@ -565,8 +579,8 @@ where
             self.md_cache.insert(
                 compressed_node,
                 DD {
-                    metrics,
-                    precomp_queries: acc.precomp_queries,
+                    metrics: metrics.clone(),
+                    precomp_queries: acc.precomp_queries.clone(),
                 },
             );
             Local {
@@ -578,10 +592,11 @@ where
             }
         };
 
-        FullNode {
+        let full_node = FullNode {
             global: global.simple(),
             local,
-        }
+        };
+        full_node
     }
 }
 
@@ -590,8 +605,8 @@ where
 // where each transmuter can own and require some fields
 // and can add derived data to subtree
 
-impl<TS: types::ETypeStore, More, const HIDDEN_NODES: bool>
-    TsTreeGen<'_, '_, TS, More, HIDDEN_NODES>
+impl<'store, 'cache, TS: types::ETypeStore, More, const HIDDEN_NODES: bool>
+    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     More: for<'t> tree_gen::More<SimpleStores<TS>, Acc = Acc<TS::Ty2>>,
 {

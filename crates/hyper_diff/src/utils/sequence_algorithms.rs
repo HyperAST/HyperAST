@@ -15,7 +15,7 @@ pub fn longest_common_subsequence_str(s0: &str, s1: &str) -> Vec<(u32, u32)> {
             }
         }
     }
-    extract_indexes(lens, s0.len(), s1.len())
+    return extract_indexes(lens, s0.len(), s1.len());
 }
 
 /// Returns the hunks of the longest common subsequence between s1 and s2.
@@ -24,7 +24,7 @@ pub fn longest_common_subsequence_str(s0: &str, s1: &str) -> Vec<(u32, u32)> {
 pub fn hunks(s0: &str, s1: &str) -> Vec<Vec<u32>> {
     let lcs: Vec<(u32, u32)> = longest_common_subsequence_str(s0, s1);
     let mut hunks: Vec<Vec<u32>> = vec![];
-    let matchh = lcs.first().unwrap();
+    let matchh = lcs.get(0).unwrap();
     let mut inf0 = matchh.0;
     let mut inf1 = matchh.1;
     let mut last0 = 0;
@@ -42,7 +42,7 @@ pub fn hunks(s0: &str, s1: &str) -> Vec<Vec<u32>> {
         last0 = matchh.0;
         last1 = matchh.1;
     }
-    hunks
+    return hunks;
 }
 
 /// Returns the longest common sequence between two strings as a string.
@@ -70,7 +70,7 @@ pub fn longest_common_sequence<'a>(s1: &'a str, s2: &str) -> &'a str {
         }
         it1.next();
     }
-    &s1[start..start + max]
+    return &s1[start..start + max];
 }
 
 // /// Returns the longest common subsequence between the two list of nodes. This version use
@@ -103,11 +103,11 @@ pub fn longest_common_sequence<'a>(s1: &'a str, s2: &str) -> &'a str {
 //     longest_common_subsequence(s0,s1,ITree::isIsoStructuralTo)
 // }
 
-pub fn longest_common_subsequence<T1, T2, U1: PrimInt, U2: PrimInt, F: Fn(&T1, &T2) -> bool>(
+pub fn longest_common_subsequence<T1, T2, U: PrimInt, F: Fn(&T1, &T2) -> bool>(
     s0: &[T1],
     s1: &[T2],
     cmp: F,
-) -> Vec<(U1, U2)> {
+) -> Vec<(U, U)> {
     let mut lens: Vec<Vec<u32>> = vec![vec![0u32; s1.len() + 1]; s0.len() + 1]; // u32[s0.len() + 1][s1.len() + 1];
     for i in 0..s0.len() {
         //(s0.len()-1).min(0) {
@@ -120,14 +120,14 @@ pub fn longest_common_subsequence<T1, T2, U1: PrimInt, U2: PrimInt, F: Fn(&T1, &
             }
         }
     }
-    extract_indexes(lens, s0.len(), s1.len())
+    return extract_indexes(lens, s0.len(), s1.len());
 }
 
-pub fn extract_indexes<T: Eq, U1: PrimInt, U2: PrimInt>(
+pub fn extract_indexes<T: Eq, U: PrimInt>(
     lens: Vec<Vec<T>>,
     len1: usize,
     len2: usize,
-) -> Vec<(U1, U2)> {
+) -> Vec<(U, U)> {
     let mut indexes = vec![]; //new ArrayList<>();
     let mut x = len1;
     let mut y = len2;

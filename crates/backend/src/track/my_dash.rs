@@ -1,7 +1,9 @@
-use std::cell::UnsafeCell;
-use std::collections::hash_map::RandomState;
-use std::fmt::Debug;
-use std::hash::{BuildHasher, Hash};
+use std::{
+    cell::UnsafeCell,
+    collections::hash_map::RandomState,
+    fmt::Debug,
+    hash::{BuildHasher, Hash},
+};
 
 use dashmap::{DashMap, RwLockWriteGuard, SharedValue};
 use hashbrown::HashMap;

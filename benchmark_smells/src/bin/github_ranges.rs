@@ -33,13 +33,13 @@ fn print_pos(
 ) {
     let query = if INCREMENTAL_QUERIES {
         hyperast_tsquery::Query::with_precomputed(
-            query,
+            &query,
             hyperast_gen_ts_java::language(),
             precomputeds,
         )
         .map(|x| x.1)
     } else {
-        hyperast_tsquery::Query::new(query, hyperast_gen_ts_java::language())
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language())
     };
 
     let query = match query {
@@ -50,7 +50,7 @@ fn print_pos(
         }
     };
 
-    let mut preprocessed = PreProcessedRepository::new(repo_name);
+    let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oids = preprocessed.pre_process_first_parents_with_limit(
         &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         "",
@@ -114,7 +114,16 @@ fn bench_conditional_logic() {
     ) @root"#
         )
     };
-    let query = &around("assertThat");
+    let query = &format!(
+        // "{}\n{}\n{}\n{}\n{}",
+        // "{}\n{}",
+        "{}",
+        around("assertThat"),
+        // around("assertEquals"),
+        // around("assertSame"),
+        // around("assertTrue"),
+        // around("assertNull"),
+    );
 
     let subs = [
         "(if_statement)",

@@ -1,13 +1,12 @@
 //! Gather most of the common behaviors used to compute positions in an HyperAST
-use std::path::PathBuf;
-
-use num::ToPrimitive;
 
 use super::{Position, StructuralPosition, TreePath};
 use crate::types::{
     Children, Childrn, HyperAST, HyperType, LabelStore, Labeled, WithChildren, WithSerialization,
 };
 use crate::{PrimInt, types::WithStats};
+use num::ToPrimitive;
+use std::path::PathBuf;
 
 /// precondition: root node do not contain a File node
 /// TODO make whole thing more specific to a path in a tree
@@ -19,7 +18,8 @@ pub fn compute_range<'store, It, HAST>(
 where
     HAST: HyperAST,
     HAST::IdN: Copy,
-    for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization,
     It: Iterator,
     It::Item: PrimInt,
 {
@@ -55,8 +55,9 @@ pub fn compute_position<HAST, It>(
 where
     It::Item: Clone,
     HAST::IdN: Clone,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
     HAST: HyperAST,
-    for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithSerialization + WithChildren,
     It: Iterator<Item = HAST::Idx>,
 {
     let mut offset = 0;
@@ -74,7 +75,7 @@ where
 
         let Some(cs) = b.children() else { break };
         if !t.is_directory() {
-            for y in cs.before(o).iter_children() {
+            for y in cs.before(o.clone()).iter_children() {
                 let b = stores.resolve(&y);
                 offset += b.try_bytes_len().unwrap().to_usize().unwrap();
             }
@@ -105,17 +106,18 @@ pub fn compute_position_and_nodes<'store, HAST, It: Iterator>(
     stores: &'store HAST,
 ) -> (Position, Vec<HAST::IdN>)
 where
-    It::Item: crate::types::PrimInt,
+    It::Item: Clone,
     HAST::IdN: Clone,
+    HAST::IdN: crate::types::NodeId<IdN = HAST::IdN>,
     HAST: HyperAST,
-    for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
+    for<'t> <HAST as crate::types::AstLending<'t>>::RT:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
     let mut path_ids = vec![];
     let mut path = vec![];
     for o in &mut *offsets {
-        let o = o.cast();
         let b = stores.resolve(&x);
 
         let t = stores.resolve_type(&x);
@@ -128,7 +130,7 @@ where
             break;
         };
         if !t.is_directory() {
-            for y in cs.before(o).iter_children() {
+            for y in cs.before(o.clone()).iter_children() {
                 let b = stores.resolve(&y);
                 offset += b
                     .try_bytes_len()
@@ -138,9 +140,7 @@ where
                     .unwrap();
             }
         }
-        let Some(a) = cs.get(o) else {
-            break;
-        };
+        let Some(a) = cs.get(o) else { break };
         x = a.clone();
         path_ids.push(x.clone());
     }
@@ -171,7 +171,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
     where
         HAST: HyperAST<IdN = IdN, Idx = Idx>,
         for<'t> crate::types::LendT<'t, HAST>: WithSerialization,
-        IdN: crate::types::UniformNodeId,
+        IdN: crate::types::NodeId<IdN = IdN>,
     {
         if cfg!(debug_assertions) {
             self.check(stores)
@@ -186,7 +186,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
             if !(t.is_file() || t.is_directory()) {
                 from_file = true;
             }
-            y
+            y as usize
         } else {
             0
         };
@@ -199,7 +199,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
         let mut i = self.parents.len() - 1;
         if from_file {
             loop {
-                if i == 0 {
+                if !(i > 0) {
                     break;
                 }
                 let p = self.parents[i - 1];
@@ -216,7 +216,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
                             .resolve(&x)
                             .try_bytes_len()
                             .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
-                            .unwrap()
+                            .unwrap() as usize
                     })
                     .sum();
                 offset += c;
@@ -260,7 +260,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
                         .resolve(&x)
                         .try_bytes_len()
                         .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
-                        .unwrap()
+                        .unwrap() as usize
                 })
                 .sum();
             offset += c;
@@ -274,7 +274,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
     where
         HAST: HyperAST<IdN = IdN, Idx = Idx>,
         for<'t> crate::types::LendT<'t, HAST>: WithStats + WithSerialization,
-        IdN: crate::types::UniformNodeId,
+        IdN: crate::types::NodeId<IdN = IdN>,
     {
         if cfg!(debug_assertions) {
             self.check(stores)
@@ -301,7 +301,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
         let mut i = self.parents.len() - 1;
         if from_file {
             loop {
-                if i == 0 {
+                if !(i > 0) {
                     break;
                 }
                 let p = self.parents[i - 1];
@@ -362,7 +362,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPosition<IdN, Idx> {
                         .resolve(&x)
                         .try_bytes_len()
                         .ok_or_else(|| MissingByteLenError(stores.resolve_type(&x)))
-                        .unwrap()
+                        .unwrap() as usize
                 })
                 .sum();
             offset += c;

@@ -1,11 +1,10 @@
+use super::super::{TreePathMut, TypedTreePath};
+use super::{Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath};
+use crate::types::{NodeId, TypedNodeId};
+use crate::PrimInt;
+use crate::{store::defaults::LabelIdentifier, types::HyperAST};
 use num::zero;
 use std::{fmt::Debug, marker::PhantomData};
-
-use super::{Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore};
-use crate::PrimInt;
-use crate::position::{TreePath, TreePathMut, TypedTreePath};
-use crate::types::{NodeId, TypedNodeId};
-use crate::{store::defaults::LabelIdentifier, types::HyperAST};
 
 #[derive(Clone, Debug)]
 pub struct TypedScout<TIdN: TypedNodeId, Idx> {
@@ -27,9 +26,10 @@ where
         self.path.offset()
     }
 
-    fn check<HAST>(&self, stores: &HAST) -> Result<(), ()>
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
     where
         HAST: HyperAST<IdN = <TIdN::IdN as NodeId>::IdN>,
+        // for<'t> <HAST as crate::types::AstLending<'t>>::RT: WithChildren<ChildIdx = Idx>,
         HAST::IdN: Eq,
         TIdN::IdN: NodeId,
         <TIdN::IdN as NodeId>::IdN: NodeId<IdN = <TIdN::IdN as NodeId>::IdN>,
@@ -65,7 +65,7 @@ where
 
     fn goto_typed(&mut self, node: TIdN, i: Idx) {
         self.path.goto(*node.as_id(), i);
-        self.tdepth += 1;
+        self.tdepth = self.tdepth + 1;
     }
 }
 
@@ -84,7 +84,7 @@ where
         mut self,
         x: &StructuralPositionStore<TIdN::IdN, Idx>,
     ) -> Result<Self, Scout<TIdN::IdN, Idx>> {
-        if self.path.pop().is_some() {
+        if let Some(_) = self.path.pop() {
             self.path = StructuralPosition::empty();
             self.ancestors = x.parents[self.ancestors];
             let tdepth = -self.tdepth as usize;
@@ -120,7 +120,7 @@ where
         x: &StructuralPositionStore<TIdN::IdN, Idx>,
     ) -> Result<TIdN, TIdN::IdN> {
         if let Some(n) = self.node_typed() {
-            Ok(*n)
+            Ok(n.clone())
         } else if let Some(y) = self.path.node() {
             Ok(unsafe { TIdN::from_id(*y) })
             // TODO do proper state
@@ -174,6 +174,24 @@ where
             None
         }
     }
+    // pub fn node(&self) -> Option<Result<TIdN, TIdN::IdN>> {
+    //     // [a] , 0 -> 1 > 0
+    //     // [a,b] , -1 -> 0 > 0
+    //     self.path.node().map(|x| if -self.path.len() < self.tdepth as isize {} else {})
+    // }
+    // pub fn node(&self) -> Option<Result<TIdN, TIdN::IdN>> {
+    //     // [a] , 0 -> 1 > 0
+    //     // [a,b] , -1 -> 0 > 0
+    //     self.path.node().map(|x| if -self.path.len() < self.tdepth as isize {} else {})
+    // }
+    // pub fn node_always(&self, x: &StructuralPositionStore<TIdN::IdN>) -> TIdN::IdN {
+    //     if let Some(y) = self.path.node() {
+    //         *y.as_id()
+    //     } else {
+    //         assert!(self.ancestors.0 > 0);
+    //         x.nodes[self.ancestors.1]
+    //     }
+    // }
     pub fn offset_always(&self, x: &StructuralPositionStore<TIdN::IdN, Idx>) -> Idx {
         if let Some(y) = self.path.offset() {
             *y
@@ -181,14 +199,30 @@ where
             x.offsets[self.ancestors]
         }
     }
-    pub fn make_position<HAST>(
+    // pub fn has_parents(&self) -> bool {
+    //     if self.path.nodes.is_empty() {
+    //         self.ancestors.1 != 0
+    //     } else {
+    //         true
+    //     }
+    // }
+
+    pub fn make_position<'store, HAST>(
         &self,
         _sp: &StructuralPositionStore<HAST::IdN, Idx>,
-        _stores: &HAST,
+        _stores: &'store HAST,
     ) -> Position
     where
-        HAST: HyperAST<Label = LabelIdentifier>,
+        HAST: HyperAST<
+            // IdN = TIdN::IdN,
+            Label = LabelIdentifier,
+        >,
         HAST: crate::types::TypedHyperAST<TIdN>,
+        // <HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT:
+        //     Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,
+        // <HAST as crate::types::HyperAST<'store>>::T: WithSerialization + WithChildren,
+        // <<HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT as types::WithChildren>::ChildIdx:
+        //     Debug,
         HAST::IdN: Copy + Debug,
         TIdN: Debug,
         TIdN::IdN: NodeId<IdN = TIdN::IdN>,
@@ -348,7 +382,8 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             self.nodes.extend(&x.path.parents[1..]);
 
             self.parents.push(x.ancestors);
-            self.parents.extend(o..o + l);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
 
             self.offsets.extend(&x.path.offsets[1..]);
             x.ancestors = self.nodes.len() - 1;
@@ -358,11 +393,18 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             let o = self.parents.len();
             self.nodes.extend(x.path.parents.clone());
             self.parents.push(x.ancestors);
-            self.parents.extend(o..o + l);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
             self.offsets.extend(&x.path.offsets);
+            // self.ends.push(self.nodes.len() - 1);
             x.ancestors = self.nodes.len() - 1;
             x.path = StructuralPosition::empty()
+            // x.path = StructuralPosition::with_offset(x.path.current_node(), x.path.current_offset());
         }
+
+        // if !x.path.offsets.is_empty() && x.path.offsets[0] == 0 {
+        //     assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
+        // }
 
         assert!(
             self.offsets.is_empty() || !self.offsets[1..].contains(&zero()),

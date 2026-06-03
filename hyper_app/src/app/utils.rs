@@ -51,17 +51,16 @@ impl From<f64> for SecFmt {
 
 impl std::fmt::Display for SecFmt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        const UP_TO_HOURS: bool = true;
         // f.precision()
         let x = self.0;
-        let (t, n) = if UP_TO_HOURS && x > 60.0 * 60.0 {
-            let n = if f.alternate() { "hours" } else { "m" };
+        let (t, n) = if x > 60.0 * 60.0 {
+            let n = if f.alternate() { "minutes" } else { "m" };
             (x / 60.0, n)
         } else if x > 60.0 * 60.0 * 24.0 {
-            let n = if f.alternate() { "days" } else { "d" };
+            let n = if f.alternate() { "minutes" } else { "d" };
             (x / 60.0, n)
         } else if x > 60.0 * 60.0 {
-            let n = if f.alternate() { "hours" } else { "h" };
+            let n = if f.alternate() { "minutes" } else { "m" };
             (x / 60.0, n)
         } else if x > 60.0 {
             let n = if f.alternate() { "minutes" } else { "m" };
@@ -110,7 +109,7 @@ pub fn round_to_significant_digits3(number: f64, significant_digits: usize) -> S
     let magnitude = 10.0_f64.powi(power as i32);
     let shifted = number * magnitude;
     let rounded_number = shifted.round();
-    let unshifted = rounded_number / magnitude;
+    let unshifted = rounded_number as f64 / magnitude;
     dbg!(
         number,
         (number.abs() + 0.000001).log10().ceil(),
@@ -143,7 +142,8 @@ pub(crate) fn prepare_paste(
 ) -> Option<String> {
     if *await_response {
         let paste = ui.input(|i| {
-            (i.events.iter())
+            i.events
+                .iter()
                 .find(|e| matches!(e, egui::Event::Paste(_)))
                 .cloned()
         });
@@ -162,7 +162,7 @@ pub(crate) fn prepare_paste(
 #[cfg(target_arch = "wasm32")]
 #[allow(static_mut_refs)]
 pub(crate) fn prepare_paste(
-    _ui: &mut egui::Ui,
+    ui: &mut egui::Ui,
     trigger: bool,
     await_response: &mut bool,
 ) -> Option<String> {
@@ -185,183 +185,4 @@ pub(crate) fn prepare_paste(
         *await_response = true;
     }
     None
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub(crate) enum Forge {
-    GitHub,
-    GitLab,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Repo {
-    #[allow(dead_code)]
-    pub forge: Forge,
-    pub user: &'static str,
-    pub name: &'static str,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Commit {
-    pub(crate) repo: Repo,
-    pub(crate) id: &'static str,
-}
-
-impl From<&Repo> for super::types::Repo {
-    fn from(value: &Repo) -> Self {
-        Self {
-            user: value.user.into(),
-            name: value.name.into(),
-        }
-    }
-}
-impl From<&Commit> for super::types::Commit {
-    fn from(value: &Commit) -> Self {
-        Self {
-            repo: (&value.repo).into(),
-            id: value.id.into(),
-        }
-    }
-}
-
-macro_rules! typed_vec {
-    ($vis:vis $name:ident, $item:ty, $id:ident($ty:ty)) => {
-        #[repr(transparent)]
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        $vis struct $id($ty);
-
-        #[allow(dead_code)]
-        impl $id {
-            const INVALID: $id = $id(<$ty>::MAX);
-            // TODO try to avoid it
-            $vis fn to_usize(&self) -> usize {
-                self.0 as usize
-            }
-        }
-
-        #[derive(Debug, Default)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        $vis struct $name(Vec<$item>);
-
-        #[allow(dead_code)]
-        impl $name {
-            $vis fn new() -> Self {
-                Self(Vec::new())
-            }
-
-            #[track_caller]
-            $vis fn push(&mut self, value: $item) -> $id {
-                debug_assert!(self.0.len() < <$ty>::MAX as usize);
-                let id = $id(self.0.len() as $ty);
-                self.0.push(value);
-                id
-            }
-
-            #[track_caller]
-            $vis fn get(&self, idx: $id) -> Option<&$item> {
-                let idx = idx.0 as usize;
-                self.0.get(idx)
-            }
-
-            #[track_caller]
-            $vis fn get_mut(&mut self, idx: $id) -> Option<&mut $item> {
-                let idx = idx.0 as usize;
-                self.0.get_mut(idx)
-            }
-
-            $vis fn iter(&self) -> impl Iterator<Item = &$item> {
-                self.0.iter()
-            }
-
-            $vis fn enumerate(&self) -> impl Iterator<Item = ($id, &$item)> {
-                self.0.iter().enumerate().map(|(i, v)| ($id(i as $ty), v))
-            }
-
-            $vis fn find(&self, mut predicate: impl FnMut(&$item) -> bool) -> Option<($id, &$item)> {
-                self.0.iter().enumerate().find(|(_, v)| predicate(v)).map(|(i, v)| ($id(i as $ty), v))
-            }
-
-            #[track_caller]
-            $vis fn last_id(&self) -> Option<$id> {
-                Some($id((self.0.len().checked_sub(1)? as $ty)))
-            }
-        }
-
-        impl std::ops::Index<$id> for $name {
-            type Output = $item;
-            #[track_caller]
-            fn index(&self, idx: $id) -> &Self::Output {
-                let idx = idx.0 as usize;
-                debug_assert!(idx < self.0.len());
-                &self.0[idx]
-            }
-        }
-
-        impl std::ops::Index<$id> for &$name {
-            type Output = $item;
-            #[track_caller]
-            fn index(&self, idx: $id) -> &Self::Output {
-                let idx = idx.0 as usize;
-                debug_assert!(idx < self.0.len());
-                &self.0[idx]
-            }
-        }
-
-        impl std::ops::IndexMut<$id> for $name {
-            #[track_caller]
-            fn index_mut(&mut self, idx: $id) -> &mut Self::Output {
-                let idx = idx.0 as usize;
-                debug_assert!(idx < self.0.len());
-                &mut self.0[idx]
-            }
-        }
-
-        // impl std::ops::Deref for $name {
-        //     type Target = Vec<$item>;
-        //     fn deref(&self) -> &Self::Target {
-        //         &self.0
-        //     }
-        // }
-        // impl std::ops::DerefMut for $name {
-        //     fn deref_mut(&mut self) -> &mut Self::Target {
-        //         &mut self.0
-        //     }
-        // }
-
-        impl From<Vec<$item>> for $name {
-            fn from(vec: Vec<$item>) -> Self {
-                Self(vec)
-            }
-        }
-    };
-}
-pub(crate) use typed_vec;
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    typed_vec!(Users, User, UserId(u16));
-
-    #[derive(Debug)]
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    pub struct User {
-        pub name: String,
-    }
-
-    #[test]
-    fn test_name() {
-        let mut users = Users::new();
-        let user_id = users.push(User {
-            name: "John".to_string(),
-        });
-        assert_eq!(users[user_id].name, "John");
-        users[user_id].name = "Jane".to_string();
-        assert_eq!(users[user_id].name, "Jane");
-        let user_id2 = users.push(User {
-            name: "Jane Doe".to_string(),
-        });
-        assert_eq!(users[user_id2].name, "Jane Doe");
-    }
 }

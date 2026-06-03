@@ -22,9 +22,9 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
-/// provoke an infinite loop or is very slow
-///
 #[test]
+// provoke an infinite loop or is very slow
+//
 fn test_immediate_pred2() {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
@@ -76,247 +76,6 @@ class A {
     // insta::assert_snapshot!(run_prepro(query, &prepro, text), @"1");
 }
 
-#[test]
-fn test_to_much_matches() {
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(log::LevelFilter::Trace))
-        .unwrap();
-    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let query = r#"(try_statement
-  (block
-    (expression_statement
-      (method_invocation
-        (identifier) (#EQ? "fail")
-      )
-    )
-  )
-  (catch_clause)
-) @root"#;
-    let prepro = ["(try_statement)"];
-    let _text = r#"
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-package org.apache.hadoop.hdfs.server.federation.router;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.server.federation.RouterConfigBuilder;
-
-import java.io.IOException;
-
-import org.apache.hadoop.test.GenericTestUtils;
-import org.apache.hadoop.test.LambdaTestUtils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
-
-/**
- * Test the behavior when disabling the Router quota.
- */
-public class TestDisableRouterQuota {
-
-  private static Router router;
-
-  @BeforeClass
-  public static void setUp() throws Exception {
-    // Build and start a router
-    router = new Router();
-    Configuration routerConf = new RouterConfigBuilder()
-        .quota(false) //set false to verify the quota disabled in Router
-        .rpc()
-        .build();
-    routerConf.set(RBFConfigKeys.DFS_ROUTER_RPC_ADDRESS_KEY, "0.0.0.0:0");
-    router.init(routerConf);
-    router.setRouterId("TestRouterId");
-    router.start();
-  }
-
-  @AfterClass
-  public static void tearDown() throws IOException {
-    if (router != null) {
-      router.stop();
-      router.close();
-    }
-  }
-
-  @Before
-  public void checkDisableQuota() {
-    assertFalse(router.isQuotaEnabled());
-  }
-
-  @Test
-  public void testSetQuota() throws Exception {
-    long nsQuota = 1024;
-    long ssQuota = 1024;
-    Quota quotaModule = router.getRpcServer().getQuotaModule();
-
-    // don't checkMountEntry called by RouterAdminServer#synchronizeQuota
-    LambdaTestUtils.intercept(
-        IOException.class,
-        "The quota system is disabled in Router.",
-        "The setQuota call should fail.",
-        () -> quotaModule.setQuota("/test", nsQuota, ssQuota, null, false));
-
-    // do checkMountEntry called by RouterClientProtocol#setQuota
-    LambdaTestUtils.intercept(
-        IOException.class,
-        "The quota system is disabled in Router.",
-        "The setQuota call should fail.",
-        () -> quotaModule.setQuota("/test", nsQuota, ssQuota, null, true));
-  }
-
-  @Test
-  public void testGetQuotaUsage() throws Exception {
-    try {
-      Quota quotaModule = router.getRpcServer().getQuotaModule();
-      quotaModule.getQuotaUsage("/test");
-      fail("The getQuotaUsage call should fail.");
-    } catch (IOException ioe) {
-      GenericTestUtils.assertExceptionContains(
-          "The quota system is disabled in Router.", ioe);
-    }
-  }
-
-  @Test
-  public void testGetGlobalQuota() throws Exception {
-    LambdaTestUtils.intercept(IOException.class,
-        "The quota system is disabled in Router.",
-        "The getGlobalQuota call should fail.", () -> {
-          Quota quotaModule = router.getRpcServer().getQuotaModule();
-          quotaModule.getGlobalQuota("/test");
-        });
-  }
-}
-    "#;
-    let text = r#"/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-package org.apache.hadoop.hdfs.server.federation.router;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.server.federation.RouterConfigBuilder;
-
-import java.io.IOException;
-
-import org.apache.hadoop.test.GenericTestUtils;
-import org.apache.hadoop.test.LambdaTestUtils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
-
-/**
- * Test the behavior when disabling the Router quota.
- */
-public class TestDisableRouterQuota {
-
-  private static Router router;
-
-  @BeforeClass
-  public static void setUp() throws Exception {
-    // Build and start a router
-    router = new Router();
-    Configuration routerConf = new RouterConfigBuilder()
-        .quota(false) //set false to verify the quota disabled in Router
-        .rpc()
-        .build();
-    routerConf.set(RBFConfigKeys.DFS_ROUTER_RPC_ADDRESS_KEY, "0.0.0.0:0");
-    router.init(routerConf);
-    router.setRouterId("TestRouterId");
-    router.start();
-  }
-
-  @AfterClass
-  public static void tearDown() throws IOException {
-    if (router != null) {
-      router.stop();
-      router.close();
-    }
-  }
-
-  @Before
-  public void checkDisableQuota() {
-    assertFalse(router.isQuotaEnabled());
-  }
-
-  @Test
-  public void testSetQuota() throws Exception {
-    long nsQuota = 1024;
-    long ssQuota = 1024;
-
-    try {
-      Quota quotaModule = router.getRpcServer().getQuotaModule();
-      quotaModule.setQuota("/test", nsQuota, ssQuota, null, false);
-      fail("The setQuota call should fail.");
-    } catch (IOException ioe) {
-      GenericTestUtils.assertExceptionContains(
-          "The quota system is disabled in Router.", ioe);
-    }
-  }
-
-  @Test
-  public void testGetQuotaUsage() throws Exception {
-    try {
-      Quota quotaModule = router.getRpcServer().getQuotaModule();
-      quotaModule.getQuotaUsage("/test");
-      fail("The getQuotaUsage call should fail.");
-    } catch (IOException ioe) {
-      GenericTestUtils.assertExceptionContains(
-          "The quota system is disabled in Router.", ioe);
-    }
-  }
-
-  @Test
-  public void testGetGlobalQuota() throws Exception {
-    LambdaTestUtils.intercept(IOException.class,
-        "The quota system is disabled in Router.",
-        "The getGlobalQuota call should fail.", () -> {
-          Quota quotaModule = router.getRpcServer().getQuotaModule();
-          quotaModule.getGlobalQuota("/test");
-        });
-  }
-}
-"#;
-    let text = text.as_bytes();
-    assert_eq!(2, run_prepro(query, &prepro, text));
-    // insta::assert_snapshot!(run_prepro(query, &prepro, text), @"1");
-}
-
 #[allow(unused)]
 fn run_stepped2(query: &str, text: &[u8]) -> usize {
     let (query, tree) = prep_stepped2(query, text);
@@ -340,7 +99,7 @@ fn run_stepped2(query: &str, text: &[u8]) -> usize {
     count
 }
 
-fn prep_stepped2(query: &str, text: &[u8]) -> (hyperast_tsquery::Query, tree_sitter::Tree) {
+fn prep_stepped2<'store>(query: &str, text: &[u8]) -> (hyperast_tsquery::Query, tree_sitter::Tree) {
     let query = hyperast_tsquery::Query::new(query, crate::language()).unwrap();
 
     let mut parser = tree_sitter::Parser::new();
@@ -384,12 +143,8 @@ fn run_stepped(query: &str, text: &[u8]) -> usize {
 #[cfg(test)]
 fn run_prepro(query: &str, subqueries: &[&str], text: &[u8]) -> usize {
     let (query, stores, code) = prep_prepro(query, subqueries, text);
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
-    // let pos = hyperast::position::StructuralPosition::new(code);
-    use hyperast::position::structural_pos::CursorHead;
-    use hyperast_tsquery::hyperast_opt::TreeCursor;
-    // use hyperast_tsquery::hyperast_cursor::TreeCursor;
-    let cursor = TreeCursor::new(&stores, pos);
+    let pos = hyperast::position::StructuralPosition::new(code);
+    let cursor = hyperast_tsquery::hyperast_cursor::TreeCursor::new(&stores, pos);
     let matches = query.matches(cursor);
 
     let mut count = 0;
@@ -402,9 +157,9 @@ fn run_prepro(query: &str, subqueries: &[&str], text: &[u8]) -> usize {
             dbg!(i);
             let name = query.capture_name(i);
             dbg!(name);
-            let n = c.node.pos.node();
-            // let n = *c.node.pos.node().unwrap();
-            let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, n);
+            use hyperast::position::TreePath;
+            let n = c.node.pos.node().unwrap();
+            let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, *n);
             dbg!(n.to_string());
         }
     }
@@ -416,7 +171,7 @@ fn run_prepro(query: &str, subqueries: &[&str], text: &[u8]) -> usize {
     count
 }
 
-fn prep_stepped(
+fn prep_stepped<'store>(
     query: &str,
     text: &[u8],
 ) -> (
@@ -445,7 +200,7 @@ fn prep_stepped(
     (query, stores, full_node.local.compressed_node)
 }
 
-fn prep_prepro(
+fn prep_prepro<'store>(
     query: &str,
     subqueries: &[&str],
     text: &[u8],
@@ -808,7 +563,7 @@ mod test_tsg_queries {
                 //     )
                 // };
                 let h_res = prep_prepro(query.0, subqueries.next().unwrap(), text);
-                let pos = hyperast::position::structural_pos::CursorWithPersistence::new(h_res.2);
+                let pos = hyperast::position::structural_pos::CursorWithPersistance::new(h_res.2);
                 let tree_cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&h_res.1, pos);
                 let h_matches = h_res.0.matches(tree_cursor);
                 let g_c = g_matches.into_iter().count();
@@ -1302,7 +1057,7 @@ mod test_tsg_queries {
     // provoke an infinite loop or is very slow.
     // aparently just very slow ie. the baseline is as slow.
     // no idea how to fix that
-    // NOTE positional predicates would probably be beneficial there ie. shortcut
+    // NOTE immediate predicates would probably be beneficial there ie. shortcut
     // Might be an issue of type of used collection.
     fn bl_155_spoon() {
         unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
@@ -1507,7 +1262,7 @@ mod test_tsg_queries {
         let pre_processing = now.elapsed();
         let now = Instant::now();
         let (query, stores, code) = (query, stores, full_node.local.compressed_node);
-        let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+        let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
         let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
         // let pos = hyperast::position::StructuralPosition::new(code);
         // let cursor = hyperast_tsquery::hyperast::TreeCursor::new(&stores, pos);
@@ -1523,7 +1278,7 @@ mod test_tsg_queries {
                 let name = query.capture_name(i);
                 dbg!(name);
                 use hyperast::position::TreePath;
-                use hyperast::position::structural_pos::CursorHead;
+                use hyperast::position::structural_pos::AAA;
                 let n = c.node.pos.node();
                 let n = hyperast::nodes::SyntaxSerializer::new(c.node.stores, n);
                 // let n = c.node.pos.node().unwrap();

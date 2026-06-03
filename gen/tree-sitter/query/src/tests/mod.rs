@@ -1,4 +1,4 @@
-use std::io::{Write, stdout};
+use std::io::{stdout, Write};
 
 use hyperast::store::SimpleStores;
 

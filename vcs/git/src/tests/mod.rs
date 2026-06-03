@@ -167,6 +167,7 @@ fn test_tsg_incr_inner_classes() -> std::result::Result<(), Box<dyn std::error::
     use hyperast_gen_ts_java::legion_with_refs::Acc;
     use hyperast_gen_ts_java::types::TStore;
     let tsg = {
+        let tsg = tsg;
         type M<HAST, Acc> = hyperast_tsquery::QueryMatcher<HAST, Acc>;
         type ExtQ<HAST, Acc> =
             hyperast_tsquery::ExtendingStringQuery<M<HAST, Acc>, tree_sitter::Language>;

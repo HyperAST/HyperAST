@@ -1,11 +1,14 @@
+
 pub mod compare;
 pub mod comparisons;
 pub mod relations;
 pub mod stats;
 
-use std::collections::{BTreeMap, HashMap};
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs::File,
+    io::{self, Read, Seek, SeekFrom},
+};
 
 use clap::{Parser, Subcommand};
 use hyperast_vcs_git::git::{fetch_repository, read_position, read_position_floating_lines};
@@ -15,9 +18,11 @@ use serde::{Deserialize, Serialize};
 use stats::CompStats;
 use termion::color;
 
-use crate::compare::Comparator;
-use crate::comparisons::{ComparedRanges, Comparison, Comparisons};
-use crate::relations::{PerModule, Position, Range, Relation, RelationsWithPerfs};
+use crate::{
+    compare::Comparator,
+    comparisons::{ComparedRanges, Comparison, Comparisons},
+    relations::{PerModule, Position, Range, Relation, RelationsWithPerfs},
+};
 
 macro_rules! inv_reset {
     ( Fg ) => {

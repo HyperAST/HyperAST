@@ -167,13 +167,13 @@ fn t() {
             self
         }
     }
-
+    
     impl ProcessorWithParam<Repo, Commit> for P0 {
         type P = S;
         fn register_param(&mut self, param: Self::P) -> ParametrizedCommitProcessorHandle {
             todo!()
         }
-
+        
         fn by_param(&mut self, handle: ParametrizedCommitProcessorHandle) -> () {
             todo!()
         }
@@ -265,14 +265,11 @@ trait ProcessorWithParam<S, V> {
     type P;
     fn by_param(&mut self, handle: ParametrizedCommitProcessorHandle) -> ();
     /// avoid expensive comparison of param,
-    /// NOTE use a different start point for handles per Processor to help detect handles used on wrong
+    /// NOTE use a different start point for handles per Processor to help detect handles used on wrong 
     fn register_param(&mut self, param: Self::P) -> ParametrizedCommitProcessorHandle;
 }
 
-impl<T, S, V> Processor<S, V> for T
-where
-    T: ProcessorWithParam<S, V> + 'static,
-{
+impl<T, S, V> Processor<S, V> for T where T: ProcessorWithParam<S, V> + 'static {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
     }

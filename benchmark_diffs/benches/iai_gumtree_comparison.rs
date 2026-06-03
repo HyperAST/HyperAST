@@ -1,6 +1,3 @@
-//! Very precise file level (buggy/fixed) benchmark based on the dataset cloned from https://github.com/GumTreeDiff/datasets
-//! at the same directory level as the HyperAST repository.
-
 #[cfg(target_os = "linux")]
 mod iai {
     use iai_callgrind::{library_benchmark, library_benchmark_group, main};
@@ -86,8 +83,7 @@ mod iai {
             .is_test(true)
             .init();
 
-        // Get path to dataset cloned from https://github.com/GumTreeDiff/datasets
-        // at the same directory level as the HyperAST repository
+        // Get path to dataset
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()

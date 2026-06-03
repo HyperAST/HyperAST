@@ -1,16 +1,18 @@
+use super::{
+    super::Position, ExploreStructuralPositions, Scout, SpHandle, StructuralPosition,
+    StructuralPositionStore,
+};
+use crate::{
+    position::TreePath,
+    store::defaults::LabelIdentifier,
+    types::{
+        AnyType, HyperAST, LendT, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
+        WithStats,
+    },
+    PrimInt,
+};
 use num::{one, zero};
 use std::fmt::Debug;
-
-use super::{
-    ExploreStructuralPositions, Scout, SpHandle, StructuralPosition, StructuralPositionStore,
-};
-use crate::PrimInt;
-use crate::position::{Position, TreePath};
-use crate::store::defaults::LabelIdentifier;
-use crate::types::{
-    AnyType, HyperAST, LendT, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
-    WithStats,
-};
 
 impl<IdN, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn with_position(x: StructuralPosition<IdN, Idx>) -> Self {
@@ -19,8 +21,9 @@ impl<IdN, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         let nodes = x.parents;
         Self {
             nodes,
-            parents: (0..l).collect(),
+            parents: (0..l).into_iter().collect(),
             offsets: x.offsets,
+            // ends: vec![],
         }
     }
     pub fn new(root: IdN) -> Self {
@@ -34,12 +37,13 @@ impl<IdN, Idx> Default for StructuralPositionStore<IdN, Idx> {
             nodes: Default::default(),
             parents: Default::default(),
             offsets: Default::default(),
+            // ends: Default::default(),
         }
     }
 }
 
 impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
-    pub fn get(&self, s: SpHandle) -> ExploreStructuralPositions<'_, IdN, Idx> {
+    pub fn get(&self, s: SpHandle) -> ExploreStructuralPositions<IdN, Idx> {
         ExploreStructuralPositions {
             sps: self,
             i: s.0,
@@ -69,10 +73,12 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     {
         let mut r = vec![];
         for x in ends.iter() {
+            // let parents = self.parents.iter().peekable();
             let it = self.get(*x);
             let position_converter =
                 &crate::position::PositionConverter::new(&it).with_stores(stores);
             r.push(position_converter.compute_pos_post_order::<_, Position>())
+            // r.push(it.make_position(stores));
         }
         r
     }
@@ -90,7 +96,11 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         scout: &Scout<IdN, Idx>,
     ) -> Result<(), String>
     where
-        HAST: HyperAST<IdN = IdN, Label = LabelIdentifier>,
+        HAST: HyperAST<
+            // T = HashedNodeRef<'store>,
+            IdN = IdN,
+            Label = LabelIdentifier,
+        >,
         for<'t> LendT<'t, HAST>: WithChildren<ChildIdx = Idx>,
         HAST::Idx: Debug,
         IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
@@ -106,7 +116,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             let o = scout.path.offsets[0];
             if o.is_zero() {
                 if i != 0 {
-                    return Err("bad offset".to_string());
+                    return Err(format!("bad offset"));
                 }
                 return Ok(());
             }
@@ -193,7 +203,8 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             self.nodes.extend(&x.path.parents[1..]);
 
             self.parents.push(x.ancestors);
-            self.parents.extend(o..o + l);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
 
             self.offsets.extend(&x.path.offsets[1..]);
             x.ancestors = self.nodes.len() - 1;
@@ -203,11 +214,18 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             let o = self.parents.len();
             self.nodes.extend(x.path.parents.clone());
             self.parents.push(x.ancestors);
-            self.parents.extend(o..o + l);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
             self.offsets.extend(&x.path.offsets);
+            // self.ends.push(self.nodes.len() - 1);
             x.ancestors = self.nodes.len() - 1;
             x.path = StructuralPosition::empty()
+            // x.path = StructuralPosition::with_offset(x.path.current_node(), x.path.current_offset());
         }
+
+        // if !x.path.offsets.is_empty() && x.path.offsets[0] == 0 {
+        //     assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
+        // }
 
         assert!(
             self.offsets.is_empty() || !self.offsets[1..].contains(&zero()),

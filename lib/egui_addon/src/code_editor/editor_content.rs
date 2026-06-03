@@ -31,9 +31,9 @@ impl Debug for EditAwareString {
     }
 }
 
-impl From<EditAwareString> for String {
-    fn from(val: EditAwareString) -> Self {
-        val.string
+impl Into<String> for EditAwareString {
+    fn into(self) -> String {
+        self.string
     }
 }
 
@@ -54,7 +54,7 @@ impl Clone for EditAwareString {
             id: self.id,
             generation: self.generation,
             string: self.string.clone(),
-            reset: (*reset).into(),
+            reset: reset.clone().into(),
             edit: self.edit.clone(),
         }
     }
@@ -87,37 +87,15 @@ impl From<String> for EditAwareString {
     }
 }
 
-impl<'a> From<&'a EditAwareString> for &'a str {
-    fn from(val: &'a EditAwareString) -> Self {
-        &val.string
+impl<'a> Into<&'a str> for &'a EditAwareString {
+    fn into(self) -> &'a str {
+        &self.string
     }
 }
 
 impl AsText for EditAwareString {
     fn text(&self) -> &str {
         &self.string
-    }
-}
-
-impl egui::TextBuffer for EditAwareString {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        &self.string
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        TextBuffer::insert_text(self, text, char_index)
-    }
-
-    fn delete_char_range(&mut self, char_range: Range<usize>) {
-        TextBuffer::delete_char_range(self, char_range)
-    }
-
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<Self>()
     }
 }
 
@@ -129,7 +107,7 @@ impl TextBuffer for EditAwareString {
     }
 
     fn as_reference(&self) -> &EditAwareString {
-        self
+        &self
     }
 
     fn as_str(&self) -> &str {
@@ -157,16 +135,17 @@ impl TextBuffer for EditAwareString {
                 let old_end_position = self_edit.old_end_position;
                 input.splice(start_byte..start_byte, edit.inserted_text.iter().cloned());
                 let new_end_position = position_for_offset(input, new_end_byte);
-
-                InputEdit {
+                let edit = InputEdit {
                     start_byte: start_byte as u32,
                     old_end_byte: old_end_byte as u32,
                     new_end_byte: new_end_byte as u32,
                     start_position,
                     old_end_position,
                     new_end_position,
-                }
-            };
+                };
+                edit
+            }
+            .into();
         } else {
             self.generation += 1;
             self.edit = Some(process_edit(unsafe { self.string.as_mut_vec() }, &edit)).into();
@@ -226,15 +205,15 @@ pub(crate) fn process_edit(input: &mut Vec<u8>, edit: &Edit<'_>) -> InputEdit {
     let old_end_position = position_for_offset(input, old_end_byte);
     input.splice(start_byte..old_end_byte, edit.inserted_text.iter().cloned());
     let new_end_position = position_for_offset(input, new_end_byte);
-
-    InputEdit {
+    let edit = InputEdit {
         start_byte: start_byte as u32,
         old_end_byte: old_end_byte as u32,
         new_end_byte: new_end_byte as u32,
         start_position,
         old_end_position,
         new_end_position,
-    }
+    };
+    edit
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]

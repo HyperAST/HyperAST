@@ -15,39 +15,26 @@ mod tnode {
     pub use hyperast::tree_gen::utils_ts::TNode;
 }
 
-#[cfg(feature = "impl")]
 use auto::tsq_ser_meta::Conv;
-#[cfg(feature = "impl")]
-use hyperast::types::TypeTrait;
-#[cfg(feature = "impl")]
+use hyperast::types::{HyperType, TypeTrait};
 use search::Captured;
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
 
-#[cfg(feature = "impl")]
 pub mod search;
 
 #[cfg(feature = "legion")]
 pub mod iter;
 
-#[cfg(feature = "impl")]
 pub mod auto;
 
-#[cfg(feature = "impl")]
 pub mod code2query;
 
-#[cfg(feature = "impl")]
 pub mod refinements;
 
 #[cfg(feature = "lattice")]
 pub mod lattice_graph;
 
-pub mod meta_queries;
-
-#[cfg(feature = "impl")]
-pub mod synth_display;
-
-#[cfg(feature = "impl")]
 pub fn prepare_matcher<Ty>(query: &str) -> crate::search::PreparedMatcher<Ty, Conv<Ty>>
 where
     Ty: std::fmt::Debug,
@@ -55,11 +42,10 @@ where
     for<'a> <Ty as TryFrom<&'a str>>::Error: std::fmt::Debug,
 {
     let (query_store, query) = crate::search::ts_query(query.as_bytes());
-
-    crate::search::PreparedMatcher::<Ty, Conv<Ty>>::new(&query_store, query)
+    let prepared_matcher = crate::search::PreparedMatcher::<Ty, Conv<Ty>>::new(&query_store, query);
+    prepared_matcher
 }
 
-#[cfg(feature = "impl")]
 pub struct IterMatched<M, HAST, It, TIdN> {
     iter: It,
     matcher: M,
@@ -67,22 +53,22 @@ pub struct IterMatched<M, HAST, It, TIdN> {
     _phantom: std::marker::PhantomData<TIdN>,
 }
 
-#[cfg(feature = "impl")]
-impl<HAST, It: Iterator, TIdN> Iterator
-    for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>, &HAST, It, TIdN>
+impl<'a, HAST, It: Iterator, TIdN> Iterator
+    for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>, &'a HAST, It, TIdN>
 where
     HAST: hyperast::types::HyperAST + hyperast::types::TypedHyperAST<TIdN>,
-    TIdN: 'static + hyperast::types::TypedNodeId,
+    TIdN: 'static + hyperast::types::TypedNodeId, //<IdN = <HAST as hyperast::types::HyperASTShared>::IdN>,
     It::Item:
         hyperast::position::TreePath<TIdN::IdN, <HAST as hyperast::types::HyperASTShared>::Idx>,
     for<'b> &'b str: Into<<TIdN as hyperast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy,
     TIdN::Ty: TypeTrait,
+    // TIdN::IdN: hyperast::types::NodeId<IdN = TIdN::IdN>,
 {
     type Item = (It::Item, Captured<HAST::IdN, HAST::Idx>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        for e in self.iter.by_ref() {
+        while let Some(e) = self.iter.next() {
             use hyperast::position::TreePath;
             if let Some(c) = self
                 .matcher
@@ -95,7 +81,71 @@ where
     }
 }
 
-#[cfg(feature = "impl")]
+// impl<Ty> crate::search::PreparedMatcher<Ty> {
+//     pub fn apply_matcher<'a, HAST, It, TIdN>(
+//         &self,
+//         hast: &'a HAST,
+//         root: TIdN::IdN,
+//     ) -> IterMatched<&crate::search::PreparedMatcher<Ty>, &'a HAST, It, TIdN>
+//     where
+//         HAST: 'a + hyperast::types::HyperAST<'a>,
+//         TIdN: hyperast::types::TypedNodeId<Ty = Ty, IdN = HAST::IdN>,
+//         It: From<(&'a HAST, It::Item)>,
+//         It::Item: From<HAST::IdN>,
+//         It: Iterator,
+//         It::Item: hyperast::position::TreePathMut<HAST::IdN, HAST::Idx>,
+//     {
+//         let path = It::Item::from(root);
+//         let iter = It::from((hast, path));
+//         IterMatched {
+//             iter,
+//             matcher: self,
+//             hast,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+impl<Ty: HyperType + std::hash::Hash + Copy + Eq + Send + Sync>
+    crate::search::PreparedMatcher<Ty, Conv<Ty>>
+{
+    // pub fn apply_matcher<'a, HAST, It, TIdN>(
+    //     &self,
+    //     hast: &'a HAST,
+    //     root: HAST::IdN,
+    // ) -> IterMatched2<
+    //     crate::search::recursive2::MatchingIter<
+    //         'a,
+    //         HAST,
+    //         TIdN,
+    //         &crate::search::PreparedMatcher<TIdN::Ty, Conv<Ty>>,
+    //     >,
+    //     &'a HAST,
+    //     It,
+    //     TIdN,
+    // >
+    // where
+    //     HAST: hyperast::types::TypedHyperAST<TIdN> + for<'t> hyperast::types::TypedLending<'t, Ty>,
+    //     // HAST::TS: hyperast::types::TypeStore<Ty = Ty>,
+    //     TIdN: hyperast::types::TypedNodeId,//<Ty = Ty>,
+    //     It: From<(&'a HAST, It::Item)>,
+    //     It::Item: From<HAST::IdN>,
+    //     It: Iterator,
+    //     It::Item: hyperast::position::TreePathMut<HAST::IdN, HAST::Idx>,
+    // {
+    //     let path = It::Item::from(root.clone());
+    //     let mut iter = It::from((hast, path));
+    //     let cur = iter.next().unwrap();
+    //     IterMatched2 {
+    //         iter,
+    //         cur,
+    //         matcher: crate::search::recursive2::MatchingIter::new(self, hast, root),
+    //         hast,
+    //         _phantom: std::marker::PhantomData,
+    //     }
+    // }
+}
+
 pub struct IterMatched2<M, HAST, It: Iterator, TIdN> {
     iter: It,
     cur: It::Item,
@@ -104,7 +154,6 @@ pub struct IterMatched2<M, HAST, It: Iterator, TIdN> {
     _phantom: std::marker::PhantomData<TIdN>,
 }
 
-#[cfg(feature = "impl")]
 impl<'a, HAST, It: Iterator, TIdN> Iterator
     for IterMatched2<
         crate::search::recursive2::MatchingIter<

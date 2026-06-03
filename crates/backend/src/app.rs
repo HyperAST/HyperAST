@@ -1,19 +1,19 @@
 use std::time::Duration;
 
 use axum::{
-    BoxError, Json, Router,
     error_handling::HandleErrorLayer,
     response::{IntoResponse, Response},
     routing::{get, post},
+    BoxError, Json, Router,
 };
 use http::StatusCode;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    SharedState, commit, fetch, file, pull_requests, querying,
+    commit, fetch, file, pull_requests, querying,
     scriptingv1::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
-    smells, track, view,
+    smells, track, view, SharedState,
 };
 
 impl IntoResponse for ScriptingError {
@@ -162,10 +162,10 @@ async fn querying_streamed(
 async fn querying_differential(
     axum::extract::Path(path): axum::extract::Path<querying::ParamDifferential>,
     axum::extract::State(state): axum::extract::State<SharedState>,
-    axum::extract::Json(script): axum::extract::Json<querying::ContentDifferential>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
 ) -> axum::response::Result<Json<querying::ComputeResultsDifferential>> {
     let r = querying::differential(script, state, path)?;
-    Ok(r.into())
+    Ok(r)
 }
 
 pub fn querying_app(_st: SharedState) -> Router<SharedState> {
@@ -204,7 +204,9 @@ pub fn querying_app(_st: SharedState) -> Router<SharedState> {
 }
 
 #[cfg(not(feature = "tsg"))]
-async fn tsg(axum::extract::Path(_): axum::extract::Path<tsg::Param>) -> impl IntoResponse {
+async fn tsg(
+    axum::extract::Path(_): axum::extract::Path<tsg::Param>,
+) -> impl IntoResponse {
     log::warn!("trying to use disabled tsg feature");
     Result::<(), _>::Err(r#""tsg comptime-feature is disabled on backend""#)
 }
@@ -246,20 +248,20 @@ pub fn tsg_app(_st: SharedState) -> Router<SharedState> {
 }
 
 async fn smells(
-    axum::extract::Path(path): axum::extract::Path<smells::Path>,
+    axum::extract::Path(path): axum::extract::Path<smells::Param>,
     axum::extract::State(state): axum::extract::State<SharedState>,
-    axum::extract::Json(e): axum::extract::Json<smells::ExamplesExt>,
+    axum::extract::Json(examples): axum::extract::Json<smells::Examples>,
 ) -> axum::response::Result<Json<smells::SearchResults>> {
-    let r = smells::smells(e.examples, state, path, e.more)?;
-    Ok(r.into())
+    let r = smells::smells(examples, state, path)?;
+    Ok(r)
 }
 
 async fn smells_ex_from_diffs(
-    axum::extract::Path(path): axum::extract::Path<smells::Path>,
+    axum::extract::Path(path): axum::extract::Path<smells::Diffs>,
     axum::extract::State(state): axum::extract::State<SharedState>,
 ) -> axum::response::Result<Json<smells::ExamplesResults>> {
     let r = smells::smells_ex_from_diffs(state, path)?;
-    Ok(r.into())
+    Ok(r)
 }
 
 pub fn smells_app(_st: SharedState) -> Router<SharedState> {
@@ -332,10 +334,6 @@ pub fn track_code_route(_st: SharedState) -> Router<SharedState> {
         .route(
             "/track_at_path/github/:user/:name/:commit/*path",
             get(track_code_at_path).layer(service_config.clone()),
-        )
-        .route(
-            "/track_at_path_with_changes/github/:user/:name/:commit/",
-            get(track_code_at_path_with_changes).layer(service_config.clone()),
         )
         .route(
             "/track_at_path_with_changes/github/:user/:name/:commit/*path",
@@ -456,7 +454,7 @@ async fn fetch_code_with_node_ids(
     axum::extract::Path(ids): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<SharedState>,
 ) -> axum::response::Result<Timed<fetch::FetchedNodes>> {
-    log::trace!("fetch_code_with_node_ids {:?}", &ids);
+    dbg!(&ids);
     fetch::fetch_with_node_ids(state, ids.split("/")).map_err(|err| err.into())
 }
 async fn fetch_labels(
@@ -469,17 +467,22 @@ async fn fetch_labels(
 
 impl IntoResponse for fetch::FetchedLabels {
     fn into_response(self) -> Response {
-        Json(self).into_response()
+        let resp = Json(self).into_response();
+        resp
     }
 }
 
 impl IntoResponse for fetch::FetchedNodes {
     fn into_response(self) -> Response {
+        dbg!();
         let to_string = serde_json::to_string(&self);
+        dbg!();
         let var_name = to_string.unwrap();
-        
+        dbg!();
+        let resp = var_name.into_response();
         // let resp = Json(self).into_response();
-        var_name.into_response()
+        dbg!();
+        resp
     }
 }
 

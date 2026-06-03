@@ -35,8 +35,13 @@ struct S<IdN, Idx, Ty> {
     neg: Vec<String>,
 }
 
-impl<'store, HAST: TypedHyperAST<TIdN>, TIdN: 'store + hyperast::types::TypedNodeId, C: Converter>
-    Iterator for MatchingIter<'_, 'store, HAST, TIdN, C>
+impl<
+    'a,
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId,
+    C: Converter,
+> Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
     type Item = MatchingRes<HAST::IdN, HAST::Idx>;
 
@@ -75,8 +80,13 @@ impl<'store, HAST: TypedHyperAST<TIdN>, TIdN: 'store + hyperast::types::TypedNod
     }
 }
 
-impl<'store, HAST: TypedHyperAST<TIdN>, TIdN: 'store + hyperast::types::TypedNodeId, C: Converter>
-    MatchingIter<'_, 'store, HAST, TIdN, C>
+impl<
+    'a,
+    'store,
+    HAST: TypedHyperAST<TIdN>,
+    TIdN: 'store + hyperast::types::TypedNodeId,
+    C: Converter,
+> MatchingIter<'a, 'store, HAST, TIdN, C>
 where
 // HAST::TS::Ty: TIdN::Ty,
 {
@@ -155,7 +165,7 @@ where
                         }
                     }
                 }
-                if pats[i_pat..].iter().any(|p| !is_optional(p)) {
+                if (&pats[i_pat..]).iter().any(|p| !is_optional(p)) {
                     return MatchingRes::zero();
                 }
                 let matched = Quant::One;
@@ -337,15 +347,14 @@ mod exp {
     type W = legion::World;
     type I = legion::Entity;
 
-    fn f(w: &mut W, p: I) -> I {
+    fn f<T>(w: &mut W, p: I) -> I {
         let pat = w.entry(p).unwrap();
-        p
-        // match pat {
-        //     // Plus { pat } => match pat.as_ref() {
-        //     //     pat => Plus { pat }
-        //     // },
-        //     x => p,
-        // }
+        match pat {
+            // Plus { pat } => match pat.as_ref() {
+            //     pat => Plus { pat }
+            // },
+            x => p,
+        }
     }
     enum P<T, I> {
         Named { ty: T, pat: Vec<I> },

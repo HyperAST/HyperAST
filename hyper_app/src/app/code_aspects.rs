@@ -1,42 +1,63 @@
+use super::tree_view::FetchedViewImpl;
+use super::tree_view::{Action, NodeIdentifier, PrefillCache, store::FetchedHyperAST};
+use super::types;
+use super::types::Resource;
+use super::utils_egui::MyUiExt as _;
+use egui_addon::egui_utils::{radio_collapsing, show_wip};
+use hyperast::store::nodes::fetched;
+use hyperast::store::nodes::fetched::LabelIdentifier;
 use poll_promise::Promise;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use super::tree_view::FetchedViewImpl;
-use super::tree_view::store::FetchedHyperAST;
-use super::tree_view::{Action, LabelIdentifier, NodeIdentifier, PrefillCache, SimplePacked};
-use super::types::{Commit, ComputeConfigAspectViews, Repo, SelectedConfig};
-use super::utils_egui::MyUiExt as _;
-use crate::utils_poll::Resource;
-
-pub(crate) const WANTED: SelectedConfig = SelectedConfig::Aspects;
+pub(crate) const WANTED: types::SelectedConfig = types::SelectedConfig::Aspects;
 
 pub(crate) fn show_config(
     ui: &mut egui::Ui,
-    aspects: &mut ComputeConfigAspectViews,
-) -> (egui::Response, egui::Response, egui::Response) {
-    let (resp_repo, resp_commit) = aspects.commit.show_clickable(ui);
-
-    let resp_path = egui::TextEdit::singleline(&mut aspects.path)
-        .id(ui.id().with("path"))
-        .clip_text(true)
-        .desired_width(150.0)
-        .desired_rows(1)
-        .hint_text("path")
-        .interactive(true)
-        .show(ui)
-        .response;
-
-    egui::TextEdit::singleline(&mut aspects.hightlight)
-        .id(ui.id().with("hightlight"))
-        .clip_text(true)
-        .desired_width(150.0)
-        .desired_rows(1)
-        .hint_text("hightlight")
-        .interactive(true)
-        .show(ui);
-
+    aspects: &mut types::ComputeConfigAspectViews,
+    aspects_result: &mut Option<Promise<Result<Resource<FetchedView>, String>>>,
+    api_addr: &str,
+    store: Arc<FetchedHyperAST>,
+) {
+    super::show_repo_menu(ui, &mut aspects.commit.repo);
+    ui.push_id(ui.id().with("commit"), |ui| {
+        egui::TextEdit::singleline(&mut aspects.commit.id)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("commit")
+            .interactive(true)
+            .show(ui)
+    });
+    ui.push_id(ui.id().with("path"), |ui| {
+        if egui::TextEdit::singleline(&mut aspects.path)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("path")
+            .interactive(true)
+            .show(ui)
+            .response
+            .changed()
+        {
+            *aspects_result = Some(remote_fetch_node_old(
+                ui.ctx(),
+                api_addr,
+                store.clone(),
+                &aspects.commit,
+                &aspects.path,
+            ));
+            // *aspects_result = Some(remote_fetch_tree(ui.ctx(), &aspects.commit, &aspects.path));
+        }
+        egui::TextEdit::singleline(&mut aspects.hightlight)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("hightlight")
+            .interactive(true)
+            .show(ui)
+    });
     ui.checkbox(&mut aspects.spacing, "Spacing");
     ui.checkbox(&mut aspects.syntax, "Syntax");
     ui.checkbox(&mut aspects.cst, "CST");
@@ -52,10 +73,10 @@ pub(crate) fn show_config(
     });
     ui.label("serialized Java:");
     let mut rm = None;
-    for x in &*aspects.ser_opt_java {
+    for x in &aspects.ser_opt_java {
         let button = &ui.button(x.to_str());
         if button.clicked() {
-            rm = Some(*x);
+            rm = Some(x.clone());
         }
     }
     if let Some(rm) = rm {
@@ -63,10 +84,10 @@ pub(crate) fn show_config(
     }
     ui.label("serialized Cpp:");
     let mut rm = None;
-    for x in &*aspects.ser_opt_cpp {
+    for x in &aspects.ser_opt_cpp {
         let button = &ui.button(x.to_str());
         if button.clicked() {
-            rm = Some(*x);
+            rm = Some(x.clone());
         }
     }
     if let Some(rm) = rm {
@@ -74,10 +95,10 @@ pub(crate) fn show_config(
     }
     ui.label("hidden Java:");
     let mut rm = None;
-    for x in &*aspects.hide_opt_java {
+    for x in &aspects.hide_opt_java {
         let button = &ui.button(x.to_str());
         if button.clicked() {
-            rm = Some(*x);
+            rm = Some(x.clone());
         }
     }
     if let Some(rm) = rm {
@@ -85,16 +106,15 @@ pub(crate) fn show_config(
     }
     ui.label("hidden Cpp:");
     let mut rm = None;
-    for x in &*aspects.hide_opt_cpp {
+    for x in &aspects.hide_opt_cpp {
         let button = &ui.button(x.to_str());
         if button.clicked() {
-            rm = Some(*x);
+            rm = Some(x.clone());
         }
     }
     if let Some(rm) = rm {
         aspects.hide_opt_cpp.remove(&rm);
     }
-    (resp_repo, resp_commit, resp_path)
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -108,23 +128,17 @@ pub struct FetchedView {
     prefill_cache: Option<PrefillCache>,
 }
 
-impl FetchedView {
-    fn new(store: Arc<FetchedHyperAST>, root: NodeIdentifier) -> Self {
-        Self {
-            store,
-            root,
-            prefill_cache: Default::default(),
-        }
-    }
-}
-
-type FetchedViewProm = Promise<Result<Resource<FetchedView>, String>>;
-
 fn ser_node_id<S>(id: &NodeIdentifier, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
+    // s.serialize_bytes(&id.to_bytes())
     s.serialize_u32(id.to_u32())
+}
+
+#[test]
+fn url_limit_on_ids() {
+    dbg!(2000 / u64::MAX.to_string().len());
 }
 
 fn de_node_id<'de, D>(d: D) -> Result<NodeIdentifier, D::Error>
@@ -140,6 +154,14 @@ where
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
             formatter.write_str("an integer between -2^31 and 2^31")
         }
+
+        // fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        // where
+        //     E: de::Error,
+        // {
+        //     NodeIdentifier::try_from(v)
+        //         .map_err(|_| de::Error::custom(format!("bad node identifier {:?}", v)))
+        // }
 
         fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
         where
@@ -157,82 +179,104 @@ where
     d.deserialize_u64(Visitor)
 }
 
+// impl Hash for FetchedView {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         // self.label_list.hash(state);
+//         // self.type_sys.hash(state);
+//         self.root.hash(state);
+//         // self.labeled.hash(state);
+//         // self.children.hash(state);
+//         // self.both.hash(state);
+//         // self.typed.hash(state);
+//         // self.prefill_cache.hash(state);
+//     }
+// }
+
 pub(crate) fn show(
-    aspects_result: &mut FetchedViewProm,
+    aspects_result: &mut poll_promise::Promise<Result<types::Resource<FetchedView>, String>>,
     ui: &mut egui::Ui,
     api_addr: &str,
-    aspects: &mut ComputeConfigAspectViews,
+    aspects: &mut types::ComputeConfigAspectViews,
 ) {
-    let Some(aspects_result) = aspects_result.ready_mut() else {
-        return;
-    };
-    if let Err(err) = aspects_result {
-        wasm_rs_dbg::dbg!(err);
-    }
-    let Ok(aspects_result) = aspects_result else {
-        return;
-    };
-    let ui = &mut ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
-    let add_content = |ui: &mut egui::Ui, _viewport| {
-        ui.set_height(3_000.0);
-        // ui.set_clip_rect(ui.ctx().screen_rect());
-        let Some(fetched_view) = &mut aspects_result.content else {
-            return;
-        };
-        let _hightlight = (aspects.hightlight.split("/"))
-            .filter_map(|x| x.parse().ok())
-            .collect::<Vec<usize>>();
-        let action = fetched_view.show(
-            ui,
-            api_addr,
-            aspects,
-            None,
-            vec![], //(&hightlight, &egui::Color32::RED, &mut None)
-            None,
-            None,
-            &aspects.path,
-        );
-        aspects.on_action(action);
-    };
-    let _scroll = egui::ScrollArea::both()
-        .auto_shrink([false, false])
-        .show_viewport(ui, add_content);
-}
+    if let Some(aspects_result) = aspects_result.ready_mut() {
+        match aspects_result {
+            Ok(aspects_result) => {
+                let ui = &mut ui
+                    .new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
+                let _scroll = egui::ScrollArea::both()
+                    .auto_shrink([false, false])
+                    .show_viewport(ui, |ui, _viewport| {
+                        ui.set_height(3_000.0);
+                        // ui.set_clip_rect(ui.ctx().screen_rect());
+                        if let Some(content) = &mut aspects_result.content {
+                            let _hightlight: Vec<usize> = aspects
+                                .hightlight
+                                .split("/")
+                                .filter_map(|x| x.parse().ok())
+                                .collect();
+                            let action = content.show(
+                                ui,
+                                api_addr,
+                                aspects,
+                                None,
+                                vec![], //(&hightlight, &egui::Color32::RED, &mut None)
+                                None,
+                                None,
+                                &aspects.path,
+                            );
+                            match action {
+                                super::tree_view::Action::SerializeKind(k) => {
+                                    use hyperast::types::HyperType;
+                                    let k = &k.as_any();
+                                    if let Some(k) =
+                                        k.downcast_ref::<hyperast_gen_ts_cpp::types::Type>()
+                                    {
+                                        aspects.ser_opt_cpp.insert(k.to_owned());
+                                    } else if let Some(k) =
+                                        k.downcast_ref::<hyperast_gen_ts_java::types::Type>()
+                                    {
+                                        aspects.ser_opt_java.insert(k.to_owned());
+                                    }
+                                }
+                                super::tree_view::Action::HideKind(k) => {
+                                    use hyperast::types::HyperType;
+                                    let k = &k.as_any();
+                                    if let Some(k) =
+                                        k.downcast_ref::<hyperast_gen_ts_cpp::types::Type>()
+                                    {
+                                        aspects.hide_opt_cpp.insert(k.to_owned());
+                                    } else if let Some(k) =
+                                        k.downcast_ref::<hyperast_gen_ts_java::types::Type>()
+                                    {
+                                        aspects.hide_opt_java.insert(k.to_owned());
+                                    }
+                                }
+                                _ => (),
+                            }
+                        }
+                    });
+                // egui::Window::new("scroller button").show(ui.ctx(), |ui| {
+                //     egui::Slider::new(&mut scroll.state.offset.y, 0.0..=200.0).ui(ui);
 
-pub(crate) fn project_modal_handler(
-    data: &mut super::AppData,
-    pid: super::ProjectId,
-) -> super::ProjectId {
-    let projects = &mut data.selected_code_data;
-    let commit = Some(&data.aspects.commit);
-    use super::utils_commit::project_modal_handler;
-    let (repo, mut commits) = match project_modal_handler(pid, projects, commit) {
-        Ok(value) => value,
-        Err(value) => return value,
-    };
-    data.aspects.commit.repo = repo.clone();
-    data.aspects.commit.id = commits.iter_mut().next().copied().unwrap();
-    data.aspects_result = None;
-    super::ProjectId::INVALID
-}
-
-impl ComputeConfigAspectViews {
-    pub(crate) fn on_action(&mut self, action: Action) {
-        match action {
-            Action::SerializeKind(k) => {
-                self.ser_opt_cpp.toggle(&*k);
-                self.ser_opt_java.toggle(&*k);
+                //     scroll.state.store(ui.ctx(), scroll.id);
+                // });
+                // egui::CollapsingHeader::new("Tree")
+                //     .default_open(false)
+                //     .show(ui, |ui| {
+                //         // aspects_result.ui(ui)
+                //         if let Some(content) = &aspects_result.content {
+                //             content.show(ui);
+                //         }
+                //     });
             }
-            Action::HideKind(k) => {
-                self.hide_opt_cpp.toggle(&*k);
-                self.hide_opt_java.toggle(&*k);
+            Err(err) => {
+                wasm_rs_dbg::dbg!(err);
             }
-            _ => (),
         }
     }
 }
 
-pub(crate) struct HighLightHandle<'a> {
+pub(crate) struct HightLightHandle<'a> {
     pub path: &'a [usize],
     /// primary key
     pub color: &'a egui::Color32,
@@ -242,50 +286,14 @@ pub(crate) struct HighLightHandle<'a> {
     pub screen_pos: &'a mut Option<egui::Rect>,
 }
 
-pub(crate) struct Focus<'a> {
-    pub offsets: &'a [usize],
-    pub ids: &'a [NodeIdentifier],
-}
-
-impl Debug for Focus<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Focus {{ {:?} {:?} }}", self.offsets, self.ids)
-    }
-}
-
-impl<'a> Focus<'a> {
-    pub fn new(offsets: &'a [usize], ids: &'a [NodeIdentifier]) -> Self {
-        if offsets.len() < ids.len() {
-            panic!("offsets.len() < ids.len(): {} {}", offsets.len(), ids.len());
-        }
-        Focus { offsets, ids }
-    }
-}
-
-// impl<'a> From<(&'a [usize], &'a [NodeIdentifier])> for Focus<'a> {
-//     fn from((offsets, ids): (&'a [usize], &'a [NodeIdentifier])) -> Self {
-//         assert!(offsets.is_empty() > ids.is_empty());
-//         Focus { offsets, ids }
-//     }
-// }
-
-impl Focus<'_> {
-    pub fn is_empty(&self) -> bool {
-        if self.offsets.is_empty() {
-            assert!(self.ids.is_empty());
-        }
-        self.offsets.is_empty()
-    }
-}
-
 impl FetchedView {
     pub(crate) fn show(
         &mut self,
         ui: &mut egui::Ui,
         api_addr: &str,
-        aspects: &ComputeConfigAspectViews,
-        focus: Option<Focus<'_>>,
-        hightlights: Vec<HighLightHandle<'_>>,
+        aspects: &types::ComputeConfigAspectViews,
+        focus: Option<(&[usize], &[NodeIdentifier])>,
+        hightlights: Vec<HightLightHandle<'_>>,
         additions: Option<&[u32]>,
         deletions: Option<&[u32]>,
         path: &str,
@@ -305,74 +313,174 @@ impl FetchedView {
             deletions,
         );
         let r = imp.show(ui, api_addr, &self.root);
+        // wasm_rs_dbg::dbg!(&imp);
         self.prefill_cache = imp.prefill_cache;
         r
     }
 }
 
-pub(super) type RemoteView = crate::utils_poll::Remote<FetchedView>;
+#[allow(unused)]
+impl Resource<FetchedView> {
+    fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
+        wasm_rs_dbg::dbg!(&response);
+        let content_type = response.content_type().unwrap_or_default();
+        let text = response.text();
+        wasm_rs_dbg::dbg!(&text);
+        let text = text.map(|x| serde_json::from_str(x).unwrap());
+
+        Self {
+            response,
+            content: text,
+        }
+    }
+}
+#[allow(unused)]
+impl Resource<FetchedNodes> {
+    fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
+        wasm_rs_dbg::dbg!(&response);
+        let content_type = response.content_type().unwrap_or_default();
+        let text = response.text();
+        let text = text.map(|x| serde_json::from_str(x).unwrap());
+
+        Self {
+            response,
+            content: text,
+        }
+    }
+}
+#[allow(unused)]
+impl Resource<FetchedNode> {
+    fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
+        wasm_rs_dbg::dbg!(&response);
+        let content_type = response.content_type().unwrap_or_default();
+        let text = response.text();
+        let text = text.map(|x| serde_json::from_str(x).unwrap());
+
+        Self {
+            response,
+            content: text,
+        }
+    }
+}
+#[allow(unused)]
+impl Resource<FetchedLabels> {
+    fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
+        wasm_rs_dbg::dbg!(&response);
+        let content_type = response.content_type().unwrap_or_default();
+        let text = response.text();
+        let text = text.map(|x| serde_json::from_str(x).unwrap());
+
+        Self {
+            response,
+            content: text,
+        }
+    }
+}
+
+pub(super) type RemoteView = Promise<ehttp::Result<Resource<FetchedView>>>;
 
 #[allow(unused)]
 pub(super) fn remote_fetch_tree(
     ctx: &egui::Context,
     api_addr: &str,
-    commit: &Commit,
+    commit: &types::Commit,
     path: &str,
-) -> FetchedViewProm {
+) -> Promise<Result<Resource<FetchedView>, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
     let url = format!(
         "http://{}/view/github/{}/{}/{}/{}",
         api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &path,
     );
+
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
-    fetch(ctx.clone(), request, Resource::<FetchedView>::from_resp)
+
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource =
+            response.map(|response| Resource::<FetchedView>::from_response(&ctx, response));
+        sender.send(resource);
+    });
+    promise
 }
 
 pub(super) fn remote_fetch_node_old(
     ctx: &egui::Context,
     api_addr: &str,
     store: Arc<FetchedHyperAST>,
-    commit: &Commit,
+    commit: &types::Commit,
     path: &str,
-) -> FetchedViewProm {
+) -> Promise<Result<Resource<FetchedView>, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
     let url = format!(
         "http://{}/fetch/github/{}/{}/{}/{}",
         api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &path,
     );
-    let store = store.clone();
+
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
-    fetch(ctx.clone(), request, move |response| {
-        let res = Resource::<FetchedNode>::from_resp(response);
-        res.map(move |fetched_node: FetchedNode| {
-            let root = single_fetched_node(&store, fetched_node);
-            FetchedView::new(store, root)
-        })
-    })
+
+    let store = store.clone();
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response.map(|response| {
+            let res = Resource::<FetchedNode>::from_response(&ctx, response);
+            let fetched_node = res.content.unwrap();
+            store
+                .node_store
+                .write()
+                .unwrap()
+                .extend(fetched_node.node_store);
+            Resource {
+                response: res.response,
+                content: Some(FetchedView {
+                    store,
+                    root: fetched_node.root[0],
+                    prefill_cache: Default::default(),
+                }),
+            }
+        });
+
+        sender.send(resource);
+    });
+    promise
 }
 
 pub(super) fn remote_fetch_node(
     ctx: &egui::Context,
     api_addr: &str,
     store: Arc<FetchedHyperAST>,
-    commit: &Commit,
+    commit: &types::Commit,
     path: &str,
 ) -> Promise<Result<NodeIdentifier, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
     let url = format!(
         "http://{}/fetch/github/{}/{}/{}/{}",
         api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &path,
     );
 
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
-    fetch(ctx.clone(), request, move |response| {
-        let res = Resource::<FetchedNode>::from_resp(response);
-        let fetched_node = res.content.unwrap();
-        single_fetched_node(&store, fetched_node)
-    })
-}
 
-fn single_fetched_node(store: &Arc<FetchedHyperAST>, fetched_node: FetchedNode) -> NodeIdentifier {
-    let mut node_store = store.node_store.write().unwrap();
-    node_store.extend(fetched_node.node_store);
-    fetched_node.root[0]
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response.map(|response| {
+            let res = Resource::<FetchedNode>::from_response(&ctx, response);
+            let fetched_node = res.content.unwrap();
+            store
+                .node_store
+                .write()
+                .unwrap()
+                .extend(fetched_node.node_store);
+            fetched_node.root[0]
+        });
+
+        sender.send(resource);
+    });
+    promise
 }
 
 #[allow(unused)]
@@ -380,9 +488,11 @@ pub(super) fn remote_fetch_nodes_by_ids(
     ctx: &egui::Context,
     api_addr: &str,
     store: Arc<FetchedHyperAST>,
-    repo: &Repo,
+    repo: &types::Repo,
     ids: HashSet<NodeIdentifier>,
 ) -> Promise<Result<Resource<()>, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
     let mut url = format!("http://{}/fetch-ids", api_addr,);
     // TODO group ids by arch
     for id in ids {
@@ -390,23 +500,28 @@ pub(super) fn remote_fetch_nodes_by_ids(
         let id = id.to_u32();
         url += &id.to_string();
     }
+
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
     let store = store.clone();
-    fetch(ctx.clone(), request, move |response| {
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
         store.nodes_pending.lock().unwrap().pop_front();
-        let res = Resource::<FetchedNodes>::from_resp(response);
-        let mut node_store = store.node_store.write().unwrap();
-        let mut raw = res.content.unwrap().node_store;
-        // Hack
-        for x in &mut raw.storages_variants {
-            x.remove_if(|id| node_store.contains(*id));
-        }
-        node_store.extend(raw);
-        Resource {
-            response: res.response,
-            content: Some(()),
-        }
-    })
+        let resource = response.map(|response| {
+            let res = Resource::<FetchedNodes>::from_response(&ctx, response);
+            store
+                .node_store
+                .write()
+                .unwrap()
+                .extend(res.content.unwrap().node_store);
+            Resource {
+                response: res.response,
+                content: Some(()),
+            }
+        });
+        sender.send(resource);
+    });
+    promise
 }
 
 #[allow(unused)]
@@ -414,40 +529,40 @@ pub(super) fn remote_fetch_labels(
     ctx: &egui::Context,
     api_addr: &str,
     store: Arc<FetchedHyperAST>,
-    repo: &Repo,
+    repo: &types::Repo,
     ids: HashSet<LabelIdentifier>,
 ) -> Promise<Result<Resource<()>, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
     let mut url = format!("http://{}/fetch-labels", api_addr,);
     for id in ids {
         url.push('/');
         let id: u32 = id.into();
         url += &id.to_string();
     }
+
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
     let store = store.clone();
-    fetch(ctx.clone(), request, move |response| {
-        // TODO look at the behavior of this pop
-        store.labels_pending.lock().unwrap().pop_front();
-        let res = Resource::<FetchedLabels>::from_resp(response);
-        res.map(|fetched_labels| {
-            let mut hash_map = store.label_store.write().unwrap();
-            let label_ids = fetched_labels.label_ids.into_iter();
-            for (k, v) in label_ids.zip(fetched_labels.labels) {
-                hash_map.insert(k, v);
-            }
-        })
-    })
-}
-
-pub fn fetch<T: 'static + Send>(
-    ctx: egui::Context,
-    request: ehttp::Request,
-    on_ok: impl 'static + Send + FnOnce(ehttp::Response) -> T,
-) -> Promise<Result<T, String>> {
-    let (sender, promise) = Promise::new();
     ehttp::fetch(request, move |response| {
         ctx.request_repaint(); // wake up UI thread
-        let resource = response.map(on_ok);
+        store.labels_pending.lock().unwrap().pop_front();
+        let resource = response.map(|response| {
+            let res = Resource::<FetchedLabels>::from_response(&ctx, response);
+            let mut hash_map = store.label_store.write().unwrap();
+            let fetched_labels = res.content.unwrap();
+            for (k, v) in fetched_labels
+                .label_ids
+                .into_iter()
+                .zip(fetched_labels.labels)
+            {
+                hash_map.insert(k, v);
+            }
+            Resource {
+                response: res.response,
+                content: Some(()),
+            }
+        });
         sender.send(resource);
     });
     promise
@@ -455,16 +570,16 @@ pub fn fetch<T: 'static + Send>(
 
 #[derive(serde::Deserialize)]
 pub struct FetchedNodes {
-    node_store: SimplePacked<String>,
+    node_store: fetched::SimplePacked<String>,
 }
 #[derive(serde::Deserialize)]
 pub struct FetchedNode {
     root: Vec<NodeIdentifier>,
-    node_store: SimplePacked<String>,
+    node_store: fetched::SimplePacked<String>,
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]
 pub struct FetchedLabels {
-    label_ids: Vec<LabelIdentifier>,
+    label_ids: Vec<fetched::LabelIdentifier>,
     labels: Vec<String>,
 }

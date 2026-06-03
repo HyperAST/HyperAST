@@ -1,16 +1,16 @@
 use std::fmt::Debug;
 
-use hyperast::types::HyperAST;
-use hyperast::types::NodeId;
-use hyperast::types::NodeStoreExt;
-use hyperast::types::{HyperType, Labeled, LendT};
-use hyperast::types::{LabelStore, NodeStore};
-use hyperast::types::{WithSerialization, WithStats};
+use hyperast::{
+    position::compute_range,
+    types::{HyperAST, LabelStore, Labeled, NodeId, NodeStore, NodeStoreExt, WithChildren},
+};
 
 use crate::tree::tree_path::TreePath;
 
-use super::Actions;
-use super::script_generator2::{Act, SimpleAction};
+use super::{
+    Actions,
+    script_generator2::{Act, SimpleAction},
+};
 
 pub struct ActionsVec<A>(pub Vec<A>);
 
@@ -26,22 +26,20 @@ impl<A> Default for ActionsVec<A> {
     }
 }
 
-/// [`crate::actions::action_vec::print_action`]
-pub fn actions_vec_f<P: TreePath<Item = HAST::Idx>, HAST>(
+pub fn actions_vec_f<P: TreePath<Item = HAST::Idx>, HAST: Copy>(
     f: &mut std::fmt::Formatter<'_>,
     v: &ActionsVec<SimpleAction<HAST::Label, P, HAST::IdN>>,
     stores: HAST,
-    src: HAST::IdN,
-    dst: HAST::IdN,
+    ori: HAST::IdN,
 ) -> std::fmt::Result
 where
-    HAST: Copy + HyperAST,
-    for<'t> LendT<'t, HAST>: WithSerialization,
-    for<'t> LendT<'t, HAST>: WithStats,
+    HAST: HyperAST,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
     HAST::IdN: Copy + NodeId<IdN = HAST::IdN> + Debug,
 {
     for a in v.iter() {
-        print_action(f, src, dst, stores, a)?;
+        print_action(f, ori, stores, a)?;
     }
     Ok(())
 }
@@ -53,7 +51,7 @@ fn format_action_pos<'store, P: TreePath<Item = HAST::Idx>, HAST>(
 ) -> String
 where
     HAST: HyperAST,
-    for<'t> LendT<'t, HAST>: WithSerialization + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
     HAST::IdN: Copy,
     HAST::IdN: NodeId<IdN = HAST::IdN> + Debug,
 {
@@ -85,7 +83,7 @@ where
         curr: &'a mut Option<T>,
         it: It,
     }
-    impl<T: Clone, It: Iterator<Item = T>> Iterator for A<'_, T, It> {
+    impl<'a, T: Clone, It: Iterator<Item = T>> Iterator for A<'a, T, It> {
         type Item = T;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -101,41 +99,34 @@ where
         curr: &mut end,
         it: a.path.ori.iter(),
     };
-    type Pos = hyperast::position::file_and_range::Position<std::path::PathBuf, usize>;
-    let p = {
-        let of = hyperast::position::Offsets::from_iterator(&mut it).with_root(ori);
-        let p = hyperast::position::PositionConverter::new(&of)
-            .with_stores(&stores)
-            .compute_pos_pre_order::<_, Pos>();
-        p.range()
-    };
-    // let p = compute_range(ori, &mut it, stores);
+    let p = compute_range(ori, &mut it, stores);
     format!(
         "{:?} at {:?}",
         p,
-        it.it.chain(end.into_iter()).collect::<Vec<_>>()
+        it.it
+            .chain(vec![end.unwrap()].into_iter())
+            .collect::<Vec<_>>()
     )
 }
 
-pub(crate) fn print_action<P: TreePath<Item = HAST::Idx>, HAST>(
+fn print_action<P: TreePath<Item = HAST::Idx>, HAST: Copy>(
     f: &mut std::fmt::Formatter<'_>,
-    src: HAST::IdN,
-    dst: HAST::IdN,
+    ori: HAST::IdN,
     stores: HAST,
     a: &SimpleAction<HAST::Label, P, HAST::IdN>,
 ) -> std::fmt::Result
 where
-    HAST: Copy + HyperAST,
-    for<'t> LendT<'t, HAST>: WithSerialization,
-    for<'t> LendT<'t, HAST>: WithStats,
+    HAST: HyperAST,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithStats,
     HAST::IdN: Copy + NodeId<IdN = HAST::IdN> + Debug,
 {
-    use hyperast::types::WithChildren;
-    type Pos = hyperast::position::file_and_range::Position<std::path::PathBuf, usize>;
-    type Pos2<IdN, Idx> = hyperast::position::offsets_and_nodes::StructuralPosition<IdN, Idx>;
     match &a.action {
         Act::Delete {} => {
-            let of = hyperast::position::Offsets::from_iterator(a.path.ori.iter()).with_root(src);
+            let of = hyperast::position::Offsets::from_iterator(a.path.ori.iter()).with_root(ori);
+            type Pos = hyperast::position::file_and_range::Position<std::path::PathBuf, usize>;
+            type Pos2<IdN, Idx> =
+                hyperast::position::offsets_and_nodes::StructuralPosition<IdN, Idx>;
             let p2 = hyperast::position::PositionConverter::new(&of)
                 .with_stores(&stores)
                 .compute_pos_pre_order::<_, Pos2<HAST::IdN, HAST::Idx>>();
@@ -146,106 +137,55 @@ where
             //     .with_stores(&stores)
             //     .compute_pos_pre_order::<_, hyperast::position::CompoundPositionPreparer<Pos, Pos2<HAST::IdN, HAST::Idx>>>();
             use hyperast::position::position_accessors::SolvedPosition;
-            let mut fmtd_ty = String::new();
-            let mut n = p2.node();
-            loop {
-                let t = stores.resolve_type(&n);
-                if !t.is_supertype() {
-                    fmtd_ty.push_str(t.as_static_str());
-                    break;
-                }
-                fmtd_ty.push_str(t.as_static_str());
-                fmtd_ty.push('/');
-                n = stores.resolve(&n).child(&num_traits::zero()).unwrap();
-            }
+            let i = p2.node();
             let r = p.range();
             let l = stores
-                .resolve(&n)
+                .resolve(&i)
                 .try_get_label()
                 .map_or(Default::default(), |l| stores.label_store().resolve(l));
             writeln!(
                 f,
                 "Del {} file=\"{}\" line {} to {} {:?}",
-                fmtd_ty,
+                stores.resolve_type(&i).to_string(),
                 p.file().to_string_lossy(),
                 r.start,
                 r.end,
                 l,
             )
         }
-        Act::Update { new, before: _ } => {
-            use hyperast::position::position_accessors::SolvedPosition;
-            type P<IdN, Idx> = hyperast::position::CompoundPositionPreparer<Pos, Pos2<IdN, Idx>>;
-            let of = hyperast::position::Offsets::from_iterator(a.path.ori.iter()).with_root(dst);
-            writeln!(f, "Upd")?;
-            let (p, p2) = hyperast::position::PositionConverter::new(&of)
-                .with_stores(&stores)
-                .compute_pos_pre_order::<_, P<HAST::IdN, HAST::Idx>>()
-                .into();
-            writeln!(
-                f,
-                " {} {:?}",
-                stores.resolve_type(&p2.node()).as_static_str(),
-                stores.label_store().resolve(new),
-            )?;
-            writeln!(
-                f,
-                " {:?}",
-                p.range() // compute_range(ori, &mut a.path.ori.iter(), stores)
-            )
-        }
-        Act::Insert { sub } => {
-            write!(f, "Ins {}", stores.resolve_type(sub).as_static_str())?;
-            writeln!(f, " {}", format_action_pos(dst, stores, a))
-        }
-        Act::Move { from } => {
-            let fmtd_ty = {
-                let mut e = src;
-                let mut node = stores.node_store().resolve(&src);
+        Act::Update { new } => writeln!(
+            f,
+            "Upd {:?} {:?}",
+            stores.label_store().resolve(new),
+            compute_range(ori, &mut a.path.ori.iter(), stores)
+        ),
+        Act::Insert { sub } => writeln!(
+            f,
+            "Ins {:?} {}",
+            stores.resolve_type(sub).to_string(),
+            format_action_pos(ori, stores, a)
+        ),
+        Act::Move { from } => writeln!(
+            f,
+            "Mov {:?} {:?} {}",
+            {
+                let mut e = ori;
+                let mut node = stores.node_store().resolve(&ori);
                 for x in from.ori.iter() {
                     e = node.child(&x).unwrap();
                     node = stores.node_store().resolve(&e);
                 }
-                // stores.resolve_type(&e).to_string()
-                let mut fmtd_ty = String::new();
-                loop {
-                    let t = stores.resolve_type(&e);
-                    if !t.is_supertype() {
-                        fmtd_ty.push_str(t.as_static_str());
-                        break;
-                    }
-                    fmtd_ty.push_str(t.as_static_str());
-                    fmtd_ty.push('/');
-                    e = stores
-                        .node_store()
-                        .resolve(&e)
-                        .child(&num_traits::zero())
-                        .unwrap();
-                }
-                fmtd_ty
-            };
-            write!(f, "Mov")?;
-            write!(f, " {}", fmtd_ty)?;
-            writeln!(f, " {:?}", {
-                let of = hyperast::position::Offsets::from_iterator(from.ori.iter()).with_root(src);
-                let p = hyperast::position::PositionConverter::new(&of)
-                    .with_stores(&stores)
-                    .compute_pos_pre_order::<_, Pos>();
-                p.range()
-            },)?;
-            writeln!(
-                f,
-                " {}",
-                // compute_range(ori, &mut from.ori.iter(), stores),
-                format_action_pos(dst, stores, a)
-            )
-        }
+                stores.resolve_type(&e).to_string()
+            },
+            compute_range(ori, &mut from.ori.iter(), stores),
+            format_action_pos(ori, stores, a)
+        ),
         Act::MovUpd { from, new } => writeln!(
             f,
             "MovUpd {:?} {:?} {:?} {}",
             {
-                let mut e = src;
-                let mut node = stores.node_store().resolve(&src);
+                let mut e = ori;
+                let mut node = stores.node_store().resolve(&ori);
                 for x in from.ori.iter() {
                     e = node.child(&x).unwrap();
                     node = stores.node_store().resolve(&e);
@@ -253,15 +193,8 @@ where
                 stores.resolve_type(&e).to_string()
             },
             stores.label_store().resolve(new),
-            {
-                let of = hyperast::position::Offsets::from_iterator(from.ori.iter()).with_root(src);
-                let p = hyperast::position::PositionConverter::new(&of)
-                    .with_stores(&stores)
-                    .compute_pos_pre_order::<_, Pos>();
-                p.range()
-            },
-            // compute_range(ori, &mut from.ori.iter(), stores),
-            format_action_pos(dst, stores, a)
+            compute_range(ori, &mut from.ori.iter(), stores),
+            format_action_pos(ori, stores, a)
         ),
     }
 }
@@ -274,9 +207,6 @@ impl<A> Actions for ActionsVec<A> {
 impl<A> ActionsVec<A> {
     pub fn iter(&self) -> impl Iterator<Item = &A> + '_ {
         self.0.iter()
-    }
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut A> + '_ {
-        self.0.iter_mut()
     }
 }
 

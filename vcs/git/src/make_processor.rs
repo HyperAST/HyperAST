@@ -1,24 +1,30 @@
-use std::iter::Peekable;
-use std::path::{Components, PathBuf};
-
-use git2::{Oid, Repository};
-
-use hyperast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
-use hyperast::store::{defaults::NodeIdentifier, nodes::legion::eq_node};
-use hyperast::types::ETypeStore as _;
-use hyperast::types::LabelStore;
-use hyperast_gen_ts_xml::types::Type;
-
-use crate::Processor;
 use crate::StackEle;
-use crate::git::{BasicGitObject, NamedObject, ObjectType, TypedObject};
-use crate::make::{MD, MakeModuleAcc};
-use crate::preprocessed::RepositoryProcessor;
 use crate::processing::erased::{
-    CommitProcessorHandle, ParametrizedCommitProc2,
-    ParametrizedCommitProcessor2Handle as PCP2Handle,
+    CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
 };
-use crate::processing::{CacheHolding, InFiles, ObjectName, ParametrizedCommitProcessorHandle};
+use crate::{
+    Processor,
+    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
+    make::{MD, MakeModuleAcc},
+    preprocessed::RepositoryProcessor,
+    processing::{
+        CacheHolding, InFiles, ObjectName, ParametrizedCommitProcessorHandle,
+        erased::ParametrizedCommitProc2,
+    },
+};
+use git2::{Oid, Repository};
+use hyperast::types::ETypeStore as _;
+use hyperast::{
+    hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
+    store::{defaults::NodeIdentifier, nodes::legion::eq_node},
+    types::LabelStore,
+};
+use hyperast_gen_ts_xml::types::Type;
+use std::{
+    iter::Peekable,
+    path::{Components, PathBuf},
+};
+
 pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_xml::types::TStore>;
 
 pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
@@ -262,9 +268,7 @@ pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdenti
 
     log::info!("make mm {} {}", &primary.name, primary.children.len());
 
-    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::with_lang(
-        hyperast_gen_ts_xml::types::Lang,
-    );
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
 
     let children_is_empty = primary.children.is_empty();
 
@@ -279,7 +283,7 @@ pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdenti
         dyn_builder.build(),
     );
 
-    let full_node = (node_id, MD { metrics });
+    let full_node = (node_id.clone(), MD { metrics });
     full_node
 }
 

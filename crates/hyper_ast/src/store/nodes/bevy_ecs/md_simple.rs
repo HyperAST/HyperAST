@@ -9,6 +9,7 @@ pub fn compute_byte_len_aux<'r>(e: EntityRef<'r>) -> Result<usize, &'r [Entity]>
     Ok(r)
 }
 
+
 pub fn compute_rec_byte_len(w: &World, e: EntityRef) -> ByteLen {
     let r = match compute_byte_len_aux(e) {
         Ok(r) => r,
@@ -44,11 +45,9 @@ fn test_compute_byte_len() {
     let expr_bin = expr_bin.id();
 
     // usage
-    assert_eq!(
-        ByteLen(4),
-        compute_rec_byte_len(&world, world.entity(expr_bin))
-    );
+    assert_eq!(ByteLen(4), compute_rec_byte_len(&world, world.entity(expr_bin)));
 }
+
 
 pub fn precompute_byte_len(w: &World, e: EntityRef) -> ByteLen {
     let r = match compute_byte_len_aux(e) {

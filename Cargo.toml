@@ -12,7 +12,6 @@ members = [
     "hyper_app",
     "benchmark_diffs",
     "benchmark_smells",
-    "benchmark_search",
     "benchmark",
 ]
 exclude = ["crates/ref-mining-evaluation", "hyperast_wasm"]
@@ -34,12 +33,12 @@ default-members = [
     "lib/egui_addon",
     "lib/polyglote",
     "crates/tsquery",
+    "benchmark_smells",
 ]
 
 [workspace.dependencies]
-tree-sitter-graph = { version = "0.13.0" }
-streaming-iterator = "0.1.9" # used for recent versions of tree-sitter
-tree-sitter = { version = "0.25.0" }
+tree-sitter-graph = { version = "0.12.0" }
+tree-sitter = { version = "0.23.0" }
 hyper_diff = { path = "./crates/hyper_diff" }
 hyperast = { path = "./crates/hyper_ast", default-features = false }
 hyperast_tsquery = { path = "./crates/tsquery" }
@@ -52,32 +51,6 @@ hyperast_gen_ts_xml = { path = "./gen/tree-sitter/xml" }
 hyperast_gen_ts_tsquery = { path = "./gen/tree-sitter/query" }
 hyperast_gen_ts_ts = { path = "./gen/tree-sitter/ts" }
 
-legion = { version = "^0.4.0" }
-
 [patch.crates-io]
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "0f56930d32dc232ced0e42a7593f813be4877f85", version = "0.13" }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "bcdb8e5bbb16636f47d155c0bdae5d19fd46a888", version = "0.12" }
 # tree-sitter-graph = { path = "../tree-sitter-graph", optional = true }
-legion = { git = "https://github.com/quentinLeDilavrec/legion", rev = "9929c5cdd1f0b844071a00725632c7c39b6fff39" }
-# legion = { path = "../legion" }
-
-[workspace.lints.rust]
-unexpected_cfgs = { level = "allow" }
-
-[workspace.lints.clippy]
-# dbg_macro = "deny" // TODO
-# todo = "deny" // TODO
-
-# declare_interior_mutable_const = "deny" # TODO
-
-# redundant_clone = "deny" # TODO
-# disallowed_methods = "deny" # TODO
-
-# Lets see
-style = { level = "allow", priority = -1 } # TODO
-
-# in Rust it can be very tedious to reduce argument count without
-# running afoul of the borrow checker.
-too_many_arguments = "allow"
-
-# We often have large enum variants yet we rarely actually bother with splitting them up.
-large_enum_variant = "allow"

@@ -176,7 +176,7 @@ async fn query_github(variables: repo_view::Variables) -> Result<repo_view::Resp
     let b: AAA = serde_json::from_slice(bytes).unwrap();
     dbg!(&b.data);
     let c = b.data.search.nodes.as_ref().unwrap();
-    let Some(d) = c.first() else {
+    let Some(d) = c.get(0) else {
         return Err("no Pr merging this commit".to_string());
     };
     dbg!(d.as_ref().unwrap());

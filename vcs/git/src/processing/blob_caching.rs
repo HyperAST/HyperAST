@@ -42,7 +42,7 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
         T::Holder: crate::processing::erased::ParametrizedCommitProc2,
         <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
             crate::processing::CacheHolding<Sys::Caches>,
-        T::Holder: std::default::Default,
+        T::Holder: std::default::Default
     {
         use crate::processing::erased::ParametrizedCommitProc2;
         let caches = self.processors.mut_or_default::<T::Holder>();
@@ -73,7 +73,7 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
         }
         full_node
     }
-
+    
     pub fn handle2<
         T: crate::processing::erased::CommitProcExt,
         N: Clone,

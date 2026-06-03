@@ -1,11 +1,13 @@
 use hyperast::position::TreePathMut;
-use hyperast::position::{Scout, StructuralPosition, StructuralPositionStore};
-use hyperast::store::{SimpleStores, defaults::NodeIdentifier};
 use hyperast::types::LabelStore;
-use hyperast::types::{HyperAST, NodeId};
+use hyperast::{
+    position::{Scout, StructuralPosition, StructuralPositionStore},
+    store::{defaults::NodeIdentifier, SimpleStores},
+    types::{HyperAST, NodeId},
+};
+use hyperast_vcs_git::TStore;
 use hyperast_gen_ts_java::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
 use hyperast_gen_ts_java::impact::{partial_analysis::PartialAnalysis, usage};
-use hyperast_vcs_git::TStore;
 
 pub fn find_refs<'a>(
     stores: &'a SimpleStores<TStore>,

@@ -5,8 +5,9 @@ pub mod ts_metadata;
 
 use std::{ops::Not, path::Path};
 
-use preprocess::{TsType, consider_tags};
-use preprocess::{TypeSys, consider_highlights};
+use preprocess::{consider_highlights, TypeSys};
+
+use crate::preprocess::{consider_tags, TsType};
 
 pub trait LanguageCompo {
     fn language(&self) -> tree_sitter::Language;

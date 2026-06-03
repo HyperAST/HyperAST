@@ -1,5 +1,4 @@
 use axum::{
-    Router,
     body::Bytes,
     error_handling::HandleErrorLayer,
     extract::{DefaultBodyLimit, Path, State},
@@ -7,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get},
+    Router,
 };
 use std::{
     borrow::Cow,

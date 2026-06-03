@@ -40,7 +40,7 @@ struct Cli {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(tracing::level_filters::LevelFilter::OFF.into())
@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1)
             }
         };
-        scripting(repo_spec, config, &args.commit, script, args.depth)
+        scripting(repo_spec, config, &args.commit, &script, args.depth)
     } else if args.interative {
         let mut script = String::new();
         for l in stdin().lines() {

@@ -27,7 +27,7 @@ impl<'tree, HAST: HyperAST<'tree>> steped::Node for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    for<'t> hyperast::types::LendT<'t, HAST>: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
     fn symbol(&self) -> steped::Symbol {
         self.0.symbol()
@@ -73,7 +73,7 @@ impl<'tree, HAST: HyperAST<'tree>> steped::Cursor for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore,
-    for<'t> hyperast::types::LendT<'t, HAST>: WithRoles,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithRoles,
 {
     type Node = Self;
 
@@ -103,7 +103,7 @@ where
 
     type Status = steped::hyperast::CursorStatus<<Self as steped::Node>::IdF>;
 
-    fn current_status(&self) -> <Self as StatusLending<'_>>::Status {
+    fn current_status(&self) -> Self::Status {
         self.0.current_status()
     }
 
@@ -311,7 +311,7 @@ impl<'tree, HAST: hyperast::types::HyperAST<'tree>> tree_sitter_graph::graph::Sy
 where
     HAST::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    for<'t> hyperast::types::LendT<'t, HAST>: WithSerialization + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
 {
     fn id(&self) -> usize {
         use std::hash::Hash;
@@ -381,7 +381,7 @@ impl<'tree, HAST: HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNodeExt for N
 where
     <HAST as HyperASTShared>::IdN: Copy + std::hash::Hash + Debug,
     HAST::Idx: Copy + std::hash::Hash,
-    for<'t> hyperast::types::LendT<'t, HAST>: WithSerialization + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithSerialization + WithStats,
 {
     type Cursor = Vec<Self>;
 
@@ -443,7 +443,9 @@ impl<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST<'tree>> Iterato
     for MyQMatches<'query, 'cursor, 'tree, It, HAST>
 where
     It: Iterator<
-        Item = hyperast_gen_ts_tsquery::search::steped::query_cursor::QueryMatch<Node<'tree, HAST>>,
+        Item = hyperast_gen_ts_tsquery::search::steped::query_cursor::QueryMatch<
+            Node<'tree, HAST>,
+        >,
     >,
 {
     type Item = self::MyQMatch<'cursor, 'tree, HAST>;

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hyperast::tree_gen::TsEnableTS;
 use hyperast::tree_gen::TsType;
 use hyperast::types::{
-    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId, UniformNodeId,
+    AAAA, AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
 impl TsEnableTS for TStore {
@@ -19,10 +19,9 @@ impl TsEnableTS for TStore {
     ) -> Option<Self::Ty2> {
         let k = n.kind_id();
         const LEN: u16 = S_T_L.len() as u16;
-        if (LEN..TStore::LOWEST_RESERVED).contains(&k) {
+        if LEN <= k && k < TStore::LOWEST_RESERVED {
             return None;
         }
-        #[cfg(feature = "impl_intern")]
         debug_assert_eq!(
             crate::language().node_kind_for_id(k).unwrap(),
             Type::from_u16(k).to_str()
@@ -45,14 +44,6 @@ impl TypeStore for TStore {
     type Ty = TypeU16<Cpp>;
 }
 
-impl hyperast::types::ETypeStore for TStore {
-    type Ty2 = Type;
-
-    fn intern(ty: Self::Ty2) -> Self::Ty {
-        TType::new(ty)
-    }
-}
-
 #[cfg(feature = "impl_intern")]
 mod legion_impls {
 
@@ -60,9 +51,17 @@ mod legion_impls {
 
     use hyperast::types::{LangWrapper, RoleStore};
 
-    impl CppEnabledTypeStore for TStore {
+    impl<'a> CppEnabledTypeStore for TStore {
         fn resolve(t: Self::Ty) -> Type {
             t.e()
+        }
+    }
+
+    impl<'a> hyperast::types::ETypeStore for TStore {
+        type Ty2 = Type;
+
+        fn intern(ty: Self::Ty2) -> Self::Ty {
+            TType::new(ty)
         }
     }
 
@@ -94,7 +93,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     crate::language().id_for_node_kind(kind, named)
 }
 #[cfg(not(feature = "impl_intern"))]
-fn id_for_node_kind(_kind: &str, _named: bool) -> u16 {
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
@@ -122,7 +121,7 @@ impl Type {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + hyperast::types::UniformNodeId> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + hyperast::types::AAAA> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -138,7 +137,7 @@ impl<IdN: Clone + Eq + hyperast::types::UniformNodeId> NodeId for TIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + UniformNodeId> TypedNodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
     type TyErazed = TType;
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
@@ -243,7 +242,6 @@ impl LangRef<TType> for Lang {
 }
 
 impl hyperast::types::Lang<Type> for Cpp {
-    const INST: Self = Lang;
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -253,15 +251,6 @@ impl hyperast::types::Lang<Type> for Cpp {
 }
 
 pub use hyperast::types::Role;
-
-macro_rules! is {
-    ($e:expr, $($p:ident $(if $guard:expr)?, )*) => {
-        match $e {$(
-            Type::$p $(if $guard)? => true,)*
-            _ => false
-        }
-    };
-}
 
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
@@ -294,138 +283,134 @@ impl HyperType for Type {
     }
 
     fn is_syntax(&self) -> bool {
-        is!(
-            self,
-            HashInclude, // "#include",
-            NewLine,     // "\n",
-            HashDefine,  // "#define",
-            LParen,      // "(",
-            DotDotDot,   // "...",
-            Comma,       // ",",
-            RParen,      // ")",
-            // HashIf, // "#if",
-            // HashEndif, // "#endif",
-            // HashIfdef, // "#ifdef",
-            // HashIfndef, // "#ifndef",
-            // HashElse, // "#else",
-            // HashElif, // "#elif",
-            Bang,      // "!",
-            Tilde,     // "~",
-            Dash,      // "-",
-            Plus,      // "+",
-            Star,      // "*",
-            Slash,     // "/",
-            Percent,   // "%",
-            PipePipe,  // "||",
-            AmpAmp,    // "&&",
-            Pipe,      // "|",
-            Caret,     // "^",
-            Amp,       // "&",
-            EqEq,      // "==",
-            BangEq,    // "!=",
-            GT,        // ">",
-            GTEq,      // ">=",
-            LTEq,      // "<=",
-            LT,        // "<",
-            LtLt,      // "<<",
-            GtGt,      // ">>",
-            SemiColon, // ";",
-            // Typedef, // "typedef",
-            Extern,     // "extern",
-            TS1,        // "__attribute__",
-            ColonColon, // "::",
-            TS2,        // "[[",
-            TS3,        // "]]",
-            // TS4, // "__declspec",
-            // TS5, // "__based",
-            // TS6, // "__cdecl",
-            // TS7, // "__clrcall",
-            // TS8, // "__stdcall",
-            // TS9, // "__fastcall",
-            // TS10, // "__thiscall",
-            // TS11, // "__vectorcall",
-            // MsRestrictModifier, // "ms_restrict_modifier",
-            // MsUnsignedPtrModifier, // "ms_unsigned_ptr_modifier",
-            // MsSignedPtrModifier, // "ms_signed_ptr_modifier",
-            // TS12, // "_unaligned",
-            // TS13, // "__unaligned",
-            LBrace,   // "{",
-            RBrace,   // "}",
-            LBracket, // "[",
-            RBracket, // "]",
-            Eq,       // "=",
-            // Static, // "static",
-            // Register, // "register",
-            // Inline, // "inline",
-            // ThreadLocal, // "thread_local",
-            // Const, // "const",
-            // Volatile, // "volatile",
-            // Restrict, // "restrict",
-            // TS14, // "_Atomic",
-            // Mutable, // "mutable",
-            // Constexpr, // "constexpr",
-            // Constinit, // "constinit",
-            // Consteval, // "consteval",
-            // Signed, // "signed",
-            // Unsigned, // "unsigned",
-            // Long, // "long",
-            // Short, // "short",
-            Enum,    // "enum",
-            Class,   // "class",
-            Struct,  // "struct",
-            Union,   // "union",
-            Colon,   // ":",
-            If,      // "if",
-            Else,    // "else",
-            Switch,  // "switch",
-            Case,    // "case",
-            Default, // "default",
-            While,   // "while",
-            Do,      // "do",
-            For,     // "for",
-            Return,  // "return",
-            // Break, // "break",
-            // Continue, // "continue",
-            // Goto, // "goto",
-            QMark, // "?",
-            // StarEq, // "*=",
-            // SlashEq, // "/=",
-            // PercentEq, // "%=",
-            // PlusEq, // "+=",
-            // DashEq, // "-=",
-            // LtLtEq, // "<<=",
-            // GtGtEq, // ">>=",
-            // AmpEq, // "&=",
-            // CaretEq, // "^=",
-            // PipeEq, // "|=",
-            // AndEq, // "and_eq",
-            // OrEq, // "or_eq",
-            // XorEq, // "xor_eq",
-            // Not, // "not",
-            // Compl, // "compl",
-            // TS15, // "<=>",
-            // Or, // "or",
-            // And, // "and",
-            // Bitor, // "bitor",
-            // Xor, // "xor",
-            // Bitand, // "bitand",
-            // NotEq, // "not_eq",
-            // DashDash, // "--",
-            // PlusPlus, // "++",
-            // Sizeof, // "sizeof",
-            // Asm, // "asm",
-            Dot,       // ".",
-            DashGt,    // "->",
-            Namespace, // "namespace",
-            Using,     // "using",
-        )
+        self == &Type::LParen
+        || self == &Type::RParen
+        || self == &Type::HashInclude // "#include",
+        ||self == &Type::NewLine // "\n",
+        ||self == &Type::HashDefine // "#define",
+        ||self == &Type::LParen // "(",
+        ||self == &Type::DotDotDot // "...",
+        ||self == &Type::Comma // ",",
+        ||self == &Type::RParen // ")",
+        // ||self == &Type::HashIf // "#if",
+        // ||self == &Type::HashEndif // "#endif",
+        // ||self == &Type::HashIfdef // "#ifdef",
+        // ||self == &Type::HashIfndef // "#ifndef",
+        // ||self == &Type::HashElse // "#else",
+        // ||self == &Type::HashElif // "#elif",
+        ||self == &Type::Bang // "!",
+        ||self == &Type::Tilde // "~",
+        ||self == &Type::Dash // "-",
+        ||self == &Type::Plus // "+",
+        ||self == &Type::Star // "*",
+        ||self == &Type::Slash // "/",
+        ||self == &Type::Percent // "%",
+        ||self == &Type::PipePipe // "||",
+        ||self == &Type::AmpAmp // "&&",
+        ||self == &Type::Pipe // "|",
+        ||self == &Type::Caret // "^",
+        ||self == &Type::Amp // "&",
+        ||self == &Type::EqEq // "==",
+        ||self == &Type::BangEq // "!=",
+        ||self == &Type::GT // ">",
+        ||self == &Type::GTEq // ">=",
+        ||self == &Type::LTEq // "<=",
+        ||self == &Type::LT // "<",
+        ||self == &Type::LtLt // "<<",
+        ||self == &Type::GtGt // ">>",
+        ||self == &Type::SemiColon // ";",
+        // ||self == &Type::Typedef // "typedef",
+        ||self == &Type::Extern // "extern",
+        ||self == &Type::TS1 // "__attribute__",
+        ||self == &Type::ColonColon // "::",
+        ||self == &Type::TS2 // "[[",
+        ||self == &Type::TS3 // "]]",
+        // ||self == &Type::TS4 // "__declspec",
+        // ||self == &Type::TS5 // "__based",
+        // ||self == &Type::TS6 // "__cdecl",
+        // ||self == &Type::TS7 // "__clrcall",
+        // ||self == &Type::TS8 // "__stdcall",
+        // ||self == &Type::TS9 // "__fastcall",
+        // ||self == &Type::TS10 // "__thiscall",
+        // ||self == &Type::TS11 // "__vectorcall",
+        // ||self == &Type::MsRestrictModifier // "ms_restrict_modifier",
+        // ||self == &Type::MsUnsignedPtrModifier // "ms_unsigned_ptr_modifier",
+        // ||self == &Type::MsSignedPtrModifier // "ms_signed_ptr_modifier",
+        // ||self == &Type::TS12 // "_unaligned",
+        // ||self == &Type::TS13 // "__unaligned",
+        ||self == &Type::LBrace // "{",
+        ||self == &Type::RBrace // "}",
+        ||self == &Type::LBracket // "[",
+        ||self == &Type::RBracket // "]",
+        ||self == &Type::Eq // "=",
+        // ||self == &Type::Static // "static",
+        // ||self == &Type::Register // "register",
+        // ||self == &Type::Inline // "inline",
+        // ||self == &Type::ThreadLocal // "thread_local",
+        // ||self == &Type::Const // "const",
+        // ||self == &Type::Volatile // "volatile",
+        // ||self == &Type::Restrict // "restrict",
+        // ||self == &Type::TS14 // "_Atomic",
+        // ||self == &Type::Mutable // "mutable",
+        // ||self == &Type::Constexpr // "constexpr",
+        // ||self == &Type::Constinit // "constinit",
+        // ||self == &Type::Consteval // "consteval",
+        // ||self == &Type::Signed // "signed",
+        // ||self == &Type::Unsigned // "unsigned",
+        // ||self == &Type::Long // "long",
+        // ||self == &Type::Short // "short",
+        ||self == &Type::Enum // "enum",
+        ||self == &Type::Class // "class",
+        ||self == &Type::Struct // "struct",
+        ||self == &Type::Union // "union",
+        ||self == &Type::Colon // ":",
+        ||self == &Type::If // "if",
+        ||self == &Type::Else // "else",
+        ||self == &Type::Switch // "switch",
+        ||self == &Type::Case // "case",
+        ||self == &Type::Default // "default",
+        ||self == &Type::While // "while",
+        ||self == &Type::Do // "do",
+        ||self == &Type::For // "for",
+        ||self == &Type::Return // "return",
+        // ||self == &Type::Break // "break",
+        // ||self == &Type::Continue // "continue",
+        // ||self == &Type::Goto // "goto",
+        ||self == &Type::QMark // "?",
+        // ||self == &Type::StarEq // "*=",
+        // ||self == &Type::SlashEq // "/=",
+        // ||self == &Type::PercentEq // "%=",
+        // ||self == &Type::PlusEq // "+=",
+        // ||self == &Type::DashEq // "-=",
+        // ||self == &Type::LtLtEq // "<<=",
+        // ||self == &Type::GtGtEq // ">>=",
+        // ||self == &Type::AmpEq // "&=",
+        // ||self == &Type::CaretEq // "^=",
+        // ||self == &Type::PipeEq // "|=",
+        // ||self == &Type::AndEq // "and_eq",
+        // ||self == &Type::OrEq // "or_eq",
+        // ||self == &Type::XorEq // "xor_eq",
+        // ||self == &Type::Not // "not",
+        // ||self == &Type::Compl // "compl",
+        // ||self == &Type::TS15 // "<=>",
+        // ||self == &Type::Or // "or",
+        // ||self == &Type::And // "and",
+        // ||self == &Type::Bitor // "bitor",
+        // ||self == &Type::Xor // "xor",
+        // ||self == &Type::Bitand // "bitand",
+        // ||self == &Type::NotEq // "not_eq",
+        // ||self == &Type::DashDash // "--",
+        // ||self == &Type::PlusPlus // "++",
+        // ||self == &Type::Sizeof // "sizeof",
+        // ||self == &Type::Asm // "asm",
+        ||self == &Type::Dot // ".",
+        ||self == &Type::DashGt // "->",
+        ||self == &Type::Namespace // "namespace",
+        ||self == &Type::Using // "using",
     }
 
     fn as_shared(&self) -> hyperast::types::Shared {
         use hyperast::types::Shared;
-        if self.is_error() {
-            return Shared::Error;
-        }
         match self {
             Type::ClassSpecifier => Shared::TypeDeclaration,
             Type::EnumSpecifier => Shared::TypeDeclaration,
@@ -442,14 +427,8 @@ impl HyperType for Type {
             Type::Comment => Shared::Comment,
             Type::Identifier => Shared::Identifier,
             Type::QualifiedIdentifier => Shared::Identifier,
-            x if x.is_identifier() => Shared::Literal,
-            x if x.is_literal() => Shared::Literal,
             _ => Shared::Other,
         }
-    }
-
-    fn is_error(&self) -> bool {
-        self == &Self::ERROR || self == &Self::_ERROR
     }
 
     fn as_abstract(&self) -> hyperast::types::Abstracts {
@@ -478,8 +457,8 @@ impl HyperType for Type {
     /// ```
     fn as_static(&self) -> &'static dyn HyperType {
         let t = <Cpp as hyperast::types::Lang<Type>>::to_u16(*self);
-
-        (<Cpp as hyperast::types::Lang<Type>>::make(t)) as _
+        let t = <Cpp as hyperast::types::Lang<Type>>::make(t);
+        t
     }
 
     fn as_static_str(&self) -> &'static str {
@@ -516,10 +495,7 @@ impl TypeTrait for Type {
     }
 
     fn is_literal(&self) -> bool {
-        self == &Self::NumberLiteral
-            || self == &Self::CharLiteral
-            || self == &Self::StringLiteral
-            || self == &Self::RawStringLiteral
+        todo!()
     }
 
     fn is_primitive(&self) -> bool {
@@ -531,11 +507,7 @@ impl TypeTrait for Type {
     }
 
     fn is_identifier(&self) -> bool {
-        self == &Self::Identifier
-            || self == &Self::QualifiedIdentifier
-            || self == &Self::QualifiedIdentifier_
-            || self == &Self::QualifiedIdentifier__
-            || self == &Self::QualifiedIdentifier___
+        todo!()
     }
 
     fn is_instance_ref(&self) -> bool {
@@ -616,56 +588,53 @@ impl Display for Type {
 
 impl Type {
     pub(crate) fn is_repeat(&self) -> bool {
-        is!(
-            self,
-            TranslationUnitRepeat1,
-            PreprocParamsRepeat1,
-            PreprocIfRepeat1,
-            PreprocIfInFieldDeclarationListRepeat1,
-            PreprocIfInEnumeratorListRepeat1,
-            PreprocIfInEnumeratorListNoCommaRepeat1,
-            PreprocArgumentListRepeat1,
-            DeclarationRepeat1,
-            TypeDefinitionRepeat1,
-            _TypeDefinitionTypeRepeat1,
-            _TypeDefinitionDeclaratorsRepeat1,
-            _DeclarationSpecifiersRepeat1,
-            AttributeDeclarationRepeat1,
-            AttributedDeclaratorRepeat1,
-            PointerDeclaratorRepeat1,
-            ArrayDeclaratorRepeat1,
-            SizedTypeSpecifierRepeat1,
-            EnumeratorListRepeat1,
-            FieldDeclarationRepeat1,
-            ParameterListRepeat1,
-            CaseStatementRepeat1,
-            GenericExpressionRepeat1,
-            GnuAsmExpressionRepeat1,
-            GnuAsmOutputOperandListRepeat1,
-            GnuAsmInputOperandListRepeat1,
-            GnuAsmClobberListRepeat1,
-            GnuAsmGotoListRepeat1,
-            ArgumentListRepeat1,
-            InitializerListRepeat1,
-            InitializerPairRepeat1,
-            CharLiteralRepeat1,
-            ConcatenatedStringRepeat1,
-            StringLiteralRepeat1,
-            _ClassDeclarationRepeat1,
-            BaseClassClauseRepeat1,
-            TemplateParameterListRepeat1,
-            FieldInitializerListRepeat1,
-            OperatorCastDefinitionRepeat1,
-            ConstructorTryStatementRepeat1,
-            StructuredBindingDeclaratorRepeat1,
-            _FunctionPostfixRepeat1,
-            ThrowSpecifierRepeat1,
-            TemplateArgumentListRepeat1,
-            SubscriptArgumentListRepeat1,
-            RequirementSeqRepeat1,
-            RequiresParameterListRepeat1,
-            LambdaCaptureSpecifierRepeat1,
-        )
+        *self == Type::TranslationUnitRepeat1
+            || *self == Type::PreprocParamsRepeat1
+            || *self == Type::PreprocIfRepeat1
+            || *self == Type::PreprocIfInFieldDeclarationListRepeat1
+            || *self == Type::PreprocIfInEnumeratorListRepeat1
+            || *self == Type::PreprocIfInEnumeratorListNoCommaRepeat1
+            || *self == Type::PreprocArgumentListRepeat1
+            || *self == Type::DeclarationRepeat1
+            || *self == Type::TypeDefinitionRepeat1
+            || *self == Type::_TypeDefinitionTypeRepeat1
+            || *self == Type::_TypeDefinitionDeclaratorsRepeat1
+            || *self == Type::_DeclarationSpecifiersRepeat1
+            || *self == Type::AttributeDeclarationRepeat1
+            || *self == Type::AttributedDeclaratorRepeat1
+            || *self == Type::PointerDeclaratorRepeat1
+            || *self == Type::ArrayDeclaratorRepeat1
+            || *self == Type::SizedTypeSpecifierRepeat1
+            || *self == Type::EnumeratorListRepeat1
+            || *self == Type::FieldDeclarationRepeat1
+            || *self == Type::ParameterListRepeat1
+            || *self == Type::CaseStatementRepeat1
+            || *self == Type::GenericExpressionRepeat1
+            || *self == Type::GnuAsmExpressionRepeat1
+            || *self == Type::GnuAsmOutputOperandListRepeat1
+            || *self == Type::GnuAsmInputOperandListRepeat1
+            || *self == Type::GnuAsmClobberListRepeat1
+            || *self == Type::GnuAsmGotoListRepeat1
+            || *self == Type::ArgumentListRepeat1
+            || *self == Type::InitializerListRepeat1
+            || *self == Type::InitializerPairRepeat1
+            || *self == Type::CharLiteralRepeat1
+            || *self == Type::ConcatenatedStringRepeat1
+            || *self == Type::StringLiteralRepeat1
+            || *self == Type::_ClassDeclarationRepeat1
+            || *self == Type::BaseClassClauseRepeat1
+            || *self == Type::TemplateParameterListRepeat1
+            || *self == Type::FieldInitializerListRepeat1
+            || *self == Type::OperatorCastDefinitionRepeat1
+            || *self == Type::ConstructorTryStatementRepeat1
+            || *self == Type::StructuredBindingDeclaratorRepeat1
+            || *self == Type::_FunctionPostfixRepeat1
+            || *self == Type::ThrowSpecifierRepeat1
+            || *self == Type::TemplateArgumentListRepeat1
+            || *self == Type::SubscriptArgumentListRepeat1
+            || *self == Type::RequirementSeqRepeat1
+            || *self == Type::RequiresParameterListRepeat1
+            || *self == Type::LambdaCaptureSpecifierRepeat1
     }
 }
 impl hyperast::types::LLang<TType> for Cpp {
@@ -676,7 +645,7 @@ impl hyperast::types::LLang<TType> for Cpp {
     const TE: &[Self::E] = S_T_L;
 
     fn as_lang_wrapper() -> hyperast::types::LangWrapper<TType> {
-        From::<&'static dyn LangRef<_>>::from(&Lang)
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }
 
@@ -688,15 +657,14 @@ impl From<u16> for Type {
         S_T_L[value as usize]
     }
 }
-
-impl From<Type> for TypeU16<Cpp> {
-    fn from(val: Type) -> Self {
-        TypeU16::new(val)
+impl Into<TypeU16<Cpp>> for Type {
+    fn into(self) -> TypeU16<Cpp> {
+        TypeU16::new(self)
     }
 }
 
-impl From<Type> for u16 {
-    fn from(_val: Type) -> Self {
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
         todo!()
         // self as u16
     }
@@ -3304,7 +3272,7 @@ fn test_tslanguage_and_type_identity() {
     }
 }
 
-const S_T_L: &[Type] = &[
+const S_T_L: &'static [Type] = &[
     Type::End,
     Type::Identifier,
     Type::HashInclude,

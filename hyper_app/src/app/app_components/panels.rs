@@ -1,11 +1,13 @@
 use egui::Widget;
-use re_ui::UiExt;
+use re_ui::{DesignTokens, UiExt};
 
-use crate::app::QResId;
-use crate::app::querying::{self, ComputeConfigQuery};
-use crate::app::types::{self, Commit, Config};
+use crate::app::{
+    querying::{self, ComputeConfigQuery},
+    show_projects_actions,
+    types::{self, Commit, Config, QueriedLang},
+};
 
-use super::{QueryDataVec, QueryId, TabId, utils_results_batched::ComputeError};
+use super::utils_results_batched::ComputeError;
 
 impl crate::HyperApp {
     pub(crate) fn show_left_panel(&mut self, ctx: &egui::Context) {
@@ -26,145 +28,132 @@ impl crate::HyperApp {
     fn show_left_panel_views_props(&mut self, ui: &mut egui::Ui) {
         for tile_id in self.tree.active_tiles() {
             let Some(&pane) = self.tree.tiles.get_pane(&tile_id) else {
+                // log::error!("{:?}", tile_id);
                 continue;
             };
-            let title = self.tabs[pane].title(&self.data);
+            let title = self.tabs[pane as usize].title(&self.data);
             use super::re_ui_collapse::SectionCollapsingHeader;
             SectionCollapsingHeader::with_id(ui.id().with(pane), title)
                 .default_open(false)
                 .show(ui, |ui| {
-                    if let super::Tab::ProjectSelection() = self.tabs[pane] {
-                        self.data.show_actions(ui);
+                    if let super::Tab::ProjectSelection() = self.tabs[pane as usize] {
+                        show_projects_actions(ui, &mut self.data);
                         ui.indent("proj_list", |ui| {
                             let mut span = ui.full_span();
                             span.min += 10.0;
                             ui.full_span_scope(span, |ui| self.show_repositories(ui))
                         });
-                    } else if let super::Tab::QueryResults { format, .. } = &mut self.tabs[pane] {
-                        selection_querying_result_format(ui, format);
-                    } else if let super::Tab::LocalQuery(id) = self.tabs[pane] {
+                    } else if let super::Tab::QueryResults { id, format } =
+                        &mut self.tabs[pane as usize]
+                    {
+                        egui::ComboBox::from_label("Commits")
+                            .selected_text(format.as_ref())
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(format, super::ResultFormat::List, "List");
+                                ui.selectable_value(format, super::ResultFormat::Table, "Table");
+                                ui.add_enabled_ui(false, |ui| {
+                                    ui.selectable_value(format, super::ResultFormat::Json, "Json");
+                                });
+                            });
+                    } else if let super::Tab::LocalQuery(id) = self.tabs[pane as usize] {
                         self.show_local_query_left_panel(ui, id);
-                    } else if let super::Tab::TreeAspect = self.tabs[pane] {
-                        use crate::app::code_aspects;
-                        let (proj_resp, commit_resp, path_resp) =
-                            code_aspects::show_config(ui, &mut self.data.aspects);
-                        if proj_resp.clicked() {
-                            self.modal_handler_proj_or_commits
-                                .open_projects(code_aspects::project_modal_handler);
-                        }
-                        if commit_resp.clicked() {
-                            let repo = &self.data.aspects.commit.repo;
-                            if let Some(proj) = self.data.selected_code_data.find(repo) {
-                                self.modal_handler_proj_or_commits
-                                    .open_commits(proj, |data, cid| data.aspects.commit.id = cid);
-                            }
-                        }
-                        if path_resp.changed() {
-                            use crate::app::code_aspects::remote_fetch_node_old as fetch;
-                            self.data.aspects_result = Some(fetch(
-                                ui.ctx(),
-                                &self.data.api_addr,
-                                self.data.store.clone(),
-                                &self.data.aspects.commit,
-                                &self.data.aspects.path,
-                            ));
-                        }
-                    } else if let super::Tab::TSG = self.tabs[pane] {
-                        use crate::app::tsg;
-                        let (proj_resp, commit_resp) = tsg::show_config(ui, &mut self.data.tsg);
-                        if proj_resp.clicked() {
-                            self.modal_handler_proj_or_commits
-                                .open_projects(tsg::project_modal_handler);
-                        }
-                        if commit_resp.clicked() {
-                            let repo = &self.data.tsg.content.commit.repo;
-                            if let Some(proj) = self.data.selected_code_data.find(repo) {
-                                self.modal_handler_proj_or_commits
-                                    .open_commits(proj, tsg::commit_modal_handler);
-                            }
-                        }
-                    } else if let super::Tab::Smells = self.tabs[pane] {
-                        use crate::app::smells;
-                        let (proj_resp, commit_resp) =
-                            smells::show_config(ui, &mut self.data.smells);
-                        if proj_resp.clicked() {
-                            self.modal_handler_proj_or_commits
-                                .open_projects(smells::project_modal_handler);
-                        }
-                        if commit_resp.clicked() {
-                            let repo = self.data.smells.repo().unwrap();
-                            if let Some(proj) = self.data.selected_code_data.find(repo) {
-                                self.modal_handler_proj_or_commits
-                                    .open_commits(proj, smells::commit_modal_handler);
-                            }
-                        }
-                    } else if let super::Tab::SmellsPatternGraph(gid) = self.tabs[pane] {
-                        use crate::app::smells;
-                        smells::show_smells_graph_config(
+                    } else if let super::Tab::TreeAspect = self.tabs[pane as usize] {
+                        crate::app::code_aspects::show_config(
                             ui,
-                            &mut self.data.smells,
-                            self.data.smells_result.as_mut(),
-                            gid,
+                            &mut self.data.aspects,
+                            &mut self.data.aspects_result,
+                            &self.data.api_addr,
+                            self.data.store.clone(),
                         );
-                    } else if let super::Tab::LongTracking = self.tabs[pane] {
-                        use crate::app::long_tracking;
-                        let (proj_resp, commit_resp) =
-                            long_tracking::show_config(ui, &mut self.data.long_tracking);
-                        if proj_resp.clicked() {
-                            self.modal_handler_proj_or_commits
-                                .open_projects(long_tracking::project_modal_handler);
-                        }
-                        if commit_resp.clicked() {
-                            let repo = self.data.long_tracking.repo();
-                            if let Some(proj) = self.data.selected_code_data.find(repo) {
-                                self.modal_handler_proj_or_commits
-                                    .open_commits(proj, long_tracking::commit_modal_handler);
-                            }
-                        }
+                    } else if let super::Tab::TSG = self.tabs[pane as usize] {
+                        crate::app::tsg::show_config(ui, &mut self.data.tsg);
+                    } else if let super::Tab::Smells = self.tabs[pane as usize] {
+                        crate::app::smells::show_config(ui, &mut self.data.smells);
+                    } else if let super::Tab::LongTracking = self.tabs[pane as usize] {
+                        crate::app::long_tracking::show_config(ui, &mut self.data.long_tracking);
                     }
+
+                    match &self.tabs[pane as usize] {
+                        _ => (),
+                    };
                 });
         }
     }
-    fn show_local_query_left_panel(&mut self, ui: &mut egui::Ui, qid: QueryId) {
-        let query = &mut self.data.queries[qid];
+    fn show_local_query_left_panel(&mut self, ui: &mut egui::Ui, id: u16) {
+        let query = &mut self.data.queries[id as usize];
         ui.horizontal(|ui| {
             ui.label("name: ");
             ui.text_edit_singleline(&mut query.name);
         });
+        egui::ComboBox::new((ui.id(), "Lang", id), "Lang")
+            .selected_text(query.lang.as_str())
+            .show_ui(ui, |ui| {
+                let v = "Cpp";
+                if ui.selectable_label(v == query.lang, v).clicked() {
+                    if query.lang != v {
+                        query.lang = v.to_string()
+                    }
+                }
+                let v = "Java";
+                if ui.selectable_label(v == query.lang, v).clicked() {
+                    if query.lang != v {
+                        query.lang = v.to_string()
+                    }
+                }
+            });
 
-        show_lang_selector(ui, qid, &mut query.lang);
-
-        let precomp_sel = show_precomp_selector(ui, qid, query.precomp, &mut self.data.queries);
-        let precomp_sel = precomp_sel.inner.as_ref();
-
-        if let Some(precomp) = precomp_sel.and_then(|x| x.0) {
-            let tid = self.tabs.push(crate::app::Tab::LocalQuery(precomp));
-            let child = self.tree.tiles.insert_pane(tid);
-            match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
-                Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
-                _ => todo!(),
-            };
-        }
-        if precomp_sel.map_or(false, |x| x.1.clicked()) {
-            let precomp = self.data.queries.push(crate::app::QueryData {
+        let sel_precomp = if let Some(id) = query.precomp.clone() {
+            self.data.queries[id as usize].name.to_string()
+        } else {
+            "<none>".to_string()
+        };
+        let mut create_q = false;
+        egui::ComboBox::new((ui.id(), "Precomp", id), "Precomp")
+            .selected_text(sel_precomp)
+            .show_ui(ui, |ui| {
+                create_q = ui.button("new").clicked();
+                let mut precomp = None;
+                for (i, q) in self.data.queries.iter().enumerate() {
+                    let v = &q.name;
+                    if ui.selectable_label(i == id as usize, v).clicked() {
+                        if i == id as usize {
+                            precomp = Some(i);
+                        }
+                    }
+                }
+                let query = &mut self.data.queries[id as usize];
+                if let Some(precomp) = precomp {
+                    query.precomp = Some(precomp as u16);
+                }
+                if ui
+                    .selectable_label(query.precomp.is_none(), "<none>")
+                    .clicked()
+                {
+                    query.precomp = None;
+                }
+            });
+        if create_q {
+            self.data.queries.push(crate::app::QueryData {
                 name: "precomp".to_string(),
-                lang: self.data.queries[qid].lang.to_string(),
+                lang: self.data.queries[id as usize].lang.to_string(),
                 query: egui_addon::code_editor::CodeEditor::new(
-                    egui_addon::code_editor::EditorInfo::default().into(),
+                    egui_addon::code_editor::EditorInfo::default().copied(),
                     r#"translation_unit"#.to_string(),
                 ),
                 ..Default::default()
             });
-            let query = &mut self.data.queries[qid];
-            query.precomp = Some(precomp);
-            let tid = self.tabs.push(crate::app::Tab::LocalQuery(precomp));
+            let qid = self.data.queries.len() as u16 - 1;
+            let query = &mut self.data.queries[id as usize];
+            query.precomp = Some(qid);
+            let tid = self.tabs.len() as u16;
+            self.tabs.push(crate::app::Tab::LocalQuery(qid));
             let child = self.tree.tiles.insert_pane(tid);
             match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
                 Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
                 _ => todo!(),
             };
         }
-        let query = &mut self.data.queries[qid];
+        let query = &mut self.data.queries[id as usize];
         egui::Slider::new(&mut query.commits, 1..=100)
             .text("#commits")
             .clamping(egui::SliderClamping::Never)
@@ -191,7 +180,7 @@ impl crate::HyperApp {
                 c.next().map(|c| {
                     let commit = types::Commit {
                         repo: r.clone(),
-                        id: *c,
+                        id: c.clone(),
                     };
                     (i, commit)
                 })
@@ -201,35 +190,36 @@ impl crate::HyperApp {
             loop {
                 match (l.next(), it.next()) {
                     (None, None) => break,
-                    (Some((rid, _c)), None) => {
-                        let qrid = self.data.queries_results.push(super::QueryResults {
-                            project: rid,
-                            query: qid,
-                            content: Default::default(),
-                            tab: TabId::INVALID,
-                        });
+                    (Some((rid, c)), None) => {
+                        let qrid: u16 = self.data.queries_results.len().try_into().unwrap();
                         r.push(qrid);
+                        self.data.queries_results.push(super::QueryResults {
+                            project: rid,
+                            query: id,
+                            content: Default::default(),
+                            tab: u16::MAX,
+                        });
                     }
                     (None, Some(&_id)) => {
                         // nothing to do ProjectIds are valid for the duration of the session
                         // self.data.queries_results[id as usize].0 = u16::MAX;
                     }
                     (Some((i, _)), Some(&id)) => {
-                        self.data.queries_results[id].project = i;
+                        self.data.queries_results[id as usize].project = i;
                         r.push(id);
                     }
                 }
             }
             *q_res_ids = r;
         }
-        let query_data = &self.data.queries[qid];
+        let query_data = &self.data.queries[id as usize];
         let q_res_ids = &query_data.results;
         ui.style_mut().spacing.item_spacing = egui::vec2(3.0, 2.0);
-        for &q_res_id in q_res_ids {
-            if q_res_id == QResId::INVALID {
+        for q_res_id in q_res_ids {
+            if *q_res_id == u16::MAX {
                 continue;
             }
-            let q_res = &mut self.data.queries_results[q_res_id];
+            let q_res = &mut self.data.queries_results[*q_res_id as usize];
             let Some((repo, mut c)) = self.data.selected_code_data.get_mut(q_res.project) else {
                 continue;
             };
@@ -238,16 +228,17 @@ impl crate::HyperApp {
             };
 
             fn update_tiles(
-                tabs: &mut crate::app::Tabs,
+                tabs: &mut Vec<crate::app::Tab>,
                 tree: &mut egui_tiles::Tree<crate::app::TabId>,
                 q_res: &mut super::QueryResults,
-                q_res_id: QResId,
+                q_res_id: &u16,
             ) {
-                let tid = tabs.push(crate::app::Tab::QueryResults {
-                    id: q_res_id,
+                let tid = tabs.len() as u16;
+                q_res.tab = tid;
+                tabs.push(crate::app::Tab::QueryResults {
+                    id: *q_res_id,
                     format: super::ResultFormat::Table,
                 });
-                q_res.tab = tid;
                 let tid = tree.tiles.insert_new(egui_tiles::Tile::Pane(tid));
                 tree.move_tile_to_container(tid, tree.root().unwrap(), usize::MAX, false);
             }
@@ -262,7 +253,7 @@ impl crate::HyperApp {
                     w.active.weak_bg_fill = d;
                     w.hovered.weak_bg_fill = n;
                     w.inactive.weak_bg_fill = d;
-                    let q_res = &mut self.data.queries_results[q_res_id];
+                    let q_res = &mut self.data.queries_results[*q_res_id as usize];
                     let compute_button;
                     if let Some(content) = q_res.content.get() {
                         match content {
@@ -349,19 +340,24 @@ impl crate::HyperApp {
                                     .on_hover_text(format!("{}\n{}", err.head(), err.content()));
                             }
                         }
-                        ui.label(&format!("{}/{}/{}", repo.user, repo.name, &c.prefix(6)));
+                        ui.label(&format!(
+                            "{}/{}/{}",
+                            repo.user,
+                            repo.name,
+                            &c[..6.min(c.len())]
+                        ));
                         if q_res.content.is_waiting() {
                             ui.spinner();
                             let synced = Self::sync_query_results(q_res);
                             if let Ok(true) = synced {
                                 self.save_interval = std::time::Duration::ZERO;
-                                if q_res.tab == TabId::INVALID {
+                                if q_res.tab == u16::MAX {
                                     update_tiles(&mut self.tabs, &mut self.tree, q_res, q_res_id);
                                 }
                             }
                         }
                     } else {
-                        let q_res = &mut self.data.queries_results[q_res_id];
+                        let q_res = &mut self.data.queries_results[*q_res_id as usize];
                         let synced = Self::sync_query_results(q_res);
                         if let Err(Some(err)) = &synced {
                             let d = egui::Color32::DARK_RED;
@@ -380,13 +376,18 @@ impl crate::HyperApp {
                         // finally, if unassigned pane then add it
                         else {
                             self.save_interval = std::time::Duration::ZERO;
-                            if q_res.tab == TabId::INVALID {
+                            if q_res.tab == u16::MAX {
                                 update_tiles(&mut self.tabs, &mut self.tree, q_res, q_res_id);
                             }
                             compute_button = ui.add(egui::Button::new("⏵"));
                         }
-                        ui.label(&format!("{}/{}/{}", repo.user, repo.name, &c.prefix(6)));
-                        let query_data = &self.data.queries[q_res.query];
+                        ui.label(&format!(
+                            "{}/{}/{}",
+                            repo.user,
+                            repo.name,
+                            &c[..6.min(c.len())]
+                        ));
+                        let query_data = &self.data.queries[q_res.query as usize];
                         // let current_lang = &query_data.lang;
                         let w = &mut ui.style_mut().visuals.widgets;
                         w.hovered.weak_bg_fill = _n;
@@ -400,16 +401,28 @@ impl crate::HyperApp {
                                 ui.label(&query_data.lang)
                             });
                         });
+                        // egui::ComboBox::new(("Lang", q_res.query), "Lang")
+                        //     .selected_text(query_data.lang.as_str())
+                        //     .show_ui(ui, |ui| {
+                        //         lang_selection(ui, current_lang, "Cpp", &mut new_lang, q_res.query);
+                        //         lang_selection(
+                        //             ui,
+                        //             current_lang,
+                        //             "Java",
+                        //             &mut new_lang,
+                        //             q_res.query,
+                        //         );
+                        //     });
                     };
                     compute_button
                 })
                 .inner;
-            let q_res = &mut self.data.queries_results[q_res_id];
+            let q_res = &mut self.data.queries_results[*q_res_id as usize];
 
             if compute_button.clicked() {
                 let (repo, mut commit_slice) =
                     self.data.selected_code_data.get_mut(q_res.project).unwrap();
-                let query_data = &self.data.queries[q_res.query];
+                let query_data = &self.data.queries[q_res.query as usize];
                 let language = query_data.lang.to_string();
                 let query = query_data.query.as_ref().to_string();
                 wasm_rs_dbg::dbg!(&query);
@@ -420,7 +433,10 @@ impl crate::HyperApp {
                 };
                 let max_matches = query_data.max_matches;
                 let timeout = query_data.timeout;
-                let precomp = query_data.precomp.map(|id| &self.data.queries[id]);
+                let precomp = query_data
+                    .precomp
+                    .clone()
+                    .map(|id| &self.data.queries[id as usize]);
                 let precomp = precomp.map(|p| p.query.as_ref().to_string());
                 let prom = querying::remote_compute_query_aux(
                     ui.ctx(),
@@ -438,7 +454,7 @@ impl crate::HyperApp {
                         timeout,
                         precomp,
                     },
-                    commit_slice.iter_mut().skip(1).map(|x| *x),
+                    commit_slice.iter_mut().skip(1).map(|x| x.to_string()),
                 );
                 q_res.content.buffer(prom);
             }
@@ -455,9 +471,20 @@ impl crate::HyperApp {
     }
 
     /// returns Ok(true) if it is now local
-    fn sync_query_results(q_res: &mut super::QueryResults) -> Result<bool, Option<String>> {
+    fn sync_query_results(
+        q_res: &mut super::QueryResults,
+        // results_per_commit: &mut super::ResultsPerCommit,
+    ) -> Result<bool, Option<String>> {
         if q_res.content.is_waiting() {
-            if q_res.content.try_poll_with(|x| x) {
+            if q_res.content.try_poll_with(|x| {
+                // x.map_err(|x| querying::QueryingError::NetworkError(x))?
+                //     .content
+                //     .ok_or(querying::QueryingError::NetworkError(
+                //         "content was not deserialized or empty".to_string(),
+                //     ))?
+                //     .map(|x| x.into())
+                x
+            }) {
                 Ok(true)
             } else {
                 Err(None)
@@ -465,10 +492,91 @@ impl crate::HyperApp {
         } else {
             Ok(false)
         }
+
+        // let a = std::mem::take(&mut q_res.2);
+        // match a {
+        //     LocalOrRemote::Remote(prom) => {
+        //         match prom.try_take() {
+        //             Ok(Ok(r)) => {
+        //                 if let Some(r) = r.content {
+        //                     if let Ok(r) = &r {
+        //                         // Self::update_results_per_commit(results_per_commit, r);
+        //                     }
+        //                     q_res.2 = LocalOrRemote::Local(r);
+        //                     Ok(true)
+        //                 } else {
+        //                     Ok(false)
+        //                 }
+        //             }
+        //             Ok(Err(err)) => {
+        //                 log::error!("{}", err);
+        //                 Err(Some(format!("error: {}", err)))
+        //             }
+        //             Err(prom) => {
+        //                 q_res.2 = LocalOrRemote::Remote(prom);
+        //                 Err(None)
+        //             }
+        //         }
+        //     }
+        //     LocalOrRemote::None => Ok(false),
+        //     _ => Ok(false),
+        // }
+    }
+
+    fn show_left_panel_custom_contents(&mut self, ui: &mut egui::Ui) {
+        egui::TopBottomPanel::top("left_panel_top_bar")
+            .min_height(3.0 * re_ui::DesignTokens::title_bar_height())
+            .frame(egui::Frame {
+                inner_margin: egui::Margin::symmetric(re_ui::DesignTokens::view_padding(), 0),
+                ..Default::default()
+            })
+            .show_inside(ui, |ui| self.show_actions(ui));
+
+        // list_item::list_item_scope(ui, "testing stuff", |ui| {
+        //     ui.list_item().show_hierarchical(
+        //         ui,
+        //         list_item::PropertyContent::new("Text (editable)")
+        //             .value_text_mut(&mut self.latest_cmd),
+        //     );
+        //     ui.list_item().show_hierarchical(
+        //         ui,
+        //         list_item::PropertyContent::new("Color")
+        //             .with_icon(&re_ui::icons::SPACE_VIEW_TEXT)
+        //             .action_button(&re_ui::icons::ADD, || {
+        //                 // re_log::warn!("Add button clicked");
+        //             })
+        //             .value_color_mut(&mut egui::Color32::RED.to_array()),
+        //     );
+        //     ui.list_item().show_hierarchical(
+        //         ui,
+        //         list_item::PropertyContent::new("Bool (editable)")
+        //             .value_bool_mut(&mut self.dummy_bool),
+        //     );
+        // });
+
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                egui::Frame {
+                    inner_margin: egui::Margin::same(re_ui::DesignTokens::view_padding()),
+                    ..Default::default()
+                }
+                .show(ui, |ui| self.left_panel_mid_section_ui(ui));
+            });
+
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                egui::Frame {
+                    inner_margin: egui::Margin::same(re_ui::DesignTokens::view_padding()),
+                    ..Default::default()
+                }
+                .show(ui, |ui| self.left_panel_bottom_section_ui(ui));
+            });
     }
 
     pub(crate) fn bottom_panel(&mut self, ctx: &egui::Context) {
-        let mut frame_style = re_ui::design_tokens_of(egui::Theme::Dark).bottom_panel_frame();
+        let mut frame_style = DesignTokens::bottom_panel_frame();
         if !ctx.style().visuals.dark_mode {
             frame_style.fill = egui::Visuals::light().window_fill;
             frame_style.stroke = egui::Visuals::light().window_stroke;
@@ -478,10 +586,78 @@ impl crate::HyperApp {
             .resizable(true)
             .frame(frame_style)
             .show_animated(ctx, self.show_bottom_panel, |ui| {
-                ui.horizontal(|ui| {
-                    self.bottom_pannel_buttons(ui);
-                });
                 let view = &mut self.bottom_view;
+                ui.horizontal(|ui| {
+                    ui.strong("Bottom panel");
+                    ui.add_space(20.0);
+                    egui::ComboBox::from_label("View")
+                        .selected_text(view.as_ref())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(view, super::BottomPanelConfig::Commits, "Commits");
+                            ui.selectable_value(
+                                view,
+                                super::BottomPanelConfig::CommitsTime,
+                                "Commits Time",
+                            );
+                            ui.add_enabled_ui(false, |ui| {
+                                ui.selectable_value(
+                                    view,
+                                    super::BottomPanelConfig::Temporal,
+                                    "Temporal",
+                                );
+                                ui.selectable_value(
+                                    view,
+                                    super::BottomPanelConfig::Temporal,
+                                    "Commit Metadata",
+                                );
+                            })
+                        });
+                    ui.add_space(20.0);
+                    const MAX: i64 = 60 * 60 * 24 * 365;
+                    const MIN: i64 = 60 * 60 * 24 * 1;
+                    let resp =
+                        &egui::widgets::Slider::new(&mut self.data.offset_fetch, 0..=MAX).ui(ui);
+                    if resp.drag_stopped() {
+                        self.save_interval = std::time::Duration::ZERO;
+                    }
+                    let resp = &egui::widgets::Slider::new(&mut self.data.max_fetch, MIN..=MAX)
+                        .clamping(egui::SliderClamping::Never)
+                        .custom_formatter(|n, _| {
+                            let n = n as i64;
+                            let days = n / (60 * 60 * 24);
+                            let hours = (n / (60 * 60)) % 24;
+                            let mins = (n / 60) % 60;
+                            let secs = n % 60;
+                            format!("{days:02}:{hours:02}:{mins:02}:{secs:02}")
+                        })
+                        .custom_parser(|s| {
+                            let parts: Vec<&str> = s.split(':').collect();
+                            if parts.len() == 4 {
+                                parts[0]
+                                    .parse::<i64>()
+                                    .and_then(|d| {
+                                        parts[1].parse::<i64>().and_then(|h| {
+                                            parts[2].parse::<i64>().and_then(|m| {
+                                                parts[3].parse::<i64>().map(|s| {
+                                                    ((d * 60 * 60 * 24)
+                                                        + (h * 60 * 60)
+                                                        + (m * 60)
+                                                        + s)
+                                                        as f64
+                                                })
+                                            })
+                                        })
+                                    })
+                                    .ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .ui(ui);
+                    if resp.drag_stopped() {
+                        self.save_interval = std::time::Duration::ZERO;
+                    }
+                });
                 if *view == super::BottomPanelConfig::Commits {
                     egui::Frame::menu(ui.style()).show(ui, |ui| {
                         egui::ScrollArea::both().show(ui, |ui| {
@@ -492,146 +668,34 @@ impl crate::HyperApp {
                         });
                     });
                 } else if *view == super::BottomPanelConfig::CommitsTime {
-                    egui::ScrollArea::vertical()
+                    egui::ScrollArea::both()
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             egui::Frame::menu(ui.style()).show(ui, |ui| {
-                                self.show_commit_graphs_timed(ui);
+                                let timed = true;
+                                if timed {
+                                    self.print_commit_graph_timed(ui);
+                                } else {
+                                    self.print_commit_graph(ui, ctx);
+                                }
                             });
                         });
                 }
             });
     }
+}
 
-    fn bottom_pannel_buttons(&mut self, ui: &mut egui::Ui) {
-        let view = &mut self.bottom_view;
-        ui.strong("Bottom panel");
-        ui.add_space(20.0);
-        egui::ComboBox::from_label("View")
-            .selected_text(view.as_ref())
-            .show_ui(ui, |ui| {
-                ui.selectable_value(view, super::BottomPanelConfig::Commits, "Commits");
-                ui.selectable_value(view, super::BottomPanelConfig::CommitsTime, "Commits Time");
-                ui.add_enabled_ui(false, |ui| {
-                    ui.selectable_value(view, super::BottomPanelConfig::Temporal, "Temporal");
-                    ui.selectable_value(
-                        view,
-                        super::BottomPanelConfig::Temporal,
-                        "Commit Metadata",
-                    );
-                })
-            });
-        ui.add_space(20.0);
-
-        const MAX: i64 = 60 * 60 * 24 * 365;
-        const MIN: i64 = 60 * 60 * 24;
-        let resp = &egui::widgets::Slider::new(&mut self.data.offset_fetch, 0..=MAX).ui(ui);
-        if resp.drag_stopped() {
-            self.save_interval = std::time::Duration::ZERO;
-        }
-        let resp = &egui::widgets::Slider::new(&mut self.data.max_fetch, MIN..=MAX)
-            .clamping(egui::SliderClamping::Never)
-            .custom_formatter(|n, _| {
-                let n = n as i64;
-                let days = n / (60 * 60 * 24);
-                let hours = (n / (60 * 60)) % 24;
-                let mins = (n / 60) % 60;
-                let secs = n % 60;
-                format!("{days:02}:{hours:02}:{mins:02}:{secs:02}")
-            })
-            .custom_parser(|s| {
-                let parts: Vec<&str> = s.split(':').collect();
-                if parts.len() != 4 {
-                    return None;
-                }
-                let d = parts[0].parse::<i64>().ok()? * 60 * 60 * 24;
-                let h = parts[1].parse::<i64>().ok()? * 60 * 60;
-                let m = parts[2].parse::<i64>().ok()? * 60;
-                let s = parts[3].parse::<i64>().ok()?;
-                Some((d + h + m + s) as f64)
-            })
-            .ui(ui);
-        if resp.drag_stopped() {
-            self.save_interval = std::time::Duration::ZERO;
+fn lang_selection<'a, T>(
+    ui: &mut egui::Ui,
+    current_lang: &str,
+    selected_value: &'a str,
+    new_lang: &mut Option<(&'a str, T)>,
+    payload: T,
+) {
+    let same = current_lang == selected_value;
+    if ui.selectable_label(same, selected_value).clicked() {
+        if !same {
+            *new_lang = Some((selected_value, payload));
         }
     }
-}
-
-fn show_precomp_selector(
-    ui: &mut egui::Ui,
-    qid: QueryId,
-    precomp: Option<QueryId>,
-    queries: &mut QueryDataVec,
-) -> egui::InnerResponse<Option<(Option<QueryId>, egui::Response)>> {
-    const NONE_LABEL: &str = "<none>";
-    let sel_precomp = if let Some(id) = precomp {
-        queries[id].name.to_string()
-    } else {
-        NONE_LABEL.to_string()
-    };
-
-    egui::ComboBox::new((ui.id(), "Precomp", qid), "Precomp")
-        .selected_text(sel_precomp)
-        .show_ui(ui, |ui| {
-            let create_q = ui.button("new");
-            let mut precomp = None;
-            for (i, q) in queries.enumerate() {
-                let v = &q.name;
-                let sel = precomp.map_or(false, |p| i == p);
-                if ui.selectable_label(sel, v).clicked() {
-                    if i == qid {
-                        precomp = Some(i);
-                    }
-                }
-            }
-            let query = &mut queries[qid];
-            if let Some(precomp) = precomp {
-                query.precomp = Some(precomp);
-            }
-            if ui
-                .selectable_label(query.precomp.is_none(), NONE_LABEL)
-                .clicked()
-            {
-                query.precomp = None;
-            }
-
-            (precomp, create_q)
-        })
-}
-
-fn show_lang_selector(ui: &mut egui::Ui, id: impl std::hash::Hash, lang: &mut String) {
-    egui::ComboBox::new((ui.id(), "Lang", id), "Lang")
-        .selected_text(lang.as_str())
-        .show_ui(ui, |ui| {
-            let v = "Cpp";
-            if ui.selectable_label(v == lang, v).clicked() {
-                if lang != v {
-                    *lang = v.to_string()
-                }
-            }
-            let v = "Java";
-            if ui.selectable_label(v == lang, v).clicked() {
-                if lang != v {
-                    *lang = v.to_string()
-                }
-            }
-        });
-}
-
-fn selection_querying_result_format(ui: &mut egui::Ui, format: &mut super::ResultFormat) {
-    egui::ComboBox::from_label("Commits")
-        .selected_text(format.as_ref())
-        .show_ui(ui, |ui| {
-            ui.selectable_value(format, super::ResultFormat::List, "List");
-            ui.selectable_value(format, super::ResultFormat::Table, "Table");
-            if format == &super::ResultFormat::Tree {
-                ui.selectable_value(format, super::ResultFormat::Hunks, "Hunks");
-            }
-            if format == &super::ResultFormat::Hunks {
-                ui.selectable_value(format, super::ResultFormat::Tree, "Tree");
-            }
-            ui.add_enabled_ui(false, |ui| {
-                ui.selectable_value(format, super::ResultFormat::Json, "Json");
-            });
-        });
 }

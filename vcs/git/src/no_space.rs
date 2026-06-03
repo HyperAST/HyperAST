@@ -1,11 +1,14 @@
 use std::ops::Deref;
 
-use hyperast::store::defaults::{LabelIdentifier, NodeIdentifier};
-use hyperast::store::nodes::legion::{HashedNodeRef, NodeStore};
-use hyperast::types::{self, Children};
-use hyperast::types::{NodeId, UniformNodeId};
+use hyperast::{
+    store::{
+        defaults::{LabelIdentifier, NodeIdentifier},
+        nodes::legion::{HashedNodeRef, NodeStore},
+    },
+    types::{self, AAAA, Children, NodeId},
+};
 
-pub fn as_nospaces<'a, TS>(
+pub fn as_nospaces2<'a, TS>(
     stores: &'a hyperast::store::SimpleStores<TS>,
 ) -> hyperast::store::SimpleStores<
     TS,
@@ -78,7 +81,7 @@ impl<IdN> Deref for MIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + UniformNodeId> NodeId for MIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> NodeId for MIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -112,12 +115,6 @@ impl<'a, T> types::WithSerialization for NoSpaceWrapper<'a, T> {
     /// WARN return the len with spaces ? YES
     fn try_bytes_len(&self) -> Option<usize> {
         self.0.try_bytes_len()
-    }
-}
-
-impl<'a, T> types::WithPrecompQueries for NoSpaceWrapper<'a, T> {
-    fn wont_match_given_precomputed_queries(&self, queries: u16) -> bool {
-        self.0.wont_match_given_precomputed_queries(queries)
     }
 }
 
@@ -173,7 +170,7 @@ impl<'a, T> types::WithHashs for NoSpaceWrapper<'a, T> {
     type HK = hyperast::hashed::SyntaxNodeHashsKinds;
     type HP = hyperast::nodes::HashSize;
 
-    fn hash(&self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
+    fn hash<'b>(&'b self, kind: impl std::ops::Deref<Target = Self::HK>) -> Self::HP {
         self.0.hash(kind)
     }
 }
@@ -191,7 +188,7 @@ impl<'a> hyperast::types::ErasedHolder for NoSpaceWrapper<'a, MIdN<NodeIdentifie
     }
 }
 
-impl hyperast::store::nodes::ErasedHolder for NoSpaceWrapper<'_, NodeIdentifier> {
+impl<'a> hyperast::store::nodes::ErasedHolder for NoSpaceWrapper<'a, NodeIdentifier> {
     unsafe fn unerase_ref_unchecked<T: 'static + hyperast::store::nodes::Compo>(
         &self,
         tid: std::any::TypeId,
@@ -204,13 +201,7 @@ impl hyperast::store::nodes::ErasedHolder for NoSpaceWrapper<'_, NodeIdentifier>
     }
 }
 
-impl hyperast::store::nodes::PolyglotHolder for NoSpaceWrapper<'_, NodeIdentifier> {
-    fn lang_id(&self) -> hyperast::store::nodes::LangId {
-        self.0.lang_id()
-    }
-}
-
-impl types::Tree for NoSpaceWrapper<'_, NodeIdentifier> {
+impl<'a> types::Tree for NoSpaceWrapper<'a, NodeIdentifier> {
     fn has_children(&self) -> bool {
         self.0.has_children()
     }
@@ -220,16 +211,16 @@ impl types::Tree for NoSpaceWrapper<'_, NodeIdentifier> {
     }
 }
 
-impl types::NStore for NoSpaceNodeStoreWrapper<'_> {
+impl<'store> types::NStore for NoSpaceNodeStoreWrapper<'store> {
     type IdN = NodeIdentifier;
     type Idx = u16;
 }
 
-impl<'a> types::lending::NLending<'a, NodeIdentifier> for NoSpaceNodeStoreWrapper<'_> {
+impl<'a, 'store> types::lending::NLending<'a, NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
     type N = NoSpaceWrapper<'a, NodeIdentifier>;
 }
 
-impl types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'_> {
+impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
     fn resolve(&self, id: &NodeIdentifier) -> types::LendN<'_, Self, NodeIdentifier> {
         NoSpaceWrapper(self.s.resolve(*id))
     }

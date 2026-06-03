@@ -1,10 +1,7 @@
-//! Computes diffs on combination of commits in a given window/
-//! NOTE a window of length one is just like computing diffs on consecutive commits (i.e., simple case)
-use std::env;
-use std::path::PathBuf;
-use std::str::FromStr;
+// window of one is just consecutive commits
 
-use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
+use std::{env, path::PathBuf, str::FromStr};
 
 use hyperast_benchmark_diffs::{setup_env_logger, window_combination::windowed_commits_compare};
 
@@ -25,6 +22,7 @@ fn main() {
         .expect("give an argument like openjdk/jdk or INRIA/spoon"); //"openjdk/jdk";//"INRIA/spoon";
     let before = args.get(2).map_or("", |x| x);
     let after = args.get(3).map_or("", |x| x);
+    let dir_path = args.get(4).map_or("", |x| x);
     let out_validity = args.get(5).and_then(|x| {
         if x.is_empty() {
             None
@@ -44,19 +42,21 @@ fn main() {
     let diff_algorithm = "Chawathe".to_string();
     let diff_algorithm = args.get(8).unwrap_or(&diff_algorithm);
     // concecutive_commits
-    let mut preprocessed = PreProcessedRepositories::default();
-    let (user, name) = repo_name.split_once("/").unwrap();
-    let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-    let configured_repo = preprocessed.register_config(repo, config);
+    let preprocessed = PreProcessedRepository::new(&repo_name);
     windowed_commits_compare(
         window_size,
         preprocessed,
-        configured_repo,
         (before, after),
+        dir_path,
         diff_algorithm,
         out,
     );
+}
+
+#[test]
+fn concecutive_commits() {
+    let preprocessed = PreProcessedRepository::new("repo_name");
+    windowed_commits_compare(2, preprocessed, ("before", "after"), "", "Chawathe", None);
 }
 
 #[test]
@@ -78,21 +78,15 @@ fn issue_mappings_pomxml_spoon_pom() {
         })
         .init();
     // INRIA/spoon 7c7f094bb22a350fa64289a94880cc3e7231468f 78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd "spoon-pom" "" 2
-    let repo_name = "INRIA/spoon";
-    let mut preprocessed = PreProcessedRepositories::default();
-    let (user, name) = repo_name.split_once("/").unwrap();
-    let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-    let configured_repo = preprocessed.register_config(repo, config);
+    let preprocessed = PreProcessedRepository::new("INRIA/spoon");
     windowed_commits_compare(
         2,
         preprocessed,
-        configured_repo,
         (
             "7c7f094bb22a350fa64289a94880cc3e7231468f",
             "78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd",
         ),
-        // "spoon-pom",
+        "spoon-pom",
         "Chawathe",
         None,
     );
@@ -104,21 +98,15 @@ fn issue_mappings_pomxml_spoon_pom_2() {
     // hast, gt evolutions: 517,517,
     // missing, additional mappings: 43,10,
     // 1.089578603,2.667414915,1.76489064,1.59514709,2.984131976,35.289540009
-    let repo_name = "INRIA/spoon";
-    let mut preprocessed = PreProcessedRepositories::default();
-    let (user, name) = repo_name.split_once("/").unwrap();
-    let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-    let configured_repo = preprocessed.register_config(repo, config);
+    let preprocessed = PreProcessedRepository::new("INRIA/spoon");
     windowed_commits_compare(
         2,
         preprocessed,
-        configured_repo,
         (
             "76ffd3353a535b0ce6edf0bf961a05236a40d3a1",
             "74ee133f4fe25d8606e0775ade577cd8e8b5cbfd",
         ),
-        // "spoon-pom",
+        "spoon-pom",
         "Chawathe",
         None,
     );

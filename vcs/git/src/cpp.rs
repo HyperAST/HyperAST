@@ -1,15 +1,17 @@
-use hyperast::hashed::SyntaxNodeHashs;
-use hyperast::store::defaults::{LabelIdentifier, NodeIdentifier};
-use hyperast::tree_gen::{self, SubTreeMetrics};
+use std::time::Instant;
 
-use crate::PROPAGATE_ERROR_ON_BAD_CST_NODE;
-use crate::processing::ObjectName;
-use crate::{Accumulator, BasicDirAcc};
-use crate::{FailedParsing, FileProcessingResult, SuccessProcessing};
+use crate::{
+    Accumulator, BasicDirAcc, FailedParsing, FileProcessingResult, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    SuccessProcessing, cpp_processor::SimpleStores, processing::ObjectName,
+};
 
-use crate::cpp_processor::SimpleStores;
-use hyperast_gen_ts_cpp::legion as cpp_tree_gen;
-use hyperast_gen_ts_cpp::types::TStore;
+use hyperast::{
+    hashed::SyntaxNodeHashs,
+    store::defaults::{LabelIdentifier, NodeIdentifier},
+    tree_gen::{self, SubTreeMetrics},
+};
+
+use hyperast_gen_ts_cpp::{legion as cpp_tree_gen, types::TStore};
 
 // waiting for residual stabilization https://github.com/rust-lang/rust/issues/84277
 // see after the temporary solution
@@ -32,14 +34,14 @@ use hyperast_gen_ts_cpp::types::TStore;
 //         node: N,
 //     },
 // }
-pub(crate) fn handle_cpp_file<'a, More>(
-    tree_gen: &mut cpp_tree_gen::CppTreeGen<'a, '_, TStore, SimpleStores, More>,
+pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
+    tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore, More>,
     name: &ObjectName,
-    text: &'a [u8],
+    text: &'b [u8],
 ) -> FileProcessingResult<cpp_tree_gen::FNode>
 where
-    More: tree_gen::Prepro<SimpleStores>,
-    More: tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
+    More:
+        tree_gen::Prepro<SimpleStores> + tree_gen::PreproTSG<SimpleStores, Acc = cpp_tree_gen::Acc>,
 {
     // handling the parsing explicitly in this function is a good idea
     // to control complex stuff like timeout, instead of the call on next line
@@ -53,7 +55,7 @@ where
     parser
         .set_language(&hyperast_gen_ts_cpp::language())
         .unwrap();
-    let time = std::time::Instant::now();
+    let time = Instant::now();
     let tree = parser.parse(text, None);
     let parsing_time = time.elapsed();
     let Some(tree) = tree else {
@@ -70,8 +72,9 @@ where
             });
         }
     };
+    let time = Instant::now();
     let node = tree_gen.generate_file(name.as_bytes(), text, tree.walk());
-    let processing_time = time.elapsed() - parsing_time;
+    let processing_time = time.elapsed();
     Ok(SuccessProcessing {
         parsing_time,
         processing_time,
@@ -79,19 +82,15 @@ where
     })
 }
 
-type PrecompQueries = u16;
-
 pub struct CppAcc {
     pub(crate) primary:
         BasicDirAcc<NodeIdentifier, LabelIdentifier, SubTreeMetrics<SyntaxNodeHashs<u32>>>,
-    pub(crate) precomp_queries: PrecompQueries,
 }
 
 impl CppAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
-            precomp_queries: 0,
         }
     }
 }
@@ -141,7 +140,6 @@ impl hyperast::tree_gen::Accumulator for CppAcc {
     fn push(&mut self, (name, (full_node,)): Self::Node) {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
-        self.precomp_queries |= full_node.precomp_queries;
     }
 }
 

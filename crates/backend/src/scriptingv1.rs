@@ -10,20 +10,21 @@ mod quantile;
 mod refs;
 mod stats;
 
-use std::fmt::Display;
-
+use crate::SharedState;
 use average::Merge;
 use axum::Json;
-use rhai::packages::{BasicArrayPackage, CorePackage, Package};
-use rhai::{Array, Dynamic, Engine, Instant, Scope};
-use serde::{Deserialize, Serialize};
-
-use hyperast::store::defaults::NodeIdentifier;
 use hyperast::store::nodes::compo::Flags;
 use hyperast::types::HyperAST;
-use hyperast::types::{HyperType, LabelStore, Labeled, WithChildren, WithStats};
-
-use crate::SharedState;
+use hyperast::{
+    store::defaults::NodeIdentifier,
+    types::{HyperType, LabelStore, Labeled, WithChildren, WithStats},
+};
+use rhai::{
+    Array, Dynamic, Engine, Instant, Scope,
+    packages::{BasicArrayPackage, CorePackage, Package},
+};
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Deserialize, Clone)]
 pub struct ScriptingParam {
@@ -111,7 +112,7 @@ pub fn simple(
         &accumulate_script,
         now,
     )
-    .map(Json)
+    .map(|r| Json(r))
 }
 
 pub fn simple_depth(
@@ -280,7 +281,7 @@ fn simple_aux(
         pending_cs: isize,
     }
     let init: Dynamic = engine
-        .eval_ast(init_script)
+        .eval_ast(&init_script)
         .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
     let mut stack: Vec<Acc> = vec![];
     stack.push(Acc {
@@ -386,7 +387,7 @@ fn simple_aux(
                 use enumset::EnumSet;
                 use hyperast_vcs_git::maven::SemFlag;
                 n.get_component::<Flags<EnumSet<SemFlag>>>()
-                    .is_ok_and(|x| x.contains(SemFlag::IsMavenModule))
+                    .map_or(false, |x| x.contains(SemFlag::IsMavenModule))
             });
             let s = state.clone();
             filter_engine.register_fn("hold_maven_submodule", move || {
@@ -396,7 +397,7 @@ fn simple_aux(
                 use enumset::EnumSet;
                 use hyperast_vcs_git::maven::SemFlag;
                 n.get_component::<Flags<EnumSet<SemFlag>>>()
-                    .is_ok_and(|x| x.contains(SemFlag::HoldMavenSubModule))
+                    .map_or(false, |x| x.contains(SemFlag::HoldMavenSubModule))
             });
             let s = state.clone();
             filter_engine.register_fn("hold_java_folder", move || {
@@ -405,13 +406,14 @@ fn simple_aux(
                 let n = node_store.resolve(current);
                 use enumset::EnumSet;
                 use hyperast_vcs_git::maven::SemFlag;
-                n.get_component::<Flags<EnumSet<SemFlag>>>().is_ok_and(|x| {
-                    x.contains(SemFlag::HoldMainFolder) || x.contains(SemFlag::HoldTestFolder)
-                })
+                n.get_component::<Flags<EnumSet<SemFlag>>>()
+                    .map_or(false, |x| {
+                        x.contains(SemFlag::HoldMainFolder) || x.contains(SemFlag::HoldTestFolder)
+                    })
             });
             add_utils(&mut filter_engine);
             let prepared: Dynamic = filter_engine
-                .eval_ast_with_scope(&mut scope, filter_script)
+                .eval_ast_with_scope(&mut scope, &filter_script)
                 .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
             acc.value = Some(scope.get_value("s").unwrap());
             if let Some(prepared) = prepared.try_cast::<Vec<Dynamic>>() {
@@ -508,7 +510,7 @@ fn simple_aux(
             use enumset::EnumSet;
             use hyperast_vcs_git::maven::SemFlag;
             n.get_component::<Flags<EnumSet<SemFlag>>>()
-                .is_ok_and(|x| x.contains(SemFlag::IsMavenModule))
+                .map_or(false, |x| x.contains(SemFlag::IsMavenModule))
         });
         let s = state.clone();
         acc_engine.register_fn("hold_maven_submodule", move || {
@@ -518,7 +520,7 @@ fn simple_aux(
             use enumset::EnumSet;
             use hyperast_vcs_git::maven::SemFlag;
             n.get_component::<Flags<EnumSet<SemFlag>>>()
-                .is_ok_and(|x| x.contains(SemFlag::HoldMavenSubModule))
+                .map_or(false, |x| x.contains(SemFlag::HoldMavenSubModule))
         });
         let s = state.clone();
         acc_engine.register_fn("hold_java_folder", move || {
@@ -527,9 +529,10 @@ fn simple_aux(
             let n = node_store.resolve(current);
             use enumset::EnumSet;
             use hyperast_vcs_git::maven::SemFlag;
-            n.get_component::<Flags<EnumSet<SemFlag>>>().is_ok_and(|x| {
-                x.contains(SemFlag::HoldMainFolder) || x.contains(SemFlag::HoldTestFolder)
-            })
+            n.get_component::<Flags<EnumSet<SemFlag>>>()
+                .map_or(false, |x| {
+                    x.contains(SemFlag::HoldMainFolder) || x.contains(SemFlag::HoldTestFolder)
+                })
         });
         #[cfg(feature = "impact")]
         {
@@ -559,7 +562,7 @@ fn simple_aux(
         }
         add_utils(&mut acc_engine);
         acc_engine
-            .eval_ast_with_scope(&mut scope, accumulate_script)
+            .eval_ast_with_scope(&mut scope, &accumulate_script)
             .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
         stack[acc.parent].value = Some(scope.get_value("p").unwrap());
     };
@@ -638,7 +641,9 @@ fn add_utils(engine: &mut Engine) {
             |context: rhai::NativeCallContext,
              x: &mut NamedContainer<Dynamic>|
              -> Result<bool, Box<rhai::EvalAltResult>> {
-                context.call_native_fn("is_empty", (x.content.clone(),))
+                context
+                    .call_native_fn("is_empty", (x.content.clone(),))
+                    .map(|r| r)
             },
         );
     use fs_container::FsContainer;
@@ -668,7 +673,9 @@ fn add_utils(engine: &mut Engine) {
             |context: rhai::NativeCallContext,
              x: &mut FsContainer<Dynamic>|
              -> Result<bool, Box<rhai::EvalAltResult>> {
-                context.call_native_fn("is_empty", (x.content.clone(),))
+                context
+                    .call_native_fn("is_empty", (x.content.clone(),))
+                    .map(|r| r)
             },
         );
     #[cfg(feature = "impact")]

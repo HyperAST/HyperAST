@@ -2,7 +2,7 @@ use crate::utils::pair::Pair;
 
 #[test]
 fn test_equals() {
-    let p1 = Pair("a", "b");
+    let p1 = Pair { 0: "a", 1: "b" };
     let p2: Pair<&str, &str> = ("a", "b").into();
     let p3 = Pair::from(("b", "a"));
     assert_eq!(p1, p1);

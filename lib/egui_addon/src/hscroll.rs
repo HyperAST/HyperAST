@@ -29,7 +29,7 @@ pub fn hscroll_many_columns<R>(
             let rect = egui::Rect::from_x_y_ranges(x_min..=x_max, ui.max_rect().y_range());
 
             let cols = min_col..max_col;
-            ui.scope_builder(
+            ui.allocate_new_ui(
                 egui::UiBuilder::new()
                     .max_rect(rect)
                     .layout(egui::Layout::left_to_right(egui::Align::TOP)),

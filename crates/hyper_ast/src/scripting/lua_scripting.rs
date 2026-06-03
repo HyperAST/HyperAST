@@ -11,7 +11,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::Instant;
 
-pub static PREPRO_SIZE: &str = r#"
+pub static PREPRO_SIZE: &'static str = r#"
 size = 1 -- init
 
 function acc(c)
@@ -19,7 +19,7 @@ function acc(c)
 end
 "#;
 
-pub static PREPRO_SIZE_WITH_FINISH: &str = r#"
+pub static PREPRO_SIZE_WITH_FINISH: &'static str = r#"
 local size = 1 -- init
 
 function acc(c)
@@ -31,7 +31,7 @@ function finish()
 end
 "#;
 
-pub static PREPRO_MCC: &str = r#"
+pub static PREPRO_MCC: &'static str = r#"
 local mcc = if is_branch() then 1 else 0
 
 function acc(c)
@@ -39,7 +39,7 @@ function acc(c)
 end
 "#;
 
-pub static PREPRO_MCC_WITH_FINISH: &str = r#"
+pub static PREPRO_MCC_WITH_FINISH: &'static str = r#"
 local mcc = 0
 
 function acc(c)
@@ -54,7 +54,7 @@ function finish()
 end
 "#;
 
-pub static PREPRO_LOC: &str = r#"
+pub static PREPRO_LOC: &'static str = r#"
 local LoC = 0
 local b = true
 
@@ -111,9 +111,9 @@ use std::cell::Cell;
 use std::cell::RefCell;
 
 thread_local! {
-    static LUA_POOL: RefCell<Vec<Lua>>  = const { RefCell::new(vec![]) };
-    static LUA_INSTANCES: Cell<u16> = const { Cell::new(0) };
-    static MAX_COUNT: Cell<u16> = const { Cell::new(0) };
+    static LUA_POOL: RefCell<Vec<Lua>>  = RefCell::new(vec![]);
+    static LUA_INSTANCES: Cell<u16> = Cell::new(0);
+    static MAX_COUNT: Cell<u16> = Cell::new(0);
     // pub static FOO: Cell<u32> = Cell::new(1);
 
     // static BAR: RefCell<Vec<f32>> = RefCell::new(vec![1.0, 2.0]);
@@ -233,7 +233,7 @@ impl UserData for Ty {
     fn add_methods<'lua, M: LuaUserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_meta_method(MetaMethod::Eq, |_, a, b: Value| {
             if let Some(s) = b.as_str() {
-                Ok(a.0.to_string() == *s)
+                Ok(a.0.to_string() == s.to_string())
             } else {
                 Err(mlua::Error::BadArgument {
                     to: None,
@@ -246,27 +246,27 @@ impl UserData for Ty {
     }
 }
 
-impl<T: HyperType> crate::scripting::lua_scripting::Subtree for Subtr<'_, T> {
+impl<'a, T: HyperType> crate::scripting::lua_scripting::Subtree for Subtr<'a, T> {
     fn ty(&self) -> &'static dyn HyperType {
         self.0.as_static()
     }
 }
 
-impl<T: HyperType> UserData for Subtr<'_, T> {}
+impl<'a, T: HyperType> UserData for Subtr<'a, T> {}
 
 pub struct SubtrLegion<'a, T>(
     pub crate::store::nodes::legion::HashedNodeRef<'a>,
     pub PhantomData<&'a T>,
 );
-impl<T: HyperType + Send + Sync + 'static> crate::scripting::lua_scripting::Subtree
-    for SubtrLegion<'_, T>
+impl<'a, T: HyperType + Send + Sync + 'static> crate::scripting::lua_scripting::Subtree
+    for SubtrLegion<'a, T>
 {
     fn ty(&self) -> &'static dyn HyperType {
         let t = self.0.get_component::<T>().unwrap();
         t.as_static()
     }
 }
-impl<T: HyperType> UserData for SubtrLegion<'_, T> {}
+impl<'a, T: HyperType> UserData for SubtrLegion<'a, T> {}
 
 impl mlua::UserData for AnyType {}
 impl mlua::UserData for HashedNodeRef<'_> {}
@@ -304,12 +304,13 @@ impl<T: HyperType + Send + Sync + 'static> mlua::UserData for SubtreeHandle<T> {
 
 impl Acc {
     pub fn acc<
+        'a,
         T: HyperType + 'static,
         T2: HyperType + Send + Sync + 'static,
         HAST: UserData + 'static,
     >(
         &mut self,
-        store: &HAST,
+        store: &'a HAST,
         ty: T,
         child: SubtreeHandle<T2>,
     ) -> Result<()> {
@@ -576,7 +577,7 @@ where
         ty: <HAST::TS as crate::types::ETypeStore>::Ty2,
     ) -> std::result::Result<Self::Scope, <Self::Scope as crate::scripting::Scriptable>::Error>
     {
-        self.clone().init(ty)
+        self.clone().init(ty).map_err(|x| x.into())
     }
     fn scripts(&self) -> &<Self::Scope as crate::scripting::Scriptable>::Scripts {
         &()

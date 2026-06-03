@@ -1,40 +1,17 @@
-use egui::layers::ShapeIdx;
-use epaint::*;
+use epaint::Pos2;
 
-pub struct MetaEdge {
-    pub src_pos: Pos2,
-    pub src_rect: Rect,
-    pub m_pos: Pos2,
-    pub m_rect: Rect,
-    pub ctrl: (Pos2, Pos2),
-    pub color: Color32,
-}
-
-impl MetaEdge {
-    pub fn show(&self, ui: &mut egui::Ui) {
-        self.paint(ui.painter());
-    }
-    pub fn paint(&self, painter: &egui::Painter) -> ShapeIdx {
-        painter.add(self.shape())
-    }
-    pub(crate) fn shape(&self) -> Shape {
-        compute_mesh(self).into()
-    }
-}
-
-fn compute_mesh(
-    MetaEdge {
-        m_pos,
-        src_pos,
-        m_rect,
-        ctrl,
-        src_rect,
-        color,
-    }: &MetaEdge,
-) -> Mesh {
+pub fn meta_egde(
+    m_pos: Pos2,
+    src_pos: Pos2,
+    m_rect: epaint::Rect,
+    ctrl: (Pos2, Pos2),
+    src_rect: epaint::Rect,
+    color: epaint::Color32,
+    ui: &mut egui::Ui,
+) {
     let tolerance = (m_pos.x - src_pos.x).abs() * 0.001;
-    let offset = Vec2::Y * 8.0;
-    let link = CubicBezierShape::from_points_stroke(
+    let offset = epaint::Vec2::Y * 8.0;
+    let link = epaint::CubicBezierShape::from_points_stroke(
         [
             m_rect.right_top() + offset,
             ctrl.0,
@@ -42,11 +19,11 @@ fn compute_mesh(
             src_rect.left_top() + offset,
         ],
         false,
-        Color32::TRANSPARENT,
-        (5.0, *color),
+        egui::Color32::TRANSPARENT,
+        (5.0, color),
     );
     let up = link.flatten(Some(tolerance));
-    let link = CubicBezierShape::from_points_stroke(
+    let link = epaint::CubicBezierShape::from_points_stroke(
         [
             m_rect.right_bottom() - offset,
             ctrl.0,
@@ -54,20 +31,27 @@ fn compute_mesh(
             src_rect.left_bottom() - offset,
         ],
         false,
-        Color32::TRANSPARENT,
-        (5.0, *color),
+        egui::Color32::TRANSPARENT,
+        (5.0, color),
     );
     let down = link.flatten(Some(tolerance));
     let l = up.len() + down.len();
-    let mut out = Mesh::default();
+    let color_step = 255.0 / l as f32;
+    let mut out = epaint::Mesh::default();
     let mut up = up.into_iter();
     let mut down = down.into_iter();
     let mut p_up = up.next().unwrap();
     let mut p_down = down.next().unwrap();
     let mut idx = 0;
-    let mut color = Color32::GREEN;
+    let mut color = egui::Color32::GREEN;
     out.colored_vertex(p_down, color);
-    let f = |idx| lerp_color_gamma(Color32::GREEN, Color32::RED, idx as f32 / l as f32);
+    let f = |idx| {
+        lerp_color_gamma(
+            egui::Color32::GREEN,
+            egui::Color32::RED,
+            idx as f32 / l as f32,
+        )
+    };
     color = f(idx);
     out.colored_vertex(p_up, color);
     color = f(idx);
@@ -76,7 +60,7 @@ fn compute_mesh(
             p_down = x;
         } else {
             let mut i = idx;
-            for x in up.by_ref() {
+            while let Some(x) = up.next() {
                 out.colored_vertex(x, color);
                 color = f(idx);
                 i += 1;
@@ -92,7 +76,7 @@ fn compute_mesh(
             p_up = x;
         } else {
             let mut i = idx;
-            for x in down.by_ref() {
+            while let Some(x) = down.next() {
                 out.colored_vertex(x, color);
                 color = f(idx);
                 i += 1;
@@ -105,15 +89,14 @@ fn compute_mesh(
         out.add_triangle(idx + 1, idx, idx + 2);
         idx += 1;
     }
-    out
+    ui.painter().add(out);
 }
 
-fn lerp_color_gamma(left: Color32, right: Color32, t: f32) -> Color32 {
-    use emath::lerp;
-    Color32::from_rgba_premultiplied(
-        lerp((left[0] as f32)..=(right[0] as f32), t).round() as u8,
-        lerp((left[1] as f32)..=(right[1] as f32), t).round() as u8,
-        lerp((left[2] as f32)..=(right[2] as f32), t).round() as u8,
-        lerp((left[3] as f32)..=(right[3] as f32), t).round() as u8,
+fn lerp_color_gamma(left: epaint::Color32, right: epaint::Color32, t: f32) -> epaint::Color32 {
+    epaint::Color32::from_rgba_premultiplied(
+        epaint::emath::lerp((left[0] as f32)..=(right[0] as f32), t).round() as u8,
+        epaint::emath::lerp((left[1] as f32)..=(right[1] as f32), t).round() as u8,
+        epaint::emath::lerp((left[2] as f32)..=(right[2] as f32), t).round() as u8,
+        epaint::emath::lerp((left[3] as f32)..=(right[3] as f32), t).round() as u8,
     )
 }

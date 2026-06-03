@@ -40,7 +40,7 @@ impl Estimate for Max {
     }
 }
 
-impl serde::Serialize for Max {
+impl<'de> serde::Serialize for Max {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

@@ -56,7 +56,10 @@ pub struct QueryPredicate {
 }
 
 impl<P: Debug> PerPattern<P> {
-    pub fn preds_for_patern_id(&self, id: crate::indexed::PatternId) -> impl Iterator<Item = &P> {
+    pub fn preds_for_patern_id<'a>(
+        &'a self,
+        id: crate::indexed::PatternId,
+    ) -> impl Iterator<Item = &'a P> {
         self.0[id.to_usize()].iter()
     }
 
@@ -66,7 +69,7 @@ impl<P: Debug> PerPattern<P> {
         self.0 = r.into();
     }
 
-    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = std::slice::IterMut<'_, P>> + '_ {
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = std::slice::IterMut<P>> + '_ {
         self.0.iter_mut().map(|x| x.iter_mut())
     }
 

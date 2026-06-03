@@ -4,7 +4,7 @@ use tree_sitter::TreeCursor;
 
 type TagedRole = String;
 
-use super::{Error, Patt, Query, ts_query_tree_from_str};
+use super::{ts_query_tree_from_str, Error, Patt, Query};
 
 #[derive(Debug, Default)]
 pub struct Tags {
@@ -167,14 +167,13 @@ impl Tag {
             .rev()
             .next()
             .ok_or_else(|| "Missing tag variable name variable".into())
-            .map(|x| {
+            .and_then(|x| {
                 dbg!(&x);
                 if x.1.len() > 1 {
-                    x.0
-                    // should be ok actually
-                    // Err("missplaced tag variable name".into())
+                    Ok(x.0) // should be ok actually
+                            // Err("missplaced tag variable name".into())
                 } else {
-                    x.0
+                    Ok(x.0)
                 }
             })?;
         if names.len() == 1 {
@@ -197,93 +196,89 @@ struct Alternate {}
 impl Alternate {
     // precond: path are ordered by position
     fn alternate(&mut self, pattern: Patt, path: Vec<usize>) -> Vec<(Vec<usize>, Patt)> {
-        alternate(pattern, path)
-    }
-}
-
-fn alternate(pattern: Patt, path: Vec<usize>) -> Vec<(Vec<usize>, Patt)> {
-    match pattern {
-        Patt::FieldDefinition { field, patt } => {
-            let patt = alternate(*patt, path);
-            patt.into_iter()
-                .map(|(name, patt)| {
-                    (
-                        name,
-                        Patt::FieldDefinition {
-                            field: field.clone(),
-                            patt: Box::new(patt),
-                        },
-                    )
-                })
-                .collect()
-        }
-        Patt::Node {
-            kind,
-            patt,
-            captures,
-        } => {
-            let mut r = vec![];
-
-            for _ in captures.iter().filter(|c| *c == "name") {
-                r.push((
-                    path.clone(),
-                    Patt::Node {
-                        kind: kind.clone(),
-                        patt: patt.clone(),
-                        captures: captures.clone(),
-                    },
-                ));
-            }
-
-            for i in 0..patt.len() {
-                let mut path = path.clone();
-                path.push(i);
-                alternate(patt[i].clone(), path.clone())
-                    .into_iter()
-                    .for_each(|(n, p)| {
-                        let mut pa = patt.clone();
-                        pa[i] = p;
-                        r.push((
-                            n,
-                            Patt::Node {
-                                kind: kind.clone(),
-                                patt: pa,
-                                captures: captures.clone(),
+        match pattern {
+            Patt::FieldDefinition { field, patt } => {
+                let patt = self.alternate(*patt, path);
+                patt.into_iter()
+                    .map(|(name, patt)| {
+                        (
+                            name,
+                            Patt::FieldDefinition {
+                                field: field.clone(),
+                                patt: Box::new(patt),
                             },
-                        ));
-                    });
+                        )
+                    })
+                    .collect()
             }
+            Patt::Node {
+                kind,
+                patt,
+                captures,
+            } => {
+                let mut r = vec![];
 
-            r
-            // if let Some(offset) = path.next() {
-            //     match patt.get_mut(index).unwrap() {
-            //         Patt::FieldDefinition { field, patt } => {}
-            //         patt => {
-            //             let p = alternate(patt);
-            //             p
-            //         }
-            //     }
-            // } else {
-            //     pattern.clone()
-            // }
-        }
-        Patt::Predicated {
-            kind: _,
-            patt: _,
-            captures_with_predicates: _,
-        } => {
-            unimplemented!()
-        }
-        Patt::Alternation { patt } => {
-            let mut r = vec![];
-            for patt in patt {
-                alternate(patt, path.clone())
-                    .into_iter()
-                    .for_each(|(n, p)| {
-                        r.push((n, p));
-                    });
+                for _ in captures.iter().filter(|c| *c == "name") {
+                    r.push((
+                        path.clone(),
+                        Patt::Node {
+                            kind: kind.clone(),
+                            patt: patt.clone(),
+                            captures: captures.clone(),
+                        },
+                    ));
+                }
+
+                for i in 0..patt.len() {
+                    let mut path = path.clone();
+                    path.push(i);
+                    self.alternate(patt[i].clone(), path.clone())
+                        .into_iter()
+                        .for_each(|(n, p)| {
+                            let mut pa = patt.clone();
+                            pa[i] = p;
+                            r.push((
+                                n,
+                                Patt::Node {
+                                    kind: kind.clone(),
+                                    patt: pa,
+                                    captures: captures.clone(),
+                                },
+                            ));
+                        });
+                }
+
+                r
+                // if let Some(offset) = self.path.next() {
+                //     match patt.get_mut(index).unwrap() {
+                //         Patt::FieldDefinition { field, patt } => {}
+                //         patt => {
+                //             let p = self.alternate(patt);
+                //             p
+                //         }
+                //     }
+                // } else {
+                //     pattern.clone()
+                // }
             }
-            r
+            Patt::Predicated {
+                kind: _,
+                patt: _,
+                captures_with_predicates: _,
+            } => {
+                unimplemented!()
+            }
+            Patt::Alternation { patt } => {
+                let mut r = vec![];
+                for patt in patt {
+                    self.alternate(patt, path.clone())
+                        .into_iter()
+                        .for_each(|(n, p)| {
+                            r.push((n, p));
+                        });
+                }
+                r
+            }
         }
     }
 }

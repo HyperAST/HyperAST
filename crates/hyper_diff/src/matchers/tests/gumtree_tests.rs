@@ -1,16 +1,20 @@
 use hyperast::types::NodeStore;
 
-use crate::decompressed_tree_store::{
-    CompletePostOrder, bfs_wrapper::SimpleBfsMapper, complete_post_order::DisplayCompletePostOrder,
+use crate::{
+    matchers::{
+        heuristic::gt::{
+            bottom_up_matcher::BottomUpMatcher,
+            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+            greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+        },
+        mapping_store::{DefaultMappingStore, MappingStore},
+    },
+    decompressed_tree_store::{
+        CompletePostOrder, Initializable as _, ShallowDecompressedTreeStore, complete_post_order::DisplayCompletePostOrder, bfs_wrapper::SimpleBfsMapper,
+    },
+    tests::examples::{example_bottom_up, example_eq_simple_class_rename, example_gumtree},
+    tree::simple_tree::{vpair_to_stores, Tree, TreeRef, NS},
 };
-use crate::decompressed_tree_store::{Initializable as _, ShallowDecompressedTreeStore as _};
-use crate::matchers::heuristic::gt;
-use crate::mappings::{DefaultMappingStore, MappingStore};
-use crate::tests::examples::{example_bottom_up, example_eq_simple_class_rename, example_gumtree};
-use crate::tree::simple_tree::{NS, Tree, TreeRef, vpair_to_stores};
-use gt::bottom_up_matcher::BottomUpMatcher;
-use gt::greedy_bottom_up_matcher::GreedyBottomUpMatcher;
-use gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher};
 
 #[test]
 fn test_min_height_threshold() {
@@ -219,8 +223,8 @@ fn test_eq_simple_class_rename() {
         ..
     } = mapper.into();
     dbg!(&mappings);
-    use crate::actions::Actions;
     use crate::decompressed_tree_store::bfs_wrapper;
+    use crate::actions::Actions;
     let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
     let actions = crate::actions::script_generator2::ScriptGenerator::<
         _,
@@ -312,12 +316,5 @@ fn test_post2pre_order() {
     let src = &src;
 
     let src_arena = CompletePostOrder::<_, u16>::make(&node_store, src);
-    println!(
-        "{}",
-        DisplayCompletePostOrder {
-            inner: &src_arena,
-            node_store: &node_store,
-            label_store: &label_store
-        }
-    )
+    println!("{}",DisplayCompletePostOrder{ inner: &src_arena, node_store: &node_store, label_store: &label_store })
 }

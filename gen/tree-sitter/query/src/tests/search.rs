@@ -2,8 +2,11 @@
 use crate::tests::cpp_tree;
 use hyperast::nodes::SyntaxSerializer;
 use hyperast::nodes::TextSerializer;
-use hyperast::position::{TreePath, structural_pos::CursorHead};
-use hyperast::store::defaults::NodeIdentifier;
+use hyperast::{
+    position::{TreePath, structural_pos::AAA},
+    store::defaults::NodeIdentifier,
+    types::Typed,
+};
 
 use hyperast_gen_ts_cpp::iter::IterAll as CppIter;
 
@@ -112,7 +115,7 @@ fn match_xml() {
     );
     println!();
     println!("{}", TextSerializer::new(&code_store, pat));
-    let q0 = "(element (STag (Name) @id (#eq? @id \"artifactId\")))".to_string();
+    let q0 = format!("(element (STag (Name) @id (#eq? @id \"artifactId\")))");
     let (query_store, query) = crate::search::ts_query(q0.as_bytes());
     use hyperast_gen_ts_xml::types::Type as Xml;
     type XmlTIdN = hyperast_gen_ts_xml::types::TIdN<NodeIdentifier>;
@@ -139,7 +142,7 @@ fn test_new_matcher_for_xml_element() -> Result<(), Box<dyn std::error::Error>> 
     let query = r#"(element) @root"#;
     let qqq = hyperast_tsquery::Query::new(query, hyperast_gen_ts_xml::language())
         .map_err(|e| e.to_string())?;
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&code_store, pos);
     let root_cap = qqq.capture_index_for_name("root").unwrap();
     let qcursor = qqq.matches(cursor);
@@ -169,7 +172,7 @@ fn test_new_matcher_for_xml_eq() -> Result<(), Box<dyn std::error::Error>> {
     let query = r#"(element (STag (Name) @id (#eq? @id "artifactId"))) @root"#;
     let qqq = hyperast_tsquery::Query::new(query, hyperast_gen_ts_xml::language())
         .map_err(|e| e.to_string())?;
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&code_store, pos);
     let root_cap = qqq.capture_index_for_name("root").unwrap();
     let qcursor = qqq.matches(cursor);
@@ -187,7 +190,7 @@ fn test_new_matcher_for_xml_eq() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn test_new_matcher_for_xml_pos_eq() -> Result<(), Box<dyn std::error::Error>> {
+fn test_new_matcher_for_xml_imm_eq() -> Result<(), Box<dyn std::error::Error>> {
     let path: std::path::PathBuf =
         std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
 
@@ -200,7 +203,7 @@ fn test_new_matcher_for_xml_pos_eq() -> Result<(), Box<dyn std::error::Error>> {
     // let query = r#"(element) @root"#;
     let qqq = hyperast_tsquery::Query::new(query, hyperast_gen_ts_xml::language())
         .map_err(|e| e.to_string())?;
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&code_store, pos);
     let root_cap = qqq.capture_index_for_name("root").unwrap();
     let qcursor = qqq.matches(cursor);
@@ -232,7 +235,7 @@ fn test_new_matcher_for_xml_proj_artid() -> Result<(), Box<dyn std::error::Error
 )))"#;
     let qqq = hyperast_tsquery::Query::new(query, hyperast_gen_ts_xml::language())
         .map_err(|e| e.to_string())?;
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&code_store, pos);
     let root_cap = qqq.capture_index_for_name("root").unwrap();
     let qcursor = qqq.matches(cursor);
@@ -264,7 +267,7 @@ fn test_new_matcher_for_xml_deps_artid() -> Result<(), Box<dyn std::error::Error
 ))"#;
     let qqq = hyperast_tsquery::Query::new(query, hyperast_gen_ts_xml::language())
         .map_err(|e| e.to_string())?;
-    let pos = hyperast::position::structural_pos::CursorWithPersistence::new(code);
+    let pos = hyperast::position::structural_pos::CursorWithPersistance::new(code);
     let cursor = hyperast_tsquery::hyperast_opt::TreeCursor::new(&code_store, pos);
     let root_cap = qqq.capture_index_for_name("root").unwrap();
     let qcursor = qqq.matches(cursor);

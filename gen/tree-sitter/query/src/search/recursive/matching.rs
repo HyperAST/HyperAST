@@ -11,8 +11,8 @@ use hyperast::types::HyperType;
 use hyperast::types::TypedHyperAST;
 use hyperast::types::{Childrn, Typed, TypedNodeStore, WithChildren};
 
-impl<Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
-    pub fn is_matching<HAST, TIdN>(&self, code_store: &HAST, id: HAST::IdN) -> bool
+impl<'a, Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
+    pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
         HAST: TypedHyperAST<TIdN>,
         TIdN: hyperast::types::TypedNodeId<Ty = Ty> + 'static,
@@ -38,9 +38,9 @@ impl<Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
         }
         false
     }
-    pub fn is_matching_and_capture<HAST, TIdN>(
+    pub fn is_matching_and_capture<'store, HAST, TIdN>(
         &self,
-        code_store: &HAST,
+        code_store: &'store HAST,
         id: HAST::IdN,
     ) -> Option<Captured<HAST::IdN, HAST::Idx>>
     where
@@ -131,9 +131,9 @@ impl<Ty: TypeTrait, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
 }
 
 impl<Ty> Pattern<Ty> {
-    pub(crate) fn is_matching<HAST, TIdN>(
+    pub(crate) fn is_matching<'store, HAST, TIdN>(
         &self,
-        code_store: &HAST,
+        code_store: &'store HAST,
         id: HAST::IdN,
     ) -> MatchingRes<HAST::IdN, HAST::Idx>
     where
@@ -225,7 +225,7 @@ impl<Ty> Pattern<Ty> {
                                 }
                             }
                         }
-                        if pats[i_pat..].iter().any(|p| !is_optional(p)) {
+                        if (&pats[i_pat..]).iter().any(|p| !is_optional(p)) {
                             return MatchingRes::zero();
                         }
                         let matched = Quant::One;
@@ -239,9 +239,12 @@ impl<Ty> Pattern<Ty> {
                     if t.is_spaces() {
                         continue;
                     }
-                    if let Pattern::Dot = curr_p {
-                        immediate = true;
-                        continue;
+                    match curr_p {
+                        Pattern::Dot => {
+                            immediate = true;
+                            continue;
+                        }
+                        _ => (),
                     }
                     dbg!(t);
                     match curr_p.is_matching(code_store, child.clone()) {
@@ -292,7 +295,7 @@ impl<Ty> Pattern<Ty> {
                         }
                         MatchingRes { matched, .. } => todo!("{:?}", matched),
                     }
-                    assert!(!immediate);
+                    assert_eq!(immediate, false);
                     i += num::one();
                 }
             }
@@ -305,7 +308,7 @@ impl<Ty> Pattern<Ty> {
                     matched: Quant::One,
                     mut captures,
                 } => {
-                    let name = *name;
+                    let name = name.clone();
                     let n = code_store.try_resolve(&id).unwrap().0;
                     use hyperast::types::Tree;
                     // let v = if !n.has_children() {
@@ -335,7 +338,7 @@ impl<Ty> Pattern<Ty> {
                     matched: Quant::ZeroOrOne,
                     mut captures,
                 } => {
-                    let name = *name;
+                    let name = name.clone();
                     let v = CaptureRes {
                         id: name,
                         match_node: id,
@@ -353,7 +356,7 @@ impl<Ty> Pattern<Ty> {
                 Predicate::Eq { left, right } => {
                     let matching_res = pat.is_matching(code_store, id);
                     if matching_res.matched == Quant::One {
-                        let matched = matching_res.capture(*left).is_some_and(|x| {
+                        let matched = matching_res.capture(*left).map_or(false, |x| {
                             Some(&x.path) == matching_res.capture(*right).map(|x| &x.path)
                         });
                         let captures = if matched {

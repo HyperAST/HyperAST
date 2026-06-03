@@ -1,5 +1,7 @@
-use std::borrow::Borrow;
-use std::fmt::{Debug, Display};
+use std::{
+    borrow::Borrow,
+    fmt::{Debug, Display},
+};
 
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 

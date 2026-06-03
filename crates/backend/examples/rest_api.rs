@@ -233,8 +233,8 @@ pub async fn post_books_id_form(form: axum::extract::Form<Book>) -> axum::respon
     let new_book: Book = form.0;
     thread::spawn(move || {
         let mut data = DATA.lock().unwrap();
-        if let std::collections::hash_map::Entry::Occupied(mut e) = data.entry(new_book.id) {
-            e.insert(new_book.clone());
+        if data.contains_key(&new_book.id) {
+            data.insert(new_book.id, new_book.clone());
             format!("<p>{}</p>\n", &new_book)
         } else {
             format!("Book id not found: {}", &new_book.id)

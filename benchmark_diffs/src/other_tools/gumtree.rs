@@ -9,7 +9,7 @@ use hyperast::{nodes::JsonSerializer2 as JsonSerializer, types};
 
 use crate::tempfile;
 
-pub fn subprocess<HAST>(
+pub fn subprocess<'a, HAST>(
     stores: HAST,
     src_root: HAST::IdN,
     dst_root: HAST::IdN,
@@ -20,36 +20,12 @@ pub fn subprocess<HAST>(
 ) -> Option<PathBuf>
 where
     HAST: types::HyperAST + Copy,
-{
-    let res = subprocess_checked(
-        stores,
-        src_root,
-        dst_root,
-        mapping_algo,
-        diff_algo,
-        timeout,
-        out_format,
-    );
-    if let Err(err) = res {
-        if err.is_empty() {
-            return None;
-        } else {
-            panic!("{}", err)
-        }
-    }
-    res.ok()
-}
-pub fn subprocess_checked<HAST>(
-    stores: HAST,
-    src_root: HAST::IdN,
-    dst_root: HAST::IdN,
-    mapping_algo: &str,
-    diff_algo: &str,
-    timeout: u64,
-    out_format: &str,
-) -> Result<PathBuf, String>
-where
-    HAST: types::HyperAST + Copy,
+    // HAST: types::LabelStore<str>,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+    // HAST: types::NodeStore<IdN>,
+    // HAST: types::LabelStore<str>,
+    // HAST: types::TypeStore<HAST::R<'a>>,
+    // HAST::R<'a>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
 {
     let (src, mut src_f) = tempfile().unwrap();
     dbg!(&src);
@@ -80,14 +56,14 @@ where
         .arg(&src)
         .arg(&dst)
         .arg(mapping_algo)
-        .arg(out_format)
+        .arg(&out_format)
         .arg(diff_algo)
         .arg(&gt_out)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .expect("failed to spawn gumtree process");
     // .output()
     // .expect("failed to execute process");
     let wait = 1;
@@ -122,7 +98,7 @@ where
                 status = None;
                 break;
             }
-            timeout -= wait;
+            timeout = timeout - wait;
         }
     }
     let gt_processing_time = now.elapsed().as_secs_f64();
@@ -132,17 +108,14 @@ where
         fs::remove_file(&dst).unwrap();
         if !status.success() {
             eprintln!("gumtree process terminated with exit code {}", status);
-            Err(Default::default())
+            None
         } else {
-            Ok(gt_out)
+            Some(gt_out)
         }
     } else {
         fs::remove_file(&src).unwrap();
         fs::remove_file(&dst).unwrap();
         eprintln!("gumtree process timedout");
-        Err(format!(
-            "gumtree process timedout after {:.3}s",
-            gt_processing_time
-        ))
+        None
     }
 }

@@ -59,17 +59,17 @@ fn many(
     subs: impl hyperast_tsquery::ArrayStr,
 ) {
     let query = if INCREMENTAL_QUERIES {
-        hyperast_tsquery::Query::with_precomputed(query, hyperast_gen_ts_java::language(), subs)
+        hyperast_tsquery::Query::with_precomputed(&query, hyperast_gen_ts_java::language(), subs)
             .map_err(|x| x.to_string())
             .unwrap()
             .1
     } else {
-        hyperast_tsquery::Query::new(query, hyperast_gen_ts_java::language()).unwrap()
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language()).unwrap()
     };
 
     assert!(query.enabled_pattern_count() > 0);
 
-    let mut preprocessed = PreProcessedRepository::new(repo_name);
+    let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oids = preprocessed.pre_process_first_parents_with_limit(
         &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         "",
@@ -110,7 +110,7 @@ fn many(
 
         let matches_positions: Vec<HashSet<_>> = matches
             .iter()
-            .map(|x| x.iter().cloned().collect())
+            .map(|x| x.into_iter().cloned().collect())
             .collect();
         let matches_links: Vec<String> = matches
             .into_iter()
@@ -246,7 +246,7 @@ fn track_heuristic2(
     // (old.difference(new).collect(), new.difference(old).collect()) // NOTE same
     let mut new_b = Vec::new();
     for b in old_b.into_iter() {
-        if let Some(i) = old_a.iter().find(|a| a.id == b.id && a.file == b.file) {
+        if let Some(i) = old_a.iter().find(|a| a.id == b.id && &a.file == &b.file) {
             old_a.remove(&i.clone());
             new_b.push(b); // no copying here
         }

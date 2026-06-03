@@ -1,29 +1,31 @@
-use std::iter::Peekable;
-use std::marker::PhantomData;
-use std::path::{Components, PathBuf};
-
-use git2::{Oid, Repository};
-
-use hyperast::hashed::MetaDataHashsBuilder;
-use hyperast::store::nodes::compo;
-use hyperast::store::nodes::legion::RawHAST;
-use hyperast::store::{defaults::NodeIdentifier, nodes::EntityBuilder};
-use hyperast::tree_gen::Accumulator;
-use hyperast::types::ETypeStore as _;
-use hyperast::types::LabelStore;
-use hyperast_gen_ts_xml::types::Type;
-
-use crate::Processor;
 use crate::StackEle;
-use crate::git::{BasicGitObject, NamedObject, ObjectType, TypedObject};
-use crate::maven::{MD, MavenModuleAcc};
-use crate::preprocessed::RepositoryProcessor;
 use crate::processing::ParametrizedCommitProcessorHandle;
 use crate::processing::erased::{
     CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
 };
-use crate::processing::{CacheHolding, InFiles, ObjectName, erased::ParametrizedCommitProc2};
-
+use crate::{
+    Processor,
+    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
+    maven::{MD, MavenModuleAcc},
+    preprocessed::RepositoryProcessor,
+    processing::{CacheHolding, InFiles, ObjectName, erased::ParametrizedCommitProc2},
+};
+use git2::{Oid, Repository};
+use hyperast::store::nodes::compo;
+use hyperast::store::nodes::legion::RawHAST;
+use hyperast::types::ETypeStore as _;
+use hyperast::{
+    hashed::MetaDataHashsBuilder,
+    store::{defaults::NodeIdentifier, nodes::EntityBuilder},
+    tree_gen::Accumulator,
+    types::LabelStore,
+};
+use hyperast_gen_ts_xml::types::Type;
+use std::{
+    iter::Peekable,
+    marker::PhantomData,
+    path::{Components, PathBuf},
+};
 pub type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_xml::types::TStore>;
 
 /// RMS: Resursive Module Search
@@ -83,7 +85,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             }
             BasicGitObject::Blob(oid, name)
                 if !FFWD
-                    && self.dir_path.peek().is_none()
+                    && !self.dir_path.peek().is_some()
                     && crate::processing::file_sys::Pom::matches(&name) =>
             {
                 let parent_acc = &mut self.stack.last_mut().unwrap().acc;
@@ -418,9 +420,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
 
     log::info!("make mm {} {}", &primary.name, primary.children.len());
     assert_eq!(primary.children_names.len(), primary.children.len());
-    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::with_lang(
-        hyperast_gen_ts_xml::types::Lang,
-    );
+    let mut dyn_builder = hyperast::store::nodes::legion::dyn_builder::EntityBuilder::new();
     let children_is_empty = primary.children.is_empty();
     if !acc.status.is_empty() {
         dyn_builder.add(compo::Flags(acc.status));
@@ -448,7 +448,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         ana,
         status,
     };
-    (node_id, md)
+    (node_id.clone(), md)
 }
 
 use hyperast_gen_ts_xml::legion::XmlTreeGen;

@@ -6,9 +6,9 @@
 //! - [ ] low compute cost extend
 use std::{fmt::Debug, marker::PhantomData};
 
-use hyperast::PrimInt;
 use hyperast::position::position_accessors::SharedPath;
-use num_traits::{ToPrimitive, cast};
+use hyperast::PrimInt;
+use num_traits::{cast, ToPrimitive};
 
 pub trait TreePath: IntoIterator {
     type ItemIterator<'a>: Iterator<Item = Self::Item>
@@ -24,6 +24,39 @@ pub trait TreePathUp {
     fn path(&self) -> &Self::TP;
     fn create(&self, up: <Self::TP as IntoIterator>::Item, path: Self::TP) -> Self;
 }
+
+#[derive(Clone)]
+struct CompressedTreePathUp<Idx> {
+    up: Idx,
+    compressed: CompressedTreePath<Idx>,
+}
+
+impl<Idx: PrimInt> TreePathUp for CompressedTreePathUp<Idx> {
+    type TP = CompressedTreePath<Idx>;
+
+    fn up(&self) -> &Idx {
+        &self.up
+    }
+
+    fn path(&self) -> &Self::TP {
+        &self.compressed
+    }
+
+    fn create(&self, up: Idx, path: Self::TP) -> Self {
+        Self {
+            up,
+            compressed: path,
+        }
+    }
+}
+
+impl<Idx: PartialEq> PartialEq for CompressedTreePathUp<Idx> {
+    fn eq(&self, other: &Self) -> bool {
+        self.up == other.up && self.compressed == other.compressed
+    }
+}
+
+impl<Idx: Eq> Eq for CompressedTreePathUp<Idx> {}
 
 pub mod simple;
 pub use crate::tree::tree_path::simple::*;

@@ -6,13 +6,13 @@ pub trait AsText {
 
 impl AsText for String {
     fn text(&self) -> &str {
-        self
+        &self
     }
 }
 
 impl AsText for str {
     fn text(&self) -> &str {
-        self
+        &self
     }
 }
 
@@ -95,7 +95,7 @@ impl TextBuffer for String {
     }
 
     fn as_reference(&self) -> &String {
-        self
+        &self
     }
     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
         // Get the byte index from the character index
@@ -132,7 +132,7 @@ impl TextBuffer for String {
 }
 
 /// Immutable view of a `&str`!
-impl TextBuffer for &str {
+impl<'a> TextBuffer for &'a str {
     type Ref = str;
 
     fn is_mutable(&self) -> bool {

@@ -105,7 +105,7 @@ fn qgram_distance_hash<const Q: usize>(s: &[u8], t: &[u8]) -> f64 {
     //     .into_par_iter()
     //     .map(|(_, i)| i32::abs(i) as u32)
     //     .sum();
-    let qgrams_dist: u32 = qgrams.into_values().map(|i| i32::abs(i) as u32).sum();
+    let qgrams_dist: u32 = qgrams.into_iter().map(|(_, i)| i32::abs(i) as u32).sum();
 
     // dbg!(&qgrams_dist);
     // dbg!(s.len() + 2 * Q);
@@ -147,8 +147,8 @@ fn qgram_distance_single_hash<const Q: usize>(s: &[u8], t: &[u8]) -> f64 {
     }
 
     // Compute the q-gram distance
-
-    common_qgrams as f64 / (s_qgrams.len() + t.len() - Q + 1) as f64
+    let distance = common_qgrams as f64 / (s_qgrams.len() + t.len() - Q + 1) as f64;
+    distance
 }
 
 #[test]

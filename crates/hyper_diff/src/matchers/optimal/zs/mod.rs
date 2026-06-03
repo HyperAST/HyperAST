@@ -1,14 +1,13 @@
 //! Zhang and Shasha edit distance algorithm for labeled trees, 1989
 //!
-//! implementation originally inspired by implementation in Gumtree repository
-use num_traits::{cast, one, zero};
-use str_distance::DistanceMetric;
+//! implementation originally inspired by Gumtree
 
-use hyperast::PrimInt;
+use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
+use crate::matchers::mapping_store::MonoMappingStore;
 use hyperast::types::{DecompressedFrom, HyperAST, LabelStore, Labeled, NodeStore};
-
-use crate::decompressed_tree_store::{DeepDecompressedTreeStore, PostOrderKeyRoots};
-use crate::mappings::MonoMappingStore;
+use hyperast::PrimInt;
+use num_traits::{cast, one, zero, ToPrimitive};
+use str_distance::DistanceMetric;
 
 // TODO use the Mapping struct
 pub struct ZsMatcher<M, SD, DD = SD> {
@@ -17,19 +16,13 @@ pub struct ZsMatcher<M, SD, DD = SD> {
     pub dst_arena: DD,
 }
 
-pub trait POKeyRoots<HAST: HyperAST + Copy, IdD>: PostOrderKeyRoots<HAST, IdD, IdD = IdD> {}
-impl<HAST: HyperAST + Copy, IdD, T: PostOrderKeyRoots<HAST, IdD, IdD = IdD>> POKeyRoots<HAST, IdD>
-    for T
-{
-}
-
 impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
     pub fn matchh<HAST>(stores: HAST, src: HAST::IdN, dst: HAST::IdN) -> Self
     where
         M::Src: PrimInt,
         M::Dst: PrimInt,
-        SD: POKeyRoots<HAST, M::Src> + DecompressedFrom<HAST, Out = SD>,
-        DD: POKeyRoots<HAST, M::Dst> + DecompressedFrom<HAST, Out = DD>,
+        SD: PostOrderKeyRoots<HAST, M::Src> + DecompressedFrom<HAST, Out = SD>,
+        DD: PostOrderKeyRoots<HAST, M::Dst> + DecompressedFrom<HAST, Out = DD>,
         HAST: HyperAST + Copy,
         HAST::Label: Eq,
     {
@@ -38,9 +31,12 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
         // let mappings = ZsMatcher::<M, SD, DD>::match_with(stores.node_store(), label_store, &src_arena, &dst_arena);
         let mappings = {
             let mut mappings = M::default();
-            mappings.topit(src_arena.len(), dst_arena.len());
+            mappings.topit(
+                (&src_arena).len().to_usize().unwrap(),
+                (&dst_arena).len().to_usize().unwrap(),
+            );
             let base = MatcherImpl::<SD, DD, HAST, M> {
-                stores,
+                stores: stores,
                 src_arena: &src_arena,
                 dst_arena: &dst_arena,
                 phantom: std::marker::PhantomData,
@@ -60,13 +56,16 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
     where
         M::Src: PrimInt,
         M::Dst: PrimInt,
-        SD: POKeyRoots<HAST, M::Src>,
-        DD: POKeyRoots<HAST, M::Dst>,
+        SD: PostOrderKeyRoots<HAST, M::Src>,
+        DD: PostOrderKeyRoots<HAST, M::Dst>,
         HAST: HyperAST + Copy,
         HAST::Label: Eq,
     {
         let mut mappings = M::default();
-        mappings.topit(src_arena.len() + 1, dst_arena.len() + 1);
+        mappings.topit(
+            src_arena.len().to_usize().unwrap() + 1,
+            dst_arena.len().to_usize().unwrap() + 1,
+        );
         let base = MatcherImpl::<_, _, HAST, M> {
             stores,
             src_arena: &src_arena,
@@ -87,6 +86,7 @@ pub struct MatcherImpl<'b, 'c, SD, DD, HAST, M> {
     pub(super) phantom: std::marker::PhantomData<*const (M, &'b ())>,
 }
 
+
 #[doc(hidden)]
 pub mod qgrams;
 
@@ -94,13 +94,13 @@ pub mod qgrams;
 pub mod other_qgrams;
 
 impl<
-    'b: 'c,
-    'c,
-    SD: PostOrderKeyRoots<HAST, M::Src>,
-    DD: PostOrderKeyRoots<HAST, M::Dst>,
-    HAST: HyperAST + Copy,
-    M: MonoMappingStore,
-> MatcherImpl<'b, 'c, SD, DD, HAST, M>
+        'b: 'c,
+        'c,
+        SD: PostOrderKeyRoots<HAST, M::Src>,
+        DD: PostOrderKeyRoots<HAST, M::Dst>,
+        HAST: HyperAST + Copy,
+        M: MonoMappingStore,
+    > MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
@@ -137,11 +137,11 @@ where
         if l1 == l2 {
             return 0.;
         }
-        let s1 = self.stores.label_store().resolve(l1);
-        let s2 = self.stores.label_store().resolve(l2);
+        let s1 = self.stores.label_store().resolve(&l1);
+        let s2 = self.stores.label_store().resolve(&l2);
         // debug_assert_ne!(s1.len(), 0);
         // debug_assert_ne!(s2.len(), 0);
-        if s1.is_empty() || s2.is_empty() {
+        if s1.len() == 0 || s2.len() == 0 {
             return 1.;
         }
         const S_LEN: usize = 3;
@@ -159,18 +159,18 @@ where
 
             let s1 = {
                 let mut tmp = S.to_vec();
-                tmp.extend_from_slice(s1);
+                tmp.extend_from_slice(&s1);
                 tmp.extend_from_slice(S);
                 tmp
             };
             let s2 = {
                 let mut tmp = S.to_vec();
-                tmp.extend_from_slice(s2);
+                tmp.extend_from_slice(&s2);
                 tmp.extend_from_slice(S);
                 tmp
             };
-
-            str_distance_patched::QGram::new(S_LEN).normalized(s1, s2)
+            let d = str_distance_patched::QGram::new(S_LEN).normalized(s1, s2);
+            d
         }
     }
 }
@@ -183,16 +183,20 @@ pub struct ZsMatcherDist {
 // TODO make a fully typed interface to each dist
 impl ZsMatcherDist {
     fn f_dist<IdD1: PrimInt, IdD2: PrimInt>(&self, row: IdD1, col: IdD2) -> f64 {
-        self.forest[row.index()][col.index()]
+        self.forest[row.to_usize().unwrap()][col.to_usize().unwrap()]
     }
 }
 
 impl<
-    SD: DeepDecompressedTreeStore<HAST, M::Src> + POKeyRoots<HAST, M::Src>,
-    DD: DeepDecompressedTreeStore<HAST, M::Dst> + POKeyRoots<HAST, M::Dst>,
-    HAST: HyperAST + Copy,
-    M: MonoMappingStore,
-> MatcherImpl<'_, '_, SD, DD, HAST, M>
+        'store,
+        'b,
+        'c,
+        's,
+        SD: DecompressedTreeStore<HAST, M::Src> + PostOrderKeyRoots<HAST, M::Src>,
+        DD: DecompressedTreeStore<HAST, M::Dst> + PostOrderKeyRoots<HAST, M::Dst>,
+        HAST: HyperAST + Copy,
+        M: MonoMappingStore,
+    > MatcherImpl<'b, 'c, SD, DD, HAST, M>
 where
     M::Src: PrimInt,
     M::Dst: PrimInt,
@@ -204,16 +208,16 @@ where
             forest: vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1],
         };
         let mut src_kr: Vec<_> = self.src_arena.iter_kr().collect();
-        if src_kr.is_empty() || src_kr[src_kr.len() - 1] != self.src_arena.root() {
+        if src_kr.len() == 0 || src_kr[src_kr.len() - 1] != self.src_arena.root() {
             src_kr.push(self.src_arena.root());
         }
         let mut dst_kr: Vec<_> = self.dst_arena.iter_kr().collect();
-        if dst_kr.is_empty() || dst_kr[dst_kr.len() - 1] != self.dst_arena.root() {
+        if dst_kr.len() == 0 || dst_kr[dst_kr.len() - 1] != self.dst_arena.root() {
             dst_kr.push(self.dst_arena.root());
         }
         for i in &src_kr {
             for j in &dst_kr {
-                self.forest_dist(&mut dist, i, j)
+                self.forest_dist(&mut dist, &i, &j)
             }
         }
         dist
@@ -223,22 +227,22 @@ where
         let sa = self.src_arena;
         let da = self.dst_arena;
         // println!("i:{:?} j:{:?}", i, j);
-        let lldsrc = sa.lld(i).index();
-        let llddst = da.lld(j).index();
+        let lldsrc = sa.lld(&i).to_usize().unwrap();
+        let llddst = da.lld(&j).to_usize().unwrap();
         dist.forest[lldsrc][llddst] = 0.0;
-        for di in lldsrc..=i.index() {
+        for di in lldsrc..=i.to_usize().unwrap() {
             let odi = cast(di).unwrap();
             let srctree = sa.tree(&odi);
             let lldsrc2 = sa.lld(&odi);
             let cost_del = self.get_deletion_cost(&srctree);
             dist.forest[di + 1][llddst] = dist.forest[di][llddst] + cost_del;
-            for dj in llddst..=j.index() {
+            for dj in llddst..=j.to_usize().unwrap() {
                 let odj = cast(dj).unwrap();
                 let dsttree = da.tree(&odj);
                 let llddst2 = da.lld(&odj);
                 let cost_ins = self.get_insertion_cost(&dsttree);
                 dist.forest[lldsrc][dj + 1] = dist.forest[lldsrc][dj] + cost_ins;
-                if lldsrc2 == sa.lld(i) && (llddst2 == da.lld(j)) {
+                if lldsrc2 == sa.lld(&i) && (llddst2 == da.lld(&j)) {
                     let cost_upd = self.get_update_cost(&srctree, &dsttree);
                     dist.forest[di + 1][dj + 1] = f64::min(
                         f64::min(
@@ -266,7 +270,9 @@ where
         let mut tree_pairs: Vec<(M::Src, M::Dst)> = Default::default();
         // push the pair of trees (ted1,ted2) to stack
         tree_pairs.push((self.src_arena.root() + one(), self.dst_arena.root() + one()));
-        while let Some(tree_pair) = tree_pairs.pop() {
+        while !tree_pairs.is_empty() {
+            let tree_pair = tree_pairs.pop().unwrap();
+
             let last_row = tree_pair.0;
             let last_col = tree_pair.1;
 
@@ -350,13 +356,13 @@ where
                         // continue with forest to the left of the popped
                         // subtree pair
                         if row > zero() {
-                            row -= one();
+                            row = row - one();
                             row = self.src_arena.lld(&row);
                         } else {
                             row = zero()
                         }
                         if col > zero() {
-                            col -= one();
+                            col = col - one();
                             col = self.dst_arena.lld(&col);
                         } else {
                             col = zero()
@@ -383,8 +389,8 @@ pub mod str_distance_patched {
         }
     }
 
-    use str_distance::DistanceMetric;
     use str_distance::qgram::QGramIter;
+    use str_distance::DistanceMetric;
 
     impl DistanceMetric for QGram {
         type Dist = usize;
@@ -406,7 +412,7 @@ pub mod str_distance_patched {
 
             eq_map(iter_a, iter_b)
                 .into_iter()
-                .map(|(n1, n2)| n1.abs_diff(n2))
+                .map(|(n1, n2)| if n1 > n2 { n1 - n2 } else { n2 - n1 })
                 .sum()
         }
 
@@ -484,10 +490,9 @@ pub mod str_distance_patched {
 mod tests {
 
     use super::*;
-    use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
-    use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
+    use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
 
-    use crate::mappings::DefaultMappingStore;
+    use crate::matchers::mapping_store::DefaultMappingStore;
     use crate::matchers::Decompressible;
     use crate::tests::examples::example_zs_paper;
     use crate::tree::simple_tree::TStore;

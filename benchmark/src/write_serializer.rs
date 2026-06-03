@@ -1,10 +1,12 @@
 use std::{fmt::Display, io::Write, str::Utf8Error};
 
-use serde::ser::{
-    SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
-    SerializeTupleStruct, SerializeTupleVariant,
+use serde::{
+    Serialize, Serializer,
+    ser::{
+        SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
+        SerializeTupleStruct, SerializeTupleVariant,
+    },
 };
-use serde::{Serialize, Serializer};
 
 pub struct WriteJson<'a, W: Write> {
     out: &'a mut W,
@@ -60,9 +62,9 @@ impl<'a, W: Write> SerializeTuple for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         if self.first {
             self.first = false;
@@ -82,9 +84,9 @@ impl<'a, W: Write> SerializeMap for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
+    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         if self.first {
             self.first = false;
@@ -94,9 +96,9 @@ impl<'a, W: Write> SerializeMap for WriteJsonSeq<'a, W> {
         key.serialize(WriteJson { out: self.out })
     }
 
-    fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         write!(self.out, ":")?;
         value.serialize(WriteJson { out: self.out })
@@ -112,9 +114,13 @@ impl<'a, W: Write> SerializeStruct for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         if self.first {
             self.first = false;
@@ -135,9 +141,13 @@ impl<'a, W: Write> SerializeStructVariant for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         write!(self.out, ",")?;
         write!(self.out, "\"{}\":", key)?;
@@ -154,9 +164,9 @@ impl<'a, W: Write> SerializeTupleStruct for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         write!(self.out, ",")?;
         value.serialize(WriteJson { out: self.out })
@@ -172,9 +182,9 @@ impl<'a, W: Write> SerializeTupleVariant for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         write!(self.out, ",")?;
         value.serialize(WriteJson { out: self.out })
@@ -190,9 +200,9 @@ impl<'a, W: Write> SerializeSeq for WriteJsonSeq<'a, W> {
 
     type Error = WriteJsonError;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         if self.first {
             self.first = false;
@@ -291,9 +301,9 @@ impl<'a, W: Write> Serializer for WriteJson<'a, W> {
         Ok(write!(self.out, "null")?)
     }
 
-    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         value.serialize(self)
     }
@@ -315,18 +325,18 @@ impl<'a, W: Write> Serializer for WriteJson<'a, W> {
         todo!()
     }
 
-    fn serialize_newtype_struct<T>(
+    fn serialize_newtype_struct<T: ?Sized>(
         self,
         _name: &'static str,
         _value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         todo!()
     }
 
-    fn serialize_newtype_variant<T>(
+    fn serialize_newtype_variant<T: ?Sized>(
         self,
         _name: &'static str,
         _variant_index: u32,
@@ -334,7 +344,7 @@ impl<'a, W: Write> Serializer for WriteJson<'a, W> {
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         value.serialize(self)
     }
@@ -498,9 +508,9 @@ impl<'a, W: Write> Serializer for WritePartialJson<'a, W> {
         Ok(write!(self.out, "null")?)
     }
 
-    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         value.serialize(WriteJson { out: self.out })
     }
@@ -522,18 +532,18 @@ impl<'a, W: Write> Serializer for WritePartialJson<'a, W> {
         todo!()
     }
 
-    fn serialize_newtype_struct<T>(
+    fn serialize_newtype_struct<T: ?Sized>(
         self,
         _name: &'static str,
         _value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         todo!()
     }
 
-    fn serialize_newtype_variant<T>(
+    fn serialize_newtype_variant<T: ?Sized>(
         self,
         _name: &'static str,
         _variant_index: u32,
@@ -541,7 +551,7 @@ impl<'a, W: Write> Serializer for WritePartialJson<'a, W> {
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: Serialize + ?Sized,
+        T: Serialize,
     {
         value.serialize(WriteJson { out: self.out })
     }

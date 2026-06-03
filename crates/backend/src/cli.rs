@@ -68,9 +68,8 @@ fn default_log_config(debug_level: log::Level) {
         use tracing_subscriber::util::SubscriberInitExt;
         tracing_subscriber::registry()
             .with(
-                tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                    "backend=debug,backend::file=debug,tower_http=debug".into()
-                }),
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "backend=debug,backend::file=debug,tower_http=debug".into()),
             )
             .with(tracing_subscriber::fmt::layer())
             .init();
@@ -85,7 +84,7 @@ fn configure_logging(debug_level: log::Level) {
 #[cfg(feature = "rerun")]
 fn configure_logging(debug_level: log::Level) {
     rerun::external::re_log::setup_logging();
-    let rec = rerun::RecordingStreamBuilder::new("HyperAST").connect_grpc();
+    let rec = rerun::RecordingStreamBuilder::new("HyperAST").connect();
     let rec = match rec {
         Ok(rec) => rec,
         Err(e) => {

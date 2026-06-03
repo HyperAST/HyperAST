@@ -1,166 +1,16 @@
-use re_ui::UiExt;
-use std::{collections::HashSet, hash::Hash, ops::Range, str::FromStr, u8};
-
 use egui_addon::code_editor;
-
 use hyperast::store::nodes::fetched::NodeIdentifier;
+use re_ui::UiExt;
 
-type Cpp = hyperast_gen_ts_cpp::types::Type;
-type Java = hyperast_gen_ts_java::types::Type;
+use std::{collections::HashSet, hash::Hash, ops::Range};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub struct Repo {
+pub(crate) struct Repo {
     pub(crate) user: String,
     pub(crate) name: String,
 }
-
-pub type CommitId = Oid;
-
-#[derive(Hash, PartialEq, Eq, Clone, Copy)]
-pub struct Oid(#[doc(hidden)] pub [u8; 20]);
-
-impl Oid {
-    // take the first x char of the oid.
-    // if x > 20 just return the full oid, equivalent to as_str
-    pub fn prefix(&self, x: usize) -> String {
-        // std::str::from_utf8(&self.0[..x.min(20)]).unwrap()
-        assert!(x.is_multiple_of(2));
-        self.0
-            .into_iter()
-            .take(x / 2)
-            .map(|x| format!("{x:02x}"))
-            .collect()
-    }
-    pub fn as_str(&self) -> String {
-        self.to_string()
-    }
-    // pub fn as_str(&self) -> &str {
-    //     std::str::from_utf8(&self.0).unwrap()
-    // }
-    pub(crate) fn tb<'a>(&'a mut self) -> OidTextBuffer<'a> {
-        OidTextBuffer(self.to_string(), self)
-    }
-}
-
-pub(crate) struct OidTextBuffer<'a>(String, &'a mut Oid);
-impl egui::TextBuffer for OidTextBuffer<'_> {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        let r = self.0.insert_text(text, char_index);
-        *self.1 = self.0.as_str().into();
-        r
-    }
-
-    fn delete_char_range(&mut self, char_range: Range<usize>) {
-        self.0.delete_char_range(char_range);
-        *self.1 = self.0.as_str().into();
-    }
-
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<Oid>()
-    }
-}
-
-impl std::fmt::Debug for Oid {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("CommitId").field(&self.0).finish()
-    }
-}
-
-impl std::fmt::Display for Oid {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:x}", self)
-    }
-}
-
-impl std::fmt::LowerHex for Oid {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for x in self.0 {
-            write!(f, "{x:02x}")?;
-        }
-        Ok(())
-    }
-}
-
-#[test]
-fn feature() {
-    let x = "2731bbaf6b4bed23abaae8de5c1fa9f373e30e57";
-    assert_eq!(x, &Oid::from(x).to_string());
-}
-
-impl From<String> for Oid {
-    fn from(value: String) -> Self {
-        value.as_str().into()
-    }
-}
-
-impl From<&str> for Oid {
-    fn from(value: &str) -> Self {
-        match value.parse() {
-            Ok(s) => s,
-            Err((s, _)) => s,
-        }
-    }
-}
-
-impl FromStr for Oid {
-    type Err = (Self, &'static str);
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut s = s.bytes().map(|c| {
-            Some(match c as char {
-                '0'..='9' => c as u32 - '0' as u32,
-                'a'..='f' => c as u32 - 'a' as u32 + 10,
-                _ => return None,
-            } as u8)
-        });
-        let mut bytes = [0; 20];
-        for i in 0..20 {
-            let Some(c1) = s.next() else {
-                return Err((Self(bytes), "no c2"));
-            };
-            let Some(c1) = c1 else {
-                return Err((Self(bytes), "unrecognized oid char"));
-            };
-            let Some(c2) = s.next() else {
-                return Err((Self(bytes), "no c2"));
-            };
-            let Some(c2) = c2 else {
-                return Err((Self(bytes), "unrecognized oid char"));
-            };
-            bytes[i] = c1 << 4 | c2;
-        }
-        if s.next().is_some() {
-            return Err((Self(bytes), "too many char in oid"));
-        }
-        Ok(Self(bytes))
-    }
-}
-
-impl serde::Serialize for Oid {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let s = self.to_string();
-        serializer.serialize_str(&s)
-    }
-}
-impl<'de> serde::Deserialize<'de> for Oid {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        <&str>::deserialize(deserializer).map(From::from)
-    }
-}
+// TODO uuse [u8;20]
+pub(crate) type CommitId = String;
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
 #[serde(default)]
@@ -168,26 +18,16 @@ pub(crate) struct ComputeConfigMulti {
     pub(crate) list: Vec<Commit>,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
+#[serde(default)]
 pub(crate) struct ComputeConfigDiff {
     pub(crate) repo: Repo,
     pub(crate) before: CommitId,
     pub(crate) after: CommitId,
 }
 
-impl Default for ComputeConfigDiff {
-    fn default() -> Self {
-        Self {
-            repo: Default::default(),
-            before: "".into(),
-            after: "".into(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
-#[derive(Default)]
 pub struct CodeRange {
     #[serde(flatten)]
     pub(crate) file: FileIdentifier,
@@ -198,40 +38,29 @@ pub struct CodeRange {
     pub(crate) path_ids: Vec<NodeIdentifier>,
 }
 
-impl PartialEq for CodeRange {
-    fn eq(&self, other: &Self) -> bool {
-        let r = self.file.commit == other.file.commit
-            // && self.range == other.range
-            && self.path == other.path
-        && self.path_ids == other.path_ids;
-        if r && !(self.range == other.range && self.path_ids == other.path_ids) {
-            wasm_rs_dbg::dbg!(
-                &self.file.commit,
-                &self.range,
-                &other.range,
-                &self.path_ids,
-                &other.path_ids,
-            );
+impl Default for CodeRange {
+    fn default() -> Self {
+        Self {
+            file: Default::default(),
+            range: Default::default(),
+            path: Default::default(),
+            path_ids: Default::default(),
         }
-        r
     }
 }
 
-impl Eq for CodeRange {}
-
-impl Hash for CodeRange {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.file.commit.hash(state);
-        // self.range.hash(state);
-        self.path.hash(state);
-        // self.path_ids.hash(state);
-    }
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Default)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub(crate) struct ComputeConfigTracking {
     pub(crate) target: CodeRange,
+}
+
+impl Default for ComputeConfigTracking {
+    fn default() -> Self {
+        Self {
+            target: Default::default(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -251,63 +80,23 @@ pub(crate) struct ComputeConfigAspectViews {
     // pub(super) ser_opt_java_text: String,
     // TODO use an enum set btw...
     #[serde(skip)]
-    pub(super) ser_opt_cpp: TySet<Cpp>,
+    pub(super) ser_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type>,
     #[serde(skip)]
-    pub(super) ser_opt_java: TySet<Java>,
+    pub(super) ser_opt_java: HashSet<hyperast_gen_ts_java::types::Type>,
     #[serde(skip)]
-    pub(super) hide_opt_cpp: TySet<Cpp>,
+    pub(super) hide_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type>,
     #[serde(skip)]
-    pub(super) hide_opt_java: TySet<Java>,
-}
-
-pub struct TySet<Ty>(HashSet<Ty>);
-
-impl<Ty> std::ops::Deref for TySet<Ty> {
-    type Target = HashSet<Ty>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<Ty> std::ops::DerefMut for TySet<Ty> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<Ty> Default for TySet<Ty> {
-    fn default() -> Self {
-        Self(HashSet::default())
-    }
-}
-
-impl<Ty: Eq + Hash + Copy + 'static> TySet<Ty> {
-    pub fn toggle(&mut self, k: &dyn hyperast::types::HyperType) {
-        let k = &k.as_any();
-        if let Some(k) = k.downcast_ref::<Ty>() {
-            self._toggle(k);
-        }
-    }
-}
-impl<Ty: Eq + Hash + Copy> TySet<Ty> {
-    fn _toggle(&mut self, k: &Ty) {
-        if self.0.contains(k) {
-            self.0.remove(k);
-        } else {
-            self.0.insert(k.to_owned());
-        }
-    }
+    pub(super) hide_opt_java: HashSet<hyperast_gen_ts_java::types::Type>,
 }
 
 impl Default for ComputeConfigAspectViews {
     fn default() -> Self {
-        let mut ser_opt_cpp = TySet::<Cpp>::default();
-        ser_opt_cpp.insert(Cpp::FunctionDeclarator);
-        let mut ser_opt_java = TySet::<Java>::default();
-        ser_opt_java.insert(Java::MethodDeclaration);
-        let hide_opt_cpp = TySet::<Cpp>::default();
-        let hide_opt_java = TySet::<Java>::default();
+        let mut ser_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type> = Default::default();
+        ser_opt_cpp.insert(hyperast_gen_ts_cpp::types::Type::FunctionDeclarator);
+        let mut ser_opt_java: HashSet<hyperast_gen_ts_java::types::Type> = Default::default();
+        ser_opt_java.insert(hyperast_gen_ts_java::types::Type::MethodDeclaration);
+        let hide_opt_cpp: HashSet<hyperast_gen_ts_cpp::types::Type> = Default::default();
+        let hide_opt_java: HashSet<hyperast_gen_ts_java::types::Type> = Default::default();
         Self {
             commit: Default::default(),
             path: "".into(),
@@ -348,7 +137,7 @@ impl Default for FileIdentifier {
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
-pub struct Commit {
+pub(crate) struct Commit {
     #[serde(flatten)]
     pub(crate) repo: Repo,
     #[serde(rename = "commit")]
@@ -357,32 +146,11 @@ pub struct Commit {
 }
 
 impl Repo {
-    pub fn with(self, id: impl Into<CommitId>) -> Commit {
+    pub fn with(self, id: impl Into<String>) -> Commit {
         Commit {
             repo: self,
             id: id.into(),
         }
-    }
-    pub(crate) fn url(&self) -> String {
-        format!("https://github.com/{}/{}", self.user, self.name)
-    }
-}
-
-impl Commit {
-    pub(crate) fn url(&self) -> String {
-        let url = self.repo.url();
-        let id = &self.id;
-        format!("{url}/commit/{id}")
-    }
-    pub(crate) fn commit_url_to_clipboard(
-        &self,
-        ctx: &egui::Context,
-        notification_ui: &mut re_ui::notifications::NotificationUi,
-    ) {
-        let url = self.url();
-        let text = format!("Copied address of github commit to clipboard\n{url}",);
-        ctx.copy_text(url);
-        notification_ui.success(text);
     }
 }
 
@@ -527,7 +295,6 @@ pub enum QueriedLang {
     Java,
 }
 impl QueriedLang {
-    #[allow(unused)]
     pub fn as_str(&self) -> &str {
         match self {
             QueriedLang::Cpp => "Cpp",
@@ -574,6 +341,25 @@ pub(crate) struct TsgEditor<T = code_editor::CodeEditor<Languages>> {
     pub(crate) query: T,
 }
 
+#[derive(Debug)]
+pub(crate) struct Resource<T> {
+    /// HTTP response
+    pub(crate) response: ehttp::Response,
+
+    pub(crate) content: Option<T>,
+    // /// If set, the response was an image.
+    // image: Option<RetainedImage>,
+}
+
+impl<T> Resource<T> {
+    pub fn map<U, F: Fn(T) -> U>(self, f: F) -> Resource<U> {
+        Resource {
+            response: self.response,
+            content: self.content.map(f),
+        }
+    }
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Config {
     Any,
@@ -582,7 +368,6 @@ pub(crate) enum Config {
 }
 
 impl Config {
-    #[allow(unused)]
     pub fn language(&self) -> &'static str {
         match self {
             Config::Any => "",

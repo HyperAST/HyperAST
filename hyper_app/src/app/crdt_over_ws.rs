@@ -1,8 +1,14 @@
-use autosurgeon::{Hydrate, Reconcile, reconcile};
+use std::sync::{Arc, RwLock};
+
+#[cfg(target_arch = "wasm32")]
+use async_executors::JoinHandle;
+use autosurgeon::{reconcile, Hydrate, Reconcile};
 use egui_addon::code_editor::generic_text_buffer::TextBuffer;
 use futures_util::{Future, SinkExt, StreamExt};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::task::JoinHandle;
 
 #[derive(Default, Debug, Reconcile, Hydrate)]
 pub(crate) struct Quote {
@@ -55,28 +61,6 @@ impl<S: Into<String>> From<S> for Quote {
 impl egui_addon::code_editor::generic_text_buffer::AsText for Quote {
     fn text(&self) -> &str {
         self.text.as_str()
-    }
-}
-
-impl egui::TextBuffer for Quote {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        &self.text.as_str()
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        TextBuffer::insert_text(self, text, char_index)
-    }
-
-    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        TextBuffer::delete_char_range(self, char_range)
-    }
-
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<Self>()
     }
 }
 
@@ -156,6 +140,7 @@ impl<S> WsChannel<S> {
         }
     }
     async fn make_ws_async(who: User, url: String) -> tokio_tungstenite_wasm::Result<WsCont> {
+        wasm_rs_dbg::dbg!(&url);
         match tokio_tungstenite_wasm::connect(url).await {
             Ok(stream) => {
                 wasm_rs_dbg::dbg!("Handshake for client {} has been completed", who);
@@ -236,6 +221,7 @@ impl WsDoc {
     }
 
     pub(crate) fn changed(&mut self, rt: &Rt, quote: &mut impl Reconcile) {
+        wasm_rs_dbg::dbg!();
         let (doc, sync_state): &mut (_, _) = &mut self.data.write().unwrap();
         if let Err(e) = reconcile(doc, &*quote) {
             log::warn!(
@@ -290,12 +276,7 @@ impl WsDocsDb {
         channel
     }
 
-    pub(crate) fn create_doc_attempt(
-        &mut self,
-        rt: &Rt,
-        name: String,
-        _quote: &mut impl Reconcile,
-    ) {
+    pub(crate) fn create_doc_atempt(&mut self, rt: &Rt, name: String, _quote: &mut impl Reconcile) {
         wasm_rs_dbg::dbg!();
         // let docs: &mut Vec<_> = &mut self.data.write().unwrap();
         // if let Err(e) = reconcile(doc, &*quote) {
@@ -336,7 +317,7 @@ impl Default for Rt {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-lazy_static::lazy_static! {
+lazy_static! {
     static ref RT: Arc<tokio::runtime::Runtime> = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -345,11 +326,7 @@ lazy_static::lazy_static! {
     );
 }
 
-pub(super) struct H(
-    #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)]
-    tokio::task::JoinHandle<()>,
-);
+pub(super) struct H(#[cfg(not(target_arch = "wasm32"))] JoinHandle<()>);
 
 impl Rt {
     #[cfg(not(target_arch = "wasm32"))]

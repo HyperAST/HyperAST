@@ -4,7 +4,7 @@
 use crate::search::steped::Status;
 
 use super::{
-    NONE, Node, PATTERN_DONE_MARKER, QueryCursor, Symbol, TreeCursorStep, WILDCARD_SYMBOL,
+    Node, QueryCursor, Symbol, TreeCursorStep, NONE, PATTERN_DONE_MARKER, WILDCARD_SYMBOL,
 };
 
 // Walk the tree, processing patterns until at least one pattern finishes,
@@ -172,13 +172,13 @@ where
             let is_named = node.is_named();
             let status = self.cursor.current_status();
             log::trace!(
-                "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
-                self.depth,
-                node.str_symbol(),
-                query.field_name(status.field_id().into()),
-                node.start_point().row,
-                self.states.len(),
-                self.finished_states.len()
+              "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
+              self.depth,
+              node.str_symbol(),
+              query.field_name(status.field_id().into()),
+              node.start_point().row,
+              self.states.len(),
+              self.finished_states.len()
             );
 
             let node_is_error = symbol == Symbol::ERROR;
@@ -462,9 +462,7 @@ where
                                 state!(_copy).step_index,
                                 state!(@step).alternative_index,
                                 state!(@step).alternative_is_immediate(),
-                                self.capture_list_pool
-                                    .get(state!(_copy).capture_list_id)
-                                    .len()
+                                self.capture_list_pool.get(state!(_copy).capture_list_id).len()
                             );
                             end_index += 1;
                             copy_count += 1;
@@ -566,9 +564,7 @@ where
                         curr_state!().pattern_index,
                         curr_state!().start_depth,
                         curr_state!().step_index,
-                        self.capture_list_pool
-                            .get(curr_state!().capture_list_id)
-                            .len()
+                        self.capture_list_pool.get(curr_state!().capture_list_id).len()
                     );
                     let next_step = &query.steps[curr_state!().step_index as usize];
                     if next_step.depth == PATTERN_DONE_MARKER {

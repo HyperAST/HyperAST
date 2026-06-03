@@ -1,15 +1,23 @@
 #![allow(unused)] // TODO maintain those tests
 
-use hyperast::nodes::TextSerializer;
-use hyperast::position::{StructuralPosition, TreePath};
-use hyperast::store::defaults::NodeIdentifier;
-use hyperast::types::WithChildren;
+use hyperast::{
+    nodes::TextSerializer,
+    position::{StructuralPosition, TreePath, position_accessors::WithPreOrderOffsets},
+    store::defaults::NodeIdentifier,
+    types::{Typed, WithChildren},
+};
 use hyperast_gen_ts_cpp::iter::IterAll as CppIter;
 use hyperast_gen_ts_xml::iter::IterAll as XmlIter;
 
-use crate::auto::tsq_ser_meta::{self, Conv};
-use crate::search::PreparedMatcher;
-use crate::tests::xml_tree;
+use crate::{
+    auto::{
+        tsq_ser,
+        tsq_ser_meta::{self, Conv},
+        tsq_transform,
+    },
+    search::PreparedMatcher,
+    tests::{cpp_tree, xml_tree},
+};
 
 const C0: &str = r#"int f() {
     return 21 + 21;

@@ -7,13 +7,11 @@ pub struct Offsets<Idx, Config = tags::TopDownFull> {
     offsets: Vec<Idx>,
     _phantom: std::marker::PhantomData<Config>,
 }
-
-impl<Idx, C> From<Offsets<Idx, C>> for Vec<Idx> {
-    fn from(val: Offsets<Idx, C>) -> Self {
-        val.offsets
+impl<Idx, C> Into<Vec<Idx>> for Offsets<Idx, C> {
+    fn into(self) -> Vec<Idx> {
+        self.offsets
     }
 }
-
 impl<Idx, C> Offsets<Idx, C> {
     pub fn from_iterator(it: impl Iterator<Item = Idx>) -> Offsets<Idx, C> {
         Self {
@@ -99,19 +97,23 @@ pub struct RootedOffsetsRef<'a, IdN, Idx> {
     offsets: &'a [Idx],
 }
 
-impl<IdN, Idx> super::node_filter_traits::Full for RootedOffsetsRef<'_, IdN, Idx> {}
+impl<'a, IdN, Idx> super::node_filter_traits::Full for RootedOffsetsRef<'a, IdN, Idx> {}
 
-impl<IdN: Copy, Idx> position_accessors::RootedPosition<IdN> for RootedOffsetsRef<'_, IdN, Idx> {
+impl<'a, IdN: Copy, Idx> position_accessors::RootedPosition<IdN>
+    for RootedOffsetsRef<'a, IdN, Idx>
+{
     fn root(&self) -> IdN {
         self.root
     }
 }
-impl<IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets for RootedOffsetsRef<'_, IdN, Idx> {
+impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets
+    for RootedOffsetsRef<'a, IdN, Idx>
+{
     type Idx = Idx;
 }
 
-impl<IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
-    for RootedOffsetsRef<'_, IdN, Idx>
+impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
+    for RootedOffsetsRef<'a, IdN, Idx>
 {
     type It<'b>
         = std::iter::Copied<std::slice::Iter<'b, Idx>>

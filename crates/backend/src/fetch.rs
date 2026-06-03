@@ -1,12 +1,19 @@
-use hyperast::store::nodes::fetched::{self, NodeIdentifier};
-use hyperast::store::nodes::{self};
-use hyperast::store::{defaults, labels::label_id_from_usize};
-use hyperast::types::{Childrn, WithChildren, WithSerialization, WithStats};
+use hyperast::{
+    store::{
+        defaults,
+        labels::label_id_from_usize, // ::fetched,
+        nodes::{
+            self,
+            fetched::{self, NodeIdentifier},
+        },
+    },
+    types::{Childrn, WithChildren, WithSerialization, WithStats},
+};
 use hyperast_vcs_git::TStore;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
-use crate::{SharedState, app::Timed};
+use crate::{app::Timed, SharedState};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Parameters {
@@ -53,7 +60,10 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
     } = path;
     dbg!(&path);
     let repo_spec = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-    let repo = (state.repositories.read().unwrap())
+    let repo = state
+        .repositories
+        .read()
+        .unwrap()
         .get_config(repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
     let mut repo = repo.fetch();
@@ -84,16 +94,6 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
         Ok(x) => dbg!(x),
         Err(x) => dbg!(x),
     };
-    if (repositories.processor.main_stores)
-        .node_store
-        .try_resolve(curr)
-        .is_none()
-    {
-        return Ok(FetchedNodes {
-            node_store: Default::default(),
-            root: vec![],
-        });
-    }
     let ids = vec![curr];
     let node_store = extract_nodes(&ids, &repositories.processor.main_stores);
     dbg!(&ids);
@@ -189,7 +189,6 @@ fn resolve_in_file(
         return Err(d);
     }
     let mut l = 0;
-    #[allow(clippy::never_loop)]
     'l: loop {
         let Some(n) = n.children() else {
             return Err(d);
@@ -257,8 +256,8 @@ pub fn fetch_labels<'a>(
         // if id == 0 {
         //     panic!()
         // }
-
-        label_id_from_usize(id).unwrap()
+        let id = label_id_from_usize(id).unwrap();
+        id
     });
     let mut get_mut = state;
     let repositories = get_mut.repositories.read().unwrap();
@@ -285,7 +284,7 @@ fn resolve_path<'a>(
     mut path: impl Iterator<Item = &'a str>,
 ) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
     let mut curr = root;
-    for i in path {
+    while let Some(i) = path.next() {
         let Ok(i) = i.parse() else {
             return Err(curr);
         };
@@ -321,8 +320,7 @@ struct BuffOut {
 
 impl std::fmt::Write for BuffOut {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.buff.push_str(s);
-        Ok(())
+        Ok(self.buff.extend(s.chars()))
     }
 }
 

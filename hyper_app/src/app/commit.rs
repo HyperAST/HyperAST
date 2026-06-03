@@ -1,9 +1,9 @@
-use std::i64;
+use std::{collections::HashMap, i64};
 
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 
-use crate::utils_poll::Resource;
+use crate::app::types::Resource;
 
 use super::types::{Commit, CommitId, Repo};
 
@@ -12,17 +12,17 @@ pub struct CommitMetadata {
     /// commit message
     pub(crate) message: Option<String>,
     /// parents commits
-    /// if multiple parents, the first one should be where the merge happens
-    pub(crate) parents: Vec<CommitId>,
+    /// if multiple parents, the first one should be where the merge happends
+    pub(crate) parents: Vec<String>,
     /// tree corresponding to version
-    pub(crate) tree: Option<super::types::Oid>,
+    pub(crate) tree: Option<String>,
     /// offset in minutes
     pub(crate) timezone: i32,
     /// seconds
     pub(crate) time: i64,
     /// (opt) ancestors in powers of 2; [2,4,8,16,32]
     /// important to avoid linear loading time
-    pub(crate) ancestors: Vec<CommitId>,
+    pub(crate) ancestors: Vec<String>,
     pub(crate) forth_timestamp: i64,
 }
 
@@ -36,32 +36,17 @@ impl CommitMetadata {
         if let Some(date) = date {
             ui.label(format!("Date:\t{:?}", date));
         } else {
-        }
-        fn join<I: Iterator>(it: I, s: I::Item) -> I::Item
-        where
-            I::Item: ToString + Clone,
-            I::Item: FromIterator<I::Item>,
-        {
-            use itertools::intersperse;
-            intersperse(it, s).collect::<I::Item>()
+            // wasm_rs_dbg::dbg!(self.timezone, self.time);
         }
         if ui.available_width() > 300.0 {
-            ui.label(format!(
-                "Parents: {}",
-                join(self.parents.iter().map(|x| x.as_str()), " + ".to_string())
-            ));
+            ui.label(format!("Parents: {}", self.parents.join(" + ")));
         } else {
-            let text = join(self.parents.iter().map(|x| x.prefix(8)), " + ".to_string());
+            use itertools::intersperse;
+            let text = intersperse(self.parents.iter().map(|x| &x[..8]), " + ").collect::<String>();
             let label = ui.label(format!("Parents: {}", text));
             if label.hovered() {
-                let text = join(self.parents.iter().map(|x| x.as_str()), " + ".to_string());
-                egui::Tooltip::always_open(
-                    ui.ctx().clone(),
-                    ui.layer_id(),
-                    label.id.with("tooltip"),
-                    &label,
-                )
-                .show(|ui| {
+                let text = self.parents.join(" + ");
+                egui::show_tooltip(ui.ctx(), ui.layer_id(), label.id.with("tooltip"), |ui| {
                     ui.label(&text);
                     ui.label("CTRL+C to copy (and send in the debug console)");
                 });
@@ -81,29 +66,12 @@ impl CommitMetadata {
                     egui::RichText::new(head).background_color(ui.style().visuals.extreme_bg_color);
                 let label = ui.label(head);
                 if label0.hovered() || label.hovered() {
-                    egui::Tooltip::always_open(
-                        ui.ctx().clone(),
-                        ui.layer_id(),
-                        label.id.with("tooltip"),
-                        label0.rect.union(label.rect),
-                    )
-                    .show(|ui| {
+                    egui::show_tooltip(ui.ctx(), ui.layer_id(), label.id.with("tooltip"), |ui| {
                         ui.text_edit_multiline(&mut msg.to_string());
                     });
                 }
             }
         }
-    }
-
-    pub(crate) fn local_datetime(&self) -> Option<chrono::DateTime<chrono::FixedOffset>> {
-        let seconds_since_epoch = self.time;
-        let tz_offset_minutes = self.timezone;
-        use chrono::prelude::*;
-        let utc_datetime = DateTime::from_timestamp(seconds_since_epoch, 0)?;
-        let offset = FixedOffset::east_opt(tz_offset_minutes * 60)?;
-        let local_datetime = utc_datetime.with_timezone(&offset);
-
-        Some(local_datetime)
     }
 }
 
@@ -119,7 +87,11 @@ pub(super) fn fetch_commit(
         api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
     );
 
+    // wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
+    // request
+    //     .headers
+    //     .insert("Content-Type".to_string(), "text".to_string());
 
     ehttp::fetch(request, move |response| {
         ctx.request_repaint(); // wake up UI thread
@@ -144,6 +116,7 @@ pub(super) fn fetch_commit0(
         api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
     );
 
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
     // request
     //     .headers
@@ -213,6 +186,7 @@ pub(super) fn fetch_merge_pr(
         api_addr, &commit.repo.user, &commit.repo.name,
     );
 
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
 
     ehttp::fetch(request, move |response| {
@@ -248,7 +222,7 @@ pub(super) fn fetch_commit_parents(
     api_addr: &str,
     commit: &Commit,
     depth: usize,
-) -> Promise<Result<Vec<CommitId>, String>> {
+) -> Promise<Result<Vec<String>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
@@ -257,19 +231,27 @@ pub(super) fn fetch_commit_parents(
     );
 
     let request = ehttp::Request::get(&url);
+    // request
+    //     .headers
+    //     .insert("Content-Type".to_string(), "text".to_string());
+
     ehttp::fetch(request, move |response| {
+        wasm_rs_dbg::dbg!(&response);
         ctx.request_repaint(); // wake up UI thread
         let resource = response
-            .and_then(|response| Resource::<Vec<CommitId>>::from_response(&ctx, response))
+            .and_then(|response| Resource::<Vec<String>>::from_response(&ctx, response))
             .and_then(|x| x.content.ok_or("No content".into()));
         sender.send(resource);
     });
     promise
 }
 
-impl Resource<Vec<CommitId>> {
+impl Resource<Vec<String>> {
     #[allow(unused)]
     fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
+        wasm_rs_dbg::dbg!(&response);
+        // let content_type = response.content_type().unwrap_or_default();
+
         let text = response.text();
         let text = text.ok_or("")?;
         let text = serde_json::from_str(text).map_err(|x| x.to_string())?;
@@ -283,7 +265,7 @@ impl Resource<Vec<CommitId>> {
 
 pub(crate) fn validate_pasted_project_url(
     paste: &str,
-) -> Result<(super::types::Repo, Vec<CommitId>), &'static str> {
+) -> Result<(super::types::Repo, Vec<String>), &'static str> {
     use std::str::FromStr;
     match hyperast::utils::Url::from_str(paste) {
         Ok(url) if &url.domain == "github.com" && &url.protocol == "https" => {
@@ -298,7 +280,7 @@ pub(crate) fn validate_pasted_project_url(
                     if *after_repo == "commit" {
                         if let Some(after_repo) = path.get(3) {
                             if after_repo.chars().all(|x| x.is_alphanumeric()) {
-                                Ok((repo, vec![after_repo.parse().unwrap()]))
+                                Ok((repo, vec![after_repo.to_string()]))
                             } else if let Some(_) = after_repo.split_once("..") {
                                 Err("range of commits are not handled (WIP)")
                             } else {
@@ -308,7 +290,7 @@ pub(crate) fn validate_pasted_project_url(
                             Err("commit id missing")
                         }
                     } else if after_repo.chars().all(|x| x.is_alphanumeric()) {
-                        Ok((repo, vec![after_repo.parse().unwrap()]))
+                        Ok((repo, vec![after_repo.to_string()]))
                     } else if let Some(_) = after_repo.split_once("..") {
                         Err("range of commits are not handled (WIP)")
                     } else {
@@ -327,13 +309,12 @@ pub(crate) fn validate_pasted_project_url(
     }
 }
 
-// TODO move to a dedicated crate (not egui_addon)
 /// Selection of projects.
 ///     Each project is identified by main repository.
 ///     Each project contains a selection of other repositories considered as forks,
 ///     and a set of commits (not branches)
 #[derive(Deserialize, Serialize, Debug)]
-pub struct SelectedProjects {
+pub(crate) struct SelectedProjects {
     len: usize,
     repositories: Vec<Repo>,
     offsets: Vec<u32>,
@@ -351,20 +332,12 @@ impl Default for SelectedProjects {
             &["56e12a0c0e0e69ea70863011b4f4ca3305e0542b"],
         );
         s.add_with_commit_slice(
-            ["official-stockfish", "Stockfish"].into(),
-            &["7f2eb10e93879bc569c7ddf6fb51d6f812cc477c"],
-        );
-        s.add_with_commit_slice(
             ["tree-sitter", "tree-sitter"].into(),
             &["800f2c41d0e35e4383172d7a67a16f3933b86039"],
         );
         s.add_with_commit_slice(
             ["rerun-io", "egui_tiles"].into(),
             &["0fe81768278678db4f66a297178c04f23452c682"],
-        );
-        s.add_with_commit_slice(
-            ["Marcono1234", "gson"].into(),
-            &["3d241ca0a6435cbf1fa1cdaed2af8480b99fecde"],
         );
         s.add_with_commit_slice(
             ["tree-sitter", "tree-sitter-cpp"].into(),
@@ -396,10 +369,7 @@ impl Default for SelectedProjects {
 /// Id of each project, ie. a repository and a selection of other repositories considered as forks
 #[derive(Deserialize, Serialize, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct ProjectId(usize);
-impl ProjectId {
-    pub const INVALID: Self = Self(usize::MAX);
-}
+pub(crate) struct ProjectId(usize);
 
 impl SelectedProjects {
     fn empty() -> Self {
@@ -414,12 +384,9 @@ impl SelectedProjects {
     pub(crate) fn add_with_commit_slice(
         &mut self,
         repo: Repo,
-        commits: &[impl Into<CommitId> + Clone],
+        commits: &[impl ToString],
     ) -> ProjectId {
-        self.add(
-            repo,
-            commits.into_iter().map(|x| x.clone().into()).collect(),
-        )
+        self.add(repo, commits.into_iter().map(|x| x.to_string()).collect())
     }
 
     pub(crate) fn add(&mut self, repo: Repo, commits: Vec<CommitId>) -> ProjectId {
@@ -479,10 +446,10 @@ impl SelectedProjects {
     }
 
     pub(crate) fn project_ids(&self) -> impl Iterator<Item = ProjectId> + use<> {
-        (0..self.repositories.len()).map(ProjectId)
+        (0..self.repositories.len()).into_iter().map(ProjectId)
     }
 
-    pub fn get(&mut self, ProjectId(i): ProjectId) -> Option<&Repo> {
+    pub(crate) fn get<'a>(&'a mut self, ProjectId(i): ProjectId) -> Option<&'a Repo> {
         self.repositories.get(i)
     }
 
@@ -522,15 +489,25 @@ impl SelectedProjects {
             },
         )
     }
-    pub fn repositories(&mut self) -> impl Iterator<Item = &mut Repo> {
-        self.repositories.iter_mut()
-    }
 
-    pub(crate) fn find(&mut self, repo: &Repo) -> Option<ProjectId> {
-        self.repositories
-            .iter()
-            .position(|r| r == repo)
-            .map(ProjectId)
+    // pub(crate) fn get<'a>(&'a self, i: usize) -> Option<(&'a Repo, CommitSlice<'a>)> {
+    //     if i >= self.len() {
+    //         return None;
+    //     }
+    //     let end = self.c_range(i).end;
+    //     Some((
+    //         &mut self.repositories[i],
+    //         CommitSlice {
+    //             end,
+    //             commits: &mut self.commits,
+    //             offsets: &mut self.offsets,
+    //             i,
+    //         },
+    //     ))
+    // }
+
+    pub(crate) fn repositories(&mut self) -> impl Iterator<Item = &mut Repo> {
+        self.repositories.iter_mut()
     }
 }
 
@@ -554,12 +531,17 @@ impl<'a> CommitSlice<'a> {
     }
 
     pub(crate) fn last_mut(&mut self) -> Option<&mut CommitId> {
-        self.commits.get_mut(self.end.checked_sub(1)?)
+        if self.end == 0 {
+            return None;
+        }
+        Some(&mut self.commits[self.end - 1])
     }
 
     pub(crate) fn pop(&mut self) -> CommitId {
-        self.end = (self.end.checked_sub(1))
-            .expect("trying to remove a commit from a project without any");
+        if self.end == 0 {
+            panic!("trying to remove a commit from a project without any")
+        }
+        self.end -= 1;
         self.offsets[self.i + 1..].iter_mut().for_each(|x| *x -= 1);
         self.commits.remove(self.end)
     }
@@ -575,6 +557,124 @@ impl<'a> CommitSlice<'a> {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct CommitsLayout {
+    pub(crate) commits: Vec<CommitId>,
+    pub(crate) pos: Vec<egui::Pos2>,
+    // indexing in subs
+    pub(crate) branches: Vec<usize>,
+    pub(crate) subs: Vec<Subs>,
+    pub(crate) rect: egui::Rect,
+}
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct Subs {
+    // indexing in CommitsLayout.commits
+    pub(crate) prev: usize,
+    // indexing in CommitsLayout.commits
+    pub(crate) start: usize,
+    // indexing in CommitsLayout.commits
+    pub(crate) end: usize,
+    // indexing in CommitsLayout.commits
+    pub(crate) succ: usize,
+}
+
+impl Default for CommitsLayout {
+    fn default() -> Self {
+        Self {
+            commits: Default::default(),
+            pos: Default::default(),
+            branches: Default::default(),
+            subs: Default::default(),
+            rect: egui::Rect::ZERO,
+        }
+    }
+}
+
+pub(crate) fn compute_commit_layout(
+    commits: impl Fn(&CommitId) -> Option<CommitMetadata>,
+    branches: impl Iterator<Item = (String, CommitId)>,
+) -> CommitsLayout {
+    // let commits: Vec<commits_layouting::CommitInfo> = commits.map(|x| todo!()).collect();
+    // let indices: std::collections::HashMap<commits_layouting::Oid, usize> = commits
+    //     .iter()
+    //     .enumerate()
+    //     .map(|(i, c)| (c.oid, i))
+    //     .collect();
+    // let mut branches: Vec<commits_layouting::BranchInfo> = branches.map(|x| todo!()).collect();
+    // let settings = commits_layouting::BranchSettings::new(branches.len());
+    // branches.into_iter().map(|x| 42).collect()
+    use egui::Pos2;
+    let mut r = CommitsLayout {
+        commits: vec![],
+        pos: vec![],
+        branches: vec![],
+        subs: vec![],
+        rect: egui::Rect::ZERO,
+    };
+    let mut index = HashMap::<CommitId, usize>::default();
+    let mut v = 0.0;
+    for (branch_name, target) in branches {
+        let mut h = 0.0;
+        r.commits.push(branch_name);
+        r.branches.push(r.subs.len());
+        let mut waiting: Vec<(String, usize)> = vec![(target, r.pos.len())];
+        r.pos.push(Pos2::new(h, v));
+        loop {
+            let Some((mut current, prev)) = waiting.pop() else {
+                break;
+            };
+            h = r.pos[prev].x;
+            let start = r.pos.len();
+            let mut succ = None;
+            loop {
+                if let Some(fork) = index.get(&current) {
+                    succ = Some(*fork);
+                    break;
+                }
+                index.insert(current.clone(), r.pos.len());
+                h += 10.0;
+                if let Some(commit) = commits(&current) {
+                    if let Some(p) = commit.parents.get(0) {
+                        r.commits.push(format!("{p}"));
+                        r.pos.push(Pos2::new(h, v));
+                        current = p.clone();
+                    } else {
+                        r.commits.push(format!("<end>"));
+                        r.pos.push(Pos2::new(h, v));
+                        r.rect.max.x = r.rect.max.x.max(h);
+                        break;
+                    }
+                    if let Some(p) = commit.parents.get(1..) {
+                        for p in p {
+                            waiting.push((p.to_string(), r.pos.len() - 1));
+                        }
+                    }
+                } else {
+                    r.commits.push(format!("m|{current}"));
+                    r.pos.push(Pos2::new(h, v));
+                    r.rect.max.x = r.rect.max.x.max(h);
+                    break;
+                }
+            }
+            let end = r.pos.len();
+            let succ = if let Some(succ) = succ {
+                succ
+            } else {
+                usize::MAX
+            };
+            r.subs.push(Subs {
+                prev,
+                start,
+                end,
+                succ,
+            });
+            v += 10.0;
+        }
+        v += 5.0;
+    }
+    r.rect.set_height(v);
+    r
+}
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct SubsTimed {
     // indexing in CommitsLayout.subs
@@ -591,15 +691,9 @@ pub(crate) struct SubsTimed {
     pub(crate) succ: usize,
     pub(crate) delta_time: i64,
 }
-impl SubsTimed {
-    pub(crate) fn range(&self) -> std::ops::Range<usize> {
-        self.start..self.end
-    }
-}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct CommitsLayoutTimed {
-    pub(crate) branch_names: Vec<String>,
     pub(crate) commits: Vec<CommitId>,
     // times and lines
     pub(crate) times: Vec<i64>,
@@ -614,7 +708,6 @@ pub(crate) struct CommitsLayoutTimed {
 impl Default for CommitsLayoutTimed {
     fn default() -> Self {
         Self {
-            branch_names: Default::default(),
             commits: Default::default(),
             times: Default::default(),
             branches: Default::default(),
@@ -627,18 +720,19 @@ impl Default for CommitsLayoutTimed {
     }
 }
 
-impl CommitsLayoutTimed {
-    pub(crate) fn time(&self, id: usize) -> Option<i64> {
-        let r = self.times[id];
-        if r == -1 { None } else { Some(r) }
-    }
-}
-
 pub(crate) fn compute_commit_layout_timed(
     commits: impl Fn(&CommitId) -> Option<CommitMetadata>,
     branches: impl Iterator<Item = (String, CommitId)>,
 ) -> CommitsLayoutTimed {
-    use std::collections::HashMap;
+    // let commits: Vec<commits_layouting::CommitInfo> = commits.map(|x| todo!()).collect();
+    // let indices: std::collections::HashMap<commits_layouting::Oid, usize> = commits
+    //     .iter()
+    //     .enumerate()
+    //     .map(|(i, c)| (c.oid, i))
+    //     .collect();
+    // let mut branches: Vec<commits_layouting::BranchInfo> = branches.map(|x| todo!()).collect();
+    // let settings = commits_layouting::BranchSettings::new(branches.len());
+    // branches.into_iter().map(|x| 42).collect()
     type TId = usize;
     type SId = usize;
     let mut r = CommitsLayoutTimed::default();
@@ -646,16 +740,18 @@ pub(crate) fn compute_commit_layout_timed(
     for (branch_name, target) in branches {
         // log::debug!("{} {}", branch_name, target);
 
-        r.branch_names.push(branch_name);
-        r.commits.push("branch".into());
+        r.commits.push(branch_name);
         r.branches.push(r.subs.len());
         let branch_index = r.times.len();
-        let mut waiting: Vec<(CommitId, TId, SId)> = vec![(target, branch_index, r.subs.len())];
+        let mut waiting: Vec<(String, TId, SId)> = vec![(target, branch_index, r.subs.len())];
+        // let mut prev_time = -1;
         r.times.push(-1);
         loop {
             let Some((mut current, prev, prev_sub)) = waiting.pop() else {
                 break;
             };
+            // h = r.pos[prev].x;
+            // let
             let start = r.times.len();
             let end;
             let mut succ = None;
@@ -665,27 +761,27 @@ pub(crate) fn compute_commit_layout_timed(
                     end = r.times.len();
                     break;
                 }
-                index.insert(current, (r.times.len(), r.subs.len()));
+                index.insert(current.clone(), (r.times.len(), r.subs.len()));
                 if let Some(commit) = commits(&current) {
                     // universal time then ?
                     let time = commit.time; // + commit.timezone as i64 * 60;
                     r.min_time = time.min(r.min_time);
                     r.max_time = time.max(r.max_time);
-                    r.commits.push(current);
+                    r.commits.push(format!("{current}"));
                     r.times.push(time);
                     if let Some(p) = commit.parents.get(0) {
-                        current = *p;
+                        current = p.clone();
                     } else {
                         end = r.times.len();
                         break;
                     }
                     if let Some(p) = commit.parents.get(1..) {
                         for p in p {
-                            waiting.push((*p, r.times.len() - 1, r.subs.len()));
+                            waiting.push((p.to_string(), r.times.len() - 1, r.subs.len()));
                         }
                     }
                 } else {
-                    r.commits.push(current);
+                    r.commits.push(format!("{current}"));
                     r.times.push(-1);
                     end = r.times.len();
                     break;
@@ -711,6 +807,10 @@ pub(crate) fn compute_commit_layout_timed(
                 } else if let Some(t) = r.times[start..end - 1].iter().rev().find(|x| **x != -1) {
                     delta_time = (r.times[prev] - t).abs();
                     r.max_delta = r.max_delta.max(delta_time);
+                // } else if r.times[end - 2] != -1 {
+                //     delta_time = r.times[prev] - r.times[end - 2];
+                //     debug_assert!(delta_time >= 0);
+                //     r.max_delta = r.max_delta.max(delta_time);
                 } else {
                     delta_time = 100;
                 }
@@ -1334,7 +1434,7 @@ mod commits_layouting {
     }
     impl Commit {
         fn id(&self) -> Oid {
-            self.oid
+            self.oid.clone()
         }
 
         fn parent_count(&self) -> usize {
@@ -1342,7 +1442,7 @@ mod commits_layouting {
         }
 
         fn parent_id(&self, i: usize) -> Result<Oid, ()> {
-            Ok(self.parents[i])
+            Ok(self.parents[i].clone())
         }
     }
 

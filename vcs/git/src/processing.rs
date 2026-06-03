@@ -15,7 +15,6 @@ pub enum BuildSystem {
 }
 
 pub enum ProcessingConfig<P> {
-    Java { limit: usize, dir_path: P },
     JavaMaven { limit: usize, dir_path: P },
     CppMake { limit: usize, dir_path: P },
     TsNpm { limit: usize, dir_path: P },
@@ -26,7 +25,6 @@ pub enum ProcessingConfig<P> {
 /// where each config given the same commit should produce the same result in the hyperast
 #[derive(serde::Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum RepoConfig {
-    Java,
     CppMake,
     JavaMaven,
     TsNpm,
@@ -38,10 +36,8 @@ impl std::str::FromStr for RepoConfig {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "CppMake" => Self::CppMake,
             "Cpp" => Self::CppMake,
             "cpp" => Self::CppMake,
-            "JavaMaven" => Self::JavaMaven,
             "Java" => Self::JavaMaven,
             "java" => Self::JavaMaven,
             "typescript" => Self::TsNpm,
@@ -62,10 +58,6 @@ impl From<&RepoConfig> for ProcessingConfig<&'static str> {
                 dir_path: "",
             },
             RepoConfig::JavaMaven => Self::JavaMaven {
-                limit: 3,
-                dir_path: "",
-            },
-            RepoConfig::Java => Self::Java {
                 limit: 3,
                 dir_path: "",
             },
@@ -242,7 +234,7 @@ impl<'a> TryInto<&'a str> for &'a ObjectName {
     }
 }
 
-impl TryInto<String> for &ObjectName {
+impl<'a> TryInto<String> for &ObjectName {
     type Error = std::str::Utf8Error;
 
     fn try_into(self) -> Result<String, Self::Error> {
@@ -250,7 +242,7 @@ impl TryInto<String> for &ObjectName {
     }
 }
 
-impl TryInto<String> for ObjectName {
+impl<'a> TryInto<String> for ObjectName {
     type Error = std::str::Utf8Error;
 
     fn try_into(self) -> Result<String, Self::Error> {
@@ -307,7 +299,6 @@ pub(crate) mod caches {
     #[derive(Default)]
     pub struct Cpp {
         pub(crate) md_cache: hyperast_gen_ts_cpp::legion::MDCache,
-        pub(crate) dedup: hyperast::store::nodes::legion::DedupMap,
         pub object_map: NamedMap<(hyperast_gen_ts_cpp::legion::Local,)>,
     }
 

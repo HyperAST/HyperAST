@@ -60,6 +60,6 @@ impl<'a, Idx: 'a + Copy> Iterator for IterSimple<'a, Idx> {
     type Item = Idx;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.internal.next().copied()
+        self.internal.next().and_then(|x| Some(*x))
     }
 }

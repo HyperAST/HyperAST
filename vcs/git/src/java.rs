@@ -1,16 +1,18 @@
-use hyperast::hashed::SyntaxNodeHashs;
-use hyperast::store::defaults::{LabelIdentifier, NodeIdentifier};
-use hyperast::tree_gen::{self, SubTreeMetrics};
-
-use crate::PROPAGATE_ERROR_ON_BAD_CST_NODE;
-use crate::processing::ObjectName;
-use crate::{Accumulator, BasicDirAcc};
-use crate::{FailedParsing, FileProcessingResult, SuccessProcessing};
+use std::time::Instant;
 
 use crate::java_processor::SimpleStores;
+use crate::{Accumulator, PROPAGATE_ERROR_ON_BAD_CST_NODE, processing::ObjectName};
+use crate::{BasicDirAcc, FailedParsing, FileProcessingResult, SuccessProcessing};
+
+use hyperast::store::defaults::NodeIdentifier;
+use hyperast::tree_gen;
+use hyperast::{
+    hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
+};
+use hyperast_gen_ts_java::types::TStore;
+use hyperast_gen_ts_java::{legion_with_refs::PartialAnalysis, types::Type};
+
 use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyperast_gen_ts_java::legion_with_refs::PartialAnalysis;
-use hyperast_gen_ts_java::types::{TStore, Type};
 
 pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     tree_gen: &mut java_tree_gen::JavaTreeGen<
@@ -27,7 +29,7 @@ where
     More: tree_gen::Prepro<SimpleStores, Scope = hyperast::scripting::Acc>
         + tree_gen::PreproTSG<SimpleStores, Acc = java_tree_gen::Acc>,
 {
-    let time = std::time::Instant::now();
+    let time = Instant::now();
     let tree = java_tree_gen::tree_sitter_parse(text);
     let parsing_time = time.elapsed();
     let tree = match tree {
@@ -46,8 +48,9 @@ where
             }
         }
     };
+    let time = Instant::now();
     let node = tree_gen.generate_file(&name.as_bytes(), text, tree.walk());
-    let processing_time = time.elapsed() - parsing_time;
+    let processing_time = time.elapsed();
     Ok(SuccessProcessing {
         parsing_time,
         processing_time,

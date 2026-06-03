@@ -1,17 +1,18 @@
 use core::fmt;
 use std::io::{Write, stdout};
 
-use pretty_assertions::assert_eq;
-
-use hyperast::filter::BloomResult;
-use hyperast::nodes::RefContainer;
-use hyperast::position::{
-    PositionConverter, Scout, StructuralPosition, StructuralPositionStore, TypedScout,
-    TypedTreePath,
+use hyperast::{
+    filter::BloomResult,
+    nodes::RefContainer,
+    position::{
+        PositionConverter, Scout, StructuralPosition, StructuralPositionStore, TypedScout,
+        TypedTreePath,
+    },
+    store::SimpleStores,
+    types::{NodeId, Typed, WithChildren},
+    utils::memusage,
 };
-use hyperast::store::SimpleStores;
-use hyperast::types::{NodeId, Typed, WithChildren};
-use hyperast::utils::memusage;
+use pretty_assertions::assert_eq;
 
 use crate::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
 use crate::{

@@ -25,19 +25,18 @@ fn main() {
 const INCREMENTAL_QUERIES: bool = true;
 
 fn single(repo_name: &str, commit: &str, query: &str) {
+
     let query = if INCREMENTAL_QUERIES {
         hyperast_tsquery::Query::with_precomputed(
-            query,
+            &query,
             hyperast_gen_ts_java::language(),
             hyperast_vcs_git::java_processor::SUB_QUERIES,
-        )
-        .unwrap()
-        .1
+        ).unwrap().1
     } else {
-        hyperast_tsquery::Query::new(query, hyperast_gen_ts_java::language()).unwrap()
+        hyperast_tsquery::Query::new(&query, hyperast_gen_ts_java::language()).unwrap()
     };
 
-    let mut preprocessed = PreProcessedRepository::new(repo_name);
+    let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let oid = preprocessed.pre_process_single(
         &mut hyperast_vcs_git::git::fetch_github_repository(&preprocessed.name),
         commit,
@@ -53,11 +52,8 @@ fn single(repo_name: &str, commit: &str, query: &str) {
     use hyperast::types::WithStats;
     let s = stores.node_store.resolve(tr).size();
 
-    let matches = count_matches(stores, tr, &query);
-    let matches = matches
-        .into_iter()
-        .map(|x| format!(",{}", x))
-        .collect::<String>();
+   let matches = count_matches(stores, tr, &query);
+   let matches = matches.into_iter().map(|x|format!(",{}",x)).collect::<String>();
 
     let mu = memusage_linux();
     // TODO
@@ -76,6 +72,7 @@ fn single(repo_name: &str, commit: &str, query: &str) {
 fn aaa() {
     println!("hello!")
 }
+
 
 #[test]
 fn bbb() {

@@ -52,7 +52,7 @@ impl<Idx: PrimInt> Iterator for IntoIter<Idx> {
                 br = true;
                 a
             };
-            c += cast(b).unwrap();
+            c = c + cast(b).unwrap();
             if self.side {
                 self.adv += 1;
             }

@@ -47,7 +47,7 @@ fn test_for_mappings() {
             .actions
             .expect("ASTs are not identical, but no actions were found")
             .len(),
-        1_usize,
+        1 as usize,
         "Incorrect number of actions"
     );
 }
@@ -134,12 +134,12 @@ fn get_diff_info(example: (SimpleTree<u8>, SimpleTree<u8>)) -> DiffInfo {
         num_actions_greedy, num_actions_normal, num_actions_lazy
     );
 
-    DiffInfo {
+    return DiffInfo {
         num_actions_normal,
         num_actions_lazy,
         num_matches_normal,
         num_matches_lazy,
-    }
+    };
 }
 
 #[test]

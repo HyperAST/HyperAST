@@ -1,7 +1,5 @@
 use hyperast_gen_ts_java::tsg::It;
 
-type SimpleStores = hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>;
-
 fn main() {
     use std::path::Path;
     log::set_logger(&LOGGER)
@@ -157,14 +155,14 @@ fn prep_stepped<'store>(
     text: &[u8],
 ) -> (
     hyperast_gen_ts_tsquery::search::steped::Query,
-    SimpleStores,
+    hyperast::store::SimpleStores<hyperast_gen_ts_java::types::TStore>,
     hyperast::store::defaults::NodeIdentifier,
 ) {
     use hyperast_gen_ts_java::legion_with_refs;
     use hyperast_gen_ts_tsquery::search::steped;
     let query = steped::Query::new(query, tree_sitter_java::language()).unwrap();
 
-    let mut stores = SimpleStores::default();
+    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 

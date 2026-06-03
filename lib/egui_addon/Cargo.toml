@@ -1,26 +1,20 @@
 [package]
 name = "egui_addon"
-version = "0.5.0"
+version = "0.3.0"
 edition = "2024"
 
-[lints]
-workspace = true
-
 [dependencies]
-egui = { version = "0.32.0", default-features = false }
-eframe = { version = "0.32.0", default-features = false }
-epaint = { version = "0.32.0", default-features = false }
-emath = { version = "0.32.0", default-features = false }
-egui_demo_lib = { version = "0.32.0", default-features = false, features = [
+egui = { version = "0.31.1", default-features = false }
+eframe = { version = "0.31.1", default-features = false }
+epaint = { version = "0.31.1", default-features = false }
+emath = { version = "0.31.1", default-features = false }
+egui_demo_lib = { version = "0.31.1", default-features = false, features = [
     "syntect",
 ] }
-egui_extras = { version = "0.32.0", default-features = false }
-# egui_graphs = { version = "0.28.0", features = ["events"], optional = true }
-egui_graphs = { git = "https://github.com/quentinLeDilavrec/egui_graphs", rev="9e83f82cb63f0733029de8c89950af27c8bac04f", features = ["events"], optional = true }
-# egui_graphs = { path = "../../../egui_graphs/crates/egui_graphs", features = ["events"], optional = true }
+egui_extras = { version = "0.31.1", default-features = false }
+egui_graphs = { version = "=0.25.0", features = ["events"], optional = true }
 
-accesskit = "0.19.0"
-
+# You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }
 
 enum-map = { version = "2", features = ["serde"] }
@@ -38,17 +32,18 @@ syntect = { version = "5", features = [
     "default-fancy",
 ], default-features = false }
 
-petgraph = { version = "0.8.3", optional = true }
+petgraph = { version = "0.7.1", optional = true }
 crossbeam = { version = "0.8", optional = true }
-# fjadra = { version = "0.2.1", optional = true }
+fdg = { git = "https://github.com/grantshandy/fdg", optional = true }
+
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 poll-promise = { version = "0.3", default-features = false }
 # tracing-subscriber = "0.3"
 tree-sitter-javascript = "0.23.1"
 # tree-sitter = { version = "0.22.2", package = "tree-sitter-facade-sg" }
-tree-sitter = { version = "0.25.0" }
-tree-sitter-highlight = "0.25.0"
+tree-sitter = { version = "0.23.2" }
+tree-sitter-highlight = "0.23.2"
 # tree-sitter-native = { version = "0.20.9", package = "tree-sitter" }
 
 # web:
@@ -64,7 +59,6 @@ wasm-bindgen-futures = "0.4.34"
 serde-wasm-bindgen = "0.4"
 js-sys = "0.3"
 # wasm-bindgen-futures = "0.4"
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
 
 
 [[example]]
@@ -85,4 +79,4 @@ ts_highlight = [
     # "dep:tree-sitter",
     # "dep:web-tree-sitter-sg"
 ]
-force_layout = ["dep:egui_graphs", "dep:petgraph", "dep:crossbeam"]
+force_layout = ["dep:egui_graphs", "dep:petgraph", "dep:crossbeam", "dep:fdg"]

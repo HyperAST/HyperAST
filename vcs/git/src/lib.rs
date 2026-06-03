@@ -16,7 +16,6 @@ pub mod make_processor;
 pub mod maven_processor;
 pub mod multi_preprocessed;
 pub mod no_space;
-pub mod no_space2;
 /// for now only tested on maven repositories with a pom in root.
 pub mod preprocessed;
 pub mod processing;
@@ -27,8 +26,10 @@ pub mod tests;
 
 use git::BasicGitObject;
 use git2::Oid;
-use hyperast::store::{defaults::LabelIdentifier, nodes::legion::NodeStoreInner};
-use hyperast::utils::Bytes;
+use hyperast::{
+    store::{defaults::LabelIdentifier, nodes::legion::NodeStoreInner},
+    utils::Bytes,
+};
 
 mod type_store;
 
@@ -209,21 +210,8 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
         let children = self.children;
         let children_names = self.children_names;
         assert_eq!(children_names.len(), children.len());
-        use hyperast::store::nodes::compo;
-        if children.len() == 1 {
-            dyn_builder.add(compo::CS(children_names.into_boxed_slice()));
-            let Ok(cs) = children.try_into() else {
-                unreachable!();
-            };
-            dyn_builder.add(compo::CS0::<_, 1>(cs));
-        } else if children.len() == 2 {
-            dyn_builder.add(compo::CS(children_names.into_boxed_slice()));
-            let Ok(cs) = children.try_into() else {
-                unreachable!();
-            };
-            dyn_builder.add(compo::CS0::<_, 2>(cs));
-        } else if !children.is_empty() {
-            use compo::CS;
+        if !children.is_empty() {
+            use hyperast::store::nodes::compo::CS;
             dyn_builder.add(CS(children_names.into_boxed_slice()));
             dyn_builder.add(CS(children.into_boxed_slice()));
         }

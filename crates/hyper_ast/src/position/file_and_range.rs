@@ -53,15 +53,15 @@ impl<T: PrimInt + Display> Display for Position<PathBuf, T> {
 
 // TODO use an interface for TopDownPositionBuilder, should actually be the same as position here, this way you can see the generated pos as a DTO
 // TODO in the same way finishing a prepare struct could directly be converted into a position, or be an accumulator itself (actually better for some structs)
-impl<IdN, Idx, IdO: PrimInt> From<super::spaces_related::TopDownPositionBuilder<IdN, Idx, IdO>>
-    for Position<PathBuf, IdO>
+impl<IdN, Idx, IdO: PrimInt> Into<Position<PathBuf, IdO>>
+    for super::spaces_related::TopDownPositionBuilder<IdN, Idx, IdO>
 {
-    fn from(val: super::spaces_related::TopDownPositionBuilder<IdN, Idx, IdO>) -> Self {
+    fn into(self) -> Position<PathBuf, IdO> {
         // TODO how to handle position of directory ?
-        let range = val.range.unwrap();
+        let range = self.range.unwrap();
         let len = range.end - range.start;
         Position {
-            file: val.file,
+            file: self.file,
             start: range.start,
             len,
         }
@@ -205,4 +205,30 @@ mod impl_receivers {
             self
         }
     }
+
+    // impl<IdN, Idx, IdO: PrimInt> top_down::ReceiveInFile<IdN, Idx, Self> for super::Position<PathBuf, T> {
+    //     type S1 = Self;
+
+    //     type S2 = Self;
+
+    //     fn finish(self) -> Self {
+    //         self
+    //     }
+    // }
+    // impl<IdN, Idx, IdO: PrimInt> top_down::ReceiveDir<IdN, Idx, Self> for super::Position<PathBuf, T> {
+    //     type SA1 = Self;
+
+    //     type SA2 = Self;
+
+    //     type SB1 = Self;
+
+    //     fn go_inside_file(mut self, file_name: &str) -> Self::SB1 {
+    //         self.file.push(file_name);
+    //         self
+    //     }
+
+    //     fn finish(self) -> Self {
+    //         self
+    //     }
+    // }
 }

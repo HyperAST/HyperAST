@@ -75,7 +75,7 @@ fn single(
     repositories.register_config(repo.clone(), config);
 
     let repo_configured = repositories
-        .get_config(repo.clone())
+        .get_config((&repo).clone())
         .ok_or_else(|| "missing config for repository".to_string())
         .unwrap()
         .fetch(); // todo: not sure if this is necessary
@@ -106,7 +106,7 @@ fn single(
     let dst_tr = commit_dst.ast_root;
     let dst_s = stores.node_store.resolve(dst_tr).size();
 
-    let hyperast = hyperast_vcs_git::no_space::as_nospaces(stores);
+    let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
     let mu = memusage_linux();
     let lazy =
@@ -157,7 +157,7 @@ fn single(
         }
     } else if gt_out_format == "JSON" {
         if let Some(gt_out) = &gt_out {
-            let pp = hyperast_benchmark_diffs::postprocess::SimpleJsonPostProcess::new(gt_out);
+            let pp = hyperast_benchmark_diffs::postprocess::SimpleJsonPostProcess::new(&gt_out);
             let gt_timings = pp.performances();
             let counts = pp.counts();
             let valid = pp.validity_mappings(&lazy.mapper);

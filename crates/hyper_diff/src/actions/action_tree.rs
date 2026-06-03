@@ -1,28 +1,27 @@
-//! WIP this action collection aims to better express all possible order (of application) of actions from edit scripts,
-//! as action_vec only allow one order to apply actions.
-//! Maybe it can be integrated in the existing script generator or it needs major changes.
-//! Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
+///! WIP this action collection aims to better express all possible order (of application) of actions from edit scripts,
+///! as action_vec only allow one order to apply actions.
+///! Maybe it can be integrated in the existing script generator or it needs major changes.
+///! Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
+use hyperast::PrimInt;
 
+use crate::tree::tree_path::{CompressedTreePath, TreePath};
 use std::fmt::{Debug, Display};
 
-use hyperast::PrimInt;
-use num_traits::ToPrimitive;
-
-use super::Actions;
-use super::script_generator2::{Act, ApplicablePath, SimpleAction};
-use crate::tree::tree_path::{CompressedTreePath, TreePath};
+use super::{
+    script_generator2::{Act, ApplicablePath, SimpleAction},
+    Actions,
+};
 
 #[derive(Debug)]
 pub struct ActionsTree<A> {
     pub atomics: Vec<Node<A>>,
-    pub composed: Vec<A>,
+    composed: Vec<A>,
 } // TODO use NS ? or a decompressed tree ?
 
 #[derive(Debug)]
 pub struct Node<A> {
     pub action: A,
     pub children: Vec<Node<A>>,
-    pub composed_offset: u32,
 }
 impl<A> Node<A> {
     fn size(&self) -> usize {
@@ -57,7 +56,7 @@ where
             }
             Ok(())
         }
-        impl<A> Debug for Summary<'_, A>
+        impl<'a, A> Debug for Summary<'a, A>
         where
             Node<A>: NodeSummary,
         {
@@ -97,7 +96,7 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
         }
         let action = match &action.action {
             Act::Delete {} => todo!(),
-            Act::Update { new, before } => todo!(),
+            Act::Update { new } => todo!(),
             Act::Move { from } => todo!(),
             Act::MovUpd { from, new } => todo!(),
             Act::Insert { sub } => todo!(),
@@ -107,96 +106,38 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
             Node {
                 action,
                 children: vec![],
-                composed_offset: u32::MAX,
             },
         )
     }
     pub fn merge_ori(&mut self, action: &SimpleAction<L, CompressedTreePath<Idx>, I>) {
-        match &action.action {
-            Act::Delete {} => Self::merge_aux(
-                action.path.ori.iter(),
-                &mut self.atomics,
-                |p| &mut p.ori,
-                |path| SimpleAction {
+        // dbg!(&action.path.ori);
+        Self::merge_aux(
+            action.path.ori.iter(),
+            &mut self.atomics,
+            |p| &mut p.ori,
+            |path| match &action.action {
+                Act::Delete {} => SimpleAction {
                     path: super::script_generator2::ApplicablePath {
                         ori: path.into(),
                         mid: action.path.mid.clone(),
                     },
                     action: Act::Delete {},
                 },
-                u32::MAX,
-            ),
-            Act::Update { new, before } => Self::merge_aux(
-                action.path.ori.iter(),
-                &mut self.atomics,
-                |p| &mut p.ori,
-                |path| SimpleAction {
+                Act::Update { new } => SimpleAction {
                     path: super::script_generator2::ApplicablePath {
                         ori: path.into(),
                         mid: action.path.mid.clone(),
                     },
-                    action: Act::Update {
-                        new: new.clone(),
-                        before: before.clone(),
-                    },
+                    action: Act::Update { new: new.clone() },
                 },
-                u32::MAX,
-            ),
-            Act::Insert { sub } => Self::merge_aux(
-                action.path.ori.iter(),
-                &mut self.atomics,
-                |p| &mut p.ori,
-                |path| SimpleAction {
+                Act::Move { from } => SimpleAction {
                     path: super::script_generator2::ApplicablePath {
                         ori: path.into(),
                         mid: action.path.mid.clone(),
                     },
-                    action: Act::Insert { sub: sub.clone() },
+                    action: Act::Move { from: from.clone() },
                 },
-                u32::MAX,
-            ),
-            Act::Move { from } => {
-                let composed_offset = (self.composed.len())
-                    .to_u32()
-                    .expect("too many composed actions");
-                // insert
-                Self::merge_aux(
-                    action.path.ori.iter(),
-                    &mut self.atomics,
-                    |p| &mut p.ori,
-                    |path| SimpleAction {
-                        path: super::script_generator2::ApplicablePath {
-                            ori: path.into(),
-                            mid: action.path.mid.clone(),
-                        },
-                        // we do not have an I so lets consider
-                        // moves to be interpreted as inserts in ActionsTree
-                        action: Act::Move { from: from.clone() },
-                    },
-                    composed_offset,
-                );
-                // delete
-                Self::merge_aux(
-                    from.ori.iter(),
-                    &mut self.atomics,
-                    |p| &mut p.ori,
-                    |path| SimpleAction {
-                        path: super::script_generator2::ApplicablePath {
-                            ori: path.into(),
-                            mid: from.mid.clone(),
-                        },
-                        action: Act::Delete {},
-                    },
-                    composed_offset,
-                );
-                // inserting the composed action
-                self.composed.push(action.clone());
-            }
-            Act::MovUpd { from, new } => Self::merge_aux(
-                action.path.ori.iter(),
-                &mut self.atomics,
-                |p| &mut p.ori,
-                |path| SimpleAction {
+                Act::MovUpd { from, new } => SimpleAction {
                     path: super::script_generator2::ApplicablePath {
                         ori: path.into(),
                         mid: action.path.mid.clone(),
@@ -206,9 +147,15 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
                         new: new.clone(),
                     },
                 },
-                todo!(),
-            ),
-        }
+                Act::Insert { sub } => SimpleAction {
+                    path: super::script_generator2::ApplicablePath {
+                        ori: path.into(),
+                        mid: action.path.mid.clone(),
+                    },
+                    action: Act::Insert { sub: sub.clone() },
+                },
+            },
+        );
     }
 
     fn merge_aux(
@@ -216,7 +163,6 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
         mut r: &mut Vec<Node<SimpleAction<L, CompressedTreePath<Idx>, I>>>,
         f: impl Fn(&mut ApplicablePath<CompressedTreePath<Idx>>) -> &mut CompressedTreePath<Idx>,
         g: impl Fn(Vec<Idx>) -> SimpleAction<L, CompressedTreePath<Idx>, I>,
-        composed_offset: u32,
     ) {
         let mut path: Vec<Idx> = path.collect();
         'aaa: loop {
@@ -224,64 +170,34 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
             loop {
                 let Some(x) = r.get_mut(i) else { break };
                 use hyperast::position::position_accessors::SharedPath;
+                // dbg!(f(&mut x.action.path));
                 let sh = crate::tree::tree_path::shared_ancestors(
                     path.iter().copied(),
                     f(&mut x.action.path).iter(),
                 );
+                // dbg!(&sh);
                 match sh {
-                    SharedPath::Exact(_) => {
-                        let action = g(path);
-                        let _action = &r[i].action;
-                        // TODO also compare content of action
-                        match (&action.action, &_action.action) {
-                            (Act::Delete { .. }, Act::Delete { .. })
-                            | (Act::Delete { .. }, Act::Move { .. })
-                            | (Act::Move { .. }, Act::Delete { .. })
-                            | (Act::Update { .. }, Act::Update { .. })
-                            | (Act::Insert { .. }, Act::Insert { .. })
-                            | (Act::Insert { .. }, Act::Move { .. })
-                            | (Act::Move { .. }, Act::Insert { .. }) => {
-                                r[i].composed_offset = r[i].composed_offset.min(composed_offset);
-                                return;
-                            }
-                            (Act::Move { .. }, Act::Move { .. })
-                            | (Act::MovUpd { .. }, Act::MovUpd { .. }) => {
-                                panic!(
-                                    "what should be done with the possibly added composed action ?"
-                                )
-                            }
-                            _ => (),
-                        }
-                        let mut tmp = std::mem::replace(
-                            &mut r[i],
-                            Node {
-                                action,
-                                children: vec![],
-                                composed_offset,
-                            },
-                        );
-                        let p = f(&mut tmp.action.path);
-                        r[i].children.push(tmp);
-                        return;
-                    }
+                    SharedPath::Exact(_) => panic!(),
                     SharedPath::Remain(_s) => {
+                        dbg!(&path);
                         let action = g(path);
                         let mut tmp = std::mem::replace(
                             &mut r[i],
                             Node {
                                 action,
                                 children: vec![],
-                                composed_offset,
                             },
                         );
                         let p = f(&mut tmp.action.path);
                         *p = p.iter().skip(_s.len() - 1).collect::<Vec<_>>().into();
+                        dbg!(&p);
                         r[i].children.push(tmp);
                         return;
                     }
                     SharedPath::Submatch(s) => {
                         r = &mut r[i].children;
                         path = path[s.len()..].to_vec();
+                        // dbg!(&path);
                         continue 'aaa;
                     }
                     SharedPath::Different(_) => (),
@@ -294,10 +210,9 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
                 Node {
                     action,
                     children: vec![],
-                    composed_offset,
                 },
             );
-            return;
+            break;
             // break (r, vec![], i);
         }
     }
@@ -306,7 +221,6 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
     //     Self::push_aux(node, &mut self.atomics);
     // }
 
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             atomics: Default::default(),

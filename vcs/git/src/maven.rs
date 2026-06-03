@@ -1,21 +1,24 @@
-use num::ToPrimitive;
-use std::fmt::{self, Debug};
-use std::ops::AddAssign;
-use std::path::PathBuf;
-
-use enumset::EnumSet;
-
-use hyperast::position::{StructuralPosition, TreePath, TreePathMut};
-use hyperast::store::defaults::{LabelIdentifier, NodeIdentifier};
-use hyperast::tree_gen::SubTreeMetrics;
-use hyperast::types::{Childrn, LabelStore as _, Labeled, Tree, Typed, WithChildren};
-use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyperast_gen_ts_xml::legion::XmlTreeGen;
-use hyperast_gen_ts_xml::types::{TStore, Type};
-
 use crate::{
     Accumulator, BasicDirAcc, DefaultMetrics, PROPAGATE_ERROR_ON_BAD_CST_NODE, ParseErr,
     SimpleStores, processing::ObjectName,
+};
+use enumset::EnumSet;
+use hyperast::{
+    position::{StructuralPosition, TreePath, TreePathMut},
+    store::defaults::{LabelIdentifier, NodeIdentifier},
+    tree_gen::SubTreeMetrics,
+    types::{Childrn, LabelStore as _, Labeled, Tree, Typed, WithChildren},
+};
+use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyperast_gen_ts_xml::{
+    legion::XmlTreeGen,
+    types::{TStore, Type},
+};
+use num::ToPrimitive;
+use std::{
+    fmt::{self, Debug},
+    ops::AddAssign,
+    path::PathBuf,
 };
 
 pub(crate) fn handle_pom_file<'a>(
@@ -145,26 +148,32 @@ impl<'a> IterMavenModules2<'a> {
                 .extend(b.children().unwrap().iter_children().rev().map(|x| Some(x)));
         }
 
-        let contains_pom = b.children().unwrap_or_default().iter_children().any(|x| {
-            let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(&x) else {
-                return false;
-            };
-            let n = n.0;
-            log::debug!("f {:?}", n.get_type());
-            n.get_type().eq(&Type::Document)
-                && if n.has_label() {
-                    log::debug!(
-                        "f name: {:?}",
-                        self.stores.label_store.resolve(n.get_label_unchecked())
-                    );
-                    self.stores
-                        .label_store
-                        .resolve(n.get_label_unchecked())
-                        .eq("pom.xml")
+        let contains_pom = b
+            .children()
+            .unwrap_or_default()
+            .iter_children()
+            .find(|x| {
+                if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(x) {
+                    let n = n.0;
+                    log::debug!("f {:?}", n.get_type());
+                    n.get_type().eq(&Type::Document)
+                        && if n.has_label() {
+                            log::debug!(
+                                "f name: {:?}",
+                                self.stores.label_store.resolve(n.get_label_unchecked())
+                            );
+                            self.stores
+                                .label_store
+                                .resolve(n.get_label_unchecked())
+                                .eq("pom.xml")
+                        } else {
+                            false
+                        }
                 } else {
                     false
                 }
-        });
+            })
+            .is_some();
 
         if contains_pom {
             Some(x)
@@ -390,12 +399,10 @@ impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterM
                         }
                         self.path.inc(child);
                         assert_eq!(*self.path.offset().unwrap(), offset + 1);
-                        self.path.check(self.stores).unwrap_or_else(|_| {
-                            panic!(
-                                "{:?} {} {:?} {:?} {:?}",
-                                node, offset, child, children, self.path
-                            )
-                        });
+                        self.path.check(self.stores).expect(&format!(
+                            "{:?} {} {:?} {:?} {:?}",
+                            node, offset, child, children, self.path
+                        ));
                     }
                     self.stack.push((node, offset + 1, Some(children)));
                     self.stack.push((child, 0, None));
@@ -460,27 +467,32 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
         is_src || t != Type::MavenDirectory
     }
     fn is_matching(&self, b: &XmlNode<'a>) -> bool {
-        let contains_pom = b.children().unwrap().iter_children().any(|x| {
-            if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(&x) {
-                let n = n.0;
-                log::debug!("f {:?}", n.get_type());
-                n.get_type().eq(&Type::Document)
-                    && if n.has_label() {
-                        log::debug!(
-                            "f name: {:?}",
-                            self.stores.label_store.resolve(n.get_label_unchecked())
-                        );
-                        self.stores
-                            .label_store
-                            .resolve(n.get_label_unchecked())
-                            .eq("pom.xml")
-                    } else {
-                        false
-                    }
-            } else {
-                false
-            }
-        });
+        let contains_pom = b
+            .children()
+            .unwrap()
+            .iter_children()
+            .find(|x| {
+                if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(x) {
+                    let n = n.0;
+                    log::debug!("f {:?}", n.get_type());
+                    n.get_type().eq(&Type::Document)
+                        && if n.has_label() {
+                            log::debug!(
+                                "f name: {:?}",
+                                self.stores.label_store.resolve(n.get_label_unchecked())
+                            );
+                            self.stores
+                                .label_store
+                                .resolve(n.get_label_unchecked())
+                                .eq("pom.xml")
+                        } else {
+                            false
+                        }
+                } else {
+                    false
+                }
+            })
+            .is_some();
         contains_pom
     }
 }

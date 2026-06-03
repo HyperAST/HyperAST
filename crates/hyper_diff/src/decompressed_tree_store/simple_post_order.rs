@@ -1,25 +1,20 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
-
-use num_traits::{ToPrimitive, Zero, cast, one, zero};
-
-use hyperast::position::Position;
-
-use hyperast::types::HyperType;
-use hyperast::types::UniformNodeId;
-use hyperast::types::{Children as _, WithChildren as _};
-use hyperast::types::{HyperAST, HyperASTShared, LendT};
-use hyperast::types::{LabelStore, NodeStore};
-use hyperast::types::{Labeled, WithSerialization};
-
-use super::Decompressed;
-use super::DeepDecompressedTreeStore;
-use super::PostOrder;
-use super::PrimInt;
-use super::ShallowDecompressedTreeStore;
-use super::basic_post_order::{BasicPOSlice, BasicPostOrder};
-use super::{ContiguousDescendants, DecendantsLending};
-use super::{DecompressedParentsLending, DecompressedWithParent, DecompressedWithSiblings};
+use super::{
+    ContiguousDescendants, DecendantsLending, DecompressedParentsLending, DecompressedTreeStore,
+    DecompressedWithParent, DecompressedWithSiblings, FullyDecompressedTreeStore, PostOrder,
+    ShallowDecompressedTreeStore,
+    basic_post_order::{BasicPOSlice, BasicPostOrder},
+};
 use crate::matchers::Decompressible;
+use hyperast::PrimInt;
+use hyperast::{
+    position::Position,
+    types::{
+        self, Children, Childrn, HyperAST, HyperASTShared, HyperType, LabelStore, Labeled,
+        NodeStore, WithChildren, WithSerialization,
+    },
+};
+use num_traits::{ToPrimitive, Zero, cast, one, zero};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
 
 #[derive(Clone)]
 pub struct SimplePostOrder<IdN, IdD> {
@@ -59,13 +54,16 @@ pub struct SimplePOSlice<'a, IdN, IdD> {
     pub(super) id_parent: &'a [IdD],
 }
 
-impl<IdN, IdD> Clone for SimplePOSlice<'_, IdN, IdD> {
+impl<'a, IdN, IdD> Clone for SimplePOSlice<'a, IdN, IdD> {
     fn clone(&self) -> Self {
-        *self
+        Self {
+            basic: self.basic.clone(),
+            id_parent: self.id_parent,
+        }
     }
 }
 
-impl<IdN, IdD> Copy for SimplePOSlice<'_, IdN, IdD> {}
+impl<'a, IdN, IdD> Copy for SimplePOSlice<'a, IdN, IdD> {}
 
 impl<'a, IdN, IdD> Deref for SimplePOSlice<'a, IdN, IdD> {
     type Target = BasicPOSlice<'a, IdN, IdD>;
@@ -85,7 +83,10 @@ impl<'a, HAST: HyperAST + Copy, IdD> Decompressible<HAST, SimplePOSlice<'a, HAST
     }
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt> Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>> {
+impl<HAST: HyperAST + Copy, IdD: PrimInt> Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
     fn _position_in_parent(&self, c: &IdD, p: &IdD) -> HAST::Idx {
         let mut r = 0;
         let mut c = *c;
@@ -116,6 +117,8 @@ impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> DecompressedParentsLending<'a, IdD
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedWithParent<HAST, IdD>
     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn parent(&self, id: &IdD) -> Option<IdD> {
         if id == &self.root() {
@@ -126,10 +129,10 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedWithParent<HAST, IdD>
     }
 
     fn has_parent(&self, id: &IdD) -> bool {
-        self.parent(id).is_some()
+        self.parent(id) != None
     }
 
-    fn position_in_parent<Idx: hyperast::PrimInt>(&self, c: &IdD) -> Option<Idx> {
+    fn position_in_parent<Idx: PrimInt>(&self, c: &IdD) -> Option<Idx> {
         let p = self.parent(c)?;
         let p = self._position_in_parent(c, &p);
         Some(cast(p).expect("no integer overflow, Idx is too small"))
@@ -142,8 +145,8 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedWithParent<HAST, IdD>
         }
     }
 
-    fn path<Idx: hyperast::PrimInt>(&self, parent: &IdD, descendant: &IdD) -> Vec<Idx> {
-        let this = self;
+    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> Vec<Idx> {
+        let ref this = self;
         let mut idxs = vec![];
         let mut curr = *descendant;
         while &curr != parent {
@@ -178,6 +181,8 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedWithParent<HAST, IdD>
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedWithSiblings<HAST, IdD>
     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn lsib(&self, x: &IdD) -> Option<IdD> {
         let p = self.parent(x)?;
@@ -191,7 +196,7 @@ pub struct IterParents<'a, IdD> {
     pub(super) id_parent: &'a [IdD],
 }
 
-impl<IdD: PrimInt> Iterator for IterParents<'_, IdD> {
+impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -199,13 +204,15 @@ impl<IdD: PrimInt> Iterator for IterParents<'_, IdD> {
             return None;
         }
         let r = self.id_parent[self.id.to_usize().unwrap()];
-        self.id = r;
+        self.id = r.clone();
         Some(r)
     }
 }
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn lld(&self, i: &IdD) -> IdD {
         self.as_basic().lld(i)
@@ -214,14 +221,18 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> PostOrder<HAST, IdD>
     fn tree(&self, id: &IdD) -> HAST::IdN {
         self.as_basic().tree(id)
     }
-
-    fn has_children(&self, id: &IdD) -> bool {
-        self.as_basic().has_children(id)
-    }
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt + Debug> hyperast::types::DecompressedFrom<HAST>
+// impl<HAST: HyperAST + Copy, IdD: PrimInt> Decompressible<HAST, SimplePostOrder<HAST::IdN, IdD>> {
+//     pub(crate) fn size(&self, i: &IdD) -> IdD {
+//         *i - self.llds[(*i).to_usize().unwrap()] + one()
+//     }
+// }
+
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Debug> types::DecompressedFrom<HAST>
     for SimplePostOrder<HAST::IdN, IdD>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     type Out = Self;
 
@@ -230,8 +241,10 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt + Debug> hyperast::types::DecompressedF
     }
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt> super::DecompressedSubtree<HAST::IdN>
+impl<'b, HAST: HyperAST + Copy, IdD: PrimInt> super::DecompressedSubtree<HAST::IdN>
     for Decompressible<HAST, SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     type Out = Self;
 
@@ -245,9 +258,8 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> super::DecompressedSubtree<HAST::IdN>
 impl<IdN, IdD: PrimInt> SimplePostOrder<IdN, IdD> {
     fn make<HAST: HyperAST<IdN = IdN> + Copy>(stores: HAST, root: &IdN) -> Self
     where
-        IdN: UniformNodeId,
+        IdN: types::NodeId<IdN = IdN>,
     {
-        use hyperast::types::Childrn as _;
         let aaa = Element::<_, _, IdD> {
             curr: root.clone(),
             idx: zero(),
@@ -325,34 +337,29 @@ struct Element<IdC, Idx, IdD> {
     children: Vec<IdD>,
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt> Decompressed<IdD>
-    for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
-{
-    type IdD = IdD;
-}
-
 impl<HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD>
     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn len(&self) -> usize {
         self.id_compressed.len()
-    }
-
-    fn root(&self) -> IdD {
-        cast(self.len() - 1).unwrap()
     }
 
     fn original(&self, id: &IdD) -> HAST::IdN {
         self.id_compressed[id.to_usize().unwrap()].clone()
     }
 
-    fn child(&self, x: &IdD, p: &[impl hyperast::PrimInt]) -> IdD {
-        use hyperast::types::Childrn as _;
+    fn root(&self) -> IdD {
+        cast(self.len() - 1).unwrap()
+    }
+
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdD {
         let mut r = *x;
         for d in p {
             let a = self.original(&r);
             let node = self.hyperast.resolve(&a);
-            let cs = node.children().filter(|x| !x.is_empty());
+            let cs = node.children().filter(|x| !types::Childrn::is_empty(x));
             let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
@@ -381,7 +388,7 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD
         while i > 0 {
             i -= 1;
             let s = self.size(&c);
-            c -= s;
+            c = c - s;
             r[i] = c;
         }
         assert_eq!(
@@ -392,10 +399,12 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> ShallowDecompressedTreeStore<HAST, IdD
     }
 }
 
-// impl<HAST: HyperAST + Copy, IdD: PrimInt> FullyDecompressedTreeStore<HAST, IdD>
-//     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
-// {
-// }
+impl<HAST: HyperAST + Copy, IdD: PrimInt> FullyDecompressedTreeStore<HAST, IdD>
+    for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
+}
 
 impl<IdN, IdD: PrimInt> SimplePostOrder<IdN, IdD> {
     pub(crate) fn _first_descendant(&self, i: &IdD) -> IdD {
@@ -403,11 +412,15 @@ impl<IdN, IdD: PrimInt> SimplePostOrder<IdN, IdD> {
     }
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt> DeepDecompressedTreeStore<HAST, IdD>
+impl<HAST: HyperAST + Copy, IdD: PrimInt> DecompressedTreeStore<HAST, IdD>
     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
-    fn it_descendants(&self, x: &IdD) -> impl Iterator<Item = IdD> {
-        self.first_descendant(x).step_until(*x)
+    fn descendants(&self, x: &IdD) -> Vec<IdD> {
+        (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
+            .map(|x| cast(x).unwrap())
+            .collect()
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
@@ -431,6 +444,8 @@ impl<'a, HAST: HyperAST + Copy, IdD: PrimInt> DecendantsLending<'a>
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt> ContiguousDescendants<HAST, IdD>
     for Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         self.first_descendant(x)..*x
@@ -450,6 +465,8 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt> ContiguousDescendants<HAST, IdD>
 
 impl<'a, HAST: HyperAST + Copy, IdD: PrimInt>
     Decompressible<HAST, &'a SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     pub(super) fn _slice(&self, x: &IdD) -> SimplePOSlice<'a, HAST::IdN, IdD> {
         let range = self.as_basic().slice_range(x);
@@ -465,6 +482,8 @@ impl<'a, HAST: HyperAST + Copy, IdD: PrimInt>
 
 impl<HAST: HyperAST + Copy, IdD: PrimInt + Eq>
     Decompressible<HAST, &SimplePostOrder<HAST::IdN, IdD>>
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
         assert!(p_lld <= c, "{:?}<={:?}", p_lld.to_usize(), c.to_usize());
@@ -478,8 +497,10 @@ impl<HAST: HyperAST + Copy, IdD: PrimInt + Eq>
     }
 }
 
-fn size2<HAST: HyperAST + Copy>(store: HAST, x: &HAST::IdN) -> usize {
-    use hyperast::types::Childrn as _;
+fn size2<HAST: HyperAST + Copy>(store: HAST, x: &HAST::IdN) -> usize
+where
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
+{
     let tmp = store.resolve(x);
     let Some(cs) = tmp.children() else {
         return 1;
@@ -531,25 +552,28 @@ impl<'a, HAST: HyperASTShared + Copy, IdD: PrimInt + Hash + Eq>
     }
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'_, HAST, IdD>
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, HAST, IdD>
 where
-    HAST::IdN: UniformNodeId,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
     HAST::IdN: Debug,
-    for<'t> LendT<'t, HAST>: WithSerialization,
+    for<'t> <HAST as types::AstLending<'t>>::RT: WithSerialization,
 {
-    pub fn position(&mut self, c: &IdD) -> &Position {
+    pub fn position<'b>(&mut self, c: &IdD) -> &Position {
         let stores = self.ds.hyperast;
-        if self.cache.contains_key(c) {
-            self.cache.get(c).unwrap()
+        if self.cache.contains_key(&c) {
+            return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
             let id = self.ds.original(&p);
             let p_t = stores.resolve_type(&id);
             if p_t.is_directory() {
-                let ori = self.ds.original(c);
+                let ori = self.ds.original(&c);
                 if self.root == ori {
                     let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
-                        stores.label_store().resolve(r.get_label_unchecked()).into(),
+                        stores
+                            .label_store()
+                            .resolve(&r.get_label_unchecked())
+                            .into(),
                         0,
                         r.try_bytes_len().unwrap_or(0),
                     ));
@@ -560,7 +584,7 @@ where
                     .cloned()
                     .unwrap_or_else(|| self.position(&p).clone());
                 let r = stores.node_store().resolve(&ori);
-                pos.inc_path(stores.label_store().resolve(r.get_label_unchecked()));
+                pos.inc_path(stores.label_store().resolve(&r.get_label_unchecked()));
                 pos.set_len(r.try_bytes_len().unwrap_or(0));
                 return self.cache.entry(*c).or_insert(pos);
             }
@@ -574,7 +598,7 @@ where
                     .cloned()
                     .unwrap_or_else(|| self.position(&lsib).clone());
                 pos.inc_offset(pos.range().end - pos.range().start);
-                let r = stores.node_store().resolve(&self.ds.original(c));
+                let r = stores.node_store().resolve(&self.ds.original(&c));
                 pos.set_len(r.try_bytes_len().unwrap());
                 self.cache.entry(*c).or_insert(pos)
             } else {
@@ -583,7 +607,7 @@ where
                     "{:?}",
                     self.ds.position_in_parent::<usize>(c).unwrap().to_usize()
                 );
-                let ori = self.ds.original(c);
+                let ori = self.ds.original(&c);
                 if self.root == ori {
                     let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
@@ -605,12 +629,15 @@ where
                 self.cache.entry(*c).or_insert(pos)
             }
         } else {
-            let ori = self.ds.original(c);
+            let ori = self.ds.original(&c);
             assert_eq!(self.root, ori);
             let r = stores.node_store().resolve(&ori);
             let t = stores.resolve_type(&ori);
             let pos = if t.is_directory() || t.is_file() {
-                let file = stores.label_store().resolve(r.get_label_unchecked()).into();
+                let file = stores
+                    .label_store()
+                    .resolve(&r.get_label_unchecked())
+                    .into();
                 let offset = 0;
                 let len = r.try_bytes_len().unwrap_or(0);
                 Position::new(file, offset, len)
@@ -658,23 +685,23 @@ impl<'a, HAST: HyperASTShared + Copy, IdD: PrimInt + Hash + Eq, U, F, G>
     }
 }
 
-impl<HAST: HyperAST + Copy, IdD: PrimInt + Hash + Eq, U: Clone + Default, F, G>
-    RecCachedProcessor<'_, HAST, IdD, U, F, G>
+impl<'a, HAST: HyperAST + Copy, IdD: PrimInt + Hash + Eq, U: Clone + Default, F, G>
+    RecCachedProcessor<'a, HAST, IdD, U, F, G>
 where
-    HAST::IdN: UniformNodeId,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
     HAST::IdN: Debug,
     F: Fn(U, HAST::IdN) -> U,
     G: Fn(U, HAST::IdN) -> U,
 {
-    pub fn position(&mut self, c: &IdD) -> &U {
+    pub fn position<'b>(&mut self, c: &IdD) -> &U {
         let stores = self.ds.hyperast;
-        if self.cache.contains_key(c) {
-            self.cache.get(c).unwrap()
+        if self.cache.contains_key(&c) {
+            return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
             let id = self.ds.original(&p);
             let p_t = stores.resolve_type(&id);
             if p_t.is_directory() {
-                let ori = self.ds.original(c);
+                let ori = self.ds.original(&c);
                 if self.root == ori {
                     return self
                         .cache
@@ -691,14 +718,14 @@ where
                 let pos = self.position(&lsib).clone();
                 self.cache
                     .entry(*c)
-                    .or_insert((self.with_lsib)(pos, self.ds.original(c)))
+                    .or_insert((self.with_lsib)(pos, self.ds.original(&c)))
             } else {
                 assert!(
                     self.ds.position_in_parent::<usize>(c).unwrap().is_zero(),
                     "{:?}",
                     self.ds.position_in_parent::<usize>(c).unwrap().to_usize()
                 );
-                let ori = self.ds.original(c);
+                let ori = self.ds.original(&c);
                 if self.root == ori {
                     return self
                         .cache
@@ -709,7 +736,7 @@ where
                 self.cache.entry(*c).or_insert((self.with_p)(pos, ori))
             }
         } else {
-            let ori = self.ds.original(c);
+            let ori = self.ds.original(&c);
             assert_eq!(self.root, ori);
             self.cache
                 .entry(*c)

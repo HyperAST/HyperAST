@@ -1,9 +1,13 @@
 use hyperast::types::DecompressedFrom;
 
-use crate::decompressed_tree_store::LazyDecompressedTreeStore;
-use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-use crate::tree::simple_tree::{DisplayTree, vpair_to_stores};
-use crate::{matchers::Decompressible, tests};
+use crate::{
+    decompressed_tree_store::{
+        lazy_post_order::LazyPostOrder, LazyDecompressedTreeStore, ShallowDecompressedTreeStore,
+    },
+    matchers::Decompressible,
+    tests,
+    tree::simple_tree::{vpair_to_stores, DisplayTree},
+};
 
 #[test]
 fn test() {
@@ -33,16 +37,12 @@ fn test() {
     dst_arena.decompress_children(&dst_arena.root()).len();
     use hyperast::types::NodeStore;
     use hyperast::types::WithStats;
-    dbg!(
-        node_store
-            .resolve(&src_arena.tree(&src_arena.root()))
-            .size()
-    );
-    dbg!(
-        node_store
-            .resolve(&dst_arena.tree(&dst_arena.root()))
-            .size()
-    );
+    dbg!(node_store
+        .resolve(&src_arena.tree(&src_arena.root()))
+        .size());
+    dbg!(node_store
+        .resolve(&dst_arena.tree(&dst_arena.root()))
+        .size());
 
     src_arena.complete_subtree(&src_arena.root());
     dst_arena.complete_subtree(&dst_arena.root());

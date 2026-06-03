@@ -9,6 +9,7 @@ pub use elem::HashedNodeRef;
 
 pub type NodeIdentifier = NonZeroU64;
 
+impl crate::types::AAAA for NodeIdentifier {}
 impl NodeId for NodeIdentifier {
     type IdN = Self;
     fn as_id(&self) -> &Self::IdN {
@@ -67,12 +68,12 @@ impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeS
     }
 
     fn try_typed(&self, id: &<TIdN as NodeId>::IdN) -> Option<TIdN> {
-        let r = self.nodes.get(id.as_id())?;
+        let r = self.nodes.get(&id.as_id())?;
         let r: HashedNodeRef<<TIdN as NodeId>::IdN> = HashedNodeRef(r, PhantomData);
         if r.get_component::<TIdN::Ty>().is_err() {
             return None;
         }
-        Some(unsafe { TIdN::from_id(*id) })
+        Some(unsafe { TIdN::from_id(id.clone()) })
     }
 }
 
@@ -81,7 +82,7 @@ impl NodeStore {
         &self,
         id: NodeIdentifier,
     ) -> <Self as crate::types::TyNodeStore<TIdN>>::R<'_> {
-        let r = self.nodes.get(id.as_id()).unwrap();
+        let r = self.nodes.get(&id.as_id()).unwrap();
         let r: HashedNodeRef<<TIdN as NodeId>::IdN> = HashedNodeRef(r, PhantomData);
         assert!(r.get_component::<TIdN::Ty>().is_ok());
         HashedNodeRef(r.0, PhantomData)
@@ -91,12 +92,6 @@ impl NodeStore {
 impl NodeStore {
     pub fn len(&self) -> usize {
         self.nodes.len()
-    }
-}
-
-impl Default for NodeStore {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

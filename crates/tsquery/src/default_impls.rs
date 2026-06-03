@@ -1,4 +1,4 @@
-use crate::{CNLending, StatusLending, ffi};
+use crate::{CNLending, ffi};
 
 use super::{Cursor, Status, TreeCursorStep, indexed::Symbol};
 
@@ -13,16 +13,12 @@ impl<'a> TreeCursor<'a> {
     }
 }
 
-impl crate::WithField for TreeCursor<'_> {
+impl<'a> crate::WithField for TreeCursor<'a> {
     type IdF = ffi::TSFieldId;
 }
 
-impl<'b> CNLending<'b> for TreeCursor<'_> {
+impl<'a, 'b> CNLending<'b> for TreeCursor<'a> {
     type NR = tree_sitter::Node<'b>;
-}
-
-impl<'b> StatusLending<'b> for TreeCursor<'_> {
-    type Status = TSStatus;
 }
 
 impl<'a> Cursor for TreeCursor<'a> {
@@ -80,13 +76,15 @@ impl<'a> Cursor for TreeCursor<'a> {
         self.cursor.node().parent().is_some()
     }
 
-    fn persist(&self) -> Self::Node {
+    fn persist(&mut self) -> Self::Node {
         self.cursor.node()
     }
 
-    fn persist_parent(&self) -> Option<Self::Node> {
+    fn persist_parent(&mut self) -> Option<Self::Node> {
         self.cursor.node().parent()
     }
+
+    type Status = TSStatus;
 
     #[inline]
     fn current_status(&self) -> TSStatus {
@@ -180,11 +178,11 @@ impl Status for TSStatus {
     }
 }
 
-impl<'a> super::TextLending<'a> for tree_sitter::Node<'_> {
+impl<'a, 'b> super::TextLending<'a> for tree_sitter::Node<'b> {
     type TP = &'a [u8];
 }
 
-impl super::Node for tree_sitter::Node<'_> {
+impl<'a> super::Node for tree_sitter::Node<'a> {
     type IdF = ffi::TSFieldId;
     fn symbol(&self) -> Symbol {
         self.kind_id().into()

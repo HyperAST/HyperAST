@@ -1,18 +1,18 @@
 //! Experimental! WIP!
 //! For now lets use the analysis done by tree_sitter
-//! cons of implementing the analysis myself:
+//! cons of implementing the analysis myself: 
 //! - takes time
 //! - more compatible with tree_sitter
 //! - only need to read the analysis
 //! - difficult to access even deeper treesitter apis like the lookhead
-//! pros of implementing the analysis myself:
+//! pros of implementing the analysis myself: 
 //! - fragile to read internal of tree_sitter
 //! - can add more optimizations
 //! - can use rust idioms
 //! - avoid unsafety due to ffi
-//!
+//! 
 //! At least for now implementing the analysis myself is put on hold.
-//! It might still be straitforward and relatively easy to add optimizations by further processing the provided query graph it is needed.
+//! It might still be straitforward and realtively easy to add optimizations by further processing the provided query graph it is needed.
 //! Before impl the analysis, I need some profiling of query performances on the hyperast (also useful for eval.).
 
 use super::*;
@@ -23,6 +23,7 @@ const MAX_ANALYSIS_STATE_DEPTH: u16 = 8;
 const MAX_ANALYSIS_ITERATION_COUNT: usize = 256;
 
 type AnalysisSubgraphArray = SortedVec<AnalysisSubgraph>;
+
 
 // struct Query {
 //     pattern_map: Vec<PatternEntry>,
@@ -55,6 +56,7 @@ struct QueryStep {
 struct Field {
     id: usize,
 }
+
 
 struct QueryAnalysis {
     final_step_indices: Vec<u16>,

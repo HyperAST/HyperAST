@@ -16,16 +16,17 @@ impl average::Merge for Stats {
     fn merge(&mut self, other: &Self) {
         if Arc::ptr_eq(&self.0, &other.0) {
             return;
-        }
-        let mut inner = self.0.lock().unwrap();
-        let other_inner = other.0.lock().unwrap();
-        inner.n += other_inner.n;
-        for (value, count) in other_inner.values.iter() {
-            inner
-                .values
-                .entry(*value)
-                .and_modify(|curr| *curr += count)
-                .or_insert(*count);
+        } else {
+            let mut inner = self.0.lock().unwrap();
+            let other_inner = other.0.lock().unwrap();
+            inner.n += other_inner.n;
+            for (value, count) in other_inner.values.iter() {
+                inner
+                    .values
+                    .entry(*value)
+                    .and_modify(|curr| *curr += count)
+                    .or_insert(*count);
+            }
         }
     }
 }

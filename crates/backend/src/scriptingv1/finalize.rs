@@ -1,10 +1,8 @@
+use super::{
+    estimate::Estimate, fs_container::FsContainer, max::Max, mean::Mean, min::Min,
+    named_container::NamedContainer, quantile::Quantile, stats::Stats,
+};
 use rhai::Dynamic;
-
-use super::estimate::Estimate;
-use super::fs_container::FsContainer;
-use super::named_container::NamedContainer;
-use super::stats::Stats;
-use super::{max::Max, mean::Mean, min::Min, quantile::Quantile};
 
 pub(crate) trait Finalize {
     type Output;

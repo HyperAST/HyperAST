@@ -1,4 +1,4 @@
-use re_ui::{UiExt as _, list_item};
+use re_ui::{list_item, DesignTokens, UiExt as _};
 
 /// A collapsible section header, with support for optional help tooltip and button.
 ///
@@ -12,7 +12,6 @@ pub struct SectionCollapsingHeader<'a> {
     help: Option<Box<dyn FnOnce(&mut egui::Ui) + 'a>>,
 }
 
-#[allow(unused)]
 impl<'a> SectionCollapsingHeader<'a> {
     /// Create a new [`Self`].
     ///
@@ -104,7 +103,7 @@ impl<'a> SectionCollapsingHeader<'a> {
             content = content
                 .with_buttons(|ui| {
                     let button_response = button.map(|button| button.ui(ui));
-                    let help_response = help.map(|help| ui.help_button(help));
+                    let help_response = help.map(|help| ui.help_hover_button().on_hover_ui(help));
 
                     match (button_response, help_response) {
                         (Some(button_response), Some(help_response)) => {
@@ -118,22 +117,22 @@ impl<'a> SectionCollapsingHeader<'a> {
         }
 
         let force_background = if ui.visuals().dark_mode {
-            re_ui::design_tokens_of(egui::Theme::Dark).section_header_color
+            DesignTokens::load().section_collapsing_header_color()
         } else {
             ui.visuals().widgets.active.weak_bg_fill
         };
+        
 
         let resp = list_item::list_item_scope(ui, id, |ui| {
             list_item::ListItem::new()
-                .interactive(true)
-                .force_background(force_background)
-                .show_hierarchical_with_children_unindented(ui, id, default_open, content, |ui| {
-                    //TODO(ab): this space is not desirable when the content actually is list items
-                    ui.add_space(4.0); // Add space only if there is a body to make minimized headers stick together.
-                    add_body(ui);
-                    ui.add_space(4.0); // Same here
-                })
-        });
+            .interactive(true)
+            .force_background(force_background)
+            .show_hierarchical_with_children_unindented(ui, id, default_open, content, |ui| {
+                //TODO(ab): this space is not desirable when the content actually is list items
+                ui.add_space(4.0); // Add space only if there is a body to make minimized headers stick together.
+                add_body(ui);
+                ui.add_space(4.0); // Same here
+            })});
 
         if resp.item_response.clicked() {
             // `show_hierarchical_with_children_unindented` already toggles on double-click,
@@ -172,7 +171,7 @@ impl<'a> SectionCollapsingHeader<'a> {
             content = content
                 .with_buttons(|ui| {
                     let button_response = button.map(|button| button.ui(ui));
-                    let help_response = help.map(|help| ui.help_button(help));
+                    let help_response = help.map(|help| ui.help_hover_button().on_hover_ui(help));
 
                     match (button_response, help_response) {
                         (Some(button_response), Some(help_response)) => {
@@ -186,22 +185,22 @@ impl<'a> SectionCollapsingHeader<'a> {
         }
 
         let force_background = if ui.visuals().dark_mode {
-            re_ui::design_tokens_of(egui::Theme::Dark).section_header_color
+            DesignTokens::load().section_collapsing_header_color()
         } else {
             ui.visuals().widgets.active.bg_fill
         };
+        
 
         let resp = list_item::list_item_scope(ui, id, |ui| {
             list_item::ListItem::new()
-                .interactive(true)
-                .force_background(force_background)
-                .show_hierarchical_with_children(ui, id, default_open, content, |ui| {
-                    //TODO(ab): this space is not desirable when the content actually is list items
-                    ui.add_space(4.0); // Add space only if there is a body to make minimized headers stick together.
-                    add_body(ui);
-                    ui.add_space(4.0); // Same here
-                })
-        });
+            .interactive(true)
+            .force_background(force_background)
+            .show_hierarchical_with_children(ui, id, default_open, content, |ui| {
+                //TODO(ab): this space is not desirable when the content actually is list items
+                ui.add_space(4.0); // Add space only if there is a body to make minimized headers stick together.
+                add_body(ui);
+                ui.add_space(4.0); // Same here
+            })});
 
         if resp.item_response.clicked() {
             // `show_hierarchical_with_children_unindented` already toggles on double-click,

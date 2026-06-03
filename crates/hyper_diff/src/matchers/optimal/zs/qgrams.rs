@@ -48,7 +48,7 @@ pub fn qgram_distance_hash_opti(s: &[u8], t: &[u8]) -> f64 {
         *qgrams.entry(qgram).or_insert(0) -= 1;
     }
 
-    let qgrams_dist: u32 = qgrams.into_values().map(|i| i32::abs(i) as u32).sum();
+    let qgrams_dist: u32 = qgrams.into_iter().map(|(_, i)| i32::abs(i) as u32).sum();
 
     // Compute the q-gram distance
     (qgrams_dist as f32 / ((s.len() + 2 * QM) + (t.len() + 2 * QM) - 2 * (QM + 1) + 2) as f32)

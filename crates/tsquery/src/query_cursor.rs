@@ -1,13 +1,11 @@
 use super::Capture;
 use super::Node;
-use super::QueryExecState;
 use super::indexed::CaptureListId;
 use super::query::PatternEntry;
 use super::{QueryCursor, QueryMatch, Status, TreeCursorStep};
 use crate::Depth;
 use crate::indexed::StepId;
 use crate::indexed::{CaptureId, PatternId};
-use crate::query::QueryStep;
 
 #[derive(Clone)]
 pub struct State {
@@ -25,7 +23,7 @@ pub struct State {
 }
 
 impl State {
-    pub(crate) const SEEKING_IMMEDIATE_MATCH: u16 = 1 << 12;
+    pub(crate) const SEEKING_IMMEDIATE_MATCH: u16 = 1 << (12 + 0);
     pub(crate) const IN_PROGRESS_ALTERNATIVES: u16 = 1 << (12 + 1);
     pub(crate) const DEAD: u16 = 1 << (12 + 2);
     pub(crate) const NEEDS_PARENT: u16 = 1 << (12 + 3);
@@ -108,18 +106,16 @@ pub(crate) fn state_bitfield() {
 // there are no more matches, return `false`.
 impl<Cursor: super::Cursor> QueryCursor<'_, Cursor, Cursor::Node>
 where
-    for<'a> <<Cursor as crate::StatusLending<'a>>::Status as Status>::IdF: Into<u16> + From<u16>,
+    <Cursor::Status as Status>::IdF: Into<u16> + From<u16>,
 {
     #[allow(unused)]
     pub(crate) fn advance(&mut self, stop_on_definite_step: bool) -> bool {
         let mut did_match = false;
         loop {
             if self.halted {
-                log::trace!("releasing {} states", self.exec_state.states.len());
-                while let Some(state) = self.exec_state.states.pop() {
-                    self.exec_state
-                        .capture_list_pool
-                        .release(state.capture_list_id);
+                log::trace!("releasing {} states", self.states.len());
+                while let Some(state) = self.states.pop() {
+                    self.capture_list_pool.release(state.capture_list_id);
                 }
             }
 
@@ -129,25 +125,18 @@ where
 
             // Exit the current node.
             if self.ascending {
+                // dbg!();
                 did_match |= self.when_ascending();
                 // Leave this node by stepping to its next sibling or to its parent.
                 match self.cursor.goto_next_sibling_internal() {
-                    TreeCursorStep::Visible => {
-                        #[cfg(feature = "cursor_counts")]
-                        {
-                            self.goto_count += 1;
-                        }
+                    TreeCursorStep::TreeCursorStepVisible => {
                         if !self.on_visible_node {
                             self.depth += 1;
                             self.on_visible_node = true;
                         }
                         self.ascending = false;
                     }
-                    TreeCursorStep::Hidden => {
-                        #[cfg(feature = "cursor_counts")]
-                        {
-                            self.goto_count += 1;
-                        }
+                    TreeCursorStep::TreeCursorStepHidden => {
                         if self.on_visible_node {
                             if self.depth == 0 {
                                 return did_match;
@@ -157,12 +146,8 @@ where
                         }
                         self.ascending = false;
                     }
-                    TreeCursorStep::None => {
+                    TreeCursorStep::TreeCursorStepNone => {
                         if self.cursor.goto_parent() {
-                            #[cfg(feature = "cursor_counts")]
-                            {
-                                self.goto_count += 1;
-                            }
                             if self.depth == 0 {
                                 return did_match;
                             }
@@ -176,28 +161,24 @@ where
             }
             // Enter a new node.
             else {
+                // dbg!();
                 let (m, node_intersects_range) = self.when_entering(stop_on_definite_step);
                 did_match |= m;
                 if self.should_descend(node_intersects_range) {
+                    // dbg!(self.cursor.current_node().str_symbol());
                     match self.cursor.goto_first_child_internal() {
-                        TreeCursorStep::Visible => {
-                            #[cfg(feature = "cursor_counts")]
-                            {
-                                self.goto_count += 1;
-                            }
+                        TreeCursorStep::TreeCursorStepVisible => {
+                            // dbg!(self.cursor.current_node().str_symbol());
                             self.depth += 1;
                             self.on_visible_node = true;
                             continue;
                         }
-                        TreeCursorStep::Hidden => {
-                            #[cfg(feature = "cursor_counts")]
-                            {
-                                self.goto_count += 1;
-                            }
+                        TreeCursorStep::TreeCursorStepHidden => {
+                            // dbg!(self.cursor.current_node().str_symbol());
                             self.on_visible_node = false;
                             continue;
                         }
-                        TreeCursorStep::None => (),
+                        TreeCursorStep::TreeCursorStepNone => (),
                     }
                 }
                 self.ascending = true;
@@ -216,7 +197,7 @@ where
             );
             let steps = &self.query.steps;
             // After leaving a node, remove any states that cannot make further progress.
-            self.exec_state.states = std::mem::take(&mut self.exec_state.states)
+            self.states = std::mem::take(&mut self.states)
                 .into_iter()
                 .filter_map(|state| {
                     let step = &steps[state.step_index];
@@ -225,7 +206,7 @@ where
                     // in order to search for longer matches, mark it as finished.
                     if step.done() && (state.start_depth() > self.depth || self.depth == 0) {
                         log::trace!("  finish pattern {}", state.pattern_index);
-                        self.exec_state.finished_states.push_back(state);
+                        self.finished_states.push_back(state);
                         did_match = true;
                         None
                     }
@@ -237,7 +218,8 @@ where
                             state.pattern_index,
                             state.step_index
                         );
-                        (self.exec_state.capture_list_pool).release(state.capture_list_id);
+                        self.capture_list_pool.release(state.capture_list_id);
+                        drop(state);
                         None
                     } else {
                         Some(state)
@@ -289,18 +271,14 @@ where
             let symbol = node.symbol();
             let is_named = node.is_named();
             let status = self.cursor.current_status();
-            #[cfg(feature = "cursor_counts")]
-            {
-                self.status_count += 1;
-            }
             log::trace!(
                 "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
                 self.depth,
                 node.str_symbol(),
                 query.field_name(status.field_id().into()),
                 node.start_point().row,
-                self.exec_state.states.len(),
-                self.exec_state.finished_states.len()
+                self.states.len(),
+                self.finished_states.len()
             );
 
             let node_is_error = symbol.is_error();
@@ -333,13 +311,13 @@ where
                             || self.max_start_depth == 0)
                         && (start_depth <= self.max_start_depth);
                     if should_add {
-                        self.exec_state.add_state(query, self.depth, pattern);
+                        self.add_state(pattern);
                     }
                 }
             }
             if self.max_start_depth == 0 {
                 for pattern in &query.pattern_map2 {
-                    self.exec_state.add_state(query, self.depth, pattern);
+                    self.add_state(pattern);
                 }
             }
             // Add new states for any patterns whose root node matches this node.
@@ -364,7 +342,7 @@ where
                                 self.cursor.current_node().str_symbol()
                             );
                         } else {
-                            self.exec_state.add_state(query, self.depth, pattern);
+                            self.add_state(pattern);
                         }
                     }
 
@@ -386,16 +364,16 @@ where
             let mut copy_count = 0;
             let mut _next = 0;
             // Update all of the in-progress states with current node.
-            while j < self.exec_state.states.len() {
+            while j < self.states.len() {
                 let mut _j = j;
                 // let state = &mut self.states[j];
                 // let step = &mut query.steps[state!().step_index as usize];
                 macro_rules! state {
                     ($i:expr) => {
-                        self.exec_state.states[$i]
+                        self.states[$i]
                     };
                     () => {
-                        self.exec_state.states[_j]
+                        self.states[_j]
                     };
                     (@index) => {
                         _j
@@ -478,8 +456,6 @@ where
 
                 if node_does_match {
                     if let Some(pred_id) = state!(@step).immediate_pred() {
-                        // TODO cache verdict in bitset outside of state loop !
-                        // NOTE make 2 bitsets, one when predicate has been computed and one with the verdict
                         let pred = &self.query.immediate_predicates[pred_id as usize];
                         match pred {
                             crate::predicate::ImmediateTextPredicate::EqString {
@@ -525,10 +501,8 @@ where
                             state!().pattern_index,
                             state!().step_index
                         );
-                        self.exec_state
-                            .capture_list_pool
-                            .release(state!().capture_list_id);
-                        self.exec_state.states.remove(j);
+                        self.capture_list_pool.release(state!().capture_list_id);
+                        self.states.remove(j);
                         j += copy_count;
                     } else {
                         j += 1 + copy_count;
@@ -544,18 +518,19 @@ where
                 if later_sibling_can_match
                     && (state!(@step).contains_captures()
                         || query.step_is_fallible(state!().step_index))
-                    && self.exec_state.copy_state(&mut state!(@index)).is_some()
                 {
-                    // TODO check if it properly passes a double pointer
-                    log::trace!(
-                        "  split state for capture. pattern:{}, step:{} {} {} {}",
-                        state!().pattern_index,
-                        state!().step_index,
-                        later_sibling_can_match,
-                        state!(@step).contains_captures(),
-                        query.step_is_fallible(state!().step_index),
-                    );
-                    copy_count += 1;
+                    if self.copy_state(&mut state!(@index)).is_some() {
+                        // TODO check if it properly passes a double pointer
+                        log::trace!(
+                            "  split state for capture. pattern:{}, step:{} {} {} {}",
+                            state!().pattern_index,
+                            state!().step_index,
+                            later_sibling_can_match,
+                            state!(@step).contains_captures(),
+                            query.step_is_fallible(state!().step_index),
+                        );
+                        copy_count += 1;
+                    }
                 }
 
                 // If this pattern started with a wildcard, such that the pattern map
@@ -574,11 +549,7 @@ where
                             }
                             if query.steps[skipped_wildcard].has_capture_ids() {
                                 log::trace!("  capture wildcard parent");
-                                let step = &self.query.steps[skipped_wildcard];
-
-                                self.exec_state.capture(state!(@index), step, || {
-                                    self.cursor.persist_parent().unwrap()
-                                });
+                                self.capture(state!(@index), skipped_wildcard, true);
                             }
                             break;
                         }
@@ -590,13 +561,11 @@ where
 
                 // If the current node is captured in this pattern, add it to the capture list.
                 if state!(@step).has_capture_ids() {
-                    let step = &self.query.steps[state!().step_index];
-                    self.exec_state
-                        .capture(state!(@index), step, || self.cursor.persist());
+                    self.capture(state!(@index), state!().step_index, false);
                 }
 
                 if state!().dead() {
-                    self.exec_state.states.remove(j);
+                    self.states.remove(j);
                     j += copy_count;
                     continue;
                 }
@@ -650,15 +619,14 @@ where
                             state!(_k).step_index.inc();
                         }
 
-                        if let Some(_copy) = self.exec_state.copy_state(&mut _k) {
+                        if let Some(_copy) = self.copy_state(&mut _k) {
                             log::trace!(
                                 "  split state for branch. pattern:{}, from_step:{}, to_step:{}, immediate:{}, capture_count: {}",
                                 state!(_copy).pattern_index,
                                 state!(_copy).step_index,
                                 state!(@step).alternative_index().unwrap_or(StepId::NONE),
                                 state!(@step).alternative_is_immediate(),
-                                self.exec_state
-                                    .capture_list_pool
+                                self.capture_list_pool
                                     .get(state!(_copy).capture_list_id)
                                     .len()
                             );
@@ -682,17 +650,17 @@ where
             }
 
             let mut j = 0;
-            while j < self.exec_state.states.len() {
+            while j < self.states.len() {
                 let _j = j;
                 macro_rules! curr_state {
                     () => {
-                        self.exec_state.states[_j]
+                        self.states[_j]
                     };
                 }
                 // let mut state = &mut self.states[j];
                 if curr_state!().dead() {
                     // array_erase(&self->states, j);
-                    self.exec_state.states.remove(j);
+                    self.states.remove(j);
                     continue;
                 }
 
@@ -701,11 +669,11 @@ where
                 // one state has a strict subset of another state's captures.
                 let mut did_remove = false;
                 let mut k = j + 1;
-                while k < self.exec_state.states.len() {
+                while k < self.states.len() {
                     let _k = k;
                     macro_rules! other_state {
                         () => {
-                            self.exec_state.states[_k]
+                            self.states[_k]
                         };
                     }
                     // let other_state = &mut self.states[k];
@@ -721,7 +689,7 @@ where
                     }
 
                     let (left_contains_right, right_contains_left) =
-                        (self.exec_state).compare_captures(&curr_state!(), &other_state!());
+                        self.compare_captures(&curr_state!(), &other_state!());
                     if left_contains_right {
                         if curr_state!().step_index == other_state!().step_index {
                             log::trace!(
@@ -729,9 +697,9 @@ where
                                 curr_state!().pattern_index,
                                 curr_state!().step_index
                             );
-                            (self.exec_state.capture_list_pool)
+                            self.capture_list_pool
                                 .release(other_state!().capture_list_id);
-                            self.exec_state.states.remove(k);
+                            self.states.remove(k);
                             continue;
                         }
                         other_state!().in_progress_alternatives();
@@ -743,9 +711,9 @@ where
                                 curr_state!().pattern_index,
                                 curr_state!().step_index
                             );
-                            (self.exec_state.capture_list_pool)
+                            self.capture_list_pool
                                 .release(curr_state!().capture_list_id);
-                            self.exec_state.states.remove(j);
+                            self.states.remove(j);
                             did_remove = true;
                             break;
                         }
@@ -762,8 +730,7 @@ where
                         curr_state!().pattern_index,
                         curr_state!().start_depth,
                         curr_state!().step_index,
-                        self.exec_state
-                            .capture_list_pool
+                        self.capture_list_pool
                             .get(curr_state!().capture_list_id)
                             .len()
                     );
@@ -779,8 +746,7 @@ where
                             log::trace!("  finishing pattern {}", curr_state!().pattern_index);
                             // array_push(&self->finished_states, *state);
                             // array_erase(&self->states, (uint32_t)(state - self->states.contents));
-                            (self.exec_state.finished_states)
-                                .push_back(self.exec_state.states.remove(_j));
+                            self.finished_states.push_back(self.states.remove(_j));
                             did_match = true;
                             j += copy_count;
                         }
@@ -797,20 +763,20 @@ where
     }
 
     pub fn next_match(&mut self) -> Option<QueryMatch<Cursor::Node>> {
-        if self.exec_state.finished_states.len() == 0 {
+        if self.finished_states.len() == 0 {
             if !self.advance(false) {
                 return None;
             }
         }
 
-        let mut state = self.exec_state.finished_states.pop_front().unwrap();
+        let mut state = self.finished_states.pop_front().unwrap();
         if state.id == crate::indexed::StateId::MAX {
-            state.id = self.exec_state.next_state_id;
-            self.exec_state.next_state_id.inc();
+            state.id = self.next_state_id;
+            self.next_state_id.inc();
         };
         let id = state.id;
         let pattern_index = state.pattern_index();
-        let captures = self.exec_state.capture_list_pool.pop(state.capture_list_id);
+        let captures = self.capture_list_pool.pop(state.capture_list_id);
         Some(QueryMatch {
             pattern_index,
             captures,
@@ -851,8 +817,8 @@ impl<Cursor: super::Cursor> QueryCursor<'_, Cursor, Cursor::Node> {
     fn should_descend(&self, node_intersects_range: bool) -> bool {
         if node_intersects_range && self.depth < self.max_start_depth {
             if self.cursor.wont_match(self.query.used_precomputed) {
-                for i in 0..self.exec_state.states.len() {
-                    let state = &self.exec_state.states[i];
+                for i in 0..self.states.len() {
+                    let state = &self.states[i];
                     let next_step = &self.query.steps[state.step_index];
                     if !next_step.done() && state.start_depth() + next_step.depth() > self.depth {
                         return true;
@@ -873,8 +839,8 @@ impl<Cursor: super::Cursor> QueryCursor<'_, Cursor, Cursor::Node> {
         }
         // If there are in-progress matches whose remaining steps occur
         // deeper in the tree, then descend.
-        for i in 0..self.exec_state.states.len() {
-            let state = &self.exec_state.states[i];
+        for i in 0..self.states.len() {
+            let state = &self.states[i];
             let next_step = &self.query.steps[state.step_index];
             if !next_step.done() && state.start_depth() + next_step.depth() > self.depth {
                 return true;
@@ -909,9 +875,7 @@ impl<Cursor: super::Cursor> QueryCursor<'_, Cursor, Cursor::Node> {
 
         false
     }
-}
 
-impl<Node: crate::Node> QueryExecState<Node> {
     fn copy_state(&mut self, state_index: &mut usize) -> Option<usize> {
         let state = &self.states[*state_index];
         let capture_list_id = state.capture_list_id;
@@ -1074,7 +1038,7 @@ impl<Node: crate::Node> QueryExecState<Node> {
         Some(state.capture_list_id)
     }
 
-    fn capture(&mut self, state_id: usize, step: &QueryStep, mut node: impl Fn() -> Node) {
+    fn capture(&mut self, state_id: usize, step_id: super::indexed::StepId, parent: bool) {
         let state = &mut self.states[state_id];
         if state.dead() {
             return;
@@ -1085,8 +1049,13 @@ impl<Node: crate::Node> QueryExecState<Node> {
             return;
         };
         let state = &self.states[state_id];
+        let step = &self.query.steps[step_id];
         for capture_id in step.capture_ids() {
-            let node = node();
+            let node = if parent {
+                self.cursor.persist_parent().unwrap()
+            } else {
+                self.cursor.persist()
+            };
             log::trace!(
                 "  capture node. type:{}, pattern:{}, capture_id:{}, capture_count:{}",
                 node.str_symbol(),
@@ -1101,9 +1070,9 @@ impl<Node: crate::Node> QueryExecState<Node> {
         }
     }
 
-    fn add_state(&mut self, query: &crate::Query, depth: u32, pattern: &PatternEntry) {
-        let step = &query.steps[pattern.step_index];
-        let start_depth = depth - step.depth();
+    fn add_state(&mut self, pattern: &PatternEntry) {
+        let step = &self.query.steps[pattern.step_index];
+        let start_depth = self.depth - step.depth();
 
         // Keep the states array in ascending order of start_depth and pattern_index,
         // so that it can be processed more efficiently elsewhere. Usually, there is

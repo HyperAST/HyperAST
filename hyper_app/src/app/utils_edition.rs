@@ -1,19 +1,25 @@
-use super::code_editor_automerge;
-use super::utils_results_batched::{ComputeError, ComputeResultsProm, show_short_result};
-use super::{Sharing, crdt_over_ws, types::WithDesc};
-use automerge::sync::{Message, SyncDoc};
+use super::{
+    crdt_over_ws::{self, DocSharingState, SharedDocView},
+    types::WithDesc,
+    utils_results_batched::{self, ComputeError, RemoteResult},
+    Sharing,
+};
+use crate::app::code_editor_automerge;
+use automerge::sync::SyncDoc;
 use futures_util::SinkExt;
 use serde::{Deserialize, Serialize};
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex, RwLock};
-
-type SharedCodeEditors<T> = std::sync::Arc<std::sync::Mutex<T>>;
+use std::{
+    ops::DerefMut,
+    sync::{Arc, Mutex, RwLock},
+};
+pub type SharedCodeEditors<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
 // TODO allow to change user name and generate a random default
 #[cfg(target_arch = "wasm32")]
 pub(crate) const USER: &str = "web";
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) const USER: &str = "native";
+
 
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct EditingContext<L, S> {
@@ -133,7 +139,7 @@ fn timed_updater<T: autosurgeon::Reconcile>(
 pub(super) async fn update_handler<T: autosurgeon::Hydrate>(
     mut receiver: futures_util::stream::SplitStream<tokio_tungstenite_wasm::WebSocketStream>,
     mut sender: futures::channel::mpsc::Sender<tokio_tungstenite_wasm::Message>,
-    doc: std::sync::Arc<std::sync::RwLock<crdt_over_ws::DocSharingState>>,
+    doc: std::sync::Arc<std::sync::RwLock<DocSharingState>>,
     ctx: egui::Context,
     rt: crdt_over_ws::Rt,
     code_editors: SharedCodeEditors<T>,
@@ -154,7 +160,7 @@ pub(super) async fn update_handler<T: autosurgeon::Hydrate>(
     match receiver.next().await {
         Some(Ok(tokio_tungstenite_wasm::Message::Binary(bin))) => {
             let (doc, sync_state): &mut (_, _) = &mut doc.write().unwrap();
-            let message = Message::decode(&bin).unwrap();
+            let message = automerge::sync::Message::decode(&bin).unwrap();
             doc.sync()
                 .receive_sync_message(sync_state, message)
                 .unwrap();
@@ -168,15 +174,15 @@ pub(super) async fn update_handler<T: autosurgeon::Hydrate>(
         _ => (),
     }
     while let Some(Ok(msg)) = receiver.next().await {
-        use tokio_tungstenite_wasm::Message as Msg;
+        wasm_rs_dbg::dbg!();
         match msg {
-            Msg::Text(msg) => {
+            tokio_tungstenite_wasm::Message::Text(msg) => {
                 wasm_rs_dbg::dbg!(&msg);
             }
-            Msg::Binary(bin) => {
+            tokio_tungstenite_wasm::Message::Binary(bin) => {
                 wasm_rs_dbg::dbg!();
                 let (doc, sync_state): &mut (_, _) = &mut doc.write().unwrap();
-                let message = Message::decode(&bin).unwrap();
+                let message = automerge::sync::Message::decode(&bin).unwrap();
                 // doc.merge(other)
                 match doc.sync().receive_sync_message(sync_state, message) {
                     Ok(_) => (),
@@ -199,32 +205,33 @@ pub(super) async fn update_handler<T: autosurgeon::Hydrate>(
                 let mut sender = sender.clone();
                 if let Some(message) = doc.sync().generate_sync_message(sync_state) {
                     wasm_rs_dbg::dbg!();
-                    let message = Msg::Binary(message.encode().to_vec());
+                    let message =
+                        tokio_tungstenite_wasm::Message::Binary(message.encode().to_vec());
                     rt.spawn(async move {
                         sender.send(message).await.unwrap();
                     });
                 } else {
                     wasm_rs_dbg::dbg!();
-                    let message = Msg::Binary(vec![]);
+                    let message = tokio_tungstenite_wasm::Message::Binary(vec![]);
                     rt.spawn(async move {
                         sender.send(message).await.unwrap();
                     });
                 };
             }
-            Msg::Close(_) => {
+            tokio_tungstenite_wasm::Message::Close(_) => {
                 wasm_rs_dbg::dbg!();
                 break;
             }
         }
     }
 }
-type SparseVecSharedDoc = Vec<Option<crdt_over_ws::SharedDocView>>;
+
 pub(super) async fn db_update_handler(
     mut sender: futures::channel::mpsc::Sender<tokio_tungstenite_wasm::Message>,
     mut receiver: futures_util::stream::SplitStream<tokio_tungstenite_wasm::WebSocketStream>,
     owner: String,
     ctx: egui::Context,
-    data: Arc<RwLock<(Option<usize>, SparseVecSharedDoc)>>,
+    data: Arc<RwLock<(Option<usize>, Vec<Option<SharedDocView>>)>>,
 ) {
     use futures_util::StreamExt;
     type User = String;
@@ -251,13 +258,11 @@ pub(super) async fn db_update_handler(
 
                 #[derive(Deserialize, Serialize, Debug, Clone)]
                 enum DbMsgFromServer {
-                    Add(crdt_over_ws::SharedDocView),
+                    Add(SharedDocView),
                     AddWriter(usize, User),
                     RmWriter(usize, User),
                     // Rename(usize, String),
-                    Reset {
-                        all: Vec<crdt_over_ws::SharedDocView>,
-                    },
+                    Reset { all: Vec<SharedDocView> },
                 }
                 let msg = serde_json::from_str(&msg).unwrap();
 
@@ -449,7 +454,7 @@ pub(crate) fn show_interactions<'a, L, S>(
     ui: &mut egui::Ui,
     context: &'a mut EditingContext<L, S>,
     docs_db: &Option<crdt_over_ws::WsDocsDb>,
-    compute_result: &mut Option<ComputeResultsProm<impl ComputeError + Send + Sync>>,
+    compute_result: &mut Option<RemoteResult<impl ComputeError + Send + Sync>>,
     examples_names: impl Fn(usize) -> String,
 ) -> InteractionResp<&'a L> {
     let mut save_button = None;
@@ -477,7 +482,7 @@ pub(crate) fn show_interactions<'a, L, S>(
     let compute_button = ui
         .horizontal(|ui| {
             let compute_button = ui.add(egui::Button::new("Compute"));
-            show_short_result(&*compute_result, ui);
+            utils_results_batched::show_short_result(&*compute_result, ui);
             compute_button
         })
         .inner;
@@ -539,13 +544,7 @@ pub(super) fn show_locals_and_interact<T, U, L, S>(
         // res = Some(ex);
         context.current = EditStatus::Local { name, content };
     } else if button.hovered() {
-        egui::Tooltip::always_open(
-            ui.ctx().clone(),
-            ui.layer_id(),
-            button.id.with("tooltip"),
-            &button,
-        )
-        .show(|ui| {
+        egui::show_tooltip(ui.ctx(), ui.layer_id(), button.id.with("tooltip"), |ui| {
             let desc = content.desc().as_ref();
             egui_demo_lib::easy_mark::easy_mark(ui, desc);
         });
@@ -556,14 +555,14 @@ pub(super) fn show_locals_and_interact<T, U, L, S>(
                 let content = Arc::new(Mutex::new(content));
                 context.current = EditStatus::Shared(usize::MAX, content.clone());
                 let mut content = content.lock().unwrap();
-                docs.doc_db.as_mut().unwrap().create_doc_attempt(
+                docs.doc_db.as_mut().unwrap().create_doc_atempt(
                     &docs.rt,
                     name,
                     content.deref_mut(),
                 );
             }
             if ui.button("close menu").clicked() {
-                ui.close()
+                ui.close_menu()
             }
         });
     }
@@ -615,18 +614,12 @@ impl
 /// e.g. visualizing deleted, moved and inserted ranges of code
 /// WARN apparently doesn't work well with transparency... the background rectangles are slighlty expanded for looks... so it makes ugly border looking things
 #[derive(Default)]
-#[allow(unused)] // TODO: move to egui_addon
 pub(crate) struct HiHighlighter(egui_addon::syntax_highlighting::syntect::Highlighter);
 impl<MH: MakeHighlights>
-    egui::util::cache::ComputerMut<
-        (&CodeTheme, FileContainer<'_, &str>, &str, MH),
-        egui::text::LayoutJob,
-    > for HiHighlighter
+    egui::util::cache::ComputerMut<(&CodeTheme, FileContainer<'_, &str>, &str, MH), egui::text::LayoutJob>
+    for HiHighlighter
 {
-    fn compute(
-        &mut self,
-        (theme, code, lang, mh): (&CodeTheme, FileContainer<'_, &str>, &str, MH),
-    ) -> LayoutJob {
+    fn compute(&mut self, (theme, code, lang, mh): (&CodeTheme, FileContainer<'_, &str>, &str, MH)) -> LayoutJob {
         let mut layout_job = self.0.highlight(theme, code.1, lang); // TODO cache it separatly it takes too much time
         let sections = std::mem::take(&mut layout_job.sections);
         let mut starts = vec![];
@@ -776,7 +769,7 @@ fn compute_hi_color(
 #[derive(Default)]
 pub(crate) struct HiHighlighter2;
 
-impl<MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
+impl<'a, 'b, MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
     egui::util::cache::ComputerMut<(G, MH), Vec<(egui::Color32, Vec<egui::Rect>)>>
     for HiHighlighter2
 {
@@ -794,7 +787,7 @@ impl<MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
                     galley,
                     &std::ops::Range { start, end },
                 );
-                let row_range = cursor_range.map(|c| galley.layout_from_cursor(c).row);
+                let row_range = cursor_range.map(|c| c.rcursor.row);
                 if row_range[0] + 1 < row_range[1] {
                     let mut mid_rect =
                         egui_addon::egui_utils::compute2_bounding_rect_from_row_range(
@@ -804,23 +797,21 @@ impl<MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
                     mid_rect.max.x += 1.0;
                     mid_rect.min.x -= 1.0;
                     let rect = &galley.rows[row_range[0]];
-                    let left = if galley.layout_from_cursor(cursor_range[0]).column == 0 {
-                        egui_addon::egui_utils::first_ws_x(rect).unwrap_or(
-                            rect.x_offset(galley.layout_from_cursor(cursor_range[0]).column),
-                        )
+                    let left = if cursor_range[0].rcursor.column == 0 {
+                        egui_addon::egui_utils::first_ws_x(rect)
+                            .unwrap_or(rect.x_offset(cursor_range[0].rcursor.column))
                     } else {
-                        rect.x_offset(galley.layout_from_cursor(cursor_range[0]).column) - 5.0
+                        rect.x_offset(cursor_range[0].rcursor.column) - 5.0
                     };
-                    let mut rect = rect.rect();
+                    let mut rect = rect.rect;
                     rect.min.x = left; //.min(mid_rect.min.x);
-                    // mid_rect.min.x = left.min(mid_rect.min.x);
+                                       // mid_rect.min.x = left.min(mid_rect.min.x);
                     rect.max.x = rect.max.x.max(mid_rect.max.x);
                     shapes.push(rect);
                     let rect = &galley.rows[row_range[1]];
                     let left2 = egui_addon::egui_utils::first_ws_x(rect);
-                    let right =
-                        rect.x_offset(galley.layout_from_cursor(cursor_range[1]).column) + 2.0;
-                    let mut rect = rect.rect();
+                    let right = rect.x_offset(cursor_range[1].rcursor.column) + 2.0;
+                    let mut rect = rect.rect;
                     if let Some(left2) = left2 {
                         let x = left2 - 5.0;
                         if mid_rect.min.x < x {
@@ -838,11 +829,11 @@ impl<MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
                 } else if row_range[0] + 1 == row_range[1] {
                     let first = &galley.rows[row_range[0]];
                     let second = &galley.rows[row_range[1]];
-                    let left = first.x_offset(galley.layout_from_cursor(cursor_range[0]).column);
-                    let right = second.x_offset(galley.layout_from_cursor(cursor_range[1]).column);
+                    let left = first.x_offset(cursor_range[0].rcursor.column);
+                    let right = second.x_offset(cursor_range[1].rcursor.column);
                     let left2 = second.glyphs.iter().find(|x| !x.chr.is_ascii_whitespace());
-                    let mut first = first.rect();
-                    let mut second = second.rect();
+                    let mut first = first.rect;
+                    let mut second = second.rect;
                     first.min.x = left;
                     second.max.x = right;
                     if let Some(left2) = left2 {
@@ -854,9 +845,9 @@ impl<MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
                     shapes.push(second);
                 } else if row_range[0] == row_range[1] {
                     let rect = &galley.rows[row_range[0]];
-                    let left = rect.x_offset(galley.layout_from_cursor(cursor_range[0]).column);
-                    let right = rect.x_offset(galley.layout_from_cursor(cursor_range[1]).column);
-                    let mut rect = rect.rect();
+                    let left = rect.x_offset(cursor_range[0].rcursor.column);
+                    let right = rect.x_offset(cursor_range[1].rcursor.column);
+                    let mut rect = rect.rect;
                     rect.min.x = left - 1.0;
                     rect.max.x = right + 1.0;
                     shapes.push(rect);

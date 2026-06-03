@@ -1,17 +1,22 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
-
-use enumset::{EnumSet, EnumSetType, enum_set};
-use num::ToPrimitive;
-
+use super::{
+    declaration::{DeclType, Declarator, DisplayDecl},
+    element::{IdentifierFormat, LabelPtr, RawLabelPtr, RefPtr, RefsEnum},
+    java_element::Primitive,
+    label_value::LabelValue,
+    reference::DisplayRef,
+    solver::Solver,
+};
+use crate::{
+    impact::{
+        element::{Arguments, ListSet},
+        solver::{SolvingAssocTable, SolvingResult},
+    },
+    types::Type,
+};
+use enumset::{enum_set, EnumSet, EnumSetType};
 use hyperast::types::{LabelStore, TypeTrait};
-
-use super::declaration::{DeclType, Declarator, DisplayDecl};
-use super::element::{IdentifierFormat, LabelPtr, RawLabelPtr, RefPtr, RefsEnum};
-use super::reference::DisplayRef;
-use super::{java_element::Primitive, label_value::LabelValue, solver::Solver};
-use crate::impact::element::{Arguments, ListSet};
-use crate::impact::solver::{SolvingAssocTable, SolvingResult};
-use crate::types::Type;
+use num::ToPrimitive;
+use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
 
 pub fn leaf_state(
     t: &Type,
@@ -322,9 +327,7 @@ impl PartialAnalysis {
                                     i,
                                 )
                             } else {
-                                log::warn!(
-                                    "resolution of local type decl without a package should not append"
-                                );
+                                log::warn!("resolution of local type decl without a package should not append");
                                 DeclType::Compile(*t, s.as_ref().into(), i.as_ref().into())
                             }
                         }
@@ -919,7 +922,7 @@ impl PartialAnalysis {
                     for (v, d, t) in members {
                         let d = d.with_changed_node(|i| syncd!(*i));
                         let t = t.map(|x| sync!(x)); // TODO try solving t
-                        // println!("d:{:?} t:{:?}", &d, &t);
+                                                     // println!("d:{:?} t:{:?}", &d, &t);
 
                         let container =
                             if Visibility::Public == visibility && Visibility::Public == v {
@@ -1521,10 +1524,7 @@ impl PartialAnalysis {
                                             }
                                         }
                                         x => {
-                                            log::error!(
-                                                "executable in declarations of a type declaration should handle: {:?}",
-                                                x
-                                            )
+                                            log::error!("executable in declarations of a type declaration should handle: {:?}", x)
                                         }
                                     }
                                 }
@@ -1595,10 +1595,7 @@ impl PartialAnalysis {
                                     }
                                 }
                                 x => {
-                                    log::error!(
-                                        "type declaration should handle the following declaration {:?}",
-                                        x
-                                    )
+                                    log::error!("type declaration should handle the following declaration {:?}", x)
                                 }
                             }
                         }
@@ -3771,11 +3768,11 @@ impl PartialAnalysis {
                     (State::None, State::Modifiers(v, n)) if kind == &Type::SpreadParameter => {
                         assert_eq!(v, Visibility::None);
                         State::None // do the rest if need non visibility modifiers
-                        // State::Declaration {
-                        //     visibility: v,
-                        //     kind: DeclType::Runtime(Default::default()),
-                        //     identifier: Declarator::None,
-                        // }
+                                    // State::Declaration {
+                                    //     visibility: v,
+                                    //     kind: DeclType::Runtime(Default::default()),
+                                    //     identifier: Declarator::None,
+                                    // }
                     }
                     (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }

@@ -18,16 +18,15 @@ impl<'a> crate::types::NLending<'a, NodeIdentifier> for NodeStore {
 }
 
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
-    fn resolve(
-        &self,
-        id: &NodeIdentifier,
-    ) -> <Self as crate::types::NLending<'_, NodeIdentifier>>::N {
+    fn resolve(&self, id: &NodeIdentifier) -> <Self as crate::types::NLending<'_, NodeIdentifier>>::N {
         self.internal
             .entity(id.clone())
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
+
 }
+
 
 // impl crate::types::NodStore<NodeIdentifier> for NodeStore {
 //     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;

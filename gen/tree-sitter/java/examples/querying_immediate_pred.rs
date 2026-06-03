@@ -93,10 +93,12 @@ fn compare_all(
             let g_res = prep_baseline(query, text);
             let g_matches = { cursor.matches(&g_res.0, g_res.1.root_node(), text) };
             let h_res = prep_stepped(query, text);
-            let h_matches = h_res.0.matches(hyperast_tsquery::hyperast::TreeCursor::new(
-                &h_res.1,
-                hyperast::position::StructuralPosition::new(h_res.2),
-            ));
+            let h_matches = h_res
+                .0
+                .matches(hyperast_tsquery::hyperast::TreeCursor::new(
+                    &h_res.1,
+                    hyperast::position::StructuralPosition::new(h_res.2),
+                ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
             // let f_c = f_matches.into_iter().count();
@@ -177,8 +179,7 @@ fn prep_stepped<'store>(
     use hyperast_gen_ts_java::legion_with_refs;
     let query = hyperast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
 
-    let mut stores =
-        hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
+    let mut stores = hyperast::store::SimpleStores::<hyperast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 

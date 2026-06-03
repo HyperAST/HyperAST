@@ -21,8 +21,7 @@ where
     Computer: Default,
 {
     fn default() -> Self {
-        let computer = Computer::default();
-        Self::new(computer)
+        Self::new(Computer::default())
     }
 }
 

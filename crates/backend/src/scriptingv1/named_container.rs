@@ -17,6 +17,11 @@ impl<T> NamedContainer<T> {
 impl Finalize for NamedContainer<Dynamic> {
     type Output = rhai::Array;
     fn finalize(self) -> Self::Output {
-        vec![self.name.into(), self.content.finalize()]
+        let mut r = rhai::Array::new();
+
+        r.push(self.name.into());
+        r.push(self.content.finalize());
+
+        r
     }
 }

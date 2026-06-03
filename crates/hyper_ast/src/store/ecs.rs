@@ -1,4 +1,4 @@
-use std::num::{NonZeroU8, NonZeroU16, NonZeroU32, NonZeroU64};
+use std::num::{NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8};
 
 /// Small entity
 /// Index+Id for nodes representing small subtrees

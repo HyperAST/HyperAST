@@ -49,25 +49,38 @@ where
         + tree_gen::WithChildren<HAST::IdN>,
     for<'c> &'c Acc: tree_gen::WithLabel<L = &'c str>,
     for<'t> types::LendT<'t, HAST>: types::WithRoles,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     type Acc = Acc;
     const ENABLED: bool = true;
     fn match_precomp_queries(
         &self,
-        stores: HAST::S<'_>,
+        stores: <HAST as StoreRefAssoc>::S<'_>,
         acc: &Acc,
         label: Option<&str>,
     ) -> tree_gen::PrecompQueries {
         if self.0.enabled_pattern_count() == 0 {
             return Default::default();
         }
-        use hyperast::position::StructuralPosition as P;
-        let pos = P::empty();
+        let pos = hyperast::position::StructuralPosition::empty();
 
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
-        let mut qcursor: crate::QueryCursor<'_, _, _> = self.0.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let mut qcursor: crate::QueryCursor<
+            '_,
+            _,
+            <crate::cursor_on_unbuild::Node<
+                <HAST as StoreRefAssoc>::S<'_>,
+                &Acc,
+                <<HAST as StoreRefAssoc>::S<'_> as HyperASTShared>::Idx,
+                hyperast::position::structural_pos::StructuralPosition<
+                    <<HAST as StoreRefAssoc>::S<'_> as HyperASTShared>::IdN,
+                    <<HAST as StoreRefAssoc>::S<'_> as HyperASTShared>::Idx,
+                >,
+                &str,
+            > as crate::Cursor>::Node,
+        > = self.0.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
-        for m in qcursor {
+        while let Some(m) = qcursor.next() {
             assert!(m.pattern_index.to_usize() < 16);
             r |= 1 << m.pattern_index.to_usize() as u16;
         }
@@ -85,6 +98,7 @@ where
         + tree_gen::WithChildren<HAST::IdN>,
     for<'c> &'c Acc: tree_gen::WithLabel<L = &'c str>,
     for<'t> types::LendT<'t, HAST>: types::WithRoles,
+    HAST::IdN: types::NodeId<IdN = HAST::IdN>,
 {
     const GRAPHING: bool = false;
     fn compute_tsg(

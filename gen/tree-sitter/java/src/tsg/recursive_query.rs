@@ -3,11 +3,12 @@
 
 use std::fmt::Debug;
 
-#[cfg(feature = "tsg")]
-use crate::auto::tsq_ser_meta::Conv;
-use hyperast::position::{StructuralPosition, TreePathMut};
-use hyperast::store::{SimpleStores, defaults::NodeIdentifier};
-use hyperast::types::HyperAST;
+use hyperast::{
+    position::{StructuralPosition, TreePathMut},
+    store::{defaults::NodeIdentifier, SimpleStores},
+    types::HyperAST,
+};
+use hyperast_gen_ts_tsquery::auto::tsq_ser_meta::Conv;
 use tree_sitter_graph::GenQuery;
 
 use crate::types::TStore;
@@ -38,8 +39,7 @@ impl<'tree, HAST, P: Clone> Clone for Node<'tree, HAST, P> {
 
 impl<'tree, HAST, P> tree_sitter_graph::graph::SyntaxNode for Node<'tree, HAST, P>
 where
-    for<'t> hyperast::types::LendT<'t, HAST>:
-        hyperast::types::WithSerialization + hyperast::types::WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization + hyperast::types::WithStats,
     HAST: HyperAST<'tree, IdN = NodeIdentifier>,
     P: Clone
         + Debug
@@ -116,8 +116,7 @@ where
 
 impl<'tree, HAST, P> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST, P>
 where
-    for<'t> hyperast::types::LendT<'t, HAST>:
-        hyperast::types::WithSerialization + hyperast::types::WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: hyperast::types::WithSerialization + hyperast::types::WithStats,
     HAST: HyperAST<'tree, IdN = NodeIdentifier>,
     P: Clone
         + Debug
@@ -144,10 +143,9 @@ where
         vec![].iter().cloned()
     }
 
-    type QM<'cursor>
-        = MyQMatch<'cursor, 'tree, HAST, P>
-    where
-        Self: 'cursor;
+    type QM<'cursor> = MyQMatch<'cursor, 'tree, HAST, P>
+where
+    Self: 'cursor;
 }
 
 pub struct MyNodeErazing;
@@ -318,14 +316,12 @@ impl GenQuery for QueryMatcher<crate::types::Type> {
         }
     }
 
-    type Match<'cursor, 'tree: 'cursor>
-        =
-        self::MyQMatch<'cursor, 'tree, SimpleStores<TStore>, hyperast::position::StructuralPosition>
+    type Match<'cursor, 'tree: 'cursor> = self::MyQMatch<'cursor, 'tree, SimpleStores<TStore>, hyperast::position::StructuralPosition>
     where
         Self: 'cursor;
 
-    type Matches<'query, 'cursor: 'query, 'tree: 'cursor>
-        = self::MyQMatches<'query, 'cursor, 'tree>
+    type Matches<'query, 'cursor: 'query, 'tree: 'cursor> =
+    self::MyQMatches<'query, 'cursor, 'tree>
     where
         Self: 'tree,
         Self: 'query,

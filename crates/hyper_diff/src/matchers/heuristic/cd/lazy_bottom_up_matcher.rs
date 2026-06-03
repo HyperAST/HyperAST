@@ -1,33 +1,35 @@
-use num_traits::ToPrimitive as _;
-use std::fmt::Debug;
-
+use crate::decompressed_tree_store::{
+    ContiguousDescendants, DecompressedWithParent, LazyDecompressed, LazyDecompressedTreeStore,
+    PostOrder, PostOrderIterable, Shallow,
+};
+use crate::matchers::Mapper;
+use crate::matchers::mapping_store::MonoMappingStore;
+use crate::matchers::similarity_metrics;
 use hyperast::PrimInt;
 use hyperast::store::nodes::compo;
-use hyperast::types::{HyperAST, LendT, Tree};
-use hyperast::types::{WithHashs, WithMetaData, WithStats};
-
-use crate::decompressed_tree_store::{ContiguousDescendants, LazyDecompressedTreeStore, Shallow};
-use crate::mappings::MonoMappingStore;
-use crate::matchers::Mapper;
-use crate::matchers::heuristic::factorized_bounds::LazyDecompTreeBounds;
-use crate::similarity_metrics;
+use hyperast::types::{HyperAST, NodeId, Tree, WithHashs, WithMetaData, WithStats};
+use num_traits::ToPrimitive as _;
+use std::fmt::Debug;
 
 use super::leaf_count;
 
 pub struct BottomUpMatcher<
-    Mpr,
+    Dsrc,
+    Ddst,
+    HAST: HyperAST + Copy,
+    M: MonoMappingStore,
     const SIZE_THRESHOLD: usize = 4,
     const SIM_THRESHOLD_NUM: u64 = 6,
     const SIM_THRESHOLD_DEN: u64 = 10,
     const SIM_THRESHOLD2_NUM: u64 = 4,
     const SIM_THRESHOLD2_DEN: u64 = 10,
 > {
-    _phantom: std::marker::PhantomData<*const Mpr>,
+    internal: Mapper<HAST, Dsrc, Ddst, M>,
 }
 
 impl<
-    Dsrc: LazyDecompTreeBounds<HAST, M::Src> + ContiguousDescendants<HAST, M::Src>,
-    Ddst: LazyDecompTreeBounds<HAST, M::Dst> + ContiguousDescendants<HAST, M::Dst>,
+    Dsrc: LazyDecompressed<M::Src>,
+    Ddst: LazyDecompressed<M::Dst>,
     HAST,
     M,
     const SIZE_THRESHOLD: usize,   // = 1000,
@@ -37,7 +39,10 @@ impl<
     const SIM_THRESHOLD2_DEN: u64, // = 10,
 >
     BottomUpMatcher<
-        Mapper<HAST, Dsrc, Ddst, M>,
+        Dsrc,
+        Ddst,
+        HAST,
+        M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
@@ -45,7 +50,8 @@ impl<
         SIM_THRESHOLD2_DEN,
     >
 where
-    for<'t> LendT<'t, HAST>: Tree + WithHashs + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: Tree + WithHashs + WithStats,
+    for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithStats,
     HAST::IdN: Clone + Eq + Debug,
     Dsrc::IdD: PrimInt,
     Ddst::IdD: PrimInt,
@@ -53,19 +59,35 @@ where
     M::Dst: PrimInt,
     HAST: HyperAST + Copy,
     M: MonoMappingStore,
+    Dsrc: DecompressedWithParent<HAST, Dsrc::IdD>
+        + PostOrder<HAST, Dsrc::IdD, M::Src>
+        + PostOrderIterable<HAST, Dsrc::IdD, M::Src>
+        + ContiguousDescendants<HAST, Dsrc::IdD, M::Src>
+        + LazyDecompressedTreeStore<HAST, M::Src>,
+    Ddst: DecompressedWithParent<HAST, Ddst::IdD>
+        + PostOrder<HAST, Ddst::IdD, M::Dst>
+        + PostOrderIterable<HAST, Ddst::IdD, M::Dst>
+        + ContiguousDescendants<HAST, Ddst::IdD, M::Dst>
+        + LazyDecompressedTreeStore<HAST, M::Dst>,
     HAST::Label: Eq,
     HAST::IdN: Debug,
+    HAST::IdN: NodeId<IdN = HAST::IdN>,
 {
     pub fn match_it(
-        mut mapper: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
+        mapping: crate::matchers::Mapper<HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<HAST, Dsrc, Ddst, M>
     where
-        for<'t> LendT<'t, HAST>: WithMetaData<compo::StmtCount>,
-        for<'t> LendT<'t, HAST>: WithMetaData<compo::MemberImportCount>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT: WithMetaData<compo::StmtCount>,
+        for<'t> <HAST as hyperast::types::AstLending<'t>>::RT:
+            WithMetaData<compo::MemberImportCount>,
     {
-        mapper.reserve_mappings();
-        Self::execute(&mut mapper, leaf_count);
-        mapper
+        let mut matcher = Self { internal: mapping };
+        matcher.internal.mapping.mappings.topit(
+            matcher.internal.mapping.src_arena.len(),
+            matcher.internal.mapping.dst_arena.len(),
+        );
+        Self::execute(&mut matcher.internal, leaf_count);
+        matcher.internal
     }
 
     pub fn execute0(
@@ -173,20 +195,23 @@ where
         let tsrc = hyperast.resolve_type(&osrc);
         let odst = dst_arena.original(&dst);
         let tdst = hyperast.resolve_type(&odst);
-        if tsrc == tdst && src_arena.has_children(&src) && dst_arena.has_children(&dst) {
-            let sim = similarity_metrics::SimilarityMeasure::range(
-                &src_arena.descendants_range(&src),
-                &dst_arena.descendants_range(&dst),
-                &*mappings,
-            )
-            .chawathe();
-            let cond1 = number_of_leaves > SIZE_THRESHOLD
-                && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
-            let cond2 = number_of_leaves <= SIZE_THRESHOLD
-                && sim >= SIM_THRESHOLD2_NUM as f64 / SIM_THRESHOLD2_DEN as f64;
-            if cond1 || cond2 {
-                mappings.link(src.to_shallow(), dst.to_shallow());
-                return true;
+        if tsrc == tdst {
+            if !(src_arena.lld(&src) == src.to_shallow() || dst_arena.lld(&dst) == dst.to_shallow())
+            {
+                let sim = similarity_metrics::SimilarityMeasure::range(
+                    &src_arena.descendants_range(&src),
+                    &dst_arena.descendants_range(&dst),
+                    &*mappings,
+                )
+                .chawathe();
+                let cond1 = number_of_leaves > SIZE_THRESHOLD
+                    && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64;
+                let cond2 = number_of_leaves <= SIZE_THRESHOLD
+                    && sim >= SIM_THRESHOLD2_NUM as f64 / SIM_THRESHOLD2_DEN as f64;
+                if cond1 || cond2 {
+                    mappings.link(src.to_shallow(), dst.to_shallow());
+                    return true;
+                }
             }
         }
         false
@@ -259,7 +284,9 @@ where
                 self.idd = idd;
                 self.to_traverse.extend(cs);
             } else {
-                let sib = self.to_traverse.pop()?;
+                let Some(sib) = self.to_traverse.pop() else {
+                    return None;
+                };
                 let sibs = self.sibs.last_mut().unwrap();
                 if sibs == &0 {
                     self.sibs.pop();

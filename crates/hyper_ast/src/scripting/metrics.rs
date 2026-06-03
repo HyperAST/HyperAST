@@ -1,7 +1,9 @@
 #![allow(unused)]
-use std::any::{Any, TypeId};
-use std::marker::PhantomData;
-use std::ops::Deref;
+use std::{
+    any::{Any, TypeId},
+    marker::PhantomData,
+    ops::Deref,
+};
 
 use crate::store::nodes::{CompressedCompo, ErasedHolder};
 use crate::tree_gen::metric_definition::{self, MetricAcc, MetricComputing, Subtree, Ty};
@@ -13,7 +15,7 @@ struct DynMetric<S>(Dynamic, std::marker::PhantomData<S>);
 
 impl<S> Clone for DynMetric<S> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1)
+        Self(self.0.clone(), self.1.clone())
     }
 }
 
@@ -102,46 +104,46 @@ impl<S: Subtree + 'static> DynMetricComputer<S> {
         // }
         let Some(init) = ast.shared_lib().get_script_fn("init", 0) else {
             return Err(DynMetricComputerCompileError(
-                "fn init() is missing or has a wrong signature",
+                "fn init() is missing or has a wrong signature".into(),
             )
             .into());
         };
         // TODO find accessed globals, specialize for a single type of node
         let Some(acc) = ast.shared_lib().get_script_fn("acc", 2) else {
             return Err(DynMetricComputerCompileError(
-                "fn acc(a, child) is missing or has a wrong signature",
+                "fn acc(a, child) is missing or has a wrong signature".into(),
             )
             .into());
         };
         if acc.params[0] != "a" {
             return Err(DynMetricComputerCompileError(
-                "fn acc(a, child) is missing or has a wrong signature",
+                "fn acc(a, child) is missing or has a wrong signature".into(),
             )
             .into());
         }
         if acc.params[1] != "child" {
             return Err(DynMetricComputerCompileError(
-                "fn acc(a, child) is missing or has a wrong signature",
+                "fn acc(a, child) is missing or has a wrong signature".into(),
             )
             .into());
         }
         // TODO find accessed fields on child
         let Some(finish) = ast.shared_lib().get_script_fn("finish", 1) else {
             return Err(DynMetricComputerCompileError(
-                "fn finish(a) is missing or has a wrong signature",
+                "fn finish(a) is missing or has a wrong signature".into(),
             )
             .into());
         };
         if finish.params[0] != "a" {
             return Err(DynMetricComputerCompileError(
-                "fn finish(a) is missing or has a wrong signature",
+                "fn finish(a) is missing or has a wrong signature".into(),
             )
             .into());
         }
         let lossy = if let Some(lossy) = ast.shared_lib().get_script_fn("lossy", 1) {
             if lossy.params[0] != "m" {
                 return Err(DynMetricComputerCompileError(
-                    "fn lossy(m) is missing or has a wrong signature",
+                    "fn lossy(m) is missing or has a wrong signature".into(),
                 )
                 .into());
             }
@@ -252,79 +254,100 @@ impl<S: Subtree + 'static> DynMetricComputer<S> {
             if var.0.name == "acc" {
                 const PARA_COUNT: usize = 1;
                 let mut params = vec![];
-                if let Expr::Stmt(block) = &var.1 {
-                    let mut stmts = block.iter();
-                    let share = stmts.next().unwrap();
-                    dbg!(share);
-                    if let Stmt::Share(scope) = share {
-                        for s in scope.iter() {
-                            dbg!(s.0.name.clone());
-                            params.push(s.0.name.clone());
-                        }
-                    }
-                    let fct = stmts.next().unwrap();
-                    dbg!(fct);
-                    if let Stmt::FnCall(fct, _) = fct {
-                        assert_eq!(fct.name, "curry");
-                        if let Some(Expr::DynamicConstant(fn_ptr, _)) = fct.args.first() {
-                            if let Some(fn_ptr) = fn_ptr.read_lock::<FnPtr>() {
-                                dbg!(fn_ptr.curry());
-                                dbg!(ast.shared_lib());
-                                dbg!(fn_ptr.fn_name());
-                                dbg!(params.len() - fn_ptr.curry().len());
-                                let num_params = params.len() + PARA_COUNT - fn_ptr.curry().len();
-                                let f = ast
-                                    .shared_lib()
-                                    .get_script_fn(fn_ptr.fn_name(), num_params)
-                                    .unwrap();
-                                dbg!(&f.params);
-                                dbg!(&f.body);
-                                assert_eq!(&f.params[..num_params - PARA_COUNT], &*params);
+                match &var.1 {
+                    Expr::Stmt(block) => {
+                        let mut stmts = block.iter();
+                        let share = stmts.next().unwrap();
+                        dbg!(share);
+                        match share {
+                            Stmt::Share(scope) => {
+                                for s in scope.iter() {
+                                    dbg!(s.0.name.clone());
+                                    params.push(s.0.name.clone());
+                                }
                             }
-                            dbg!(fn_ptr);
-                        } else {
-                            unreachable!()
+                            _ => {}
                         }
-                    } else {
-                        unreachable!()
+                        let fct = stmts.next().unwrap();
+                        dbg!(fct);
+                        match fct {
+                            Stmt::FnCall(fct, _) => {
+                                assert_eq!(fct.name, "curry");
+                                if let Some(Expr::DynamicConstant(fn_ptr, _)) = fct.args.first() {
+                                    if let Some(fn_ptr) = fn_ptr.read_lock::<FnPtr>() {
+                                        dbg!(fn_ptr.curry());
+                                        dbg!(ast.shared_lib());
+                                        dbg!(fn_ptr.fn_name());
+                                        dbg!(params.len() - fn_ptr.curry().len());
+                                        let num_params =
+                                            params.len() + PARA_COUNT - fn_ptr.curry().len();
+                                        let f = ast
+                                            .shared_lib()
+                                            .get_script_fn(fn_ptr.fn_name(), num_params)
+                                            .unwrap();
+                                        dbg!(&f.params);
+                                        dbg!(&f.body);
+                                        assert_eq!(&f.params[..num_params - PARA_COUNT], &*params);
+                                    }
+                                    dbg!(fn_ptr);
+                                } else {
+                                    unreachable!()
+                                }
+                            }
+                            _ => {
+                                unreachable!()
+                            }
+                        }
                     }
+                    _ => {}
                 }
             } else if var.0.name == "finish" {
                 const PARA_COUNT: usize = 0;
                 let mut params = vec![];
-                if let Expr::Stmt(block) = &var.1 {
-                    let mut stmts = block.iter();
-                    let share = stmts.next().unwrap();
-                    dbg!(share);
-                    if let Stmt::Share(scope) = share {
-                        for s in scope.iter() {
-                            dbg!(s.0.name.clone());
-                            params.push(s.0.name.clone());
-                        }
-                    }
-                    let fct = stmts.next().unwrap();
-                    dbg!(fct);
-                    if let Stmt::FnCall(fct, _) = fct {
-                        assert_eq!(fct.name, "curry");
-                        if let Some(Expr::DynamicConstant(fn_ptr, _)) = fct.args.first() {
-                            if let Some(fn_ptr) = fn_ptr.read_lock::<FnPtr>() {
-                                dbg!(fn_ptr.curry());
-                                let num_params = params.len() + PARA_COUNT - fn_ptr.curry().len();
-                                let f = ast
-                                    .shared_lib()
-                                    .get_script_fn(fn_ptr.fn_name(), num_params)
-                                    .unwrap();
-                                dbg!(&f.params);
-                                dbg!(&f.body);
-                                assert_eq!(&f.params[..num_params - PARA_COUNT], &*params);
+                match &var.1 {
+                    Expr::Stmt(block) => {
+                        let mut stmts = block.iter();
+                        let share = stmts.next().unwrap();
+                        dbg!(share);
+                        match share {
+                            Stmt::Share(scope) => {
+                                for s in scope.iter() {
+                                    dbg!(s.0.name.clone());
+                                    params.push(s.0.name.clone());
+                                }
                             }
-                            dbg!(fn_ptr);
-                        } else {
-                            unreachable!()
+                            _ => {}
                         }
-                    } else {
-                        unreachable!()
+                        let fct = stmts.next().unwrap();
+                        dbg!(fct);
+                        match fct {
+                            Stmt::FnCall(fct, _) => {
+                                assert_eq!(fct.name, "curry");
+                                if let Some(Expr::DynamicConstant(fn_ptr, _)) = fct.args.first() {
+                                    if let Some(fn_ptr) = fn_ptr.read_lock::<FnPtr>() {
+                                        dbg!(fn_ptr.curry());
+                                        let num_params =
+                                            params.len() + PARA_COUNT - fn_ptr.curry().len();
+                                        let f = ast
+                                            .shared_lib()
+                                            .get_script_fn(fn_ptr.fn_name(), num_params)
+                                            .unwrap();
+                                        dbg!(&f.params);
+                                        dbg!(&f.body);
+                                        // assert_eq!(fct.args);
+                                        assert_eq!(&f.params[..num_params - PARA_COUNT], &*params);
+                                    }
+                                    dbg!(fn_ptr);
+                                } else {
+                                    unreachable!()
+                                }
+                            }
+                            _ => {
+                                unreachable!()
+                            }
+                        }
                     }
+                    _ => {}
                 }
             } else {
                 dbg!(&var.0.name, &var.1);
@@ -516,7 +539,7 @@ private fn zero() { 0 }
     let ast = engine.compile(script).unwrap();
     let mut scope = Scope::new();
     dbg!(&ast);
-    let ast = engine.optimize_ast(&scope, ast, OptimizationLevel::Full);
+    let ast = engine.optimize_ast(&mut scope, ast, OptimizationLevel::Full);
     assert!(
         ast.shared_lib().get_script_fn("zero", 0).is_none(),
         "should inline private zero()"
@@ -753,7 +776,7 @@ fn compute(child) {
     let body = AST::new(body.iter().cloned(), Module::new());
     dbg!(&body);
     engine.set_allow_shadowing(false);
-    let opt_ast = engine.optimize_ast(&scope, body, OptimizationLevel::Full);
+    let opt_ast = engine.optimize_ast(&mut scope, body, OptimizationLevel::Full);
     dbg!(&opt_ast);
     dbg!();
     let r: i64 = engine
@@ -865,13 +888,17 @@ fn eq_expr(e1: &Expr, e2: &Expr) -> bool {
         (Expr::Property(v1, ..), Expr::Property(v2, ..)) => v1 == v2,
         (Expr::MethodCall(v1, ..), Expr::MethodCall(v2, ..)) => soft_todo!(false),
         (Expr::FnCall(v1, ..), Expr::FnCall(v2, ..)) => {
-            v1.name == v2.name
-                && v1.args.len() == v2.args.len()
-                && (v1.capture_parent_scope == v2.capture_parent_scope)
-                && v1.hashes == v2.hashes
-                && v1.namespace == v2.namespace
-                && v1.op_token == v2.op_token
-                && Iterator::zip(v1.args.iter(), v2.args.iter()).all(|(e1, e2)| eq_expr(e1, e2))
+            v1.name == v1.name
+                && v1.args.len() == v1.args.len()
+                && v1.capture_parent_scope == v1.capture_parent_scope
+                && v1.hashes == v1.hashes
+                && v1.namespace == v1.namespace
+                && v1.op_token == v1.op_token
+                && v1
+                    .args
+                    .iter()
+                    .zip(v2.args.iter())
+                    .all(|(e1, e2)| eq_expr(e1, e2))
         }
         (Expr::Index(v1, f1, ..), Expr::Index(v2, f2, ..)) => {
             f1.bits() == f2.bits() && soft_todo!(false)
@@ -884,7 +911,7 @@ fn eq_stmt_block(b1: &[Stmt], b2: &[Stmt]) -> bool {
     if b1.len() != b2.len() {
         return false;
     }
-    for (s1, s2) in b1.iter().zip(b2.iter()) {
+    for (s1, s2) in b1.into_iter().zip(b2.into_iter()) {
         if !eq_stmt(s1, s2) {
             return false;
         }
@@ -912,7 +939,7 @@ fn test_split_dynamic_enum() {
             } else if v < u32::MAX as u64 {
                 push(DynHolder(Neg(v as u32)))
             } else {
-                push(DynHolder(Neg(v)))
+                push(DynHolder(Neg(v as u64)))
             }
         } else {
             let v = v as u64;
@@ -921,7 +948,7 @@ fn test_split_dynamic_enum() {
             } else if v < u32::MAX as u64 {
                 push(DynHolder(v as u32))
             } else {
-                push(DynHolder(v))
+                push(DynHolder(v as u64))
             }
         }
         // v.as_int();
@@ -986,7 +1013,7 @@ impl CompressedCompo for D {
         let d = if let Some(d) = ptr.unerase_ref::<Dynamic>(tid) {
             d.clone()
         } else if let Some(x) = ptr.unerase_ref::<DynHolder<()>>(tid) {
-            ().into()
+            x.0.into()
         } else if let Some(x) = ptr.unerase_ref::<DynHolder<u16>>(tid) {
             x.to_dyn()
         } else if let Some(x) = ptr.unerase_ref::<DynHolder<u32>>(tid) {
@@ -999,9 +1026,9 @@ impl CompressedCompo for D {
             x.to_dyn()
         } else if let Some(x) = ptr.unerase_ref::<DynHolder<Neg<u64>>>(tid) {
             x.to_dyn()
-        } else if ptr.unerase_ref::<DynHolder<True>>(tid).is_some() {
+        } else if let Some(_) = ptr.unerase_ref::<DynHolder<True>>(tid) {
             true.into()
-        } else if ptr.unerase_ref::<DynHolder<Fals>>(tid).is_some() {
+        } else if let Some(_) = ptr.unerase_ref::<DynHolder<Fals>>(tid) {
             false.into()
         } else {
             unreachable!()
@@ -1048,8 +1075,8 @@ fn test_hyperast_construction_interface_level_push() {
         /// returns Err(Id) if the node was already inside, using ty, label and cs to compare nodes
         /// Note: metadata are not identifying.
         /// Note: In debug mode, if a node is already present and md differs then panics.
-        fn try_insert(
-            &mut self,
+        fn try_insert<'a>(
+            &'a mut self,
             ty: impl Ty,
             label: &str,
             cs: &[Self::Id],
@@ -1074,7 +1101,7 @@ fn test_hyperast_construction_interface_level_push() {
             &mut self,
             hash: u64,
             eq: impl Fn(&AnyTy, &str, &[Self::Id]) -> bool,
-        ) -> Prepared<'_, Self>;
+        ) -> Prepared<Self>;
         /// primary/prepare_insertion
         /// distinguishes identifying fields such that metadata only have to be computed if node is absent
         fn primaries<'a>(
@@ -1084,7 +1111,7 @@ fn test_hyperast_construction_interface_level_push() {
             cs: &[Self::Id],
         ) -> Prepared<'a, Self>;
     }
-    impl<HAST: HyperAST> Absent<'_, HAST> {
+    impl<'hast, HAST: HyperAST> Absent<'hast, HAST> {
         /// metadatas/with_metadata
         fn secondaries(self, md: impl MD) -> HAST::Id {
             todo!()

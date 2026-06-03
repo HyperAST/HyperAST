@@ -1,49 +1,49 @@
 #![allow(unused)]
 /// historic regression test for static analysis
-pub(super) static CASE_1: &str = "
+pub(super) static CASE_1: &'static str = "
 class A {
     char[] c = new char[] { (char) x };
 }
 ";
-pub(super) static CASE_1_1: &str = "package q.w.e;
+pub(super) static CASE_1_1: &'static str = "package q.w.e;
 class A {
     char c = null;
 }
 ";
-pub(super) static CASE_1_2: &str = "package q.w.e;
+pub(super) static CASE_1_2: &'static str = "package q.w.e;
 class A {
     A c = null;
 }
 ";
-pub(super) static CASE_1_3: &str = "package q.w.e;
+pub(super) static CASE_1_3: &'static str = "package q.w.e;
 class A {
     E c = null;
 }
 ";
 
-pub(super) static CASE_1_4: &str = "package q.w.e;
+pub(super) static CASE_1_4: &'static str = "package q.w.e;
 class A  extends E {
     X c = null;
 }
 ";
-pub(super) static CASE_1_5: &str = "package q.w.e;
+pub(super) static CASE_1_5: &'static str = "package q.w.e;
 class A  extends E {
     E c = null;
 }
 ";
-pub(super) static CASE_1_6: &str = "package q.w.e;
+pub(super) static CASE_1_6: &'static str = "package q.w.e;
 class A  extends E {
     E E = null;
 }
 ";
 
-pub(super) static CASE_1_7: &str = "package q.w.e;
+pub(super) static CASE_1_7: &'static str = "package q.w.e;
 class A  extends E {
     E E = null;
     E e = E;
 }
 ";
-pub(super) static CASE_1_8: &str = "package q.w.e;
+pub(super) static CASE_1_8: &'static str = "package q.w.e;
 import a.z.E;
 
 class A  extends E {
@@ -51,7 +51,7 @@ class A  extends E {
     E e = E;
 }
 ";
-pub(super) static CASE_1_9: &str = "package q.w.e;
+pub(super) static CASE_1_9: &'static str = "package q.w.e;
 import a.z.*;
 
 class A  extends E {
@@ -59,7 +59,7 @@ class A  extends E {
     E e = E;
 }
 ";
-pub(super) static CASE_1_10: &str = "package q.w.e;
+pub(super) static CASE_1_10: &'static str = "package q.w.e;
 import a.z.E;
 import a.z.*;
 
@@ -70,7 +70,7 @@ class A  extends E {
 ";
 
 /// mostly simple resolutions
-pub(super) static CASE_2: &str = "package q.w.e;
+pub(super) static CASE_2: &'static str = "package q.w.e;
 import a.z.e.r.t.y.ControlFlowGraph;
 import a.z.e.r.Exc;
 import a.z.e.r.t.y.ControlFlowBuilder;
@@ -101,7 +101,7 @@ class A {
 class B {long c = 0}";
 
 /// a part from java.lang.Character.java
-pub(super) static CASE_3: &str = "
+pub(super) static CASE_3: &'static str = "
 package java.lang;
 
 import java.util.Arrays;
@@ -169,7 +169,7 @@ class Character implements java.io.Serializable, Comparable<Character> {
 }";
 
 /// about super
-pub(super) static CASE_4: &str = "
+pub(super) static CASE_4: &'static str = "
 package java.lang;
 
 public
@@ -185,7 +185,7 @@ class AbstractMethodError extends IncompatibleClassChangeError {
 }
 ";
 /// about constructor in java.lang with String as parameters
-pub(super) static CASE_5: &str = "
+pub(super) static CASE_5: &'static str = "
 package java.lang;//azer.ty;
 
 public final
@@ -205,7 +205,7 @@ class Character {
 ";
 
 /// about self import
-pub(super) static CASE_6: &str = "
+pub(super) static CASE_6: &'static str = "
 package java.lang;
 
 import static java.lang.StackStreamFactory.WalkerState.*;
@@ -217,7 +217,7 @@ final class StackStreamFactory {
 ";
 
 /// about hierarchical resolutions
-pub(super) static CASE_7: &str = "
+pub(super) static CASE_7: &'static str = "
 package p;
 
 class A {
@@ -252,7 +252,7 @@ interface C {
 }
 ";
 
-pub(super) static CASE_8: &str = "package q.w.e;
+pub(super) static CASE_8: &'static str = "package q.w.e;
 class A {
     Integer a = 0;
     <T> void test(T x) {
@@ -266,14 +266,14 @@ class A {
     }
 }";
 
-pub(super) static CASE_8_1: &str = "package q.w.e;
+pub(super) static CASE_8_1: &'static str = "package q.w.e;
 class A {
     <T> void test(T x) {
         test(x);
     }
 }";
 
-pub(super) static CASE_9: &str = "
+pub(super) static CASE_9: &'static str = "
 class D {
 	int a = 1;
     int f() {
@@ -284,7 +284,7 @@ class D {
 }
 ";
 
-pub(super) static CASE_10: &str = "package a;
+pub(super) static CASE_10: &'static str = "package a;
 public class A {
     public void f() {
         int second = 0;
@@ -294,7 +294,7 @@ public class A {
 }
 ";
 
-pub(super) static CASE_11: &str = "package a;
+pub(super) static CASE_11: &'static str = "package a;
 public class A {
     public static long f() {
         int start = 0, len = 0;
@@ -303,7 +303,7 @@ public class A {
 }
 ";
 
-pub(super) static CASE_11_BIS: &str = "package a;
+pub(super) static CASE_11_BIS: &'static str = "package a;
 public class A {
     int start, len;
     public static long f() {
@@ -313,7 +313,7 @@ public class A {
 ";
 
 // TODO handle fall through variable declaration
-pub(super) static CASE_12: &str = "package a;
+pub(super) static CASE_12: &'static str = "package a;
 import z.VM;
 public class A {
     public static long f() {
@@ -340,7 +340,7 @@ public class A {
 }
 ";
 
-pub(super) static CASE_13: &str = "package a;
+pub(super) static CASE_13: &'static str = "package a;
 public class A {
     public A(byte ascii[], int hibyte) {
         this(ascii, hibyte, 0, ascii.length);
@@ -366,7 +366,7 @@ public class A {
 }
 ";
 
-pub(super) static CASE_14: &str = "package q.w.e;
+pub(super) static CASE_14: &'static str = "package q.w.e;
 import a.z.e.r.*;
 import a.z.e.r.Y;
 class A {
@@ -382,13 +382,13 @@ class A {
     }
 }";
 
-pub(super) static CASE_15: &str = "package q.w.e;
+pub(super) static CASE_15: &'static str = "package q.w.e;
 class A<V> {
     public Enumeration<V> elements() {
         return this.<V>getEnumeration(VALUES);
     }
 }";
-pub(super) static CASE_15_1: &str = "package q.w.e;
+pub(super) static CASE_15_1: &'static str = "package q.w.e;
 class A<V> {
     public Enumeration<V> elements() {
         return this.<V>getEnumeration(VALUES);
@@ -397,7 +397,7 @@ class A<V> {
         return v.a;
     }
 }";
-pub(super) static CASE_15_2: &str = "package q.w.e;
+pub(super) static CASE_15_2: &'static str = "package q.w.e;
 class A<V> {
     public Enumeration<V> elements() {
         return this.<V>getEnumeration();
@@ -407,14 +407,14 @@ class A<V> {
     }
 }";
 
-pub(super) static CASE_16: &str = "package q.w.e;
+pub(super) static CASE_16: &'static str = "package q.w.e;
 class A {
     public <V> Enumeration<V> elements(V x) {
         return this.<V>getEnumeration(VALUES);
     }
 }";
 
-pub(super) static CASE_17: &str = r#"package q.w.e;
+pub(super) static CASE_17: &'static str = r#"package q.w.e;
 enum SSLCipher {
     // exportable ciphers
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -444,7 +444,7 @@ enum SSLCipher {
 }
 "#;
 
-pub(super) static CASE_18: &str = "
+pub(super) static CASE_18: &'static str = "
 module java.compiler {
     exports javax.annotation.processing;
     exports javax.lang.model;
@@ -457,7 +457,7 @@ module java.compiler {
     uses javax.tools.JavaCompiler;
 }";
 
-pub(super) static CASE_19: &str = "package q.w.e;
+pub(super) static CASE_19: &'static str = "package q.w.e;
 class A {
     static class BnM extends Node {
         int[] buffer;
@@ -496,7 +496,7 @@ class A {
         }
     }
 }";
-pub(super) static CASE_20: &str = "package q.w.e;
+pub(super) static CASE_20: &'static str = "package q.w.e;
 class A {
     static class BnM extends Node {
         static Node optimize(Node node) {
@@ -505,7 +505,7 @@ class A {
     }
 }";
 
-pub(super) static CASE_21: &str = "package q.w.e;
+pub(super) static CASE_21: &'static str = "package q.w.e;
 class A {
     static class BnM extends Node {
         int[] optoSft;
@@ -517,7 +517,7 @@ class A {
     }
 }";
 
-pub(super) static CASE_22: &str = "package q.w.e;
+pub(super) static CASE_22: &'static str = "package q.w.e;
 class A {
     public interface Cleanable {
         void clean();
@@ -527,7 +527,7 @@ class A {
 /// Same name field and type
 // TODO need mandatory type ref and mandatory member ref
 // so that we do not mask ref to super and interfaces with a field of the same name.
-pub(super) static CASE_23: &str =
+pub(super) static CASE_23: &'static str =
 "package spoon.test.template.testclasses;
 
 import spoon.reflect.code.CtStatement;
@@ -604,7 +604,7 @@ interface _TargetType_ {
 
 }";
 
-pub(super) static CASE_24: &str =
+pub(super) static CASE_24: &'static str =
 "/**
 * Licensed to the Apache Software Foundation (ASF) under one
 * or more contributor license agreements.  See the NOTICE file
@@ -1622,7 +1622,7 @@ public class TestLocalFileSystem {
 }";
 
 // TODO handle same identical name for parameter and its type
-pub(super) static CASE_25: &str = "
+pub(super) static CASE_25: &'static str = "
 
 package org.apache.hadoop.yarn.api.protocolrecords.impl.pb;
 
@@ -1641,7 +1641,7 @@ public class GetApplicationAttemptReportResponsePBImpl extends
 
 }
 ";
-pub(super) static CASE_26: &str = "
+pub(super) static CASE_26: &'static str = "
 
 package p;
 
@@ -1659,7 +1659,7 @@ public class A{
 
 // Nothing in X.java file
 // see https://github.com/apache/hadoop/blob/03cfc852791c14fad39db4e5b14104a276c08e59/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/AggregatedLogsBlock.java
-pub(super) static CASE_27: &str = "/**
+pub(super) static CASE_27: &'static str = "/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -1677,12 +1677,12 @@ pub(super) static CASE_27: &str = "/**
  * limitations under the License.
  */";
 
-pub(super) static CASE_28: &str = "package p;
+pub(super) static CASE_28: &'static str = "package p;
 class A {
     org.apa.B x;
 }";
 
-pub(super) static CASE_29: &str =
+pub(super) static CASE_29: &'static str =
 "/**\r
  * Copyright (C) 2006-2018 INRIA and contributors\r
  * Spoon - http://spoon.gforge.inria.fr/\r
@@ -1760,7 +1760,7 @@ public class TemplateReplaceReturnTest {\r
 
 }";
 
-pub(super) static CASE_30: &str = r#"
+pub(super) static CASE_30: &'static str = r#"
 package spoon.test.prettyprinter.testclasses.innertype;
 
 import java.util.Map.*;
@@ -1771,7 +1771,7 @@ public class InnerTypeOk {
   }
 }"#;
 
-pub(super) static CASE_31: &str = r#"
+pub(super) static CASE_31: &'static str = r#"
 package q.w.e;
 
 public class A {
@@ -1782,7 +1782,7 @@ public class A {
     }
 }"#;
 
-pub(super) static CASE_32: &str = r#"
+pub(super) static CASE_32: &'static str = r#"
 package q.w.e;
 
 public class A {
@@ -1791,7 +1791,7 @@ public class A {
     }
 }"#;
 
-pub(super) static CASE_33: &str = r#"package io.quarkus.spring.web.deployment;
+pub(super) static CASE_33: &'static str = r#"package io.quarkus.spring.web.deployment;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -1950,7 +1950,7 @@ class Node {}",
     )]),
 )]);
 
-static A:&str = "
+static A:&'static str = "
 package java.lang;
 
 import java.lang.annotation.Native;

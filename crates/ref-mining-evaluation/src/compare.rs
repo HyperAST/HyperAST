@@ -1,7 +1,9 @@
 use std::{collections::BTreeMap, mem::take};
 
-use crate::comparisons::{Comparison, Comparisons};
-use crate::relations::{Position, Range, Relation, Relations};
+use crate::{
+    comparisons::{Comparison, Comparisons},
+    relations::{Position, Range, Relation, Relations},
+};
 
 enum ExactCompareDeclResult {
     Exact(Vec<Position>, Vec<Position>),

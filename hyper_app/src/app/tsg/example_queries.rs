@@ -15,7 +15,6 @@ pub(super) struct Example {
     pub(crate) path: &'static str,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) enum Forge {
     GitHub,
@@ -24,12 +23,10 @@ pub(crate) enum Forge {
 
 #[derive(Clone)]
 pub(crate) struct Repo {
-    #[allow(dead_code)]
     pub(crate) forge: Forge,
     pub(crate) user: &'static str,
     pub(crate) name: &'static str,
 }
-
 #[derive(Clone)]
 pub(crate) struct Commit {
     pub(crate) repo: Repo,
@@ -44,7 +41,6 @@ impl From<&Repo> for super::super::types::Repo {
         }
     }
 }
-
 impl From<&Commit> for super::super::types::Commit {
     fn from(value: &Commit) -> Self {
         Self {
@@ -89,10 +85,10 @@ pub(super) const EXAMPLES: &[Example] = &[
     Example {
         name: "top level decls (Java)",
         query: Query {
-            description: "Find top level public declarations, capturing its name and package.",
+            description: "Find top level public delcarations, capturing its name and package.",
             query: r#"(program
   (package_declaration (_)@pkg)
-  (declaration
+  (declaration 
     (modifiers "public")
     name: (_) @name
   )
@@ -110,12 +106,12 @@ pub(super) const EXAMPLES: &[Example] = &[
             description: "Find test methods",
             query: r#"(program
   (package_declaration (_)@pkg)
-  (declaration
+  (declaration 
     (modifiers "public")
     name: (_) @name
     body: (_
       (method_declaration
-        (modifiers . (marker_annotation
+        (modifiers . (marker_annotation 
           name: (_)@_anot (#eq? @_anot "Test")
         ))
         name: (_)@meth
@@ -135,7 +131,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         name: "methods per declaration (Java)",
         query: Query {
             description: "Find methods for each declaration.
-The pattern '[(meth)@m, (_)]*' allows to match '@m' even when interleaved with other siblings not captured in '@m',
+The pattern '[(meth)@m, (_)]*' allows to match '@m' even when interleaved with other siblings not captured in '@m', 
 otherwise, this query would return each 'declaration' as many time as '@m' is interleaved.",
             query: r#"(program
   (package_declaration (_)@pkg)
@@ -166,13 +162,13 @@ otherwise, this query would return each 'declaration' as many time as '@m' is in
 Due to possible interleaved annotations and late predicates,
 it is very important to match annotations immediately i.e '@Test'.
 The quantifier on 'marker_annotation' is important to match '@Test' after other annotations.
-Without those, on large classes with many annotated methods,
+Without those, on large clases with many anotated methods,
 the query engine has to branch quadratically on each child of 'modifiers'.
 Indeed, the semantic of the query is actually to produce a different match for each individual annotation
 (when there are multiple annotation marker).",
             query: r#"(program
   (package_declaration (_)@pkg)
-  (class_declaration
+  (class_declaration 
     (modifiers "public")
     name: (_) @name
     body: (_
@@ -181,7 +177,7 @@ Indeed, the semantic of the query is actually to produce a different match for e
             (modifiers
               . ; this is very important otherwise the complexity explodes
               [
-                (marker_annotation
+                (marker_annotation 
                   name: (_)@_anot (#any-eq? @_anot "Test")
                 )
                 (_)
@@ -207,18 +203,18 @@ Indeed, the semantic of the query is actually to produce a different match for e
     Example {
         name: "bad query (Java)",
         query: Query {
-            description: "Version of previous example
-that hangs because it executes quadraticaly.
+            description: "Version of previous example 
+that hangs because it executes quadraticaly. 
 It also splits lists of methods when interleaved by other members",
             query: r#"(program
   (package_declaration (_)@pkg)
-  (class_declaration
+  (class_declaration 
     (modifiers "public")
     name: (_) @name
     body: (_
       (method_declaration
         (modifiers
-          (marker_annotation
+          (marker_annotation 
             name: (_)@_anot (#eq? @_anot "Test")
           )
         )
@@ -243,8 +239,8 @@ It also splits lists of methods when interleaved by other members",
             description: "",
             query: r#"(program
   (package_declaration (_)@pkg)
-  (import_declaration
-    (scoped_absolute_identifier
+  (import_declaration 
+    (scoped_absolute_identifier 
       name: (_)@name (#eq? @name "Test")
     )
   )@imp

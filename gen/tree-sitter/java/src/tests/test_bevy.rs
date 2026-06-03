@@ -1,5 +1,7 @@
-use std::io::{Write, stdout};
-use std::str::from_utf8;
+use std::{
+    io::{Write, stdout},
+    str::from_utf8,
+};
 
 use hyperast::tree_gen::utils_ts::tree_sitter_parse;
 

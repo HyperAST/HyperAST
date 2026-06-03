@@ -1,17 +1,22 @@
+use std::{
+    collections::{hash_map, HashMap},
+    ops::Range,
+};
+
+use crate::app::code_editor::generic_text_buffer::byte_index_from_char_index;
 use egui::Id;
+use egui_addon::{
+    egui_utils::{highlight_byte_range, radio_collapsing, show_wip},
+    interactive_split::interactive_splitter::InteractiveSplitter,
+};
 use poll_promise::Promise;
-use std::collections::hash_map;
-use std::ops::Range;
 
-use egui_addon::InteractiveSplitter;
-use egui_addon::egui_utils::highlight_byte_range;
-
-use super::code_editor::generic_text_buffer::byte_index_from_char_index;
-use super::show_repo_menu;
-use super::types::ComputeConfigTracking;
-use super::types::{CodeRange, Commit, FileIdentifier, SelectedConfig};
-use super::utils_egui::MyUiExt as _;
-use crate::utils_poll::{Accumulable, Buffered, Resource};
+use super::{
+    show_repo_menu,
+    types::{self, CodeRange, Commit, Resource},
+    utils_egui::MyUiExt as _,
+    utils_poll::{self, Accumulable, Buffered},
+};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct FetchedFile {
@@ -19,29 +24,9 @@ pub struct FetchedFile {
     pub line_breaks: Vec<usize>,
 }
 
-pub(crate) type FetchedFiles =
-    std::collections::HashMap<FileIdentifier, super::code_tracking::RemoteFile>;
-
-pub(crate) fn try_fetch_remote_file<R>(
-    file_result: &std::collections::hash_map::Entry<'_, FileIdentifier, RemoteFile>,
-    mut f: impl FnMut(&FetchedFile) -> R,
-) -> Option<Result<R, String>> {
-    let std::collections::hash_map::Entry::Occupied(promise) = file_result else {
-        return None;
-    };
-    let promise = promise.get();
-    let result = promise.ready()?;
-    match result {
-        Ok(resource) => {
-            let text = resource.content.as_ref()?;
-            Some(Ok(f(text)))
-        }
-        Err(error) => Some(Err(error.to_string())),
-    }
-}
-
 impl Resource<FetchedFile> {
     pub(super) fn from_response(_ctx: &egui::Context, response: ehttp::Response) -> Self {
+        // wasm_rs_dbg::dbg!(&response);
         let _content_type = response.content_type().unwrap_or_default();
         // let image = if content_type.starts_with("image/") {
         //     RetainedImage::from_image_bytes(&response.url, &response.bytes).ok()
@@ -73,12 +58,12 @@ impl Resource<FetchedFile> {
     }
 }
 
-pub(super) type RemoteFile = crate::utils_poll::Remote<FetchedFile>;
+pub(super) type RemoteFile = Promise<ehttp::Result<Resource<FetchedFile>>>;
 
 pub(super) fn remote_fetch_file(
     ctx: &egui::Context,
     api_addr: &str,
-    commit: &Commit,
+    commit: &types::Commit,
     file_path: &str,
 ) -> RemoteFile {
     let ctx = ctx.clone();
@@ -88,6 +73,7 @@ pub(super) fn remote_fetch_file(
         api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &file_path,
     );
 
+    wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
     // request
     //     .headers
@@ -102,7 +88,7 @@ pub(super) fn remote_fetch_file(
     promise
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TrackingResult {
     pub compute_time: f64,
     pub commits_processed: usize,
@@ -216,12 +202,14 @@ pub(super) fn track(
         )
     };
 
+    // wasm_rs_dbg::dbg!(&url);
     let request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
 
     ehttp::fetch(request, move |response| {
+        // wasm_rs_dbg::dbg!(&response);
         ctx.request_repaint(); // wake up UI thread
         let resource =
             response.and_then(|response| Resource::<TrackingResult>::from_response(&ctx, response));
@@ -235,6 +223,9 @@ impl Resource<TrackingResult> {
         _ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
+        // wasm_rs_dbg::dbg!(&response);
+        // let content_type = response.content_type().unwrap_or_default();
+
         let text = response.text();
         let text = text.ok_or("")?;
 
@@ -243,6 +234,7 @@ impl Resource<TrackingResult> {
         } else {
             return Err(text.into());
         };
+        // wasm_rs_dbg::dbg!(&text);
 
         Ok(Self {
             response,
@@ -256,6 +248,7 @@ impl Resource<TrackingResultWithChanges> {
         _ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
+        // wasm_rs_dbg::dbg!(&response);
         // let content_type = response.content_type().unwrap_or_default();
 
         let text = response.text();
@@ -266,6 +259,7 @@ impl Resource<TrackingResultWithChanges> {
         } else {
             return Err(text.into());
         };
+        // wasm_rs_dbg::dbg!(&text);
 
         Ok(Self {
             response,
@@ -274,16 +268,16 @@ impl Resource<TrackingResultWithChanges> {
     }
 }
 
-pub(crate) const WANTED: SelectedConfig = SelectedConfig::Tracking;
+pub(crate) const WANTED: types::SelectedConfig = types::SelectedConfig::Tracking;
 
 pub(crate) fn show_config(
     ui: &mut egui::Ui,
-    tracking: &mut ComputeConfigTracking,
+    tracking: &mut types::ComputeConfigTracking,
     tracking_result: &mut Buffered<Result<Resource<TrackingResult>, String>>,
 ) {
     let repo_changed = show_repo_menu(ui, &mut tracking.target.file.commit.repo);
-    let old = tracking.target.file.commit.id;
-    let commit_te = egui::TextEdit::singleline(&mut tracking.target.file.commit.id.tb())
+    let old = tracking.target.file.commit.id.clone();
+    let commit_te = egui::TextEdit::singleline(&mut tracking.target.file.commit.id)
         .clip_text(true)
         .desired_width(150.0)
         .desired_rows(1)
@@ -314,9 +308,9 @@ pub(crate) fn show_config(
 pub(super) fn show_code_tracking_results(
     ui: &mut egui::Ui,
     api_addr: &str,
-    tracking: &mut ComputeConfigTracking,
-    tracking_result: &mut Buffered<RemoteResult>,
-    fetched_files: &mut FetchedFiles,
+    tracking: &mut types::ComputeConfigTracking,
+    tracking_result: &mut utils_poll::Buffered<RemoteResult>,
+    fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
     ctx: &egui::Context,
 ) {
     let result_changed = tracking_result.try_poll();
@@ -359,7 +353,14 @@ pub(super) fn show_code_tracking_results(
                     //     }
                     // });
                     if result_changed {
+                        // wasm_rs_dbg::dbg!(
+                        //     aa.content_size,
+                        //     aa.state.offset.y,
+                        //     aa.inner_rect.height(),
+                        //     rect.top(),
+                        // );
                         pos_ratio = Some((rect.top() - aa.state.offset.y) / aa.inner_rect.height());
+                        // wasm_rs_dbg::dbg!(pos_ratio);
                     }
                 }
                 if !aa.inner.response.is_pointer_button_down_on() {
@@ -372,6 +373,7 @@ pub(super) fn show_code_tracking_results(
                             end: byte_index_from_char_index(s, r.end),
                         };
                         if tracking.target.range != Some(r.clone()) {
+                            // wasm_rs_dbg::dbg!(&r);
                             tracking.target.range = Some(r);
                             tracking_result.buffer(track(
                                 ctx,
@@ -426,7 +428,7 @@ pub(super) fn show_code_tracking_results(
                                         highlight_byte_range(ui, &aa.inner, selected_node, color);
                                     aa.inner.response.context_menu(|ui| {
                                         if ui.button("Close the menu").clicked() {
-                                            ui.close();
+                                            ui.close_menu();
                                         }
                                     });
                                     let b = ctx.memory_mut(|mem| {
@@ -435,6 +437,8 @@ pub(super) fn show_code_tracking_results(
                                             .map(|x| x.unwrap_or(0.5))
                                     });
                                     if result_changed || b.is_some() {
+                                        // wasm_rs_dbg::dbg!(result_changed);
+                                        // wasm_rs_dbg::dbg!(pos_ratio);
                                         if b.is_some() {
                                             ctx.memory_mut(|mem| {
                                                 mem.data
@@ -442,6 +446,12 @@ pub(super) fn show_code_tracking_results(
                                             });
                                         }
 
+                                        // wasm_rs_dbg::dbg!(
+                                        //     aa.content_size,
+                                        //     aa.state.offset.y,
+                                        //     aa.inner_rect.height(),
+                                        //     rect.top(),
+                                        // );
                                         let pos_ratio = pos_ratio.unwrap_or(b.unwrap_or(0.5));
                                         let qq = pos_ratio * aa.inner_rect.height();
                                         aa.state.offset.y = rect.top() - qq;
@@ -451,10 +461,14 @@ pub(super) fn show_code_tracking_results(
                             }
                         }
                     } else {
+                        // wasm_rs_dbg::dbg!(&track_result);
                     }
                 }
-                Some(Err(_err)) => {}
+                Some(Err(_err)) => {
+                    // wasm_rs_dbg::dbg!(err);
+                }
                 None => {
+                    // wasm_rs_dbg::dbg!();
                     // *track_result = Some(code_tracking::track(
                     //     ctx,
                     //     &tracking.target.file.commit,

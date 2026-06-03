@@ -1,7 +1,9 @@
-use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
-use std::ops::Index;
-use std::str::Utf8Error;
+use std::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    ops::Index,
+    str::Utf8Error,
+};
 
 use num::ToPrimitive;
 use string_interner::{Symbol, symbol::SymbolU16};
@@ -16,7 +18,7 @@ pub trait MySerializePar {
     type Error: Error;
 
     /// Serialize a sequence element.
-    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: MySerialize + Keyed<usize>;
 
@@ -31,9 +33,9 @@ pub trait MySerializeSco {
     type Error: Error;
 
     /// Serialize a sequence element.
-    fn serialize_object<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_object<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: ?Sized + MySerialize + Keyed<usize>;
+        T: MySerialize + Keyed<usize>;
 
     /// Finish serializing a sequence.
     fn end(self, s: &str) -> Result<Self::Ok, Self::Error>;
@@ -70,9 +72,9 @@ pub trait MySerializer: Sized {
     type SerializePar: MySerializePar<Ok = Self::Ok, Error = Self::Error>;
     type SerializeSco: MySerializeSco<Ok = Self::Ok, Error = Self::Error>;
 
-    fn collect_str<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn collect_str<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: ?Sized + Display;
+        T: Display;
 
     fn serialize_par(self, len: Option<usize>) -> Result<Self::SerializePar, Self::Error>;
 
@@ -198,7 +200,7 @@ impl<H: VaryHasher<u8>> CachedHasher<'static, usize, u8, H> {
     }
 }
 
-impl<H: VaryHasher<u16>> CachedHasher<'_, usize, u16, H> {
+impl<'a, H: VaryHasher<u16>> CachedHasher<'a, usize, u16, H> {
     pub fn once<T: MySerialize + Keyed<usize>>(x: T) -> Vec<u16> {
         let mut table = Default::default();
         let s = CachedHasher::<usize, u16, H> {
@@ -242,9 +244,9 @@ impl<'a, H: 'a + VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H>
         })
     }
 
-    fn collect_str<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn collect_str<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: ?Sized + Display,
+        T: Display,
     {
         let mut h = H::new(0);
         h.write(value.to_string().as_bytes());
@@ -279,9 +281,9 @@ impl<'a, H: 'a + VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, 
         })
     }
 
-    fn collect_str<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn collect_str<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: ?Sized + Display,
+        T: Display,
     {
         let mut h = H::new(0);
         h.write(value.to_string().as_bytes());
@@ -297,14 +299,14 @@ pub struct CachedHasherAux<'a, I, S, H: VaryHasher<S>> {
     _phantom: PhantomData<*const S>,
 }
 
-impl<H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'_, usize, u8, H> {
+impl<'a, H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'a, usize, u8, H> {
     type Ok = SymbolU16;
 
     type Error = CachedHasherError;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: ?Sized + MySerialize + Keyed<usize>,
+        T: MySerialize + Keyed<usize>,
     {
         let x = value.serialize(CachedHasher::<_, _, H> {
             index: value.key(),
@@ -327,14 +329,14 @@ impl<H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'_, usize, u8, H> {
     }
 }
 
-impl<H: VaryHasher<u16>> MySerializePar for CachedHasherAux<'_, usize, u16, H> {
+impl<'a, H: VaryHasher<u16>> MySerializePar for CachedHasherAux<'a, usize, u16, H> {
     type Ok = SymbolU16;
 
     type Error = CachedHasherError;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: ?Sized + MySerialize + Keyed<usize>,
+        T: MySerialize + Keyed<usize>,
     {
         let x = value.serialize(CachedHasher::<_, _, H> {
             index: value.key(),
@@ -356,14 +358,14 @@ impl<H: VaryHasher<u16>> MySerializePar for CachedHasherAux<'_, usize, u16, H> {
         }
     }
 }
-impl<H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'_, usize, u8, H> {
+impl<'a, H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'a, usize, u8, H> {
     type Ok = SymbolU16;
 
     type Error = CachedHasherError;
 
-    fn serialize_object<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_object<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: ?Sized + MySerialize + Keyed<usize>,
+        T: MySerialize + Keyed<usize>,
     {
         let x = value.serialize(CachedHasher::<_, _, H> {
             index: value.key(),
@@ -384,14 +386,14 @@ impl<H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'_, usize, u8, H> {
         Ok(self.table.insert(self.index, self.acc))
     }
 }
-impl<H: VaryHasher<u16>> MySerializeSco for CachedHasherAux<'_, usize, u16, H> {
+impl<'a, H: VaryHasher<u16>> MySerializeSco for CachedHasherAux<'a, usize, u16, H> {
     type Ok = SymbolU16;
 
     type Error = CachedHasherError;
 
-    fn serialize_object<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_object<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: ?Sized + MySerialize + Keyed<usize>,
+        T: MySerialize + Keyed<usize>,
     {
         let x = value.serialize(CachedHasher::<_, _, H> {
             index: value.key(),

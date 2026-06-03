@@ -42,6 +42,52 @@ impl<T: PrimInt + Display> Display for RowCol<T> {
     }
 }
 
+// use super::spaces_related::{SealedFileTopDownPosBuilder, TopDownPosBuilder};
+
+// impl<IdN, Idx: PrimInt, IdO: PrimInt + Default>
+//     TopDownPosBuilder<IdN, Idx, IdO, NoSpacePrepareParams<Idx>> for Position<PathBuf, IdO>
+// {
+//     type Prepared = Position<PathBuf, IdO>;
+
+//     type SealedFile = Position<PathBuf, IdO>;
+
+//     fn seal_path(mut self, file_name: &str) -> Self::SealedFile {
+//         self.file.push(file_name);
+//         self
+//     }
+
+//     fn seal_without_path(self) -> Self::SealedFile {
+//         self
+//     }
+
+//     fn push(&mut self, _parent: IdN, _offset: Idx, dir_name: &str, _additional: ()) {
+//         self.file.push(dir_name);
+//     }
+
+//     fn finish(self, _node: IdN) -> Self::Prepared {
+//         todo!("how exactly should directories be handled")
+//     }
+// }
+// impl<IdN, Idx: PrimInt, IdO: PrimInt>
+//     SealedFileTopDownPosBuilder<IdN, Idx, IdO, NoSpacePrepareParams<Idx>>
+//     for Position<PathBuf, IdO>
+// {
+//     type Prepared = Position<PathBuf, IdO>;
+
+//     fn push(&mut self, _parent: IdN, _idx: Idx, offset: IdO, (_no_s_idx,): (Idx,)) {
+//         self.offset += offset;
+//     }
+
+//     fn finish(self, _node: IdN, len: Idx, _additional: ()) -> Self::Prepared {
+//         assert_eq!(self.len, num::zero());
+//         let len = num::cast(len).unwrap();
+//         Self::Prepared {
+//             file: self.file,
+//             offset: self.offset,
+//             len,
+//         }
+//     }
+// }
 mod impl_receivers {
     use super::super::building;
     use crate::PrimInt;

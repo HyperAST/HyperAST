@@ -85,21 +85,21 @@
 //!
 //! ```
 
-use crate::compat::hash_map;
+use std::{
+    alloc::{Layout, alloc, dealloc},
+    any::TypeId,
+    collections::HashMap,
+    hash::{BuildHasher, BuildHasherDefault, Hasher},
+    ptr::NonNull,
+};
 
-use hash_map::DefaultHashBuilder;
-use hash_map::HashMap;
-
-use std::alloc::{Layout, alloc, dealloc};
-use std::any::TypeId;
-use std::hash::{BuildHasher, BuildHasherDefault, Hasher};
-use std::ptr::NonNull;
-
-use legion::Entity;
-use legion::query::{FilterResult, LayoutFilter};
-use legion::storage::{
-    ArchetypeSource, ArchetypeWriter, ComponentSource, ComponentTypeId, EntityLayout,
-    UnknownComponentStorage,
+use legion::{
+    Entity,
+    query::{FilterResult, LayoutFilter},
+    storage::{
+        ArchetypeSource, ArchetypeWriter, ComponentSource, ComponentTypeId, EntityLayout,
+        UnknownComponentStorage,
+    },
 };
 
 use super::*;
@@ -115,29 +115,15 @@ impl Debug for BuiltEntity {
     }
 }
 
+#[derive(Default)]
 pub struct EntityBuilder {
     inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
 }
 
 impl EntityBuilder {
-    pub(crate) fn new() -> Self {
-        Self {
-            inner: Default::default(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
-    // adds a language marker to the subtree (in first position in the layout)
-    // enables faster and more predictable component accesses when dealing with polyglot ASTs.
-    #[doc(hidden)]
-    pub fn with_lang<L: Component>(l: L) -> Self {
-        assert_eq!(size_of::<L>(), 0);
-        let mut s = Self {
-            inner: Default::default(),
-        };
-        use super::super::EntityBuilder;
-        s.add(l);
-        s
-    }
-
     pub fn build(self) -> BuiltEntity {
         BuiltEntity { inner: self.inner }
     }
@@ -217,7 +203,7 @@ impl ArchetypeSource for BuiltEntity {
 
         for (tid, _offset, meta) in &self.inner.inner.info {
             unsafe {
-                layout.register_component_raw(tid.id(), *meta);
+                layout.register_component_raw(tid.id(), meta.clone());
             }
         }
 
@@ -226,9 +212,9 @@ impl ArchetypeSource for BuiltEntity {
 }
 
 impl ComponentSource for BuiltEntity {
-    fn push_components(
+    fn push_components<'a>(
         &mut self,
-        writer: &mut ArchetypeWriter<'_>,
+        writer: &mut ArchetypeWriter<'a>,
         mut entities: impl Iterator<Item = Entity>,
     ) {
         let entity = entities.next().unwrap();
@@ -328,9 +314,6 @@ impl Hasher for TypeIdHasher {
 /// faster no-op hash.
 pub(crate) type TypeIdMap<V> = HashMap<TypeId, V, BuildHasherDefault<TypeIdHasher>>;
 
-/// Associated vacant entry
-type VacantEntry<'a> = hash_map::VacantEntry<'a, TypeId, usize, BuildHasherDefault<TypeIdHasher>>;
-
 /// Metadata required to store a component.
 ///
 /// All told, this means a [`TypeId`], to be able to dynamically name/check the component type; a
@@ -421,7 +404,7 @@ impl<M> Common<M> {
         self.indices.contains_key(&TypeId::of::<T>())
     }
 
-    fn get_by_tid<T>(&self, tid: &TypeId) -> Option<T> {
+    fn get_by_tid<'a, T>(&'a self, tid: &TypeId) -> Option<T> {
         let index = self.indices.get(tid)?;
         let (_, offset, _) = self.inner.info[*index];
         unsafe {
@@ -466,7 +449,7 @@ impl<M> Common<M> {
     }
 
     unsafe fn add(&mut self, ptr: *mut u8, ty: TypeInfo, meta: M) {
-        use hash_map::Entry;
+        use std::collections::hash_map::Entry;
         match self.indices.entry(ty.id().type_id()) {
             Entry::Occupied(occupied) => {
                 let index = *occupied.get();
@@ -482,7 +465,7 @@ impl<M> Common<M> {
                 }
             }
             Entry::Vacant(vacant) => {
-                unsafe { self.inner.push(ty, ptr, vacant, meta) };
+                unsafe { self.inner.fun_name(ty, ptr, vacant, meta) };
             }
         }
     }
@@ -501,7 +484,13 @@ impl<M> CommonInner<M> {
         (new_storage, layout)
     }
 
-    unsafe fn push(&mut self, ty: TypeInfo, ptr: *mut u8, vacant: VacantEntry, meta: M) {
+    unsafe fn fun_name(
+        &mut self,
+        ty: TypeInfo,
+        ptr: *mut u8,
+        vacant: std::collections::hash_map::VacantEntry<'_, TypeId, usize>,
+        meta: M,
+    ) {
         let offset = align(self.cursor, ty.layout().align());
         let end = offset + ty.layout().size();
         if end > self.layout.size() || ty.layout().align() > self.layout.align() {
@@ -515,13 +504,21 @@ impl<M> CommonInner<M> {
             self.layout = new_layout;
         }
 
-        // if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-        //     let aaa = ptr as *mut (Vec<usize>,);
-        //     dbg!(unsafe { aaa.as_ref() });
-        //     // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
-        //     // dbg!(&v);
-        //     // std::mem::forget(v);
-        // }
+        if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
+            let aaa = ptr as *mut (Vec<usize>,);
+            dbg!(unsafe { aaa.as_ref() });
+            // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
+            // dbg!(&v);
+            // std::mem::forget(v);
+        }
+
+        if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
+            let aaa = ptr as *mut (Box<[u32]>,);
+            dbg!(unsafe { aaa.as_ref() });
+            // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
+            // dbg!(&v);
+            // std::mem::forget(v);
+        }
 
         let addr = unsafe { self.storage.as_ptr().add(offset) };
         unsafe { std::ptr::copy_nonoverlapping(ptr, addr, ty.layout().size()) };
@@ -529,6 +526,14 @@ impl<M> CommonInner<M> {
         vacant.insert(self.info.len());
         self.info.push((ty, offset, meta));
         self.cursor = end;
+
+        if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
+            let aaa = ptr as *mut (Box<[u32]>,);
+            dbg!(unsafe { aaa.as_ref() });
+            // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
+            // dbg!(&v);
+            // std::mem::forget(v);
+        }
     }
 }
 fn align(x: usize, alignment: usize) -> usize {

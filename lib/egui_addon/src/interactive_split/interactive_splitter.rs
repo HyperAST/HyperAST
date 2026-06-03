@@ -63,7 +63,6 @@ impl InteractiveSplitter {
         self.show_dyn(ui, Box::new(add_contents))
     }
 
-    #[expect(clippy::type_complexity)]
     pub fn show_dyn<'c, R>(
         self,
         ui: &mut Ui,
@@ -158,7 +157,7 @@ impl InteractiveSplitter {
                 let we_are_on_top = ui
                     .ctx()
                     .layer_id_at(pointer)
-                    .is_none_or(|top_layer_id| top_layer_id == ui.layer_id());
+                    .map_or(true, |top_layer_id| top_layer_id == ui.layer_id());
                 let mouse_over_resize_line = we_are_on_top
                     && second_rect.y_range().contains(pointer.y)
                     && (line_pos_1.x - pointer.x).abs()
@@ -210,8 +209,8 @@ impl InteractiveSplitter {
         //     ui.set_min_width(*width_range.start());
         //     add_contents(ui)
         // });
-        // let frame = frame.unwrap_or_else(|| Frame::side_top_panel(ui.style()));
-        let frame = Frame::side_top_panel(ui.style());
+        let frame = None;
+        let frame = frame.unwrap_or_else(|| Frame::side_top_panel(ui.style()));
         let inner_response = frame.show(&mut first_ui, |first_ui| {
             // ui1.set_widthmin_height(ui1.max_rect().height()); // Make sure the frame fills the full height
             // ui1.set_min_width(*width_range.start());

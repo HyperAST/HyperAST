@@ -38,7 +38,7 @@ impl Mean {
         self.sum += x;
     }
 }
-impl Serialize for Mean {
+impl<'de> Serialize for Mean {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

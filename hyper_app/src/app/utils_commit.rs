@@ -1,5 +1,5 @@
 use super::types::Commit;
-use egui_addon::code_editor::generic_text_buffer::byte_index_from_char_index;
+use egui_addon::code_editor::{self, generic_text_buffer::byte_index_from_char_index};
 use lazy_static::lazy_static;
 use std::{ops::Range, sync::Arc};
 
@@ -118,7 +118,7 @@ impl<Value, Computer> BorrowFrameCache<Value, Computer> {
         Key: std::hash::Hash,
     {
         let hash = egui::util::hash(&key);
-        self.cache.remove(&hash).map(|x| x.1)
+        self.cache.remove(&hash).map(|x|x.1)
     }
 }
 
@@ -136,13 +136,29 @@ impl egui::util::cache::ComputerMut<(&str, &Commit), String> for ComputeCommitSt
     }
 }
 
+#[derive(Hash)]
+struct AAA {}
+
+#[derive(Default)]
+pub struct ComputeCommitStr2 {
+    // map:
+}
+
+impl egui::util::cache::ComputerMut<(&str, &Commit, &AAA), String> for ComputeCommitStr2 {
+    fn compute(&mut self, (forge, commit, _): (&str, &Commit, &AAA)) -> String {
+        format!(
+            "{}/{}/{}/{}",
+            forge, commit.repo.user, commit.repo.name, commit.id
+        )
+    }
+}
+
 pub struct CommitTextBuffer<'a, 'b, 'c> {
     pub(crate) commit: &'a mut Commit,
     pub(crate) forge: String,
     pub(crate) str: &'b mut std::sync::MutexGuard<'c, BorrowFrameCache<String, ComputeCommitStr>>,
 }
 
-#[allow(unused)] // TODO use it
 impl<'a, 'b, 'c> CommitTextBuffer<'a, 'b, 'c> {
     pub(crate) fn new(
         commit: &'a mut Commit,
@@ -168,19 +184,21 @@ impl<'a, 'b, 'c> super::code_editor::generic_text_buffer::TextBuffer
     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
         // Get the byte index from the character index
         let byte_idx = self.byte_index_from_char_index(char_index);
-        if let Some(text) = text.strip_prefix("https://") {
+        if text.starts_with("https://") {
+            let text = &text["https://".len()..];
             let split: Vec<_> = text.split("/").collect();
             if split[0] != "github.com" {
                 // TODO launch an alert
-                log::warn!("only github.com is provided");
+                // wasm_rs_dbg::dbg!("only github.com is allowed");
                 return 0;
             }
             if split.len() == 5 {
                 self.commit.repo.user = split[1].to_string();
                 self.commit.repo.name = split[2].to_string();
                 assert_eq!("commit", split[3].to_string());
-                self.commit.id = split[4].parse().unwrap();
+                self.commit.id = split[4].to_string();
             }
+            // wasm_rs_dbg::dbg!(&self.commit);
             self.str.get((&self.forge, &self.commit));
             return text.chars().count();
         }
@@ -191,12 +209,12 @@ impl<'a, 'b, 'c> super::code_editor::generic_text_buffer::TextBuffer
         let split: Vec<_> = t.split("/").collect();
         if split[0] != "github.com" {
             // TODO launch an alert
-            log::warn!("only github.com is provided");
+            // wasm_rs_dbg::dbg!("only github.com is allowed");
             return 0;
         }
         self.commit.repo.user = split[1].to_string();
         self.commit.repo.name = split[2].to_string();
-        self.commit.id = split[3].parse().unwrap();
+        self.commit.id = split[3].to_string();
 
         self.str.get((&self.forge, &self.commit));
 
@@ -219,19 +237,22 @@ impl<'a, 'b, 'c> super::code_editor::generic_text_buffer::TextBuffer
     fn replace_range(&mut self, text: &str, char_range: Range<usize>) -> usize {
         // Get the byte index from the character index
         let byte_idx = self.byte_index_from_char_index(char_range.start);
-        if let Some(text) = text.strip_prefix("https://") {
+        if text.starts_with("https://") {
+            let text = &text["https://".len()..];
             let split: Vec<_> = text.split("/").collect();
             if split[0] != "github.com" {
                 // TODO launch an alert
-                log::warn!("only github.com is provided");
+                // wasm_rs_dbg::dbg!(&split[0]);
+                // wasm_rs_dbg::dbg!("only github.com is allowed");
                 return 0;
             }
             if split.len() == 5 {
                 self.commit.repo.user = split[1].to_string();
                 self.commit.repo.name = split[2].to_string();
                 assert_eq!("commit", split[3].to_string());
-                self.commit.id = split[4].parse().unwrap();
+                self.commit.id = split[4].to_string();
             }
+            // wasm_rs_dbg::dbg!(&split, &self.commit);
             self.str.get((&self.forge, &self.commit));
             return text.chars().count();
         }
@@ -246,12 +267,12 @@ impl<'a, 'b, 'c> super::code_editor::generic_text_buffer::TextBuffer
         let split: Vec<_> = text.split("/").collect();
         if split[0] != "github.com" {
             // TODO launch an alert
-            log::warn!("only github.com is provided");
+            // wasm_rs_dbg::dbg!("only github.com is allowed");
             return 0;
         }
         self.commit.repo.user = split[1].to_string();
         self.commit.repo.name = split[2].to_string();
-        self.commit.id = split[3].parse().unwrap();
+        self.commit.id = split[3].to_string();
 
         self.str.get((&self.forge, &self.commit));
 
@@ -271,39 +292,39 @@ impl<'a, 'b, 'c> super::code_editor::generic_text_buffer::TextBuffer
     }
 }
 
-impl Commit {
-    pub fn show_clickable(&self, ui: &mut egui::Ui) -> (egui::Response, egui::Response) {
-        let show_repo = |ui: &mut egui::Ui| {
-            ui.button(&self.repo.user) | ui.label("/") | ui.button(&self.repo.name) | ui.label("/")
-        };
-        let (resp_repo, resp_commit) = ui
-            .horizontal_wrapped(|ui| (show_repo(ui), ui.button(self.id.as_str())))
-            .inner;
-        let resp_repo = resp_repo.interact(egui::Sense::click());
-        let resp_commit = resp_commit.interact(egui::Sense::click());
-        (resp_repo, resp_commit)
-    }
+pub(crate) fn show_commit_menu(ui: &mut egui::Ui, commit: &mut Commit) -> bool {
+    let mut mutex_guard = COMMIT_STRS.lock().unwrap();
+    let mut c = CommitTextBuffer::new(commit, "github.com".to_string(), &mut mutex_guard);
+    let ml = code_editor::generic_text_edit::TextEdit::multiline(&mut c)
+        // .margin(egui::Vec2::new(0.0, 0.0))
+        // .desired_width(40.0)
+        .id(ui.id().with("commit entry"))
+        .show(ui);
+
+    ml.response.changed()
 }
-pub(crate) fn project_modal_handler<'a>(
-    pid: super::ProjectId,
-    projects: &'a mut super::SelectedProjects,
-    commit: Option<&Commit>,
-) -> Result<(&'a mut super::Repo, super::CommitSlice<'a>), super::ProjectId> {
-    use super::ProjectId;
-    if pid == ProjectId::INVALID {
-        let Some(commit) = commit else {
-            return Err(pid);
-        };
-        return Err(projects.find(&commit.repo).unwrap_or(ProjectId::INVALID));
-    }
-    let Some((repo, commits)) = projects.get_mut(pid) else {
-        return Err(ProjectId::INVALID);
-    };
-    let Some(commit) = commit else {
-        return Err(pid);
-    };
-    if &commit.repo == repo {
-        return Err(pid);
-    }
-    Ok((repo, commits))
+
+pub(crate) fn show_commit_menu2(ui: &mut egui::Ui, commit: &mut Commit) -> bool {
+    let c = ui.ctx().memory_mut(|mem| {
+        let a = mem
+            .caches
+            .cache::<BorrowFrameCache<String, ComputeCommitStr>>()
+            .get(("github.com", commit));
+    });
+    let c = ui.ctx().memory_mut(|mem| {
+        let aaa =AAA{};
+        let a = mem
+            .caches
+            .cache::<BorrowFrameCache<String, ComputeCommitStr2>>()
+            .get(("github.com", commit, &aaa));
+    });
+    let mut mutex_guard = COMMIT_STRS.lock().unwrap();
+    let mut c = CommitTextBuffer::new(commit, "github.com".to_string(), &mut mutex_guard);
+    let ml = code_editor::generic_text_edit::TextEdit::multiline(&mut c)
+        // .margin(egui::Vec2::new(0.0, 0.0))
+        // .desired_width(40.0)
+        .id(ui.id().with("commit entry"))
+        .show(ui);
+
+    ml.response.changed()
 }

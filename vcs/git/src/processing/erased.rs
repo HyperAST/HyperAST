@@ -31,7 +31,7 @@ impl<T: CommitProcExt> PartialEq for ParametrizedCommitProcessor2Handle<T> {
 
 impl<T: CommitProcExt> Clone for ParametrizedCommitProcessor2Handle<T> {
     fn clone(&self) -> Self {
-        *self
+        Self(self.0.clone(), self.1.clone())
     }
 }
 impl<T: CommitProcExt> Copy for ParametrizedCommitProcessor2Handle<T> {}

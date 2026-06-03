@@ -1,19 +1,24 @@
-use std::collections::{HashMap, HashSet};
-use std::iter::Peekable;
-use std::path::{Components, PathBuf};
-use std::time::{Duration, Instant};
-use std::{todo, usize};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::Peekable,
+    path::{Components, PathBuf},
+    time::{Duration, Instant},
+    todo, usize,
+};
 
 use git2::{Oid, Repository};
+use hyperast::{
+    store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
+    types::{AnyType, Childrn, LabelStore as _, WithChildren},
+    utils::memusage,
+};
 use log::info;
 
-use hyperast::store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier};
-use hyperast::types::{AnyType, Childrn, LabelStore as _, WithChildren};
-use hyperast::utils::memusage;
-
-use crate::git::{all_commits_between, all_first_parents_between, retrieve_commit};
-use crate::processing::{ConfiguredRepo2, file_sys};
-use crate::{Commit, DefaultMetrics};
+use crate::{
+    Commit, DefaultMetrics,
+    git::{all_commits_between, all_first_parents_between, retrieve_commit},
+    processing::{ConfiguredRepo2, file_sys},
+};
 
 /// Preprocess a git repository
 /// using the hyperAST and caching git object transformations
@@ -254,8 +259,8 @@ impl PreProcessedRepository {
                     dir_path,
                     oid,
                 );
-                processing_ordered_commits.push(oid);
-                self.commits.insert(oid, c);
+                processing_ordered_commits.push(oid.clone());
+                self.commits.insert(oid.clone(), c);
             });
         processing_ordered_commits
     }
@@ -363,8 +368,8 @@ impl PreProcessedRepository {
                 dir_path,
                 oid,
             );
-            processing_ordered_commits.push(oid);
-            self.commits.insert(oid, c);
+            processing_ordered_commits.push(oid.clone());
+            self.commits.insert(oid.clone(), c);
         });
         processing_ordered_commits
     }
@@ -393,8 +398,8 @@ impl PreProcessedRepository {
                 dir_path,
                 oid,
             );
-            processing_ordered_commits.push(oid);
-            self.commits.insert(oid, c);
+            processing_ordered_commits.push(oid.clone());
+            self.commits.insert(oid.clone(), c);
         });
         processing_ordered_commits
     }
@@ -412,7 +417,7 @@ impl PreProcessedRepository {
             dir_path,
             oid,
         );
-        self.commits.insert(oid, c);
+        self.commits.insert(oid.clone(), c);
         oid
     }
 }
@@ -456,8 +461,8 @@ impl PreProcessedRepository {
                     dir_path,
                     oid,
                 );
-                processing_ordered_commits.push(oid);
-                self.commits.insert(oid, c);
+                processing_ordered_commits.push(oid.clone());
+                self.commits.insert(oid.clone(), c);
             });
         processing_ordered_commits
     }
@@ -503,8 +508,8 @@ impl PreProcessedRepository {
                     dir_path,
                     oid,
                 );
-                processing_ordered_commits.push(oid);
-                self.commits.insert(oid, c);
+                processing_ordered_commits.push(oid.clone());
+                self.commits.insert(oid.clone(), c);
             });
         processing_ordered_commits
     }
@@ -524,7 +529,7 @@ impl PreProcessedRepository {
             dir_path,
             oid,
         );
-        self.commits.insert(oid, c);
+        self.commits.insert(oid.clone(), c);
         oid
     }
 }
@@ -537,9 +542,9 @@ pub(crate) trait CommitProcessor<Sys> {
     /// In rust to avoid loosing performances you might have to enable link time optimizations (lto).
     ///
     /// RMS: Resursive Module Search
-    fn handle_module<'b, const RMS: bool>(
+    fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        repository: &Repository,
+        repository: &'a Repository,
         dir_path: &'b mut Peekable<Components<'b>>,
         name: &[u8],
         oid: git2::Oid,
@@ -587,7 +592,7 @@ impl CommitBuilder {
         let commit = repository.find_commit(commit_oid).unwrap();
         let tree_oid = commit.tree().unwrap().id();
 
-        let parents = commit.parents().map(|x| x.id()).collect();
+        let parents = commit.parents().into_iter().map(|x| x.id()).collect();
 
         info!("handle commit: {}", commit_oid);
 
@@ -654,21 +659,21 @@ impl<H: IdHolder, T> IdHolder for (H, T) {
 impl IdHolder for NodeIdentifier {
     type Id = NodeIdentifier;
     fn id(&self) -> Self::Id {
-        *self
+        self.clone()
     }
 }
 
 #[cfg(feature = "maven")]
 impl CommitProcessor<file_sys::Maven> for RepositoryProcessor {
     type Module = (NodeIdentifier, crate::maven::MD);
-    fn handle_module<'b, const RMS: bool>(
+    fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        _repository: &Repository,
+        _repository: &'a Repository,
         _dir_path: &'b mut Peekable<Components<'b>>,
         _name: &[u8],
         _oid: git2::Oid,
     ) -> Self::Module {
-        todo!("need to refactor some methods")
+        todo!("need to refactor the some methods")
         // let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
         //     repository,
         //     self,
@@ -686,9 +691,9 @@ impl CommitProcessor<file_sys::Maven> for RepositoryProcessor {
 #[cfg(feature = "java")]
 impl CommitProcessor<file_sys::Java> for RepositoryProcessor {
     type Module = (NodeIdentifier, crate::maven::MD);
-    fn handle_module<'b, const RMS: bool>(
+    fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        _repository: &Repository,
+        _repository: &'a Repository,
         _dir_path: &'b mut Peekable<Components<'b>>,
         _name: &[u8],
         _oid: git2::Oid,
@@ -710,9 +715,9 @@ impl CommitProcessor<file_sys::Java> for RepositoryProcessor {
 #[cfg(feature = "make")]
 impl CommitProcessor<file_sys::Make> for RepositoryProcessor {
     type Module = (NodeIdentifier, crate::make::MD);
-    fn handle_module<'b, const RMS: bool>(
+    fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        _repository: &Repository,
+        _repository: &'a Repository,
         _dir_path: &'b mut Peekable<Components<'b>>,
         _name: &[u8],
         _oid: git2::Oid,
@@ -758,9 +763,9 @@ impl CommitProcessor<file_sys::Make> for RepositoryProcessor {
 #[cfg(feature = "npm")]
 impl CommitProcessor<file_sys::Npm> for RepositoryProcessor {
     type Module = (NodeIdentifier, DefaultMetrics);
-    fn handle_module<'b, const RMS: bool>(
+    fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        _repository: &Repository,
+        _repository: &'a Repository,
         _dir_path: &'b mut Peekable<Components<'b>>,
         _name: &[u8],
         _oid: git2::Oid,
@@ -882,20 +887,20 @@ mod experiments {
     }
 
     impl PreProcessedRepository2 {
-        fn handle_maven_module<'b, const RMS: bool, const FFWD: bool>(
+        fn handle_maven_module<'a, 'b, const RMS: bool, const FFWD: bool>(
             &mut self,
-            repository: &Repository,
+            repository: &'a Repository,
             dir_path: &'b mut Peekable<Components<'b>>,
             name: &[u8],
             oid: git2::Oid,
         ) -> <crate::maven::MavenModuleAcc as Accumulator>::Unlabeled {
-            // processor_factory::ffwd::Maven {
-            //     sources: &middle::MiddleWare { repository },
-            //     maven: &mut self.maven,
-            //     pom: &mut self.pom,
-            //     java: &mut self.java,
-            //     dir_path,
-            // };
+            processor_factory::ffwd::Maven {
+                sources: &middle::MiddleWare { repository },
+                maven: &mut self.maven,
+                pom: &mut self.pom,
+                java: &mut self.java,
+                dir_path,
+            };
             // MavenProcessor::<RMS, FFWD, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
             //     .process()
             todo!()

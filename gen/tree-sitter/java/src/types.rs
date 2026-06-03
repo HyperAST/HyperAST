@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
 use hyperast::tree_gen::{TsEnableTS, TsType};
-use hyperast::types::{AnyType, HyperType, LangRef, TypeTrait, TypedNodeId};
-use hyperast::types::{NodeId, UniformNodeId};
+use hyperast::types::{AAAA, AnyType, HyperType, LangRef, NodeId, TypeTrait, TypedNodeId};
 
 impl TsEnableTS for TStore {
     fn obtain_type<'a, N: hyperast::tree_gen::parser::NodeWithU16TypeId>(
@@ -42,7 +41,7 @@ impl TypeStore for &TStore {
     type Ty = TType;
 }
 
-impl hyperast::types::ETypeStore for TStore {
+impl<'a> hyperast::types::ETypeStore for TStore {
     type Ty2 = Type;
 
     fn intern(ty: Self::Ty2) -> Self::Ty {
@@ -54,21 +53,6 @@ mod impls {
     use super::*;
     use hyperast::types::LangWrapper;
     use hyperast::types::RoleStore;
-
-    // static dynamically initialized once association table from Roles to tree_sitter_java Fields
-    static ROLE2FIELD: std::sync::LazyLock<Box<[u16]>> = std::sync::LazyLock::new(|| {
-        (0..Role::len())
-            .map(|i| {
-                let i = i as u8;
-                let role: Role = unsafe { std::mem::transmute(i) };
-                let field_name = role.to_string();
-                // dbg!(&field_name);
-                crate::language()
-                    .field_id_for_name(field_name)
-                    .map_or(u16::MAX, |x| x.into())
-            })
-            .collect()
-    });
 
     impl RoleStore for TStore {
         type IdF = u16;
@@ -84,12 +68,14 @@ mod impls {
         }
 
         fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
-            let r = ROLE2FIELD[role as usize];
-            assert!(r < u16::MAX, "Role not found");
-            r
+            let field_name = role.to_string();
+            crate::language()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
         }
     }
-    impl JavaEnabledTypeStore for TStore {
+    impl<'a> JavaEnabledTypeStore for TStore {
         fn resolve(t: Self::Ty) -> Type {
             t.e()
         }
@@ -136,7 +122,7 @@ impl Default for TStore {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
-impl<IdN: Clone + Eq + hyperast::types::UniformNodeId> NodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + hyperast::types::AAAA> NodeId for TIdN<IdN> {
     type IdN = IdN;
 
     fn as_id(&self) -> &Self::IdN {
@@ -152,7 +138,7 @@ impl<IdN: Clone + Eq + hyperast::types::UniformNodeId> NodeId for TIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + UniformNodeId> TypedNodeId for TIdN<IdN> {
+impl<IdN: Clone + Eq + AAAA> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
     type TyErazed = TType;
     fn unerase(ty: Self::TyErazed) -> Self::Ty {
@@ -170,7 +156,6 @@ pub struct Lang;
 pub type Java = Lang;
 
 impl hyperast::types::Lang<Type> for Java {
-    const INST: Self = Lang;
     fn make(t: u16) -> &'static Type {
         Lang.make(t)
     }
@@ -193,7 +178,6 @@ impl LangRef<Type> for Java {
             &S_T_L[t as usize]
         }
     }
-
     fn to_u16(&self, t: Type) -> u16 {
         t as u16
     }
@@ -203,9 +187,7 @@ impl LangRef<Type> for Java {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
-        assert!(t != Type::Spaces || t != Type::Directory);
-        debug_assert_eq!(t as u16, id_for_node_kind(t.as_static_str(), t.is_named()));
-        t as u16
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 impl LangRef<AnyType> for Java {
@@ -213,8 +195,7 @@ impl LangRef<AnyType> for Java {
         todo!("{}", t)
     }
     fn to_u16(&self, t: AnyType) -> u16 {
-        let t: &Type = t.as_any().downcast_ref().unwrap();
-        Lang.to_u16(*t)
+        todo!("{}", t)
     }
 
     fn name(&self) -> &'static str {
@@ -222,17 +203,7 @@ impl LangRef<AnyType> for Java {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
-        let t: Type = *t.as_any().downcast_ref().unwrap();
-        assert!(t != Type::Spaces && t != Type::Directory);
-        if cfg!(debug_assertions) && t != Type::Throws_ && t != Type::Permits_ {
-            assert_eq!(
-                Lang.to_u16(t),
-                id_for_node_kind(t.as_static_str(), t.is_named()),
-                "{}",
-                t.as_static_str()
-            );
-        }
-        Lang.to_u16(t)
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -250,39 +221,11 @@ impl LangRef<TType> for Lang {
     }
 
     fn ts_symbol(&self, t: TType) -> u16 {
-        let t: Type = *t.as_any().downcast_ref().unwrap();
-        assert!(t != Type::Spaces || t != Type::Directory);
-        // debug_assert_eq!(
-        //     Lang.to_u16(t),
-        //     id_for_node_kind(t.as_static_str(), t.is_named())
-        // );
-        Lang.to_u16(t)
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
 pub use hyperast::types::Role;
-
-macro_rules! is {
-    ($e:expr, $($p:ident $(if $guard:expr)?, )*) => {
-        match $e {$(
-            Type::$p $(if $guard)? => true,)*
-            _ => false
-        }
-    };
-}
-macro_rules! ty {
-    ($e:expr,
-        $([$g2:expr] => $v2:expr, )*
-        $($p:ident => $v:expr,)*
-        $(_ => $d:expr,)?
-    ) => {
-        match $e {
-            $(_ if $g2 => $v2,)*
-            $(Type::$p => $v,)*
-            $(_ => $d)?
-        }
-    }
-}
 
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
@@ -314,152 +257,132 @@ impl HyperType for Type {
         self.is_supertype()
     }
     fn is_syntax(&self) -> bool {
-        is!(
-            self,
-            LParen, // "(",
-            Amp,    // "&",
-            RParen, // ")",
-            Eq,     // "=",
-            // PlusEq, // "+=",
-            // DashEq, // "-=",
-            // StarEq, // "*=",
-            // SlashEq, // "/=",
-            // AmpEq, // "&=",
-            // PipeEq, // "|=",
-            // CaretEq, // "^=",
-            // PercentEq, // "%=",
-            // LtLtEq, // "<<=",
-            // GtGtEq, // ">>=",
-            // GtGtGtEq, // ">>>=",
-            // GT, // ">",
-            // LT, // "<",
-            // GTEq, // ">=",
-            // LTEq, // "<=",
-            // EqEq, // "==",
-            // BangEq, // "!=",
-            // AmpAmp, // "&&",
-            // PipePipe, // "||",
-            // Plus, // "+",
-            // Dash, // "-",
-            // Star, // "*",
-            // Slash, // "/",
-            // Pipe, // "|",
-            // Caret, // "^",
-            // Percent, // "%",
-            // LtLt, // "<<",
-            // GtGt, // ">>",
-            // GtGtGt, // ">>>",
-            // Instanceof, // "instanceof",
-            // DashGt, // "->",
-            Comma, // ",",
-            QMark, // "?",
-            Colon, // ":",
-            // Bang, // "!",
-            // Tilde, // "~",
-            // PlusPlus, // "++",
-            // DashDash, // "--",
-            // New, // "new",
-            LBracket, // "[",
-            RBracket, // "]",
-            Dot,      // ".",
-            // Class, // "class",
-            ColonColon, // "::",
-            // Extends, // "extends",
-            Switch, // "switch",
-            LBrace, // "{",
-            RBrace, // "}",
-            // Case, // "case",
-            // Default, // "default",
-            SemiColon, // ";",
-            Assert,    // "assert",
-            Do,        // "do",
-            While,     // "while",
-            // Break, // "break",
-            // Continue, // "continue",
-            Return,       // "return",
-            Yield,        // "yield",
-            Synchronized, // "synchronized",
-            Throw,        // "throw",
-            Try,          // "try",
-            // Catch, // "catch",
-            // Finally, // "finally",
-            If, // "if",
-            Else,
-            // "else",
-            // For, // "for",
-            // At, // "@",
-            // Open, // "open",
-            // Module, // "module",
-            // Requires, // "requires",
-            // Exports, // "exports",
-            // To, // "to",
-            // Opens, // "opens",
-            // Uses, // "uses",
-            // Provides, // "provides",
-            // With, // "with",
-            // Transitive, // "transitive",
-            // Static, // "static",
-            // Package, // "package",
-            // Import, // "import",
-            // Enum, // "enum",
-            // Public, // "public",
-            // Protected, // "protected",
-            // Private, // "private",
-            // Abstract, // "abstract",
-            // Final, // "final",
-            // Strictfp, // "strictfp",
-            // Native, // "native",
-            // Transient, // "transient",
-            // Volatile, // "volatile",
-            // Implements, // "implements",
-            // Record, // "record",
-            // TS0, // "@interface",
-            // Interface, // "interface",
-            // Byte, // "byte",
-            // Short, // "short",
-            // Int, // "int",
-            // Long, // "long",
-            // Char, // "char",
-            // Float, // "float",
-            // Double, // "double",
-            // BooleanType, // "boolean_type",
-            // VoidType, // "void_type",
-            // DotDotDot, // "...",
-            // Throws, // "throws",
-            // This, // "this",
-            // Super, // "super",
-        )
+        self == &Type::LParen // "(",
+        || self == &Type::Amp // "&",
+        || self == &Type::RParen // ")",
+        || self == &Type::Eq // "=",
+        // || self == &Type::PlusEq // "+=",
+        // || self == &Type::DashEq // "-=",
+        // || self == &Type::StarEq // "*=",
+        // || self == &Type::SlashEq // "/=",
+        // || self == &Type::AmpEq // "&=",
+        // || self == &Type::PipeEq // "|=",
+        // || self == &Type::CaretEq // "^=",
+        // || self == &Type::PercentEq // "%=",
+        // || self == &Type::LtLtEq // "<<=",
+        // || self == &Type::GtGtEq // ">>=",
+        // || self == &Type::GtGtGtEq // ">>>=",
+        // || self == &Type::GT // ">",
+        // || self == &Type::LT // "<",
+        // || self == &Type::GTEq // ">=",
+        // || self == &Type::LTEq // "<=",
+        // || self == &Type::EqEq // "==",
+        // || self == &Type::BangEq // "!=",
+        // || self == &Type::AmpAmp // "&&",
+        // || self == &Type::PipePipe // "||",
+        // || self == &Type::Plus // "+",
+        // || self == &Type::Dash // "-",
+        // || self == &Type::Star // "*",
+        // || self == &Type::Slash // "/",
+        // || self == &Type::Pipe // "|",
+        // || self == &Type::Caret // "^",
+        // || self == &Type::Percent // "%",
+        // || self == &Type::LtLt // "<<",
+        // || self == &Type::GtGt // ">>",
+        // || self == &Type::GtGtGt // ">>>",
+        // || self == &Type::Instanceof // "instanceof",
+        // || self == &Type::DashGt // "->",
+        || self == &Type::Comma // ",",
+        || self == &Type::QMark // "?",
+        || self == &Type::Colon // ":",
+        // || self == &Type::Bang // "!",
+        // || self == &Type::Tilde // "~",
+        // || self == &Type::PlusPlus // "++",
+        // || self == &Type::DashDash // "--",
+        // || self == &Type::New // "new",
+        || self == &Type::LBracket // "[",
+        || self == &Type::RBracket // "]",
+        || self == &Type::Dot // ".",
+        // || self == &Type::Class // "class",
+        || self == &Type::ColonColon // "::",
+        // || self == &Type::Extends // "extends",
+        || self == &Type::Switch // "switch",
+        || self == &Type::LBrace // "{",
+        || self == &Type::RBrace // "}",
+        // || self == &Type::Case // "case",
+        // || self == &Type::Default // "default",
+        || self == &Type::SemiColon // ";",
+        || self == &Type::Assert // "assert",
+        || self == &Type::Do // "do",
+        || self == &Type::While // "while",
+        // || self == &Type::Break // "break",
+        // || self == &Type::Continue // "continue",
+        || self == &Type::Return // "return",
+        || self == &Type::Yield // "yield",
+        || self == &Type::Synchronized // "synchronized",
+        || self == &Type::Throw // "throw",
+        || self == &Type::Try // "try",
+        // || self == &Type::Catch // "catch",
+        // || self == &Type::Finally // "finally",
+        || self == &Type::If // "if",
+        || self == &Type::Else // "else",
+
+        // || self == &Type::For // "for",
+        // || self == &Type::At // "@",
+        // || self == &Type::Open // "open",
+        // || self == &Type::Module // "module",
+        // || self == &Type::Requires // "requires",
+        // || self == &Type::Exports // "exports",
+        // || self == &Type::To // "to",
+        // || self == &Type::Opens // "opens",
+        // || self == &Type::Uses // "uses",
+        // || self == &Type::Provides // "provides",
+        // || self == &Type::With // "with",
+        // || self == &Type::Transitive // "transitive",
+        // || self == &Type::Static // "static",
+        // || self == &Type::Package // "package",
+        // || self == &Type::Import // "import",
+        // || self == &Type::Enum // "enum",
+        // || self == &Type::Public // "public",
+        // || self == &Type::Protected // "protected",
+        // || self == &Type::Private // "private",
+        // || self == &Type::Abstract // "abstract",
+        // || self == &Type::Final // "final",
+        // || self == &Type::Strictfp // "strictfp",
+        // || self == &Type::Native // "native",
+        // || self == &Type::Transient // "transient",
+        // || self == &Type::Volatile // "volatile",
+        // || self == &Type::Implements // "implements",
+        // || self == &Type::Record // "record",
+        // || self == &Type::TS0 // "@interface",
+        // || self == &Type::Interface // "interface",
+        // || self == &Type::Byte // "byte",
+        // || self == &Type::Short // "short",
+        // || self == &Type::Int // "int",
+        // || self == &Type::Long // "long",
+        // || self == &Type::Char // "char",
+        // || self == &Type::Float // "float",
+        // || self == &Type::Double // "double",
+        // || self == &Type::BooleanType // "boolean_type",
+        // || self == &Type::VoidType // "void_type",
+        // || self == &Type::DotDotDot // "...",
+        // || self == &Type::Throws // "throws",
+        // || self == &Type::This // "this",
+        // || self == &Type::Super // "super",
     }
 
     fn as_shared(&self) -> hyperast::types::Shared {
         use hyperast::types::Shared;
-        ty!(self,
-            [self.is_error()] => Shared::Error,
-            [self.is_type_declaration()] => Shared::TypeDeclaration,
-            [self.is_literal()] => Shared::Literal,
-            [self.is_fork()] => Shared::Branch,
-            LineComment => Shared::Comment,
-            BlockComment => Shared::Comment,
-            Identifier => Shared::Identifier,
-            TypeIdentifier => Shared::Identifier,
-            ScopedIdentifier => Shared::Identifier,
+        match self {
+            x if x.is_type_declaration() => Shared::TypeDeclaration,
+            Type::LineComment => Shared::Comment,
+            Type::BlockComment => Shared::Comment,
+            Type::Identifier => Shared::Identifier,
+            Type::TypeIdentifier => Shared::Identifier,
+            Type::ScopedIdentifier => Shared::Identifier,
+            x if x.is_fork() => Shared::Branch,
             _ => Shared::Other,
-        )
-        // match self {
-        //     x if x.is_type_declaration() => Shared::TypeDeclaration,
-        //     Type::LineComment => Shared::Comment,
-        //     Type::BlockComment => Shared::Comment,
-        //     Type::Identifier => Shared::Identifier,
-        //     Type::TypeIdentifier => Shared::Identifier,
-        //     Type::ScopedIdentifier => Shared::Identifier,
-        //     x if x.is_literal() => Shared::Literal,
-        //     x if x.is_fork() => Shared::Branch,
-        //     _ => Shared::Other,
-        // }
-    }
-
-    fn is_error(&self) -> bool {
-        self == &Self::ERROR || self == &Self::_ERROR
+        }
     }
 
     fn as_abstract(&self) -> hyperast::types::Abstracts {
@@ -503,51 +426,57 @@ impl TypeTrait for Type {
     type Lang = Java;
 
     fn is_fork(&self) -> bool {
-        is!(
-            self,
-            TernaryExpression,
-            IfStatement,
-            ForStatement,
-            EnhancedForStatement,
-            WhileStatement,
-            CatchClause,
-            SwitchLabel,
-            TryStatement,
-            TryWithResourcesStatement,
-            DoStatement,
-        )
+        match self {
+            Self::TernaryExpression => true,
+            Self::IfStatement => true,
+            Self::ForStatement => true,
+            Self::EnhancedForStatement => true,
+            Self::WhileStatement => true,
+            Self::CatchClause => true,
+            Self::SwitchLabel => true,
+            Self::TryStatement => true,
+            Self::TryWithResourcesStatement => true,
+            Self::DoStatement => true,
+            _ => false,
+        }
     }
 
     fn is_literal(&self) -> bool {
-        is!(
-            self,
-            _Literal,
-            True,
-            False,
-            OctalIntegerLiteral,
-            BinaryIntegerLiteral,
-            DecimalIntegerLiteral,
-            HexFloatingPointLiteral,
-            DecimalFloatingPointLiteral,
-            ClassLiteral,
-            StringLiteral,
-            CharacterLiteral,
-            HexIntegerLiteral,
-            NullLiteral,
-        )
+        match self {
+            Self::_Literal => true,
+            Self::True => true,
+            Self::False => true,
+            Self::OctalIntegerLiteral => true,
+            Self::BinaryIntegerLiteral => true,
+            Self::DecimalIntegerLiteral => true,
+            Self::HexFloatingPointLiteral => true,
+            Self::DecimalFloatingPointLiteral => true,
+            Self::ClassLiteral => true,
+            Self::StringLiteral => true,
+            Self::CharacterLiteral => true,
+            Self::HexIntegerLiteral => true,
+            Self::NullLiteral => true,
+            _ => false,
+        }
     }
     fn is_primitive(&self) -> bool {
-        is!(self, BooleanType, VoidType, FloatingPointType, IntegralType,)
+        match self {
+            Self::BooleanType => true,
+            Self::VoidType => true,
+            Self::FloatingPointType => true,
+            Self::IntegralType => true,
+            _ => false,
+        }
     }
     fn is_type_declaration(&self) -> bool {
-        is!(
-            self,
-            ClassDeclaration,
-            EnumDeclaration,
-            InterfaceDeclaration,
-            AnnotationTypeDeclaration,
-            EnumConstant, // TODO need more eval
-        )
+        match self {
+            Self::ClassDeclaration => true,
+            Self::EnumDeclaration => true,
+            Self::InterfaceDeclaration => true,
+            Self::AnnotationTypeDeclaration => true,
+            Self::EnumConstant => true, // TODO need more eval
+            _ => false,
+        }
     }
     // fn primitive_to_str(&self) -> &str {
     //     match self {
@@ -559,37 +488,35 @@ impl TypeTrait for Type {
     //     }
     // }
     fn is_identifier(&self) -> bool {
-        is!(
-            self,
-            Identifier,
-            TypeIdentifier,
-            ScopedIdentifier,
-            ScopedTypeIdentifier,
-        )
+        match self {
+            Self::Identifier => true,
+            Self::TypeIdentifier => true,
+            Self::ScopedIdentifier => true,
+            Self::ScopedTypeIdentifier => true,
+            _ => false,
+        }
     }
     fn is_instance_ref(&self) -> bool {
-        is!(self, This, Super,)
+        match self {
+            Self::This => true,
+            Self::Super => true,
+            _ => false,
+        }
     }
 
     fn is_type_body(&self) -> bool {
-        is!(
-            self,
-            ClassBody,
-            InterfaceBody,
-            AnnotationTypeBody,
-            EnumBody,
-            EnumBodyDeclarations,
-        )
+        self == &Type::ClassBody
+            || self == &Type::InterfaceBody
+            || self == &Type::AnnotationTypeBody
+            || self == &Type::EnumBody
+            || self == &Type::EnumBodyDeclarations
     }
 
     fn is_value_member(&self) -> bool {
-        is!(
-            self,
-            FieldDeclaration,
-            ConstantDeclaration,
-            // EnumConstant,
-            AnnotationTypeElementDeclaration,
-        )
+        self == &Type::FieldDeclaration
+        || self == &Type::ConstantDeclaration
+        // || self == &Type::EnumConstant
+        || self == &Type::AnnotationTypeElementDeclaration
     }
 
     fn is_executable_member(&self) -> bool {
@@ -656,43 +583,39 @@ impl TypeTrait for Type {
     }
 
     fn is_parameter_list(&self) -> bool {
-        is!(
-            self,
-            ResourceSpecification,
-            FormalParameters,
-            TypeParameters,
-        )
+        self == &Type::ResourceSpecification
+            || self == &Type::FormalParameters
+            || self == &Type::TypeParameters
     }
 
     fn is_argument_list(&self) -> bool {
-        is!(self, ArgumentList, TypeArguments, AnnotationArgumentList,)
+        self == &Type::ArgumentList
+            || self == &Type::TypeArguments
+            || self == &Type::AnnotationArgumentList
     }
 
     fn is_expression(&self) -> bool {
-        is!(
-            self,
-            TernaryExpression,
-            BinaryExpression,
-            UnaryExpression,
-            AssignmentExpression,
-            // VariableDeclarator,
-            InstanceofExpression,
-            ArrayCreationExpression,
-            ObjectCreationExpression,
-            LambdaExpression,
-            CastExpression,
-            UpdateExpression,
-            ParenthesizedExpression,
-            MethodInvocation,
-            MethodReference,
-            ExplicitConstructorInvocation,
-            ClassLiteral,
-            FieldAccess,
-            ArrayAccess,
-        )
+        self == &Type::TernaryExpression
+        || self == &Type::BinaryExpression
+        || self == &Type::UnaryExpression
+        || self == &Type::AssignmentExpression
+        // || self == &Type::VariableDeclarator
+        || self == &Type::InstanceofExpression
+        || self == &Type::ArrayCreationExpression
+        || self == &Type::ObjectCreationExpression
+        || self == &Type::LambdaExpression
+        || self == &Type::CastExpression
+        || self == &Type::UpdateExpression
+        || self == &Type::ParenthesizedExpression
+        || self == &Type::MethodInvocation
+        || self == &Type::MethodReference
+        || self == &Type::ExplicitConstructorInvocation
+        || self == &Type::ClassLiteral
+        || self == &Type::FieldAccess
+        || self == &Type::ArrayAccess
     }
     fn is_comment(&self) -> bool {
-        is!(self, LineComment, BlockComment,)
+        self == &Type::LineComment || self == &Type::BlockComment
     }
 }
 impl Type {
@@ -702,69 +625,66 @@ impl Type {
 
     pub fn literal_type(&self) -> &str {
         // TODO make the difference btw int/long and float/double
-        ty!(self,
-            _Literal => panic!(),
-            True => "boolean",
-            False => "boolean",
-            OctalIntegerLiteral => "int",
-            BinaryIntegerLiteral => "int",
-            DecimalIntegerLiteral => "int",
-            HexFloatingPointLiteral => "float",
-            DecimalFloatingPointLiteral => "float",
-            HexIntegerLiteral => "float",
-            // ClassLiteral => "class",
-            StringLiteral => "String",
-            CharacterLiteral => "char",
-            NullLiteral => "null",
+        match self {
+            Self::_Literal => panic!(),
+            Self::True => "boolean",
+            Self::False => "boolean",
+            Self::OctalIntegerLiteral => "int",
+            Self::BinaryIntegerLiteral => "int",
+            Self::DecimalIntegerLiteral => "int",
+            Self::HexFloatingPointLiteral => "float",
+            Self::DecimalFloatingPointLiteral => "float",
+            Self::HexIntegerLiteral => "float",
+            // Self::ClassLiteral => "class",
+            Self::StringLiteral => "String",
+            Self::CharacterLiteral => "char",
+            Self::NullLiteral => "null",
             _ => panic!(),
-        )
+        }
     }
 
     pub(crate) fn is_repeat(&self) -> bool {
-        is!(
-            self,
-            ProgramRepeat1,
-            _StringLiteralRepeat1,
-            _MultilineStringLiteralRepeat1,
-            CastExpressionRepeat1,
-            InferredParametersRepeat1,
-            ArrayCreationExpressionRepeat1,
-            ArgumentListRepeat1,
-            TypeArgumentsRepeat1,
-            DimensionsRepeat1,
-            SwitchBlockRepeat1,
-            SwitchBlockStatementGroupRepeat1,
-            RecordPatternBodyRepeat1,
-            TryStatementRepeat1,
-            CatchTypeRepeat1,
-            ResourceSpecificationRepeat1,
-            ForStatementRepeat1,
-            AnnotationArgumentListRepeat1,
-            ElementValueArrayInitializerRepeat1,
-            ModuleBodyRepeat1,
-            RequiresModuleDirectiveRepeat1,
-            ExportsModuleDirectiveRepeat1,
-            ProvidesModuleDirectiveRepeat1,
-            EnumBodyRepeat1,
-            EnumBodyDeclarationsRepeat1,
-            ModifiersRepeat1,
-            TypeParametersRepeat1,
-            TypeBoundRepeat1,
-            TypeListRepeat1,
-            AnnotationTypeBodyRepeat1,
-            InterfaceBodyRepeat1,
-            _VariableDeclaratorListRepeat1,
-            ArrayInitializerRepeat1,
-            FormalParametersRepeat1,
-            ReceiverParameterRepeat1,
-            ArrayCreationExpressionRepeat2,
-            SwitchBlockRepeat2,
-            SwitchBlockStatementGroupRepeat2,
-            ForStatementRepeat2,
-            _MultilineStringFragmentToken1,
-            _MultilineStringFragmentToken2,
-            _EscapeSequenceToken1,
-        )
+        self == &Type::ProgramRepeat1
+            || self == &Type::_StringLiteralRepeat1
+            || self == &Type::_MultilineStringLiteralRepeat1
+            || self == &Type::CastExpressionRepeat1
+            || self == &Type::InferredParametersRepeat1
+            || self == &Type::ArrayCreationExpressionRepeat1
+            || self == &Type::ArgumentListRepeat1
+            || self == &Type::TypeArgumentsRepeat1
+            || self == &Type::DimensionsRepeat1
+            || self == &Type::SwitchBlockRepeat1
+            || self == &Type::SwitchBlockStatementGroupRepeat1
+            || self == &Type::RecordPatternBodyRepeat1
+            || self == &Type::TryStatementRepeat1
+            || self == &Type::CatchTypeRepeat1
+            || self == &Type::ResourceSpecificationRepeat1
+            || self == &Type::ForStatementRepeat1
+            || self == &Type::AnnotationArgumentListRepeat1
+            || self == &Type::ElementValueArrayInitializerRepeat1
+            || self == &Type::ModuleBodyRepeat1
+            || self == &Type::RequiresModuleDirectiveRepeat1
+            || self == &Type::ExportsModuleDirectiveRepeat1
+            || self == &Type::ProvidesModuleDirectiveRepeat1
+            || self == &Type::EnumBodyRepeat1
+            || self == &Type::EnumBodyDeclarationsRepeat1
+            || self == &Type::ModifiersRepeat1
+            || self == &Type::TypeParametersRepeat1
+            || self == &Type::TypeBoundRepeat1
+            || self == &Type::TypeListRepeat1
+            || self == &Type::AnnotationTypeBodyRepeat1
+            || self == &Type::InterfaceBodyRepeat1
+            || self == &Type::_VariableDeclaratorListRepeat1
+            || self == &Type::ArrayInitializerRepeat1
+            || self == &Type::FormalParametersRepeat1
+            || self == &Type::ReceiverParameterRepeat1
+            || self == &Type::ArrayCreationExpressionRepeat2
+            || self == &Type::SwitchBlockRepeat2
+            || self == &Type::SwitchBlockStatementGroupRepeat2
+            || self == &Type::ForStatementRepeat2
+            || self == &Type::_MultilineStringFragmentToken1
+            || self == &Type::_MultilineStringFragmentToken2
+            || self == &Type::_EscapeSequenceToken1
     }
 }
 
@@ -798,7 +718,7 @@ impl hyperast::types::LLang<TType> for Java {
     const TE: &[Self::E] = S_T_L;
 
     fn as_lang_wrapper() -> hyperast::types::LangWrapper<TType> {
-        From::<&'static dyn LangRef<_>>::from(&Lang)
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }
 #[repr(u16)]
@@ -2123,240 +2043,240 @@ impl Type {
         }
     }
     pub fn is_hidden(&self) -> bool {
-        is!(
-            self,
-            End,
-            _MultilineStringFragmentToken1,
-            _MultilineStringFragmentToken2,
-            _EscapeSequenceToken1,
-            _ToplevelStatement,
-            _Literal,
-            _StringLiteral,
-            _MultilineStringLiteral,
-            _EscapeSequence,
-            Expression,
-            PrimaryExpression,
-            _UnqualifiedObjectCreationExpression,
-            _WildcardBounds,
-            Statement,
-            _Annotation,
-            _ElementValue,
-            Declaration,
-            ModuleDirective,
-            _ConstructorDeclarator,
-            _DefaultValue,
-            _VariableDeclaratorList,
-            _VariableDeclaratorId,
-            _Type,
-            _UnannotatedType,
-            _MethodHeader,
-            _MethodDeclarator,
-            _ReservedIdentifier,
-            ProgramRepeat1,
-            _StringLiteralRepeat1,
-            _MultilineStringLiteralRepeat1,
-            CastExpressionRepeat1,
-            InferredParametersRepeat1,
-            ArrayCreationExpressionRepeat1,
-            ArrayCreationExpressionRepeat2,
-            ArgumentListRepeat1,
-            TypeArgumentsRepeat1,
-            DimensionsRepeat1,
-            SwitchBlockRepeat1,
-            SwitchBlockRepeat2,
-            SwitchBlockStatementGroupRepeat1,
-            SwitchBlockStatementGroupRepeat2,
-            RecordPatternBodyRepeat1,
-            TryStatementRepeat1,
-            CatchTypeRepeat1,
-            ResourceSpecificationRepeat1,
-            ForStatementRepeat1,
-            ForStatementRepeat2,
-            AnnotationArgumentListRepeat1,
-            ElementValueArrayInitializerRepeat1,
-            ModuleBodyRepeat1,
-            RequiresModuleDirectiveRepeat1,
-            ExportsModuleDirectiveRepeat1,
-            ProvidesModuleDirectiveRepeat1,
-            EnumBodyRepeat1,
-            EnumBodyDeclarationsRepeat1,
-            ModifiersRepeat1,
-            TypeParametersRepeat1,
-            TypeBoundRepeat1,
-            TypeListRepeat1,
-            AnnotationTypeBodyRepeat1,
-            InterfaceBodyRepeat1,
-            _VariableDeclaratorListRepeat1,
-            ArrayInitializerRepeat1,
-            FormalParametersRepeat1,
-            ReceiverParameterRepeat1,
-        )
+        match self {
+            Type::End => true,
+            Type::_MultilineStringFragmentToken1 => true,
+            Type::_MultilineStringFragmentToken2 => true,
+            Type::_EscapeSequenceToken1 => true,
+            Type::_ToplevelStatement => true,
+            Type::_Literal => true,
+            Type::_StringLiteral => true,
+            Type::_MultilineStringLiteral => true,
+            Type::_EscapeSequence => true,
+            Type::Expression => true,
+            Type::PrimaryExpression => true,
+            Type::_UnqualifiedObjectCreationExpression => true,
+            Type::_WildcardBounds => true,
+            Type::Statement => true,
+            Type::_Annotation => true,
+            Type::_ElementValue => true,
+            Type::Declaration => true,
+            Type::ModuleDirective => true,
+            Type::_ConstructorDeclarator => true,
+            Type::_DefaultValue => true,
+            Type::_VariableDeclaratorList => true,
+            Type::_VariableDeclaratorId => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            Type::_MethodHeader => true,
+            Type::_MethodDeclarator => true,
+            Type::_ReservedIdentifier => true,
+            Type::ProgramRepeat1 => true,
+            Type::_StringLiteralRepeat1 => true,
+            Type::_MultilineStringLiteralRepeat1 => true,
+            Type::CastExpressionRepeat1 => true,
+            Type::InferredParametersRepeat1 => true,
+            Type::ArrayCreationExpressionRepeat1 => true,
+            Type::ArrayCreationExpressionRepeat2 => true,
+            Type::ArgumentListRepeat1 => true,
+            Type::TypeArgumentsRepeat1 => true,
+            Type::DimensionsRepeat1 => true,
+            Type::SwitchBlockRepeat1 => true,
+            Type::SwitchBlockRepeat2 => true,
+            Type::SwitchBlockStatementGroupRepeat1 => true,
+            Type::SwitchBlockStatementGroupRepeat2 => true,
+            Type::RecordPatternBodyRepeat1 => true,
+            Type::TryStatementRepeat1 => true,
+            Type::CatchTypeRepeat1 => true,
+            Type::ResourceSpecificationRepeat1 => true,
+            Type::ForStatementRepeat1 => true,
+            Type::ForStatementRepeat2 => true,
+            Type::AnnotationArgumentListRepeat1 => true,
+            Type::ElementValueArrayInitializerRepeat1 => true,
+            Type::ModuleBodyRepeat1 => true,
+            Type::RequiresModuleDirectiveRepeat1 => true,
+            Type::ExportsModuleDirectiveRepeat1 => true,
+            Type::ProvidesModuleDirectiveRepeat1 => true,
+            Type::EnumBodyRepeat1 => true,
+            Type::EnumBodyDeclarationsRepeat1 => true,
+            Type::ModifiersRepeat1 => true,
+            Type::TypeParametersRepeat1 => true,
+            Type::TypeBoundRepeat1 => true,
+            Type::TypeListRepeat1 => true,
+            Type::AnnotationTypeBodyRepeat1 => true,
+            Type::InterfaceBodyRepeat1 => true,
+            Type::_VariableDeclaratorListRepeat1 => true,
+            Type::ArrayInitializerRepeat1 => true,
+            Type::FormalParametersRepeat1 => true,
+            Type::ReceiverParameterRepeat1 => true,
+            _ => false,
+        }
     }
     pub fn is_supertype(&self) -> bool {
-        is!(
-            self,
-            _Literal,
-            Expression,
-            PrimaryExpression,
-            Statement,
-            Declaration,
-            ModuleDirective,
-            _Type,
-            _UnannotatedType,
-        )
+        match self {
+            Type::_Literal => true,
+            Type::Expression => true,
+            Type::PrimaryExpression => true,
+            Type::Statement => true,
+            Type::Declaration => true,
+            Type::ModuleDirective => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            _ => false,
+        }
     }
     pub fn is_named(&self) -> bool {
-        is!(
-            self,
-            Identifier,
-            DecimalIntegerLiteral,
-            HexIntegerLiteral,
-            OctalIntegerLiteral,
-            BinaryIntegerLiteral,
-            DecimalFloatingPointLiteral,
-            HexFloatingPointLiteral,
-            True,
-            False,
-            CharacterLiteral,
-            StringFragment,
-            EscapeSequence,
-            NullLiteral,
-            UnderscorePattern,
-            BooleanType,
-            VoidType,
-            This,
-            Super,
-            LineComment,
-            BlockComment,
-            Program,
-            _Literal,
-            StringLiteral,
-            MultilineStringFragment,
-            StringInterpolation,
-            Expression,
-            CastExpression,
-            AssignmentExpression,
-            BinaryExpression,
-            InstanceofExpression,
-            LambdaExpression,
-            InferredParameters,
-            TernaryExpression,
-            UnaryExpression,
-            UpdateExpression,
-            PrimaryExpression,
-            ArrayCreationExpression,
-            DimensionsExpr,
-            ParenthesizedExpression,
-            ClassLiteral,
-            ObjectCreationExpression,
-            FieldAccess,
-            TemplateExpression,
-            ArrayAccess,
-            MethodInvocation,
-            ArgumentList,
-            MethodReference,
-            TypeArguments,
-            Wildcard,
-            Dimensions,
-            SwitchExpression,
-            SwitchBlock,
-            SwitchBlockStatementGroup,
-            SwitchRule,
-            SwitchLabel,
-            Pattern,
-            TypePattern,
-            RecordPattern,
-            RecordPatternBody,
-            RecordPatternComponent,
-            Guard,
-            Statement,
-            Block,
-            ExpressionStatement,
-            LabeledStatement,
-            AssertStatement,
-            DoStatement,
-            BreakStatement,
-            ContinueStatement,
-            ReturnStatement,
-            YieldStatement,
-            SynchronizedStatement,
-            ThrowStatement,
-            TryStatement,
-            CatchClause,
-            CatchFormalParameter,
-            CatchType,
-            FinallyClause,
-            TryWithResourcesStatement,
-            ResourceSpecification,
-            Resource,
-            IfStatement,
-            WhileStatement,
-            ForStatement,
-            EnhancedForStatement,
-            MarkerAnnotation,
-            Annotation,
-            AnnotationArgumentList,
-            ElementValuePair,
-            ElementValueArrayInitializer,
-            Declaration,
-            ModuleDeclaration,
-            ModuleBody,
-            ModuleDirective,
-            RequiresModuleDirective,
-            RequiresModifier,
-            ExportsModuleDirective,
-            OpensModuleDirective,
-            UsesModuleDirective,
-            ProvidesModuleDirective,
-            PackageDeclaration,
-            ImportDeclaration,
-            Asterisk,
-            EnumDeclaration,
-            EnumBody,
-            EnumBodyDeclarations,
-            EnumConstant,
-            ClassDeclaration,
-            Modifiers,
-            TypeParameters,
-            TypeParameter,
-            TypeBound,
-            Superclass,
-            SuperInterfaces,
-            TypeList,
-            ClassBody,
-            StaticInitializer,
-            ConstructorDeclaration,
-            ConstructorBody,
-            ExplicitConstructorInvocation,
-            ScopedIdentifier,
-            FieldDeclaration,
-            RecordDeclaration,
-            AnnotationTypeDeclaration,
-            AnnotationTypeBody,
-            AnnotationTypeElementDeclaration,
-            InterfaceDeclaration,
-            ExtendsInterfaces,
-            InterfaceBody,
-            ConstantDeclaration,
-            VariableDeclarator,
-            ArrayInitializer,
-            _Type,
-            _UnannotatedType,
-            AnnotatedType,
-            ScopedTypeIdentifier,
-            GenericType,
-            ArrayType,
-            IntegralType,
-            FloatingPointType,
-            FormalParameters,
-            FormalParameter,
-            ReceiverParameter,
-            SpreadParameter,
-            LocalVariableDeclaration,
-            MethodDeclaration,
-            CompactConstructorDeclaration,
-            TypeIdentifier,
-        )
+        match self {
+            Type::Identifier => true,
+            Type::DecimalIntegerLiteral => true,
+            Type::HexIntegerLiteral => true,
+            Type::OctalIntegerLiteral => true,
+            Type::BinaryIntegerLiteral => true,
+            Type::DecimalFloatingPointLiteral => true,
+            Type::HexFloatingPointLiteral => true,
+            Type::True => true,
+            Type::False => true,
+            Type::CharacterLiteral => true,
+            Type::StringFragment => true,
+            Type::EscapeSequence => true,
+            Type::NullLiteral => true,
+            Type::UnderscorePattern => true,
+            Type::BooleanType => true,
+            Type::VoidType => true,
+            Type::This => true,
+            Type::Super => true,
+            Type::LineComment => true,
+            Type::BlockComment => true,
+            Type::Program => true,
+            Type::_Literal => true,
+            Type::StringLiteral => true,
+            Type::MultilineStringFragment => true,
+            Type::StringInterpolation => true,
+            Type::Expression => true,
+            Type::CastExpression => true,
+            Type::AssignmentExpression => true,
+            Type::BinaryExpression => true,
+            Type::InstanceofExpression => true,
+            Type::LambdaExpression => true,
+            Type::InferredParameters => true,
+            Type::TernaryExpression => true,
+            Type::UnaryExpression => true,
+            Type::UpdateExpression => true,
+            Type::PrimaryExpression => true,
+            Type::ArrayCreationExpression => true,
+            Type::DimensionsExpr => true,
+            Type::ParenthesizedExpression => true,
+            Type::ClassLiteral => true,
+            Type::ObjectCreationExpression => true,
+            Type::FieldAccess => true,
+            Type::TemplateExpression => true,
+            Type::ArrayAccess => true,
+            Type::MethodInvocation => true,
+            Type::ArgumentList => true,
+            Type::MethodReference => true,
+            Type::TypeArguments => true,
+            Type::Wildcard => true,
+            Type::Dimensions => true,
+            Type::SwitchExpression => true,
+            Type::SwitchBlock => true,
+            Type::SwitchBlockStatementGroup => true,
+            Type::SwitchRule => true,
+            Type::SwitchLabel => true,
+            Type::Pattern => true,
+            Type::TypePattern => true,
+            Type::RecordPattern => true,
+            Type::RecordPatternBody => true,
+            Type::RecordPatternComponent => true,
+            Type::Guard => true,
+            Type::Statement => true,
+            Type::Block => true,
+            Type::ExpressionStatement => true,
+            Type::LabeledStatement => true,
+            Type::AssertStatement => true,
+            Type::DoStatement => true,
+            Type::BreakStatement => true,
+            Type::ContinueStatement => true,
+            Type::ReturnStatement => true,
+            Type::YieldStatement => true,
+            Type::SynchronizedStatement => true,
+            Type::ThrowStatement => true,
+            Type::TryStatement => true,
+            Type::CatchClause => true,
+            Type::CatchFormalParameter => true,
+            Type::CatchType => true,
+            Type::FinallyClause => true,
+            Type::TryWithResourcesStatement => true,
+            Type::ResourceSpecification => true,
+            Type::Resource => true,
+            Type::IfStatement => true,
+            Type::WhileStatement => true,
+            Type::ForStatement => true,
+            Type::EnhancedForStatement => true,
+            Type::MarkerAnnotation => true,
+            Type::Annotation => true,
+            Type::AnnotationArgumentList => true,
+            Type::ElementValuePair => true,
+            Type::ElementValueArrayInitializer => true,
+            Type::Declaration => true,
+            Type::ModuleDeclaration => true,
+            Type::ModuleBody => true,
+            Type::ModuleDirective => true,
+            Type::RequiresModuleDirective => true,
+            Type::RequiresModifier => true,
+            Type::ExportsModuleDirective => true,
+            Type::OpensModuleDirective => true,
+            Type::UsesModuleDirective => true,
+            Type::ProvidesModuleDirective => true,
+            Type::PackageDeclaration => true,
+            Type::ImportDeclaration => true,
+            Type::Asterisk => true,
+            Type::EnumDeclaration => true,
+            Type::EnumBody => true,
+            Type::EnumBodyDeclarations => true,
+            Type::EnumConstant => true,
+            Type::ClassDeclaration => true,
+            Type::Modifiers => true,
+            Type::TypeParameters => true,
+            Type::TypeParameter => true,
+            Type::TypeBound => true,
+            Type::Superclass => true,
+            Type::SuperInterfaces => true,
+            Type::TypeList => true,
+            Type::ClassBody => true,
+            Type::StaticInitializer => true,
+            Type::ConstructorDeclaration => true,
+            Type::ConstructorBody => true,
+            Type::ExplicitConstructorInvocation => true,
+            Type::ScopedIdentifier => true,
+            Type::FieldDeclaration => true,
+            Type::RecordDeclaration => true,
+            Type::AnnotationTypeDeclaration => true,
+            Type::AnnotationTypeBody => true,
+            Type::AnnotationTypeElementDeclaration => true,
+            Type::InterfaceDeclaration => true,
+            Type::ExtendsInterfaces => true,
+            Type::InterfaceBody => true,
+            Type::ConstantDeclaration => true,
+            Type::VariableDeclarator => true,
+            Type::ArrayInitializer => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            Type::AnnotatedType => true,
+            Type::ScopedTypeIdentifier => true,
+            Type::GenericType => true,
+            Type::ArrayType => true,
+            Type::IntegralType => true,
+            Type::FloatingPointType => true,
+            Type::FormalParameters => true,
+            Type::FormalParameter => true,
+            Type::ReceiverParameter => true,
+            Type::SpreadParameter => true,
+            Type::LocalVariableDeclaration => true,
+            Type::MethodDeclaration => true,
+            Type::CompactConstructorDeclaration => true,
+            Type::TypeIdentifier => true,
+            _ => false,
+        }
     }
 }
 
@@ -2371,7 +2291,7 @@ fn test_tslanguage_and_type_identity() {
     }
 }
 
-const S_T_L: &[Type] = &[
+const S_T_L: &'static [Type] = &[
     Type::End,
     Type::Identifier,
     Type::DecimalIntegerLiteral,

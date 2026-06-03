@@ -1,15 +1,14 @@
-use std::fmt;
-
-use hyperast::types::{DecompressedFrom, LabelStore, Labeled, NodeStore};
-
-use crate::actions::script_generator::{self, Actions, SimpleAction, TestActions};
-use crate::decompressed_tree_store::CompletePostOrder;
-use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
 use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
-use crate::mappings::{DefaultMappingStore, MappingStore};
 use crate::matchers::Decompressible;
-use crate::tests::examples::{example_action, example_gt_java_code};
-use crate::tree::simple_tree::{DisplayTree, vpair_to_stores};
+use crate::{
+    actions::script_generator::{self, Actions, SimpleAction, TestActions},
+    decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
+    matchers::mapping_store::{DefaultMappingStore, MappingStore},
+    tests::examples::{example_action, example_gt_java_code},
+    tree::simple_tree::{DisplayTree, vpair_to_stores},
+};
+use hyperast::types::{DecompressedFrom, LabelStore, Labeled, NodeStore};
+use std::fmt;
 
 pub struct Fmt<F>(pub F)
 where
@@ -33,11 +32,11 @@ fn test_with_action_example() {
 
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(label_store, node_store, src)
+        DisplayTree::new(&label_store, &node_store, src)
     );
     println!(
         "dst tree:\n{:?}",
-        DisplayTree::new(label_store, node_store, dst)
+        DisplayTree::new(&label_store, &node_store, dst)
     );
 
     let mut ms = DefaultMappingStore::default();
@@ -70,7 +69,7 @@ fn test_with_action_example() {
             src_arena
                 .iter()
                 .enumerate()
-                .for_each(|(i, x)| writeln!(f, "[{}]: {}", i, g(x)).unwrap());
+                .for_each(|(i, x)| write!(f, "[{}]: {}\n", i, g(x)).unwrap());
             write!(f, "")
         })
     );
@@ -81,13 +80,13 @@ fn test_with_action_example() {
             dst_arena
                 .iter()
                 .enumerate()
-                .for_each(|(i, x)| writeln!(f, "[{}]: {}", i, g(x)).unwrap());
+                .for_each(|(i, x)| write!(f, "[{}]: {}\n", i, g(x)).unwrap());
             write!(f, "")
         })
     );
 
     // Decompressible<_, CompletePostOrder<_, IdD>>
-    let dst_arena = SimpleBfsMapper::<u16, _, _>::make(dst_arena);
+    let dst_arena = SimpleBfsMapper::<u16, _, _>::with_store(&stores, dst_arena);
     let from_dst = |path: &[u8]| dst_arena.child(dst, path);
 
     // let actions = script_generator::ScriptGenerator::<
@@ -114,7 +113,7 @@ fn test_with_action_example() {
 
     let lab = |x: &IdD| {
         label_store
-            .resolve(node_store.resolve(x).get_label_unchecked())
+            .resolve(&node_store.resolve(x).get_label_unchecked())
             .to_string()
     };
 
@@ -304,7 +303,7 @@ fn test_with_zs_custom_example() {
     ms.link(from_src(&[1, 2]), from_dst(&[0, 1, 2]));
     ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
 
-    let dst_arena = SimpleBfsMapper::<u16, _, _>::make(dst_arena);
+    let dst_arena = SimpleBfsMapper::<u16, _, _>::with_store(&stores, dst_arena);
     let from_dst = |path: &[u8]| dst_arena.child(dst, path);
     // let actions = script_generator::ScriptGenerator::<
     //     _,
@@ -335,7 +334,7 @@ fn test_with_zs_custom_example() {
     assert!(actions.has_actions(&[
         // new Insert(dst, null, 0),
         SimpleAction::Insert {
-            sub: dst_arena.original(dst),
+            sub: dst_arena.original(&dst),
             parent: None,
             idx: 0,
         },

@@ -6,12 +6,14 @@ use std::{net::SocketAddr, sync::Arc};
 use backend::*;
 
 use axum::Router;
-use backend::app::{
-    commit_metadata_route, fetch_code_route, fetch_git_file, querying_app, scripting_app,
-    smells_app, track_code_route, tsg_app, view_code_route,
+use backend::{
+    app::{
+        commit_metadata_route, fetch_code_route, fetch_git_file, querying_app, scripting_app,
+        smells_app, track_code_route, tsg_app, view_code_route,
+    },
+    examples::{example_app, kv_store_app},
 };
-use backend::examples::{example_app, kv_store_app};
-use hyper_diff::mappings::VecStore;
+use hyper_diff::matchers::mapping_store::VecStore;
 use hyperast_vcs_git::git::Forge;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
@@ -47,10 +49,6 @@ async fn main() {
         );
         repos.register_config(
             Forge::Github.repo("official-stockfish", "Stockfish"),
-            RepoConfig::CppMake,
-        );
-        repos.register_config(
-            Forge::Github.repo("rerun-io", "egui_tiles"),
             RepoConfig::CppMake,
         );
         repos.register_config(Forge::Github.repo("torvalds", "linux"), RepoConfig::CppMake);

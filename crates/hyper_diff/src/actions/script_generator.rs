@@ -6,18 +6,17 @@ use bitvec::order::Lsb0;
 use hyperast::types::{HyperAST, HyperASTShared, Labeled, NodeStore as _};
 use num_traits::{PrimInt, cast};
 
-use crate::decompressed_tree_store::{
-    BreadthFirstIterable, DecompressedWithParent, FullyDecompressedTreeStore, PostOrder,
-    PostOrderIterable,
+use crate::{
+    decompressed_tree_store::{
+        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+        PostOrderIterable,
+    },
+    matchers::mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+    utils::sequence_algorithms::longest_common_subsequence,
 };
-use crate::mappings::{DefaultMappingStore, MappingStore, MonoMappingStore};
-use crate::utils::sequence_algorithms::longest_common_subsequence;
 
 pub trait Actions {
     fn len(&self) -> usize;
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
 }
 pub struct ActionsVec<A>(Vec<A>);
 
@@ -114,10 +113,6 @@ struct MidNode<IdC, IdD> {
     children: Option<Vec<IdD>>,
 }
 
-#[allow(type_alias_bounds)]
-type EditScript<HAST: HyperAST, IdD, Idx> =
-    ActionsVec<SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, Idx>>;
-
 pub struct ScriptGenerator<
     'a,
     'b,
@@ -139,24 +134,25 @@ pub struct ScriptGenerator<
     moved: bitvec::vec::BitVec,
 
     // pub actions: ActionsVec<SimpleAction<IdD, IdD, S::>>,
-    pub actions: EditScript<HAST, IdD, Idx>,
+    pub actions: ActionsVec<SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, Idx>>,
 
     src_in_order: InOrderNodes<IdD>,
     dst_in_order: InOrderNodes<IdD>,
 }
 
 impl<
+    's,
     'a,
     'b,
     'c,
     IdD: PrimInt + Debug,
     // T: Stored,
     //  + Typed + Labeled + WithChildren,
-    SS: FullyDecompressedTreeStore<HAST, IdD>
+    SS: DecompressedTreeStore<HAST, IdD>
         + DecompressedWithParent<HAST, IdD>
         + PostOrderIterable<HAST, IdD>
         + PostOrder<HAST, IdD>,
-    SD: FullyDecompressedTreeStore<HAST, IdD>
+    SD: DecompressedTreeStore<HAST, IdD>
         + DecompressedWithParent<HAST, IdD>
         + BreadthFirstIterable<HAST, IdD>,
     HAST: HyperAST + Copy, //:'a + NodeStore2<HAST::IdN, R<'a> = T>, //NodeStore<'a, HAST::IdN, T>,
@@ -181,7 +177,7 @@ where
         src_arena: &'a SS,
         dst_arena: &'b SD,
         ms: &'c DefaultMappingStore<IdD>,
-    ) -> EditScript<HAST, IdD, HAST::Idx> {
+    ) -> ActionsVec<SimpleAction<IdD, IdD, HAST::IdN, HAST::Label, HAST::Idx>> {
         ScriptGenerator::<'a, 'b, 'c, IdD, SS, SD, HAST>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
@@ -220,7 +216,7 @@ where
         self.moved.resize(self.src_arena_dont_use.len(), false);
         for x in self.src_arena_dont_use.iter_df_post::<true>() {
             let children = self.src_arena_dont_use.children(&x);
-            let children = if !children.is_empty() {
+            let children = if children.len() > 0 {
                 Some(children)
             } else {
                 None
@@ -261,7 +257,7 @@ where
         for x in self.dst_arena.iter_bf() {
             let w;
             let y = self.dst_arena.parent(&x);
-            let z = y.map(|y| self.cpy_mappings.get_src_unchecked(&y));
+            let z = y.and_then(|y| Some(self.cpy_mappings.get_src_unchecked(&y)));
             if !self.cpy_mappings.is_dst(&x) {
                 // insertion
                 let k = if let Some(y) = y {
@@ -414,23 +410,25 @@ where
             .children
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
-        self.src_in_order.remove_all(w_c);
+        self.src_in_order.remove_all(&w_c);
         let x_c: Vec<IdD> = self.dst_arena.children(x);
         self.dst_in_order.remove_all(&x_c);
 
         // todo use iter filter collect
         let mut s1 = vec![];
         for c in w_c {
-            if self.cpy_mappings.is_src(c) && x_c.contains(&self.cpy_mappings.get_dst_unchecked(c))
-            {
-                s1.push(*c);
+            if self.cpy_mappings.is_src(c) {
+                if x_c.contains(&self.cpy_mappings.get_dst_unchecked(c)) {
+                    s1.push(*c);
+                }
             }
         }
         let mut s2 = vec![];
         for c in &x_c {
-            if self.cpy_mappings.is_dst(c) && w_c.contains(&self.cpy_mappings.get_src_unchecked(c))
-            {
-                s2.push(*c);
+            if self.cpy_mappings.is_dst(c) {
+                if w_c.contains(&self.cpy_mappings.get_src_unchecked(c)) {
+                    s2.push(*c);
+                }
             }
         }
 
@@ -475,8 +473,8 @@ where
         }
         let xpos = self.dst_arena.position_in_parent(x).unwrap();
         let mut v: Option<IdD> = None;
-
-        for c in siblings.iter().take(xpos) {
+        for i in 0..xpos {
+            let c: &IdD = &siblings[i];
             if self.dst_in_order.contains(c) {
                 v = Some(*c);
             };
@@ -598,18 +596,21 @@ where
         w: &IdD,
         x: &IdD,
     ) {
-        if let SimpleAction::MoveUpdate { .. } = action {
-            self.apply_update(action, w, x);
+        match action {
+            SimpleAction::MoveUpdate { .. } => {
+                self.apply_update(action, w, x);
+            }
+            _ => (),
         }
         // self.moved.set(cast::<_, usize>(*w).unwrap(), true);
         self.cpy_mappings.cut(*w, *x);
         self.apply_insert(action, z, w, x);
     }
 
-    fn iter_mid_in_post_order(
+    fn iter_mid_in_post_order<'d>(
         root: IdD,
-        mid_arena: &[MidNode<HAST::IdN, IdD>],
-    ) -> Iter<'_, HAST::IdN, IdD> {
+        mid_arena: &'d [MidNode<HAST::IdN, IdD>],
+    ) -> Iter<'d, HAST::IdN, IdD> {
         let parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
         Iter { parent, mid_arena }
     }
@@ -628,12 +629,16 @@ struct Iter<'a, IdC, IdD: PrimInt> {
     mid_arena: &'a [MidNode<IdC, IdD>],
 }
 
-impl<IdC, IdD: num_traits::PrimInt> Iterator for Iter<'_, IdC, IdD> {
+impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let (id, idx) = self.parent.pop()?;
+            let (id, idx) = if let Some(id) = self.parent.pop() {
+                id
+            } else {
+                return None;
+            };
             let curr = &self.mid_arena[cast::<_, usize>(id).unwrap()];
             if let Some(cs) = &curr.children {
                 if cs.len() == idx {
@@ -664,7 +669,7 @@ impl<IdD: Eq> InOrderNodes<IdD> {
     fn remove_all(&mut self, w: &[IdD]) {
         if let Some(a) = self.0.take() {
             let c: Vec<IdD> = a.into_iter().filter(|x| !w.contains(x)).collect();
-            if !c.is_empty() {
+            if c.len() > 0 {
                 self.0 = Some(c);
             }
         }

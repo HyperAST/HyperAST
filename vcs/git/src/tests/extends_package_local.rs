@@ -1,19 +1,29 @@
-use crate::java::handle_java_file;
-use hyperast::position::{Scout, StructuralPosition, StructuralPositionStore, TypedTreePath};
-use hyperast::store::{SimpleStores, nodes::DefaultNodeStore as NodeStore};
-use hyperast::store::{defaults::NodeIdentifier, labels::LabelStore};
-use hyperast::types::{LabelStore as _, Typed};
-use hyperast::types::{NodeId, TypedNodeStore, WithChildren};
-use hyperast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyperast::{
+    filter::{Bloom, BloomResult, BF},
+    impact::serialize::CachedHasher,
+    impact::BulkHasher,
+    nodes::RefContainer,
+    position::{Scout, StructuralPosition, StructuralPositionStore, TypedTreePath},
+    store::{
+        defaults::NodeIdentifier, labels::LabelStore, nodes::DefaultNodeStore as NodeStore,
+        SimpleStores,
+    },
+    types::{LabelStore as _, Typed},
+    types::{NodeId, TypedNodeStore, WithChildren},
+};
+
 use hyperast_gen_ts_java::types::{TIdN, Type};
 
-use hyperast::filter::{BF, Bloom, BloomResult};
-use hyperast::impact::BulkHasher;
-use hyperast::impact::serialize::CachedHasher;
-use hyperast::nodes::RefContainer;
-use hyperast_gen_ts_java::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
-use hyperast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
-use hyperast_gen_ts_java::impact::usage;
+use crate::java::handle_java_file;
+
+use hyperast_gen_ts_java::impact::{
+    element::{IdentifierFormat, LabelPtr},
+    partial_analysis::PartialAnalysis,
+};
+use hyperast_gen_ts_java::{
+    impact::{element::RefsEnum, usage},
+    legion_with_refs as java_tree_gen,
+};
 
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -171,14 +181,14 @@ public class Launcher extends Klass implements SpoonAPI, A {
 
     public SpoonModelBuilder f(Object e) {
         if (!(e instanceof SpoonException)) {
-
+            
         }
         System.out.println(SpoonModelBuilder.InputType.FILES);
         if (!(e instanceof @TypeAnnotation(integer=1) SpoonException)) {
-
+            
         }
         if (!(e instanceof @TypeAnnotation(integer=1) SpoonException[])) {
-
+            
         }
         getModelBuilder().compile(SpoonModelBuilder.InputType2.FILES);
         try {
@@ -344,7 +354,7 @@ import spoon.support.Envir;
 import spoon.processor.AbstractProcessor;
 
 public class JDTBasedSpoonCompiler implements spoon.SpoonModelBuilder {
-
+    
     void f(Object e) {
         spoon.Launcher.main();
 
@@ -1324,7 +1334,7 @@ public class Tacos<K, V extends String> implements ITacos<V> {
             new <Integer>Tacos<Object, String>();
             new Tacos<>();
         }
-
+        
         public List<Label> getLabels(int state) {
             return labels.get(state);
         }
@@ -1666,13 +1676,13 @@ public class AllBranchesReturnTest {
                 public void process(CtMethod ctMethod) {
                     List<CtFor> fors = ctMethod.getElements(new TypeFilter<CtFor>(CtFor.class));
                     if (ctMethod.getBody() == null || ctMethod.getBody().getStatements() == null) return;
-
+    
                     int size = ctMethod.getBody().getStatements().size();
-
+    
                     if (size > 6 || fors.size() < 1 || !hasInterfaceVariables(ctMethod) ) return;
-
+    
                     printMethod(ctMethod);
-
+    
             }
         };
 

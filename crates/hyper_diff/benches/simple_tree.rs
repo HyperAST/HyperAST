@@ -1,8 +1,8 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use hyper_diff::decompressed_tree_store::SimpleZsTree;
-use hyper_diff::mappings::DefaultMappingStore;
-use hyper_diff::matchers::Decompressible;
-use hyper_diff::matchers::optimal::zs::ZsMatcher;
+use hyper_diff::{
+    decompressed_tree_store::SimpleZsTree,
+    matchers::{Decompressible, mapping_store::DefaultMappingStore, optimal::zs::ZsMatcher},
+};
 use hyperast::test_utils::simple_tree::{SimpleTree, vpair_to_stores};
 
 fn compare_simple_tree_group(c: &mut Criterion) {
@@ -54,7 +54,7 @@ fn compare_simple_tree_group(c: &mut Criterion) {
 
     let pairs = &[(src, dst)];
 
-    for (i, p) in pairs.iter().enumerate() {
+    for (i, p) in pairs.into_iter().enumerate() {
         group.bench_with_input(BenchmarkId::new("zs", i), &p, |b, p| {
             b.iter(|| {
                 ZsMatcher::<DefaultMappingStore<u16>, Decompressible<_, SimpleZsTree<_, u16>>>::matchh(

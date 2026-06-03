@@ -1,7 +1,7 @@
+#![allow(unused)]
 pub mod async_exec;
 pub mod code_editor;
 pub mod egui_utils;
-pub mod fancy_links;
 #[cfg(feature = "force_layout")]
 pub mod force_layout;
 pub mod hscroll;
@@ -9,9 +9,6 @@ pub mod interactive_split;
 pub mod meta_edge;
 pub mod multi_split;
 pub mod syntax_highlighting;
-
-pub use interactive_split::interactive_splitter::InteractiveSplitter;
-pub use multi_split::MultiSplitter;
 
 #[derive(Debug, Clone)]
 pub struct Lang {

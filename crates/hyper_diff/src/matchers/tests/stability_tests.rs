@@ -1,15 +1,26 @@
-use hyperast::store::SimpleStores;
-use hyperast::test_utils::simple_tree::{DisplayTree, LS, SimpleTree, TStore};
-use hyperast::types::DecompressedFrom;
+use hyperast::{
+    store::SimpleStores,
+    test_utils::simple_tree::{DisplayTree, LS, SimpleTree, TStore},
+    types::DecompressedFrom,
+};
 
-use crate::decompressed_tree_store::CompletePostOrder;
-use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
-use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-use crate::mappings::{DefaultMappingStore, MappingStore, VecStore};
-use crate::matchers::heuristic::gt;
-use crate::matchers::{Decompressible, Mapper, Mapping};
-use crate::tests::examples::*;
-use crate::tree::simple_tree::{NS, Tree, vpair_to_stores};
+use crate::{
+    decompressed_tree_store::{
+        CompletePostOrder, ShallowDecompressedTreeStore, lazy_post_order::LazyPostOrder,
+    },
+    matchers::{
+        Decompressible, Mapper, Mapping,
+        heuristic::gt::{
+            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+            lazy_marriage_bottom_up_matcher::LazyMarriageBottomUpMatcher,
+            lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher,
+            marriage_bottom_up_matcher::MarriageBottomUpMatcher,
+        },
+        mapping_store::{DefaultMappingStore, MappingStore, VecStore},
+    },
+    tests::examples::*,
+    tree::simple_tree::{NS, Tree, vpair_to_stores},
+};
 
 #[derive(Clone, Copy)]
 enum GumtreeVariant {
@@ -21,10 +32,10 @@ enum GumtreeVariant {
 
 impl GumtreeVariant {
     fn is_lazy(&self) -> bool {
-        match self {
+        return match self {
             Self::Greedy | Self::Stable => false,
             Self::GreedyLazy | Self::StableLazy => true,
-        }
+        };
     }
 }
 
@@ -73,7 +84,29 @@ fn is_stable(
     let result2 = test_with_mappings(&stores, dst, src, mappings.mirror(), variant).mirror();
 
     println!("result1: {:?}\nresult2: {:?}", result1, result2);
-    result1 == result2
+    return result1 == result2;
+}
+
+fn _calculate_mappings(example: ((SimpleTree<u8>, SimpleTree<u8>), Vec<Vec<u8>>, Vec<Vec<u8>>)) {
+    let (vpair, map_src, map_dst) = example;
+    let (stores, src, dst) = vpair_to_stores(vpair);
+
+    let src_arena = Decompressible::<_, CompletePostOrder<u16, u16>>::decompress(&stores, &src);
+    let dst_arena = Decompressible::<_, CompletePostOrder<u16, u16>>::decompress(&stores, &dst);
+
+    let mut m: DefaultMappingStore<u16> = DefaultMappingStore::default();
+    m.topit(src_arena.len(), dst_arena.len());
+
+    let src = src_arena.root();
+    let dst = dst_arena.root();
+
+    for (map_src, map_dst) in map_src.iter().zip(map_dst) {
+        m.link(
+            src_arena.child(&src, &map_src),
+            dst_arena.child(&dst, &map_dst),
+        );
+    }
+    println!("{:?}", m);
 }
 
 fn test_with_mappings(
@@ -90,7 +123,7 @@ fn test_with_mappings(
         let src_arena = Decompressible::<_, CompletePostOrder<u16, u16>>::decompress(stores, &src);
         let dst_arena = Decompressible::<_, CompletePostOrder<u16, u16>>::decompress(stores, &dst);
 
-        let mut mapper = Mapper {
+        let mapping = Mapper {
             hyperast: stores,
             mapping: Mapping {
                 src_arena,
@@ -98,23 +131,35 @@ fn test_with_mappings(
                 mappings,
             },
         };
-        use gt::greedy_bottom_up_matcher::GreedyBottomUpMatcher;
-        use gt::marriage_bottom_up_matcher::MarriageBottomUpMatcher;
-        match variant {
-            GumtreeVariant::Stable => {
-                MarriageBottomUpMatcher::<_, VecStore<_>>::execute(&mut mapper)
+        let mapping = match variant {
+            GumtreeVariant::Greedy => {
+                GreedyBottomUpMatcher::<
+                    Decompressible<_, CompletePostOrder<_, u16>>,
+                    Decompressible<_, CompletePostOrder<_, u16>>,
+                    &SimpleStores<TStore, NS<Tree>, LS<u16>>,
+                    VecStore<u16>,
+                >::match_it(mapping)
+                .mapping
             }
-            GumtreeVariant::Greedy => GreedyBottomUpMatcher::<_>::execute(&mut mapper),
+            GumtreeVariant::Stable => {
+                MarriageBottomUpMatcher::<
+                    Decompressible<_, CompletePostOrder<_, u16>>,
+                    Decompressible<_, CompletePostOrder<_, u16>>,
+                    &SimpleStores<TStore, NS<Tree>, LS<u16>>,
+                    VecStore<u16>,
+                >::match_it(mapping)
+                .mapping
+            }
             _ => panic!(),
         };
         println!(
             "{}",
-            mapper.mappings.display(
-                &|src: u16| mapper.src_arena.original(&src).to_string(),
-                &|dst: u16| mapper.dst_arena.original(&dst).to_string(),
+            mapping.mappings.display(
+                &|src: u16| mapping.src_arena.original(&src).to_string(),
+                &|dst: u16| mapping.dst_arena.original(&dst).to_string(),
             )
         );
-        mapper.mapping.mappings
+        return mapping.mappings;
     } else {
         let mut owned_src_arena =
             Decompressible::<_, LazyPostOrder<u16, u16>>::decompress(stores, &src);
@@ -157,14 +202,12 @@ fn test_with_mappings(
             },
         };
 
-        use gt::lazy_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
-        use gt::lazy_marriage_bottom_up_matcher::LazyMarriageBottomUpMatcher;
         let mapping = match variant {
             GumtreeVariant::GreedyLazy => {
-                LazyGreedyBottomUpMatcher::<_, VecStore<_>>::match_it(mapper).mapping
+                LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper).mapping
             }
             GumtreeVariant::StableLazy => {
-                LazyMarriageBottomUpMatcher::<_, VecStore<_>>::match_it(mapper).mapping
+                LazyMarriageBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper).mapping
             }
             _ => panic!(),
         };
@@ -175,7 +218,7 @@ fn test_with_mappings(
         // &|dst: u16| mapping.dst_arena.original(&dst).to_string(),
         // )
         // );
-        mapping.mappings
+        return mapping.mappings;
     }
 }
 

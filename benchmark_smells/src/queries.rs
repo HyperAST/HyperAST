@@ -61,12 +61,12 @@ pub fn exception_handling() -> [String; 2] {
         )
     };
     [
-        tc(r#"(expression_statement
+        tc(r#"(expression_statement 
       (method_invocation
         (identifier) (#EQ? "fail")
       )
     )"#),
-        tc(r#"(expression_statement
+        tc(r#"(expression_statement 
       (method_invocation
         (identifier) (#EQ? "fail")
       )
@@ -120,11 +120,11 @@ pub fn constructor_initialization() -> String {
 
     format!(
         r#"(class_declaration
-
+    
     (constructor_declaration)
 
     {test}
-
+    
     )"#
     )
 }
@@ -156,7 +156,8 @@ pub fn duplicated_assert() -> String {
 }
 
 pub fn ignored_test() -> String {
-    r#"(method_declaration
+    format!(
+        r#"(method_declaration
   (modifiers
     (marker_annotation
       name: (_) (#EQ? "Ignored")
@@ -168,7 +169,7 @@ pub fn ignored_test() -> String {
   name: (_)
   body: (_)
 ) @root"#
-        .to_string()
+    )
 }
 
 pub fn magic_number_test() -> String {
@@ -236,7 +237,7 @@ pub fn sensitive_equality() -> String {
         r#"(expression_statement
       (method_invocation
           name: (identifier) (#EQ? "assertEquals")
-          (argument_list (method_invocation
+          (argument_list (method_invocation 
             name: (identifier) (#EQ? "toString")
           )
       )

@@ -26,14 +26,14 @@ fn construction_group(c: &mut Criterion) {
         },
     ];
 
-    for p in inputs.iter() {
+    for p in inputs.into_iter() {
         group.bench_with_input(BenchmarkId::new("HyperAST", p.repo.name()), &p, |b, p| {
             b.iter_batched(
                 || {
                     let mut repositories = PreProcessedRepositories::default();
                     repositories.register_config(p.repo.clone(), p.config);
                     let repo = repositories
-                        .get_config(p.repo.clone())
+                        .get_config((&p.repo).clone())
                         .ok_or_else(|| "missing config for repository".to_string())
                         .unwrap();
                     let repository = if p.fetch {

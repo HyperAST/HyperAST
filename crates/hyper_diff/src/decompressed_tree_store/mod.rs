@@ -1,14 +1,16 @@
-//! Different decompressed tree layouts optimized for different traversals and exposing different behavior.
+//! different decompressed tree layouts optimized for different traversals and exposing different behavior.
 //!
-//! Here decompressed means that nodes are not shared ie. each node only has one parent.
+//! Here decomressed means that nodes are not shared ie. each node only has one parent.
 //!
-//! The most important layout is post-order,
-//! because it gives good properties, notably with descendants being laid out contiguously.
-//!
-//! We need the breadth-first traversal for the Chawathe algorithm.
+//! The most important layout is Post Order.
+//! We need both post-order traversal and breadth-first.
 
-use hyperast::types::HyperAST;
+use hyperast::{
+    PrimInt,
+    types::{HyperAST, NodeStore, Stored, WithStats},
+};
 
+// pub mod breath_first;
 pub mod basic_post_order;
 pub mod bfs_wrapper;
 pub mod breadth_first;
@@ -25,6 +27,15 @@ pub use simple_zs_tree::SimpleZsTree;
 
 pub use hyperast::types::DecompressedSubtree;
 
+// /// show that the decompression can be done
+// /// - needed to initialize in matchers
+// pub trait Initializable<'a, T: Stored> {
+//     /// decompress the tree at [`root`] in [`store`]
+//     fn decompress<S>(store: &'a S, root: &T::TreeId) -> Self
+//     where
+//         S: NodeStore<T::TreeId, N = T>;
+// }
+
 /// TODO remove this trait when the specialization feature improves
 ///
 /// NOTE compared to Initializable this trait only adds WithStats bound on T.
@@ -34,24 +45,28 @@ pub trait InitializableWithStats<IdN>: DecompressedSubtree<IdN> {
     fn considering_stats(&self, root: &IdN) -> Self;
 }
 
-pub trait FullyDecompressedTreeStore<HAST: HyperAST + Copy, IdD>:
-    DeepDecompressedTreeStore<HAST, IdD, IdD = IdD>
-{
+/// create a lazy decompresed tree store
+///
+/// You should also implement a way of finalysing the decompression
+/// eg. fn finalyze(store: &'a S, lazy: Lazy) -> Self
+/// - I do not think it can be easily made into a trait
+pub trait LazyInitializable<'a, T: Stored + WithStats> {
+    fn create<S>(store: &'a S, root: &T::TreeId) -> Self
+    where
+        S: NodeStore<T::TreeId, N = T>;
 }
-impl<HAST: HyperAST + Copy, IdD, T: DeepDecompressedTreeStore<HAST, IdD, IdD = IdD>>
-    FullyDecompressedTreeStore<HAST, IdD> for T
+
+pub trait FullyDecompressedTreeStore<HAST: HyperAST + Copy, IdD>:
+    ShallowDecompressedTreeStore<HAST, IdD>
 {
 }
 
-pub trait ShallowDecompressedTreeStore<HAST: HyperAST + Copy, IdS>: Decompressed<IdS> {
+pub trait ShallowDecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD> {
     fn len(&self) -> usize;
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    fn root(&self) -> Self::IdD;
-    fn original(&self, id: &Self::IdD) -> HAST::IdN;
-    fn child(&self, x: &Self::IdD, p: &[impl hyperast::PrimInt]) -> IdS;
-    fn children(&self, x: &Self::IdD) -> Vec<IdS>;
+    fn original(&self, id: &IdD) -> HAST::IdN;
+    fn root(&self) -> IdS;
+    fn child(&self, x: &IdD, p: &[impl PrimInt]) -> IdS;
+    fn children(&self, x: &IdD) -> Vec<IdS>;
 }
 
 pub trait Shallow<T> {
@@ -77,33 +92,12 @@ shallow_impl! {u32}
 shallow_impl! {u16}
 shallow_impl! {u8}
 
-/// just a convenience trait for non-lazy decompressed tree stores
-pub trait PrimInt: hyperast::PrimInt + Shallow<Self> {}
-impl<T: hyperast::PrimInt + Shallow<T>> PrimInt for T {}
-
-/// Core trait of lazy decompression distinguishing between shallow ids (IdS) and decompressed ids (IdD)
-///
-/// more specifically,
-///     `IdS` are ids over nodes that are possibly not yet decompressed
-/// and `IdD` are ids over nodes that are definitely decompressed
-///
-/// This is a compile-time trick
-/// that forbids invalid access to decompressed nodes at no runtime cost.
-/// Consequently, the challenge lies in representing `IdS` and `IdD` at the type level,
-/// when implementing usages of lazy decompression.
-///
-/// Note 1.1: by construction, IdS can point to an already decompressed node
-/// Note 1.2: and IdD can always be converted to an IdS (see `Shallow`)
-/// Note 2: when implemented, `IdS` and `IdD` should be the same concrete type (at the very least have the same size)
-pub trait Decompressed<Id> {
-    type IdD: Shallow<Id>;
+pub trait LazyDecompressed<IdS> {
+    type IdD: Shallow<IdS>;
 }
 
-/// On-demand decompression
-///
-/// enables the lazification of tree matching algorithms
 pub trait LazyDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
-    DeepDecompressedTreeStore<HAST, IdS>
+    DecompressedTreeStore<HAST, Self::IdD, IdS> + LazyDecompressed<IdS>
 {
     #[must_use]
     fn starter(&self) -> Self::IdD;
@@ -114,158 +108,131 @@ pub trait LazyDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
     fn decompress_descendants(&mut self, x: &Self::IdD) {
         let mut q = self.decompress_children(x);
         while let Some(x) = q.pop() {
+            // assert!(self.id_parent[x.to_usize().unwrap()] != zero());
             q.extend(self.decompress_children(&x));
         }
     }
 }
 
-/// access de
-pub trait DeepDecompressedTreeStore<HAST: HyperAST + Copy, IdS>:
-    ShallowDecompressedTreeStore<HAST, IdS>
+pub trait DecompressedTreeStore<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    ShallowDecompressedTreeStore<HAST, IdD, IdS>
 {
-    fn descendants(&self, x: &Self::IdD) -> Vec<IdS> {
-        self.it_descendants(x).collect()
+    fn descendants(&self, x: &IdD) -> Vec<IdS>;
+    fn descendants_count(&self, x: &IdD) -> usize;
+    fn descendants2(&self, x: &IdD) -> Vec<IdS> {
+        self.descendants(x)
     }
-    fn it_descendants(&self, x: &Self::IdD) -> impl Iterator<Item = IdS>;
-    fn descendants_count(&self, x: &Self::IdD) -> usize;
-    fn first_descendant(&self, i: &Self::IdD) -> IdS;
-    fn is_descendant(&self, desc: &IdS, of: &Self::IdD) -> bool;
+    fn descendants_count2(&self, x: &IdD) -> usize {
+        self.descendants_count(x)
+    }
+    fn first_descendant(&self, i: &IdD) -> IdS;
+    fn is_descendant(&self, desc: &IdS, of: &IdD) -> bool;
 }
 
-/// give the possibly of adding bounds on the slice using the lender pattern
 pub trait DecendantsLending<'a, __ImplBound = &'a Self> {
     type Slice: 'a;
 }
 
-/// descendants are stored contiguously in the tree store
-///
-/// thus a subtree can be identified by a range of ids,
-/// and we can lend a slice of descendants
-///
-/// typical property of post- and pre-order tree layouts
-pub trait ContiguousDescendants<HAST: HyperAST + Copy, IdS>:
-    DeepDecompressedTreeStore<HAST, IdS> + for<'a> DecendantsLending<'a>
+/// If you want to add bounds on Self::Slice, make a specialized trait like POBorrowSlice
+pub trait ContiguousDescendants<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    DecompressedTreeStore<HAST, IdD, IdS> + for<'a> DecendantsLending<'a>
 {
-    fn descendants_range(&self, x: &Self::IdD) -> std::ops::Range<IdS>;
+    fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdS>;
 
     /// The contiguous slice of descendants of x
-    fn slice(&self, x: &Self::IdD) -> <Self as DecendantsLending<'_>>::Slice;
+    fn slice(&self, x: &IdD) -> <Self as DecendantsLending<'_>>::Slice;
 }
 
-/// give the possibly of adding bounds on the slice using the lender pattern
-pub trait POSliceLending<'a, HAST: HyperAST + Copy, IdS, IdD, __ImplBound = &'a Self> {
-    type SlicePo: 'a + PostOrderKeyRoots<HAST, IdS, IdD = IdD>;
+pub trait POSliceLending<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self> {
+    type SlicePo: 'a + PostOrderKeyRoots<HAST, IdD>;
 }
 
-/// lend a slice of descendants
-pub trait POBorrowSlice<HAST: HyperAST + Copy, IdS>:
-    ContiguousDescendants<HAST, IdS> + for<'a> POSliceLending<'a, HAST, IdS, Self::IdD>
+/// Specialize ContiguousDescendants to specify in trait the bound of Self::Slice (here SlicePo)
+/// WIP see https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
+pub trait POBorrowSlice<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    ContiguousDescendants<HAST, IdD, IdS> + for<'a> POSliceLending<'a, HAST, IdD>
 {
-    fn slice_po(
-        &self,
-        x: &Self::IdD,
-    ) -> <Self as POSliceLending<'_, HAST, IdS, Self::IdD>>::SlicePo;
+    fn slice_po(&self, x: &IdD) -> <Self as POSliceLending<'_, HAST, IdD>>::SlicePo;
 }
 
-/// give the possibly of adding bounds on the slice using the lender pattern
-pub trait LazyPOSliceLending<'a, HAST: HyperAST + Copy, IdS, IdD, __ImplBound = &'a Self> {
-    type SlicePo: 'a + PostOrderKeyRoots<HAST, IdS, IdD = IdD>;
+pub trait LazyPOSliceLending<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self> {
+    type SlicePo: 'a + PostOrderKeyRoots<HAST, IdD>;
 }
 
-/// lend a slice of descendants
-pub trait LazyPOBorrowSlice<HAST: HyperAST + Copy, IdS>:
-    ContiguousDescendants<HAST, IdS> + for<'a> LazyPOSliceLending<'a, HAST, Self::IdD, Self::IdD>
+pub trait LazyPOBorrowSlice<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    ContiguousDescendants<HAST, IdD, IdS> + for<'a> LazyPOSliceLending<'a, HAST, IdD>
 {
-    fn slice_po(
-        &mut self,
-        x: &Self::IdD,
-    ) -> <Self as LazyPOSliceLending<'_, HAST, Self::IdD, Self::IdD>>::SlicePo;
+    fn slice_po(&mut self, x: &IdD) -> <Self as LazyPOSliceLending<'_, HAST, IdD>>::SlicePo;
 }
 
-/// give the possibly of adding bounds on the associated parent iterator (ancestors) using the lender pattern
 pub trait DecompressedParentsLending<'a, IdD, __ImplBound = &'a Self> {
     type PIt: 'a + Iterator<Item = IdD>;
 }
 
-/// access parents
 pub trait DecompressedWithParent<HAST: HyperAST + Copy, IdD>:
     for<'a> DecompressedParentsLending<'a, IdD>
 {
     fn has_parent(&self, id: &IdD) -> bool;
     fn parent(&self, id: &IdD) -> Option<IdD>;
     fn parents(&self, id: IdD) -> <Self as DecompressedParentsLending<'_, IdD>>::PIt;
-    fn position_in_parent<Idx: hyperast::PrimInt>(&self, c: &IdD) -> Option<Idx>;
-    fn path<Idx: hyperast::PrimInt>(&self, parent: &IdD, descendant: &IdD) -> Vec<Idx>;
-    fn path_rooted<Idx: hyperast::PrimInt>(&self, descendant: &IdD) -> Vec<Idx>
+    fn position_in_parent<Idx: PrimInt>(&self, c: &IdD) -> Option<Idx>;
+    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> Vec<Idx>;
+    fn path_rooted<Idx: PrimInt>(&self, descendant: &IdD) -> Vec<Idx>
     where
-        Self: ShallowDecompressedTreeStore<HAST, IdD, IdD = IdD>,
+        Self: ShallowDecompressedTreeStore<HAST, IdD>,
     {
         self.path(&self.root(), descendant)
     }
     /// lowest common ancestor
     fn lca(&self, a: &IdD, b: &IdD) -> IdD;
 }
-
-/// access siblings
 pub trait DecompressedWithSiblings<HAST: HyperAST + Copy, IdD>:
     DecompressedWithParent<HAST, IdD>
 {
-    /// left sibling of `x`
     fn lsib(&self, x: &IdD) -> Option<IdD>;
 }
 
-/// give the possibly of adding bounds on the breadth-first iterator using the lender pattern
-pub trait BreadthFirstIt<HAST: HyperAST + Copy, IdD>: DeepDecompressedTreeStore<HAST, IdD> {
+pub trait BreadthFirstIt<HAST: HyperAST + Copy, IdD>: DecompressedTreeStore<HAST, IdD> {
     type It<'b>: Iterator<Item = IdD>;
 }
 
-/// enables breadth-first iteration over a tree store
 pub trait BreadthFirstIterable<HAST: HyperAST + Copy, IdD>: BreadthFirstIt<HAST, IdD> {
     fn iter_bf(&self) -> Self::It<'_>;
 }
 
-/// enables depth-first post-order iteration over a tree store
-pub trait PostOrderIterable<HAST: HyperAST + Copy, IdS>:
-    DeepDecompressedTreeStore<HAST, IdS>
+pub trait PostOrderIterable<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    DecompressedTreeStore<HAST, IdD, IdS>
 {
     type It: Iterator<Item = IdS>;
     fn iter_df_post<const ROOT: bool>(&self) -> Self::It;
 }
 
-/// enables contiguous sibling iteration over a tree store
 pub trait BreadthFirstContiguousSiblings<HAST: HyperAST + Copy, IdD>:
-    DeepDecompressedTreeStore<HAST, IdD>
+    DecompressedTreeStore<HAST, IdD>
 {
     fn has_children(&self, id: &IdD) -> bool;
     fn first_child(&self, id: &IdD) -> Option<IdD>;
 }
 
-pub trait RawContiguousDescendants<IdD, IdS> {
-    fn range(&self, id: &IdD) -> std::ops::Range<IdS>;
-}
-
-/// enables post-order iteration over a tree store
-pub trait PostOrder<HAST: HyperAST + Copy, IdS>: DeepDecompressedTreeStore<HAST, IdS> {
-    fn lld(&self, id: &Self::IdD) -> IdS;
-    fn tree(&self, id: &Self::IdD) -> HAST::IdN;
-    fn has_children(&self, id: &Self::IdD) -> bool;
-}
-
-/// give the possibly of adding bounds on the associated key root iterator using the lender pattern
-pub trait PostOrdKeyRoots<'a, HAST: HyperAST + Copy, IdS, __ImplBound = &'a Self>:
-    PostOrder<HAST, IdS>
+pub trait PostOrder<HAST: HyperAST + Copy, IdD, IdS = IdD>:
+    DecompressedTreeStore<HAST, IdD, IdS>
 {
-    type Iter: 'a + Iterator<Item = Self::IdD>;
+    fn lld(&self, i: &IdD) -> IdS;
+    fn tree(&self, id: &IdD) -> HAST::IdN;
 }
 
-/// enables iterating key roots (in post-order)
-pub trait PostOrderKeyRoots<HAST: HyperAST + Copy, IdS>:
-    for<'a> PostOrdKeyRoots<'a, HAST, IdS>
+pub trait PostOrdKeyRoots<'a, HAST: HyperAST + Copy, IdD, __ImplBound = &'a Self>:
+    PostOrder<HAST, IdD>
 {
-    fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdS>>::Iter;
+    type Iter: 'a + Iterator<Item = IdD>;
 }
 
-/// iterates node ids in post-order
+pub trait PostOrderKeyRoots<HAST: HyperAST + Copy, IdD>:
+    for<'a> PostOrdKeyRoots<'a, HAST, IdD>
+{
+    fn iter_kr(&self) -> <Self as PostOrdKeyRoots<'_, HAST, IdD>>::Iter;
+}
+
 pub struct Iter<IdD> {
     current: IdD,
     len: IdD,
@@ -286,13 +253,12 @@ impl<IdD: PrimInt> Iterator for Iter<IdD> {
     }
 }
 
-/// key root iterator
 pub struct IterKr<'a, IdD>(
     bitvec::slice::IterOnes<'a, usize, bitvec::prelude::LocalBits>,
     std::marker::PhantomData<*const IdD>,
 );
 
-impl<IdD: PrimInt> Iterator for IterKr<'_, IdD> {
+impl<'a, IdD: PrimInt> Iterator for IterKr<'a, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {

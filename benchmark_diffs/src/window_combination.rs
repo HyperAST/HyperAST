@@ -1,43 +1,36 @@
-#![allow(unused)]
-use std::fmt::Display;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
-
-use hyper_diff::algorithms;
-use hyper_diff::algorithms::RuntimeMeasurement as _;
-use hyperast::{types::WithStats, utils::memusage_linux};
-use hyperast_vcs_git::multi_preprocessed::PreProcessedRepositories;
-use hyperast_vcs_git::no_space::as_nospaces;
-use hyperast_vcs_git::processing::ConfiguredRepoHandle2;
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf,
+};
 
 use crate::other_tools;
 use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess};
+use hyper_diff::algorithms::{self, RuntimeMeasurement as _};
+use hyperast::{types::WithStats, utils::memusage_linux};
+use hyperast_vcs_git::preprocessed::PreProcessedRepository;
+use hyperast_vcs_git::{git::fetch_github_repository, no_space::as_nospaces2 as as_nospaces};
 
 pub fn windowed_commits_compare(
     window_size: usize,
-    mut preprocessed: PreProcessedRepositories,
-    repo: ConfiguredRepoHandle2,
+    mut preprocessed: PreProcessedRepository,
     (before, after): (&str, &str),
+    dir_path: &str,
     diff_algorithm: &str,
     out: Option<(PathBuf, PathBuf)>,
 ) {
     assert!(window_size > 1);
-    use hyperast_vcs_git::processing::ConfiguredRepoTrait;
-    let batch_id = format!(
-        "{}/{}:({},{})",
-        repo.spec().user(),
-        repo.spec().name(),
-        before,
-        after
-    );
-    let mu = memusage_linux();
 
-    let repository = repo.fetch();
-    let processing_ordered_commits = preprocessed
-        .processor
-        .pre_process_with_limit(&repository, before, after, 1000)
-        .unwrap();
+    let batch_id = format!("{}:({},{})", &preprocessed.name, before, after);
+    let mu = memusage_linux();
+    let processing_ordered_commits = preprocessed.pre_process_with_limit(
+        &mut fetch_github_repository(&preprocessed.name),
+        before,
+        after,
+        dir_path,
+        1000,
+    );
     let hyperast_size = memusage_linux() - mu;
     log::warn!("hyperAST size: {}", hyperast_size);
     log::warn!("batch_id: {batch_id}");
@@ -48,7 +41,7 @@ pub fn windowed_commits_compare(
     log::warn!("cache size: {mu}");
     log::warn!(
         "commits ({}): {:?}",
-        processing_ordered_commits.len(),
+        preprocessed.commits.len(),
         processing_ordered_commits
     );
     let mut i = 0;
@@ -74,27 +67,20 @@ pub fn windowed_commits_compare(
         )
         .unwrap();
     }
-    for (i, c) in (0..c_len - 1)
-        .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
-        .enumerate()
-    {
+    for c in (0..c_len - 1).map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)]) {
         let oid_src = c[0];
         for oid_dst in &c[1..] {
             log::warn!("diff of {oid_src} and {oid_dst}");
 
             let stores = &preprocessed.processor.main_stores;
 
-            let commit_src = preprocessed
-                .get_commit(&repository.config, &oid_src)
-                .unwrap();
-            let src_tr = commit_src.ast_root;
+            let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+            let src_tr = commit_src.1.ast_root;
             let src_s = stores.node_store.resolve(src_tr).size();
             dbg!(src_s, stores.node_store.resolve(src_tr).size_no_spaces());
 
-            let commit_dst = preprocessed
-                .get_commit(&repository.config, oid_dst)
-                .unwrap();
-            let dst_tr = commit_dst.ast_root;
+            let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+            let dst_tr = commit_dst.1.ast_root;
             let dst_s = stores.node_store.resolve(dst_tr).size();
             dbg!(dst_s, stores.node_store.resolve(dst_tr).size_no_spaces());
 
@@ -142,7 +128,7 @@ pub fn windowed_commits_compare(
                 }
             } else if gt_out_format == "JSON" {
                 if let Some(gt_out) = &gt_out {
-                    let pp = PathJsonPostProcess::new(gt_out);
+                    let pp = PathJsonPostProcess::new(&gt_out);
                     let gt_timings = pp.performances();
                     let counts = pp.counts();
                     let valid = pp.validity_mappings(&lazy.mapper);
@@ -160,8 +146,8 @@ pub fn windowed_commits_compare(
                 dbg!(
                     &src_s,
                     &dst_s,
-                    Into::<isize>::into(&commit_src.memory_used()),
-                    Into::<isize>::into(&commit_dst.memory_used()),
+                    Into::<isize>::into(&commit_src.1.memory_used()),
+                    Into::<isize>::into(&commit_dst.1.memory_used()),
                     &summarized_lazy,
                     &not_lazy,
                     &partial_lazy,
@@ -183,8 +169,8 @@ pub fn windowed_commits_compare(
                         summarized_lazy.actions.map_or(-1, |x| x as isize),
                         &gt_counts.src_heap,
                         &gt_counts.dst_heap,
-                        Into::<isize>::into(&commit_src.memory_used()),
-                        Into::<isize>::into(&commit_dst.memory_used()),
+                        Into::<isize>::into(&commit_src.1.memory_used()),
+                        Into::<isize>::into(&commit_dst.1.memory_used()),
                         not_lazy.mappings,
                         not_lazy.actions.map_or(-1, |x| x as isize),
                         partial_lazy.mappings,
@@ -223,8 +209,8 @@ pub fn windowed_commits_compare(
                         summarized_lazy.actions.map_or(-1, |x| x as isize),
                         -1, //&gt_counts.src_heap,
                         -1, //&gt_counts.dst_heap,
-                        Into::<isize>::into(&commit_src.memory_used()),
-                        Into::<isize>::into(&commit_dst.memory_used()),
+                        Into::<isize>::into(&commit_src.1.memory_used()),
+                        Into::<isize>::into(&commit_dst.1.memory_used()),
                         not_lazy.mappings,
                         not_lazy.actions.map_or(-1, |x| x as isize),
                         partial_lazy.mappings,
@@ -265,44 +251,47 @@ pub fn windowed_commits_compare(
                 .unwrap();
                 buf_validity.flush().unwrap();
                 buf_perfs.flush().unwrap();
-            } else if let Some((gt_timings, gt_counts, valid)) = res {
-                let sumrzd_lazy = summarized_lazy;
-                dbg!(&gt_timings);
-                println!(
-                    "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                    src_s,
-                    dst_s,
-                    Into::<isize>::into(&commit_src.memory_used()),
-                    Into::<isize>::into(&commit_dst.memory_used()),
-                    sumrzd_lazy.actions.map_or(-1, |x| x as isize),
-                    gt_counts.actions,
-                    valid.missing_mappings,
-                    valid.additional_mappings,
-                    &gt_timings[0].as_secs_f64(),
-                    &gt_timings[1].as_secs_f64(),
-                    &gt_timings[2].as_secs_f64(),
-                    sumrzd_lazy.exec_data.phase1().prep.0.as_secs_f64(),
-                    sumrzd_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
-                    sumrzd_lazy.exec_data.phase2().prep.0.as_secs_f64(),
-                    sumrzd_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
-                    sumrzd_lazy.exec_data.phase3().prep.0.as_secs_f64(),
-                    sumrzd_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
-                    not_lazy.exec_data.phase1().prep.0.as_secs_f64(),
-                    not_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
-                    not_lazy.exec_data.phase2().prep.0.as_secs_f64(),
-                    not_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
-                    not_lazy.exec_data.phase3().prep.0.as_secs_f64(),
-                    not_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
-                    partial_lazy.exec_data.phase1().prep.0.as_secs_f64(),
-                    partial_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
-                    partial_lazy.exec_data.phase2().prep.0.as_secs_f64(),
-                    partial_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
-                    partial_lazy.exec_data.phase3().prep.0.as_secs_f64(),
-                    partial_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
-                );
+            } else {
+                if let Some((gt_timings, gt_counts, valid)) = res {
+                    let sumrzd_lazy = summarized_lazy;
+                    dbg!(&gt_timings);
+                    println!(
+                        "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                        src_s,
+                        dst_s,
+                        Into::<isize>::into(&commit_src.1.memory_used()),
+                        Into::<isize>::into(&commit_dst.1.memory_used()),
+                        sumrzd_lazy.actions.map_or(-1, |x| x as isize),
+                        gt_counts.actions,
+                        valid.missing_mappings,
+                        valid.additional_mappings,
+                        &gt_timings[0].as_secs_f64(),
+                        &gt_timings[1].as_secs_f64(),
+                        &gt_timings[2].as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                        sumrzd_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                        not_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                        not_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                        not_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                        not_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                        not_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                        not_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase1().prep.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase1().mapping.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase2().prep.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase2().mapping.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase3().prep.0.as_secs_f64(),
+                        partial_lazy.exec_data.phase3().mapping.0.as_secs_f64(),
+                    );
+                }
             }
         }
         log::warn!("done computing diff {i}");
+        i += 1;
     }
     let mu = memusage_linux();
     drop(preprocessed);
@@ -347,49 +336,40 @@ pub(crate) fn write_perfs<Id: Display>(
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
-    use hyper_diff::decompressed_tree_store::CompletePostOrder;
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-    use hyper_diff::mappings::{DefaultMultiMappingStore, VecStore};
-    use hyper_diff::matchers::Decompressible;
-    use hyper_diff::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
+    use hyper_diff::{
+        decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
+        matchers::{
+            Decompressible,
+            heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            mapping_store::{DefaultMultiMappingStore, VecStore},
+        },
+    };
     use hyperast::types::{HyperASTShared, WithChildren};
-    use hyperast_vcs_git::preprocessed::child_by_name;
 
     use crate::postprocess::{SimpleJsonPostProcess, print_mappings};
 
     #[test]
     fn issue_mappings_pomxml_spoon_pom() {
         // INRIA/spoon 7c7f094bb22a350fa64289a94880cc3e7231468f 78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd "spoon-pom" "" 2
-        let repo_name = "INRIA/spoon";
-        let subdir = "spoon-pom";
+        let preprocessed = PreProcessedRepository::new("INRIA/spoon");
         let window_size = 2;
+        let mut preprocessed = preprocessed;
         let (before, after) = (
             "7c7f094bb22a350fa64289a94880cc3e7231468f",
             "78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd",
         );
         assert!(window_size > 1);
 
-        let mut preprocessed = PreProcessedRepositories::default();
-        let (user, name) = repo_name.split_once("/").unwrap();
-        let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-        let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-        let configured_repo = preprocessed.register_config(repo, config);
-        let repository = configured_repo.fetch();
-
-        todo!("need to reenable the selection of a subdir"); // here spoon-pom
-
-        let processing_ordered_commits = preprocessed
-            .processor
-            .pre_process_with_limit(
-                &repository,
-                before,
-                after,
-                // subdir,
-                1000,
-            )
-            .unwrap();
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "spoon-pom",
+            1000,
+        );
         preprocessed.processor.purge_caches();
         let c_len = processing_ordered_commits.len();
         let c = (0..c_len - 1)
@@ -399,16 +379,12 @@ mod test {
         let oid_src = &c[0];
         let oid_dst = &c[1];
 
-        let commit_src = preprocessed
-            .get_commit(&repository.config, oid_src)
-            .unwrap();
-        let src_tr = commit_src.ast_root;
+        let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+        let src_tr = commit_src.1.ast_root;
         // let src_tr = preprocessed.child_by_name(src_tr, "hadoop-common-project").unwrap();
 
-        let commit_dst = preprocessed
-            .get_commit(&repository.config, oid_dst)
-            .unwrap();
-        let dst_tr = commit_dst.ast_root;
+        let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+        let dst_tr = commit_dst.1.ast_root;
         // let dst_tr = preprocessed.child_by_name(dst_tr, "hadoop-common-project").unwrap();
         let stores = &preprocessed.processor.main_stores;
         let src = src_tr;
@@ -417,26 +393,16 @@ mod test {
         #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
         // type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = GreedySubtreeMatcher::<_>::match_it::<DefaultMultiMappingStore<_>>(
-            hyper_diff::matchers::Mapper {
-                hyperast: stores,
-                mapping: hyper_diff::matchers::Mapping {
-                    mappings,
-                    src_arena: <DS<_> as hyperast::types::DecompressedFrom<_>>::decompress(
-                        stores, &src,
-                    ),
-                    dst_arena: <DS<_> as hyperast::types::DecompressedFrom<_>>::decompress(
-                        stores, &dst,
-                    ),
-                },
-            },
-        );
-        let hyper_diff::matchers::Mapping {
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(stores, src, dst, mappings);
+        let SubtreeMatcher {
             src_arena,
             dst_arena,
             mappings,
-        } = mapper.mapping;
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+            ..
+        } = mapper.into();
+        print_mappings(&dst_arena, &src_arena, &stores, &mappings);
     }
 
     #[test]
@@ -445,33 +411,22 @@ mod test {
         // hast, gt evolutions: 517,517,
         // missing, additional mappings: 43,10,
         // 1.089578603,2.667414915,1.76489064,1.59514709,2.984131976,35.289540009
-        let repo_name = "INRIA/spoon";
-        let subdir = "spoon-pom";
+        let preprocessed = PreProcessedRepository::new("INRIA/spoon");
         let window_size = 2;
+        let mut preprocessed = preprocessed;
         let (before, after) = (
             "76ffd3353a535b0ce6edf0bf961a05236a40d3a1",
             "74ee133f4fe25d8606e0775ade577cd8e8b5cbfd",
         );
         assert!(window_size > 1);
 
-        let mut preprocessed = PreProcessedRepositories::default();
-        let (user, name) = repo_name.split_once("/").unwrap();
-        let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-        let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-        let configured_repo = preprocessed.register_config(repo, config);
-        let repository = configured_repo.fetch();
-
-        todo!("need to reenable the selection of a subdir"); // here spoon-pom
-        let processing_ordered_commits = preprocessed
-            .processor
-            .pre_process_with_limit(
-                &repository,
-                before,
-                after,
-                // subdir,
-                1000,
-            )
-            .unwrap();
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "spoon-pom",
+            1000,
+        );
         preprocessed.purge_caches();
         let c_len = processing_ordered_commits.len();
         let c = (0..c_len - 1)
@@ -482,21 +437,17 @@ mod test {
         let oid_dst = &c[1];
         let stores = &preprocessed.processor.main_stores;
 
-        let commit_src = preprocessed
-            .get_commit(&repository.config, oid_src)
-            .unwrap();
-        let src_tr = commit_src.ast_root;
-        let src_tr = child_by_name(stores, src_tr, "spoon-pom").unwrap();
-        let src_tr = child_by_name(stores, src_tr, "pom.xml").unwrap();
+        let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+        let src_tr = commit_src.1.ast_root;
+        let src_tr = preprocessed.child_by_name(src_tr, "spoon-pom").unwrap();
+        let src_tr = preprocessed.child_by_name(src_tr, "pom.xml").unwrap();
         // let src_tr = stores.node_store.resolve(src_tr).get_child(&0);
         dbg!(stores.node_store.resolve(src_tr).child_count());
 
-        let commit_dst = preprocessed
-            .get_commit(&repository.config, oid_dst)
-            .unwrap();
-        let dst_tr = commit_dst.ast_root;
-        let dst_tr = child_by_name(stores, dst_tr, "spoon-pom").unwrap();
-        let dst_tr = child_by_name(stores, dst_tr, "pom.xml").unwrap();
+        let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+        let dst_tr = commit_dst.1.ast_root;
+        let dst_tr = preprocessed.child_by_name(dst_tr, "spoon-pom").unwrap();
+        let dst_tr = preprocessed.child_by_name(dst_tr, "pom.xml").unwrap();
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
 
         let src = src_tr;
@@ -504,27 +455,16 @@ mod test {
         let mappings = VecStore::default();
         #[allow(type_alias_bounds)]
         type DS<HAST: HyperASTShared> = Decompressible<HAST, CompletePostOrder<HAST::IdN, u32>>;
-        let mapper = GreedySubtreeMatcher::<_>::match_it::<DefaultMultiMappingStore<_>>(
-            hyper_diff::matchers::Mapper {
-                hyperast: stores,
-                mapping: hyper_diff::matchers::Mapping {
-                    mappings,
-                    src_arena: <DS<_> as hyperast::types::DecompressedFrom<_>>::decompress(
-                        stores, &src,
-                    ),
-                    dst_arena: <DS<_> as hyperast::types::DecompressedFrom<_>>::decompress(
-                        stores, &dst,
-                    ),
-                },
-            },
-        );
-        let hyper_diff::matchers::Mapping {
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(stores, src, dst, mappings);
+        let SubtreeMatcher {
             src_arena,
             dst_arena,
             mappings,
             ..
-        } = mapper.mapping;
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        } = mapper.into();
+        print_mappings(&dst_arena, &src_arena, &stores, &mappings);
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
@@ -557,9 +497,9 @@ mod test {
     fn issue_lazy_spark() {
         // cargo build --release && time target/release/window_combination apache/spark 14211a19f53bd0f413396582c8970e3e0a74281d 885f4733c413bdbb110946361247fbbd19f6bba9 "" validity_spark.csv perfs_spark.csv 2 Chawathe &> spark.log
         // thread 'main' panicked at 'Entity(63568) Entity(63568)', /home/quentin/rusted_gumtree3/gumtree/src/decompressed_tree_store/lazy_post_order.rs:293:17
-        let repo_name = "apache/spark";
+        let preprocessed = PreProcessedRepository::new("apache/spark");
         let window_size = 2;
-        let subdir = "spoon-pom";
+        let mut preprocessed = preprocessed;
         let (before, after) = (
             "a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1",
             "29b9537e00d857c92378648ca7163ba0dc63da39",
@@ -568,17 +508,13 @@ mod test {
         // after a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1
         assert!(window_size > 1);
 
-        let mut preprocessed = PreProcessedRepositories::default();
-        let (user, name) = repo_name.split_once("/").unwrap();
-        let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-        let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-        let configured_repo = preprocessed.register_config(repo, config);
-        let repository = configured_repo.fetch();
-
-        let processing_ordered_commits = preprocessed
-            .processor
-            .pre_process_with_limit(&repository, before, after, 3)
-            .unwrap();
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "",
+            3,
+        );
         preprocessed.purge_caches();
         let c_len = processing_ordered_commits.len();
         assert!(c_len > 0);
@@ -592,19 +528,15 @@ mod test {
         dbg!(oid_src, oid_dst);
         let stores = &preprocessed.processor.main_stores;
 
-        let commit_src = preprocessed
-            .get_commit(&repository.config, oid_src)
-            .unwrap();
-        let src_tr = commit_src.ast_root;
+        let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+        let src_tr = commit_src.1.ast_root;
         // let src_tr = preprocessed.child_by_name(src_tr, "spoon-pom").unwrap();
         // let src_tr = preprocessed.child_by_name(src_tr, "pom.xml").unwrap();
         // let src_tr = stores.node_store.resolve(src_tr).get_child(&0);
         dbg!(stores.node_store.resolve(src_tr).child_count());
 
-        let commit_dst = preprocessed
-            .get_commit(&repository.config, oid_dst)
-            .unwrap();
-        let dst_tr = commit_dst.ast_root;
+        let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+        let dst_tr = commit_dst.1.ast_root;
         // let dst_tr = preprocessed.child_by_name(dst_tr, "spoon-pom").unwrap();
         // let dst_tr = preprocessed.child_by_name(dst_tr, "pom.xml").unwrap();
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
@@ -617,33 +549,22 @@ mod test {
     fn issue_logging_log4j2_pom() {
         // cargo build --release && time target/release/window_combination apache/logging-log4j2 7e745b42bda9bf6f8ea681d38992d18036fc021e ebfc8945a5dd77b617f4667647ed4b740323acc8 "" batch2/validity_logging-log4j2.csv batch2/perfs_logging-log4j2.csv 2 Chawathe &> batch2/logging-log4j2.log
         // thread 'main' panicked at '114 55318 "reporting"', hyperast/src/tree_gen/mod.rs:414:13
-        let repo_name = "apache/logging-log4j2";
+        let preprocessed = PreProcessedRepository::new("apache/logging-log4j2");
         let window_size = 2;
+        let mut preprocessed = preprocessed;
         let (before, after) = (
             "7e745b42bda9bf6f8ea681d38992d18036fc021e",
             "ebfc8945a5dd77b617f4667647ed4b740323acc8",
         );
         assert!(window_size > 1);
 
-        let mut preprocessed = PreProcessedRepositories::default();
-        let (user, name) = repo_name.split_once("/").unwrap();
-        let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-        let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-        let configured_repo = preprocessed.register_config(repo, config);
-        let repository = configured_repo.fetch();
-
-        todo!("need to reenable the selection of a subdir"); // here apache/logging-log4j2
-
-        let processing_ordered_commits = preprocessed
-            .processor
-            .pre_process_with_limit(
-                &repository,
-                before,
-                after,
-                // subdir,
-                3,
-            )
-            .unwrap();
+        preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "log4j-osgi",
+            3,
+        );
     }
 
     #[test]
@@ -652,25 +573,22 @@ mod test {
         // hast, gt evolutions: 517,517,
         // missing, additional mappings: 43,10,
         // 1.089578603,2.667414915,1.76489064,1.59514709,2.984131976,35.289540009
-        let repo_name = "INRIA/spoon";
+        let preprocessed = PreProcessedRepository::new("INRIA/spoon");
         let window_size = 2;
+        let mut preprocessed = preprocessed;
         let (before, after) = (
             "b5806e1f42e105c223e1c6659256a4a3a4538b6c",
             "568b4526d7af83de99c65bc64a55ddcb6b6d3488",
         );
         assert!(window_size > 1);
 
-        let mut preprocessed = PreProcessedRepositories::default();
-        let (user, name) = repo_name.split_once("/").unwrap();
-        let repo = hyperast_vcs_git::git::Forge::Github.repo(user, name);
-        let config = hyperast_vcs_git::processing::RepoConfig::JavaMaven;
-        let configured_repo = preprocessed.register_config(repo, config);
-        let repository = configured_repo.fetch();
-
-        let processing_ordered_commits = preprocessed
-            .processor
-            .pre_process_with_limit(&repository, before, after, 2)
-            .unwrap();
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "",
+            2,
+        );
         preprocessed.purge_caches();
         let c_len = processing_ordered_commits.len();
         let c = (0..c_len - 1)
@@ -681,19 +599,15 @@ mod test {
         let oid_dst = &c[1];
         let stores = &preprocessed.processor.main_stores;
 
-        let commit_src = preprocessed
-            .get_commit(&repository.config, oid_src)
-            .unwrap();
-        let src_tr = commit_src.ast_root;
-        let src_tr = child_by_name(stores, src_tr, "pom.xml").unwrap();
+        let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+        let src_tr = commit_src.1.ast_root;
+        let src_tr = preprocessed.child_by_name(src_tr, "pom.xml").unwrap();
         // let src_tr = stores.node_store.resolve(src_tr).get_child(&0);
         dbg!(stores.node_store.resolve(src_tr).child_count());
 
-        let commit_dst = preprocessed
-            .get_commit(&repository.config, oid_dst)
-            .unwrap();
-        let dst_tr = commit_dst.ast_root;
-        let dst_tr = child_by_name(stores, dst_tr, "pom.xml").unwrap();
+        let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+        let dst_tr = commit_dst.1.ast_root;
+        let dst_tr = preprocessed.child_by_name(dst_tr, "pom.xml").unwrap();
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
 
         let src = &src_tr;
@@ -715,23 +629,26 @@ mod test {
         };
         dbg!();
         use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
-        use hyper_diff::mappings::MappingStore;
-        mapper.reserve_mappings();
-        dbg!();
-        let mm = LazyGreedySubtreeMatcher::<_>::compute_multi_mapping::<DefaultMultiMappingStore<_>>(
-            &mut mapper,
+        use hyper_diff::matchers::mapping_store::MappingStore;
+        mapper.mapping.mappings.topit(
+            mapper.mapping.src_arena.len(),
+            mapper.mapping.dst_arena.len(),
         );
         dbg!();
-        use hyper_diff::matchers::heuristic::gt::lazy_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
-        LazyGreedySubtreeMatcher::<_, 10>::filter_mappings(&mut mapper, &mm);
+        let mm = LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
+            DefaultMultiMappingStore<_>,
+        >(&mut mapper);
+        dbg!();
+        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+        LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>, 10>::filter_mappings(&mut mapper, &mm);
         // TODO do something with the multi mappings
         // modify filter_mappings to extract redundant mappings
         // the store it alongside other mappings
         dbg!();
-        use hyper_diff::matchers::heuristic::gt::lazy_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
-        LazyGreedyBottomUpMatcher::<_, VecStore<_>>::execute(&mut mapper);
+        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::LazyGreedyBottomUpMatcher;
+        LazyGreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(&mut mapper);
         // This one matches everingthing as it should but it is much slower
-        // GreedyBottomUpMatcher::<_, VecStore<_>, 10_000, 1, 2>::execute(
+        // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 10_000, 1, 2>::execute(
         //     &mut mapper,
         //     &stores.label_store,
         // );
@@ -754,7 +671,7 @@ mod test {
             hyperast: stores,
             decomp: &dst_arena,
         };
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        print_mappings(&dst_arena, &src_arena, &stores, &mappings);
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(

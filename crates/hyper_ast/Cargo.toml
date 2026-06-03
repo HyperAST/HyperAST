@@ -1,12 +1,9 @@
 [package]
 name = "hyperast"
-version = "0.5.0"
+version = "0.3.0"
 edition = "2024"
 description = "Temporal code analyses at scale"
 license = "GPL-3.0"
-
-[lints]
-workspace = true
 
 [dependencies]
 num = "0.4.0"
@@ -17,7 +14,7 @@ hashbrown = { version = "0.14.5", default-features = false, optional = true }
 log = { version = "0.4.6" }
 
 ## store
-legion = { workspace = true, features = [
+legion = { version = "0.4.0", features = [
     "extended-tuple-impls", # soon should not be req., ie moving to the entry builder
 ], optional = true }
 bitvec = "1.0.1"

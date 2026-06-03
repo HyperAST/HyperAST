@@ -53,7 +53,7 @@ pub(crate) mod acc {
     }
 
     pub fn acc(acc: &mut PrimaryAcc, child: IdN) {
-        acc.2.0.push(child);
+        acc.2 .0.push(child);
     }
 
     pub fn finish(
@@ -343,9 +343,9 @@ pub(crate) mod acc {
         };
 
         let finish = |acc: (PrimaryAcc, (_, _)), l| {
-            let ty_lab = (&acc.0.0, acc.0.1.0.as_ref());
+            let ty_lab = (&acc.0 .0, acc.0 .1 .0.as_ref());
             let md = fn_zip12(md_sys_tree_size::finish, |a, (x, s): (_, _)| {
-                md_sys_tree_hash::finish(a, x, s)
+                md_sys_tree_hash::finish(a, x , s)
             })(acc.1, ty_lab);
             (finish(acc.0.0, l, acc.0.2), md)
             // let s = md_sys_tree_size::finish(acc.1 .0);

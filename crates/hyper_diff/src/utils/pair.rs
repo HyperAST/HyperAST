@@ -1,12 +1,14 @@
 use std::fmt;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-#[allow(unused)]
 pub(crate) struct Pair<T1, T2>(pub(crate) T1, pub(crate) T2);
 
 impl<T1, T2> From<(T1, T2)> for Pair<T1, T2> {
     fn from(pair: (T1, T2)) -> Self {
-        Pair(pair.0, pair.1)
+        Pair {
+            0: pair.0,
+            1: pair.1,
+        }
     }
 }
 

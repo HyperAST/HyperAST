@@ -18,6 +18,8 @@ impl<T> Array<T> {
     ) -> Option<usize> {
         unsafe { std::slice::from_raw_parts(self.contents, self.size as usize) }
             .binary_search_by_key(&needle, f)
+            .ok()?
+            .try_into()
             .ok()
     }
 }
@@ -101,7 +103,7 @@ impl SymbolTable {
         let slice = &self.slices[id as usize];
         let o0 = slice.offset;
         let o1 = o0 + slice.length;
-        &self.characters[o0 as usize..o1 as usize]
+        return &self.characters[o0 as usize..o1 as usize];
     }
 }
 
@@ -173,7 +175,7 @@ impl ArrayStr for [String] {
 
 impl ArrayStr for [&str] {
     fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
-        Box::new(self.iter().copied())
+        Box::new(self.iter().map(|x| *x))
     }
 
     fn len(&self) -> usize {
@@ -183,7 +185,7 @@ impl ArrayStr for [&str] {
 
 impl ArrayStr for &[&str] {
     fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
-        Box::new((*self).iter().copied())
+        Box::new((*self).iter().map(|x| *x))
     }
 
     fn len(&self) -> usize {
@@ -206,7 +208,7 @@ impl ArrayStr for std::sync::Arc<[String]> {
 impl ArrayStr for std::sync::Arc<[&str]> {
     fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
         use std::ops::Deref;
-        Box::new(self.deref().iter().copied())
+        Box::new(self.deref().iter().map(|x| *x))
     }
 
     fn len(&self) -> usize {
@@ -223,7 +225,7 @@ pub struct ZeroSepArrayStr {
 
 impl From<&[&str]> for ZeroSepArrayStr {
     fn from(arr: &[&str]) -> Self {
-        arr.iter().collect()
+        arr.into_iter().collect()
     }
 }
 
@@ -236,13 +238,14 @@ impl<T: AsRef<str>> FromIterator<T> for ZeroSepArrayStr {
                 s.push('\0');
             }
             let x = x.as_ref();
-            len = len + 1 + x.chars().filter(|x| *x == '\0').count();
+            len = len + 1 + x.chars().filter(|x|*x=='\0').count();
             s.push_str(x);
         }
         let s = s.into();
         Self { len, s }
     }
 }
+
 
 impl ArrayStr for ZeroSepArrayStr {
     fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
@@ -255,6 +258,7 @@ impl ArrayStr for ZeroSepArrayStr {
     }
 }
 
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct ZeroSepArrayStrStatic {
     len: usize,
@@ -263,7 +267,7 @@ pub struct ZeroSepArrayStrStatic {
 
 impl From<&[&str]> for ZeroSepArrayStrStatic {
     fn from(arr: &[&str]) -> Self {
-        arr.iter().collect()
+        arr.into_iter().collect()
     }
 }
 
@@ -276,7 +280,7 @@ impl<T: AsRef<str>> FromIterator<T> for ZeroSepArrayStrStatic {
                 s.push('\0');
             }
             let x = x.as_ref();
-            len = len + 1 + x.chars().filter(|x| *x == '\0').count();
+            len = len + 1 + x.chars().filter(|x|*x=='\0').count();
             s.push_str(x);
         }
         let s: Box<str> = s.into();
@@ -285,6 +289,7 @@ impl<T: AsRef<str>> FromIterator<T> for ZeroSepArrayStrStatic {
         Self { len, s }
     }
 }
+
 
 impl ArrayStr for ZeroSepArrayStrStatic {
     fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {

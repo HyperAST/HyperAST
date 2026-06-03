@@ -18,6 +18,7 @@ struct QuantileInner {
 impl average::Merge for Quantile {
     fn merge(&mut self, other: &Self) {
         if Arc::ptr_eq(&self.0, &other.0) {
+            return;
         } else {
             let mut inner = self.0.lock().unwrap();
             let other_inner = other.0.lock().unwrap();
@@ -37,7 +38,7 @@ impl Quantile {
     // const EPSILON: i64 = 5;
 
     pub fn new(quantile: f64) -> Result<Self, Box<EvalAltResult>> {
-        if !(0.0..=1.0).contains(&quantile) {
+        if quantile > 1.0 || quantile < 0.0 {
             Err("Quartile must be between 0.0 and 1.0".into())
         } else {
             Ok(Self(Arc::new(Mutex::new(QuantileInner {

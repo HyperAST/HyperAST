@@ -1,8 +1,5 @@
-use std::io::Write;
-use std::path::PathBuf;
-
-use num_traits::ToPrimitive;
-
+use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess};
+use crate::{other_tools, window_combination::write_perfs};
 use hyper_diff::algorithms;
 use hyperast::types::{LabelStore, WithStats};
 use hyperast::utils::memusage_linux;
@@ -11,9 +8,9 @@ use hyperast_vcs_git::processing::ConfiguredRepoHandle2;
 use hyperast_vcs_git::processing::erased::ParametrizedCommitProc2 as _;
 use hyperast_vcs_git::processing::{CacheHolding as _, ConfiguredRepoTrait as _};
 use hyperast_vcs_git::{maven::MavenModuleAcc, maven_processor::MavenProcessorHolder};
-
-use crate::postprocess::{CompressedBfPostProcess, PathJsonPostProcess};
-use crate::{other_tools, window_combination::write_perfs};
+use num_traits::ToPrimitive;
+use std::io::Write;
+use std::path::PathBuf;
 
 pub struct CommitCompareParameters<'a> {
     pub configured_repo: ConfiguredRepoHandle2,
@@ -68,6 +65,7 @@ pub fn windowed_commits_compare(
     //     preprocessed.commits.len(),
     //     processing_ordered_commits
     // );
+    let mut loop_count = 0;
 
     use std::fs::File;
     use std::io::BufWriter;
@@ -96,15 +94,12 @@ pub fn windowed_commits_compare(
         .min()
         .unwrap();
     dbg!(&min_len, 0..=min_len - window_size);
-    for (loop_count, c) in (0..min_len - window_size)
-        .map(|c| {
-            processing_ordered_commits
-                .iter()
-                .map(|x| (&x.0[c..(c + window_size)], &x.1))
-                .collect::<Vec<_>>()
-        })
-        .enumerate()
-    {
+    for c in (0..min_len - window_size).map(|c| {
+        processing_ordered_commits
+            .iter()
+            .map(|x| (&x.0[c..(c + window_size)], &x.1))
+            .collect::<Vec<_>>()
+    }) {
         // dbg!(&c, 1..min_len - window_size);
         let oid_src: Vec<_> = c.iter().map(|x| (x.0[0], x.1)).collect();
         for oid_dst in (1..window_size).map(|i| c.iter().map(|c| (c.0[i], c.1)).collect::<Vec<_>>())
@@ -116,7 +111,7 @@ pub fn windowed_commits_compare(
             let mut src_mem = hyperast::utils::Bytes::default(); // NOTE it does not consider the size of the root, but it is an implementation detail
             let mut src_s = 0;
             for (i, (oid_src, repo)) in oid_src.iter().enumerate() {
-                let commit_src = preprocessed.get_commit(repo.config(), oid_src).unwrap();
+                let commit_src = preprocessed.get_commit(repo.config(), &oid_src).unwrap();
                 let node_store = &preprocessed.processor.main_stores.node_store;
                 let src_tr = commit_src.ast_root;
                 let s = node_store.resolve(src_tr).size();
@@ -145,7 +140,7 @@ pub fn windowed_commits_compare(
             let mut dst_mem = hyperast::utils::Bytes::default();
             let mut dst_s = 0;
             for (i, (oid_dst, repo)) in oid_dst.iter().enumerate() {
-                let commit_dst = preprocessed.get_commit(repo.config(), oid_dst).unwrap();
+                let commit_dst = preprocessed.get_commit(repo.config(), &oid_dst).unwrap();
                 let node_store = &preprocessed.processor.main_stores.node_store;
                 let dst_tr = commit_dst.ast_root;
                 let s = node_store.resolve(dst_tr).size();
@@ -176,7 +171,7 @@ pub fn windowed_commits_compare(
             let dst_tr = PreProcessedRepositories::make(dst_acc, stores).0;
 
             let stores = &preprocessed.processor.main_stores;
-            let hyperast = hyperast_vcs_git::no_space::as_nospaces(stores);
+            let hyperast = hyperast_vcs_git::no_space::as_nospaces2(stores);
 
             let mu = memusage_linux();
             let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr);
@@ -221,7 +216,7 @@ pub fn windowed_commits_compare(
                 }
             } else if gt_out_format == "JSON" {
                 if let Some(gt_out) = &gt_out {
-                    let pp = PathJsonPostProcess::new(gt_out);
+                    let pp = PathJsonPostProcess::new(&gt_out);
                     let gt_timings = pp.performances();
                     let counts = pp.counts();
                     let valid = pp.validity_mappings(&lazy.mapper);
@@ -257,7 +252,9 @@ pub fn windowed_commits_compare(
                     dbg!(&gt_counts, &valid, &gt_timings,);
                     writeln!(
                         buf_validity,
-                        "{oid_src}/{oid_dst},java_gumtree,gumtree_lazy,{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                        "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                        "java_gumtree",
+                        "gumtree_lazy",
                         src_s,
                         dst_s,
                         gt_counts.mappings,
@@ -388,6 +385,7 @@ pub fn windowed_commits_compare(
             }
         }
         log::warn!("done computing diff {loop_count}");
+        loop_count += 1;
     }
     let mu = memusage_linux();
     drop(preprocessed);

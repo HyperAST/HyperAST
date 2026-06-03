@@ -294,7 +294,7 @@ impl Iterator for It {
                     self.outer = Some(d);
                     return self.next();
                 } else {
-                    return self.p.take();
+                    return Some(self.p.take()?);
                 }
             };
             let p = d.next()?.ok()?.path();
